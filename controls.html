@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bevyosc Controls</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./controls.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">
+          <p class="eyebrow">bevyosc</p>
+          <h1>VJ Controls</h1>
+        </div>
+        <div class="status" role="status" aria-live="polite">
+          <span id="bridge-status" class="pill" data-state="connecting">bridge connecting</span>
+          <span id="osc-status" class="pill" data-state="idle">OSC idle</span>
+          <span id="diagnostics-status" class="pill" data-state="info">0 viewers</span>
+        </div>
+      </header>
+
+      <section class="panel hero crossfade-panel s-hero" aria-label="Crossfade">
+        <div class="xfade-head">
+          <span class="xfade-tag deck-a">A</span>
+          <div class="xfade-meta">
+            <span class="xfade-label">Crossfade</span>
+            <output id="crossfade-value" class="xfade-value">50%</output>
+          </div>
+          <span class="xfade-tag deck-b">B</span>
+        </div>
+        <input id="crossfade" class="xfade-slider" type="range" min="0" max="1" step="0.001" value="0.5" />
+        <div class="snap-row">
+          <button data-snap="0" class="snap-a">Deck A</button>
+          <button data-snap="0.5" class="snap-c">Center</button>
+          <button data-snap="1" class="snap-b">Deck B</button>
+        </div>
+      </section>
+
+      <section class="panel s-cues">
+        <div class="section-title">
+          <h2>Cues</h2>
+          <span id="quantize-status" class="badge">Beat sync</span>
+        </div>
+        <div class="cue-grid">
+          <button data-cue="warmup">Warmup</button>
+          <button data-cue="drop">Drop</button>
+          <button data-cue="tunnel">Tunnel</button>
+          <button data-cue="burst">Burst</button>
+          <button data-cue="wash">Wash</button>
+          <button data-cue="panic" class="danger">Panic Dim</button>
+        </div>
+        <div class="button-grid compact">
+          <button id="beat-sync" aria-pressed="true">Beat Sync</button>
+          <button id="bar-sync" aria-pressed="false">Bar Sync</button>
+          <button id="flash" class="accent">Flash</button>
+          <button id="save-preset">Save Preset</button>
+        </div>
+        <div id="preset-grid" class="preset-grid" aria-label="Saved presets"></div>
+      </section>
+
+      <section class="grid s-sliders">
+        <label class="panel slot deck-slot" data-deck="a">
+          <div class="slot-head">
+            <span>Deck A Mode</span>
+            <span class="deck-chip deck-a">A</span>
+          </div>
+          <select id="deck-a-mode">
+            <option value="0">Beams</option>
+            <option value="1">Tunnel</option>
+            <option value="2">Burst</option>
+            <option value="3">Mirror</option>
+            <option value="4">Wash</option>
+          </select>
+        </label>
+        <label class="panel slot deck-slot" data-deck="b">
+          <div class="slot-head">
+            <span>Deck B Mode</span>
+            <span class="deck-chip deck-b">B</span>
+          </div>
+          <select id="deck-b-mode">
+            <option value="0">Beams</option>
+            <option value="1">Tunnel</option>
+            <option value="2">Burst</option>
+            <option value="3">Mirror</option>
+            <option value="4">Wash</option>
+          </select>
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>BPM</span><output id="bpm-value">124</output></div>
+          <input id="bpm" type="range" min="60" max="190" step="0.1" value="124" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Speed</span><output id="speed-value">1.00</output></div>
+          <input id="speed" type="range" min="0.1" max="3" step="0.01" value="1" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Intensity</span><output id="intensity-value">0.82</output></div>
+          <input id="intensity" type="range" min="0.05" max="1.5" step="0.01" value="0.82" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Trails</span><output id="feedback-value">0.35</output></div>
+          <input id="feedback" type="range" min="0" max="1" step="0.01" value="0.35" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>3D Lines</span><output id="depth-value">0.00</output></div>
+          <input id="depth" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Ring Opacity</span><output id="ring-opacity-value">100%</output></div>
+          <input id="ring-opacity" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+      </section>
+
+      <section class="panel s-master">
+        <label class="slot palette-slot">
+          <div class="slot-head"><span>Color</span><output id="palette-value">0 deg</output></div>
+          <input id="palette" type="range" min="0" max="1" step="0.001" value="0" />
+          <div class="palette-strip" aria-hidden="true"></div>
+        </label>
+        <div class="button-grid">
+          <button id="rings" aria-pressed="true">Rings</button>
+          <button id="strobe" aria-pressed="false">Strobe</button>
+          <button id="strobe-lockout" aria-pressed="true">Strobe Lock</button>
+          <button id="freeze" aria-pressed="false">Freeze</button>
+          <button id="blackout" aria-pressed="false">Blackout</button>
+          <button id="reset" class="danger">Reset</button>
+        </div>
+        <label class="slot safety">
+          <div class="slot-head">
+            <span>Max Brightness</span>
+            <output id="max-brightness-value">90%</output>
+          </div>
+          <input id="max-brightness" type="range" min="0.1" max="1" step="0.01" value="0.9" />
+        </label>
+      </section>
+
+      <section class="panel s-mapping">
+        <div class="section-title">
+          <h2>Ableton Mapping</h2>
+          <span class="badge subtle">0-based track indices</span>
+        </div>
+        <div class="mapping-grid">
+          <label><span>A Start</span><input id="map-deck-a-start" type="number" min="0" max="31" value="0" /></label>
+          <label><span>A Count</span><input id="map-deck-a-count" type="number" min="1" max="32" value="8" /></label>
+          <label><span>B Start</span><input id="map-deck-b-start" type="number" min="0" max="31" value="8" /></label>
+          <label><span>B Count</span><input id="map-deck-b-count" type="number" min="1" max="32" value="8" /></label>
+          <label><span>Bass</span><input id="map-bass-track" type="number" min="0" max="31" value="0" /></label>
+          <label><span>Mid</span><input id="map-mid-track" type="number" min="0" max="31" value="1" /></label>
+          <label><span>High</span><input id="map-high-track" type="number" min="0" max="31" value="2" /></label>
+        </div>
+      </section>
+
+      <section class="panel s-rehearsal">
+        <div class="section-title">
+          <h2>Rehearsal</h2>
+          <span id="recording-status" class="badge">Ready</span>
+        </div>
+        <div class="button-grid compact">
+          <button id="demo-mode" aria-pressed="false">Demo Audio</button>
+          <button id="record" class="rec">Record</button>
+          <button id="play-replay">Play Replay</button>
+          <button id="stop-replay">Stop</button>
+        </div>
+      </section>
+
+      <section class="panel meters s-meters">
+        <div data-channel="energy"><span>Energy</span><meter id="energy" min="0" max="1" value="0"></meter></div>
+        <div data-channel="bass"><span>Bass</span><meter id="bass" min="0" max="1" value="0"></meter></div>
+        <div data-channel="mid"><span>Mid</span><meter id="mid" min="0" max="1" value="0"></meter></div>
+        <div data-channel="high"><span>High</span><meter id="high" min="0" max="1" value="0"></meter></div>
+        <div data-channel="deck-a"><span>Deck A</span><meter id="deck-a" min="0" max="1" value="0"></meter></div>
+        <div data-channel="deck-b"><span>Deck B</span><meter id="deck-b" min="0" max="1" value="0"></meter></div>
+      </section>
+    </main>
+
+    <script type="module">
+      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash"];
+      const cuePresets = {
+        warmup: { crossfade: 0.5, intensity: 0.62, feedback: 0.22, depth: 0.15, palette: 0.58, deckAMode: 4, deckBMode: 4 },
+        drop: { crossfade: 1, intensity: 1.25, feedback: 0.42, depth: 0.58, palette: 0.9, deckAMode: 2, deckBMode: 2 },
+        tunnel: { crossfade: 0.25, intensity: 1.0, feedback: 0.5, depth: 0.85, palette: 0.66, deckAMode: 1, deckBMode: 3 },
+        burst: { crossfade: 0.75, intensity: 1.35, feedback: 0.32, depth: 0.35, palette: 0.04, deckAMode: 2, deckBMode: 2 },
+        wash: { crossfade: 0.5, intensity: 0.48, feedback: 0.68, depth: 0.25, palette: 0.33, deckAMode: 4, deckBMode: 4 },
+        panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
+      };
+      const defaultState = () => ({
+        crossfade: 0.5,
+        bpm: 124,
+        speed: 1,
+        intensity: 0.82,
+        feedback: 0.35,
+        depth: 0,
+        palette: 0,
+        deckAMode: 0,
+        deckBMode: 1,
+        rings: true,
+        ringOpacity: 1,
+        strobe: false,
+        strobeLockout: true,
+        blackout: false,
+        freeze: false,
+        maxBrightness: 0.9,
+        beatSync: true,
+        barSync: false,
+        demoMode: false,
+        replaying: false,
+        flashVersion: 0,
+        resetVersion: 0,
+        cueVersion: 0,
+        cueIntensity: 0,
+        cuePalette: 0,
+        cueCrossfade: 0.5,
+        cueDeckAMode: 0,
+        cueDeckBMode: 1,
+        trackMapping: {
+          deckAStart: 0,
+          deckACount: 8,
+          deckBStart: 8,
+          deckBCount: 8,
+          bassTrack: 0,
+          midTrack: 1,
+          highTrack: 2,
+        },
+      });
+      const state = defaultState();
+      const osc = {
+        lastFrameAt: 0,
+        beat: 0,
+        beatIndex: 0,
+        energy: 0,
+        bass: 0,
+        mid: 0,
+        high: 0,
+        deckA: 0,
+        deckB: 0,
+        previousEnergy: 0,
+        lastEnvelopeAt: 0,
+      };
+      const diagnostics = { sockets: 0, oscReady: false, oscActive: false, demoMode: false, replaying: false };
+
+      const $ = (selector) => document.querySelector(selector);
+      const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+      const bridgeStatus = $("#bridge-status");
+      const oscStatus = $("#osc-status");
+      const diagnosticsStatus = $("#diagnostics-status");
+      const recordingStatus = $("#recording-status");
+      let ws;
+      let reconnectTimer;
+      let pendingCue = null;
+      let isRecording = false;
+      let recordStart = 0;
+      let recording = [];
+      let replayTimers = [];
+
+      const clamp = (value, min, max, fallback = min) => {
+        const number = Number(value);
+        return Math.max(min, Math.min(max, Number.isFinite(number) ? number : fallback));
+      };
+      const clamp01 = (value) => clamp(value, 0, 1, 0);
+      const clampInt = (value, min, max, fallback = min) => Math.floor(clamp(value, min, max, fallback));
+      const average = (items) => (items.length ? items.reduce((sum, value) => sum + value, 0) / items.length : 0);
+      const smoothSignal = (current, target, dtMs, attackMs, releaseMs) => {
+        const timeMs = target > current ? attackMs : releaseMs;
+        const blend = 1 - Math.exp(-dtMs / Math.max(1, timeMs));
+        return current + (target - current) * blend;
+      };
+      const cloneState = () => JSON.parse(JSON.stringify(state));
+
+      function connect() {
+        clearTimeout(reconnectTimer);
+        const scheme = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(`${scheme}://${location.hostname || "localhost"}:3000/ws`);
+
+        ws.onopen = () => {
+          bridgeStatus.textContent = "bridge live";
+          bridgeStatus.dataset.state = "live";
+          publish({ record: false });
+        };
+        ws.onclose = () => {
+          bridgeStatus.textContent = "bridge reconnecting";
+          bridgeStatus.dataset.state = "connecting";
+          reconnectTimer = setTimeout(connect, 1000);
+        };
+        ws.onerror = () => {
+          bridgeStatus.textContent = "bridge error";
+          bridgeStatus.dataset.state = "error";
+        };
+        ws.onmessage = (event) => {
+          try {
+            applyFrame(JSON.parse(event.data));
+          } catch {
+            // Ignore malformed frames on a live controls surface.
+          }
+        };
+      }
+
+      function publish(options = {}) {
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ address: "/bevyosc/control/state", args: [state] }));
+        }
+        if (isRecording && options.record !== false) {
+          const now = performance.now();
+          const last = recording[recording.length - 1];
+          if (!last || now - last.t > 100) {
+            recording.push({ t: now - recordStart, state: cloneState() });
+          }
+        }
+        render();
+      }
+
+      function trackDataValueStart(args) {
+        const fieldIndex = args.findIndex(
+          (arg) => typeof arg === "string" && (arg === "track.output_meter_level" || arg.startsWith("track.")),
+        );
+        if (fieldIndex >= 0) return fieldIndex + 1;
+
+        const allNumeric = args.every((arg) => Number.isFinite(Number(arg)));
+        if (allNumeric && args.length >= 3) {
+          const start = Number(args[0]);
+          const count = Number(args[1]);
+          if (Number.isInteger(start) && Number.isInteger(count) && count > 0 && count <= args.length - 2) {
+            return 2;
+          }
+        }
+        if (allNumeric && args.length <= 32) return 0;
+
+        return Math.min(2, args.length);
+      }
+
+      function applyFrame(frame) {
+        const args = Array.isArray(frame?.args) ? frame.args : [];
+        if (frame?.address === "/bevyosc/control/state" && args[0] && typeof args[0] === "object") {
+          syncFromRemote(args[0]);
+        }
+        if (frame?.address === "/bevyosc/server/diagnostics" && args[0] && typeof args[0] === "object") {
+          Object.assign(diagnostics, args[0]);
+        }
+        if (frame?.address === "/bevyosc/demo/audio" && state.demoMode && args[0]) {
+          applyDemo(args[0]);
+        }
+        if (frame?.address === "/live/song/get/tempo" && Number.isFinite(Number(args[0]))) {
+          state.bpm = Number(args[0]);
+          $("#bpm").value = String(state.bpm);
+        }
+        if (frame?.address === "/live/song/get/beat") {
+          const nextBeat = Number(args[0]) || 0;
+          if (Math.floor(nextBeat) !== osc.beatIndex) {
+            osc.beatIndex = Math.floor(nextBeat);
+            flushPendingCue(nextBeat);
+          }
+          osc.beat = nextBeat;
+          osc.lastFrameAt = performance.now();
+        }
+        if (frame?.address === "/live/song/get/track_data") {
+          applyTrackData(args);
+        }
+        render();
+      }
+
+      function syncFromRemote(next) {
+        if (next.replaying && !state.replaying) return;
+        Object.assign(state, { ...state, ...next, trackMapping: { ...state.trackMapping, ...(next.trackMapping || {}) } });
+        syncInputs();
+      }
+
+      function applyTrackData(args) {
+        const valueStart = trackDataValueStart(args);
+        const values = args
+          .slice(valueStart)
+          .filter((value) => Number.isFinite(Number(value)))
+          .slice(0, 32)
+          .map(clamp01);
+        if (!values.length) return;
+
+        const mapping = state.trackMapping;
+        const mappedAverage = (start, count) => average(values.slice(start, start + Math.max(1, count)));
+        const mappedTrack = (index, fallback) => (Number.isFinite(values[index]) ? values[index] : fallback);
+        const avg = average(values);
+        const peak = Math.max(avg, ...values);
+        const energyTarget = peak * 0.72 + avg * 0.28;
+        const transient = Math.max(0, energyTarget - osc.previousEnergy);
+        const now = performance.now();
+        const dtMs = Math.max(16, Math.min(250, now - (osc.lastEnvelopeAt || now)));
+
+        osc.lastFrameAt = now;
+        osc.energy = smoothSignal(osc.energy, energyTarget, dtMs, 120, 280);
+        osc.bass = smoothSignal(osc.bass, mappedTrack(mapping.bassTrack, energyTarget), dtMs, 260, 620);
+        osc.mid = smoothSignal(osc.mid, mappedTrack(mapping.midTrack, avg), dtMs, 150, 360);
+        osc.high = smoothSignal(osc.high, Math.max(mappedTrack(mapping.highTrack, 0), Math.min(1, transient * 2.2)), dtMs, 90, 260);
+        osc.deckA = smoothSignal(osc.deckA, mappedAverage(mapping.deckAStart, mapping.deckACount) || avg, dtMs, 140, 320);
+        osc.deckB = smoothSignal(osc.deckB, mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg, dtMs, 140, 320);
+        osc.previousEnergy = energyTarget;
+        osc.lastEnvelopeAt = now;
+      }
+
+      function applyDemo(frame) {
+        osc.lastFrameAt = performance.now();
+        osc.energy = clamp01(frame.energy);
+        osc.bass = clamp01(frame.bass);
+        osc.mid = clamp01(frame.mid);
+        osc.high = clamp01(frame.high);
+        osc.deckA = clamp01(frame.deckA);
+        osc.deckB = clamp01(frame.deckB);
+        flushPendingCue(Number(frame.beat) || 0);
+      }
+
+      function queueCue(name) {
+        const cue = cuePresets[name];
+        if (!cue) return;
+        if (!state.beatSync) {
+          applyCue(name, cue);
+          return;
+        }
+        pendingCue = { name, cue };
+        $("#quantize-status").textContent = state.barSync ? `Queued ${name} on bar` : `Queued ${name} on beat`;
+        render();
+      }
+
+      function flushPendingCue(beat) {
+        if (!pendingCue) return;
+        if (state.barSync && Math.floor(beat) % 4 !== 0) return;
+        applyCue(pendingCue.name, pendingCue.cue);
+        pendingCue = null;
+      }
+
+      function applyCue(name, cue) {
+        Object.assign(state, cue);
+        state.cueVersion += 1;
+        state.cueIntensity = clamp01(cue.intensity ?? state.intensity);
+        state.cuePalette = clamp01(cue.palette ?? state.palette);
+        state.cueCrossfade = clamp01(cue.crossfade ?? state.crossfade);
+        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 4, state.deckAMode);
+        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 4, state.deckBMode);
+        state.flashVersion += name === "panic" ? 0 : 1;
+        syncInputs();
+        publish();
+      }
+
+      function savePreset() {
+        const slot = Math.max(1, Math.min(6, Number(prompt("Preset slot 1-6", "1")) || 1));
+        const presets = JSON.parse(localStorage.getItem("bevyosc.presets") || "{}");
+        presets[`slot-${slot}`] = cloneState();
+        localStorage.setItem("bevyosc.presets", JSON.stringify(presets));
+        renderPresets();
+      }
+
+      function renderPresets() {
+        const root = $("#preset-grid");
+        const presets = JSON.parse(localStorage.getItem("bevyosc.presets") || "{}");
+        root.innerHTML = "";
+        for (let i = 1; i <= 6; i += 1) {
+          const button = document.createElement("button");
+          button.textContent = presets[`slot-${i}`] ? `Preset ${i}` : `Empty ${i}`;
+          button.disabled = !presets[`slot-${i}`];
+          button.addEventListener("click", () => {
+            const preset = JSON.parse(localStorage.getItem("bevyosc.presets") || "{}")[`slot-${i}`];
+            if (!preset) return;
+            Object.assign(state, preset, { replaying: false });
+            state.cueVersion += 1;
+            syncInputs();
+            publish();
+          });
+          root.append(button);
+        }
+      }
+
+      function startRecording() {
+        isRecording = !isRecording;
+        if (isRecording) {
+          recording = [];
+          recordStart = performance.now();
+          $("#record").textContent = "Stop Rec";
+        } else {
+          $("#record").textContent = "Record";
+        }
+        render();
+      }
+
+      function playReplay() {
+        if (!recording.length) return;
+        stopReplay();
+        state.replaying = true;
+        const start = performance.now();
+        for (const item of recording) {
+          const timer = setTimeout(() => {
+            Object.assign(state, item.state, { replaying: true });
+            syncInputs();
+            publish({ record: false });
+          }, item.t);
+          replayTimers.push(timer);
+        }
+        replayTimers.push(setTimeout(() => {
+          if (performance.now() - start >= recording[recording.length - 1].t) stopReplay();
+        }, recording[recording.length - 1].t + 100));
+        publish({ record: false });
+      }
+
+      function stopReplay() {
+        replayTimers.forEach(clearTimeout);
+        replayTimers = [];
+        state.replaying = false;
+        publish({ record: false });
+      }
+
+      function syncInputs() {
+        for (const [id, key] of [
+          ["crossfade", "crossfade"],
+          ["bpm", "bpm"],
+          ["speed", "speed"],
+          ["intensity", "intensity"],
+          ["feedback", "feedback"],
+          ["depth", "depth"],
+          ["ring-opacity", "ringOpacity"],
+          ["palette", "palette"],
+          ["max-brightness", "maxBrightness"],
+          ["deck-a-mode", "deckAMode"],
+          ["deck-b-mode", "deckBMode"],
+        ]) {
+          $(`#${id}`).value = String(state[key]);
+        }
+        for (const [id, key] of [
+          ["map-deck-a-start", "deckAStart"],
+          ["map-deck-a-count", "deckACount"],
+          ["map-deck-b-start", "deckBStart"],
+          ["map-deck-b-count", "deckBCount"],
+          ["map-bass-track", "bassTrack"],
+          ["map-mid-track", "midTrack"],
+          ["map-high-track", "highTrack"],
+        ]) {
+          $(`#${id}`).value = String(state.trackMapping[key]);
+        }
+      }
+
+      function render() {
+        $("#crossfade-value").textContent = `${Math.round(state.crossfade * 100)}%`;
+        $("#bpm-value").textContent = state.bpm.toFixed(1);
+        $("#speed-value").textContent = state.speed.toFixed(2);
+        $("#intensity-value").textContent = state.intensity.toFixed(2);
+        $("#feedback-value").textContent = state.feedback.toFixed(2);
+        $("#depth-value").textContent = state.depth.toFixed(2);
+        $("#ring-opacity-value").textContent = `${Math.round(state.ringOpacity * 100)}%`;
+        $("#palette-value").textContent = `${Math.round(state.palette * 360)} deg`;
+        $("#max-brightness-value").textContent = `${Math.round(state.maxBrightness * 100)}%`;
+        $("#deck-a-mode").title = visualModes[state.deckAMode] || "Mode";
+        $("#deck-b-mode").title = visualModes[state.deckBMode] || "Mode";
+        $("#rings").setAttribute("aria-pressed", String(state.rings));
+        $("#strobe").setAttribute("aria-pressed", String(state.strobe));
+        $("#strobe-lockout").setAttribute("aria-pressed", String(state.strobeLockout));
+        $("#freeze").setAttribute("aria-pressed", String(state.freeze));
+        $("#blackout").setAttribute("aria-pressed", String(state.blackout));
+        $("#beat-sync").setAttribute("aria-pressed", String(state.beatSync));
+        $("#bar-sync").setAttribute("aria-pressed", String(state.barSync));
+        $("#demo-mode").setAttribute("aria-pressed", String(state.demoMode));
+        $("#energy").value = osc.energy;
+        $("#bass").value = osc.bass;
+        $("#mid").value = osc.mid;
+        $("#high").value = osc.high;
+        $("#deck-a").value = osc.deckA;
+        $("#deck-b").value = osc.deckB;
+        $("#quantize-status").textContent = pendingCue
+          ? state.barSync
+            ? `Queued ${pendingCue.name} on bar`
+            : `Queued ${pendingCue.name} on beat`
+          : state.beatSync
+            ? state.barSync
+              ? "Bar sync"
+              : "Beat sync"
+            : "Immediate";
+        const oscLive = performance.now() - osc.lastFrameAt < 3000;
+        oscStatus.textContent = state.demoMode ? "Demo audio" : oscLive ? "OSC live" : "OSC idle";
+        oscStatus.dataset.state = state.demoMode ? "demo" : oscLive ? "live" : "idle";
+        diagnosticsStatus.textContent = `${diagnostics.sockets} viewer${diagnostics.sockets === 1 ? "" : "s"} · ${diagnostics.oscReady ? "OSC ready" : "OSC wait"}`;
+        diagnosticsStatus.dataset.state = diagnostics.oscReady ? "info" : "warn";
+        recordingStatus.textContent = state.replaying
+          ? `Replaying ${recording.length} frames`
+          : isRecording
+            ? `Recording ${recording.length} frames`
+            : recording.length
+              ? `${recording.length} frames saved`
+              : "Ready";
+        recordingStatus.dataset.state = state.replaying ? "replaying" : isRecording ? "recording" : "ready";
+      }
+
+      for (const [id, key] of [
+        ["crossfade", "crossfade"],
+        ["bpm", "bpm"],
+        ["speed", "speed"],
+        ["intensity", "intensity"],
+        ["feedback", "feedback"],
+        ["depth", "depth"],
+        ["ring-opacity", "ringOpacity"],
+        ["palette", "palette"],
+        ["max-brightness", "maxBrightness"],
+      ]) {
+        $(`#${id}`).addEventListener("input", (event) => {
+          state[key] = Number(event.target.value);
+          publish();
+        });
+      }
+
+      for (const [id, key] of [
+        ["deck-a-mode", "deckAMode"],
+        ["deck-b-mode", "deckBMode"],
+      ]) {
+        $(`#${id}`).addEventListener("change", (event) => {
+          state[key] = Number(event.target.value);
+          state.cueVersion += 1;
+          publish();
+        });
+      }
+
+      for (const [id, key] of [
+        ["map-deck-a-start", "deckAStart"],
+        ["map-deck-a-count", "deckACount"],
+        ["map-deck-b-start", "deckBStart"],
+        ["map-deck-b-count", "deckBCount"],
+        ["map-bass-track", "bassTrack"],
+        ["map-mid-track", "midTrack"],
+        ["map-high-track", "highTrack"],
+      ]) {
+        $(`#${id}`).addEventListener("input", (event) => {
+          state.trackMapping[key] = Number(event.target.value);
+          publish();
+        });
+      }
+
+      $$("[data-snap]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.crossfade = Number(button.dataset.snap);
+          $("#crossfade").value = String(state.crossfade);
+          publish();
+        });
+      });
+      $$("[data-cue]").forEach((button) => button.addEventListener("click", () => queueCue(button.dataset.cue)));
+
+      $("#flash").addEventListener("click", () => {
+        state.flashVersion += 1;
+        publish();
+      });
+      $("#rings").addEventListener("click", () => {
+        state.rings = !state.rings;
+        publish();
+      });
+      $("#strobe").addEventListener("click", () => {
+        if (!state.strobeLockout) state.strobe = !state.strobe;
+        publish();
+      });
+      $("#strobe-lockout").addEventListener("click", () => {
+        state.strobeLockout = !state.strobeLockout;
+        if (state.strobeLockout) state.strobe = false;
+        publish();
+      });
+      $("#freeze").addEventListener("click", () => {
+        state.freeze = !state.freeze;
+        publish();
+      });
+      $("#blackout").addEventListener("click", () => {
+        state.blackout = !state.blackout;
+        publish();
+      });
+      $("#beat-sync").addEventListener("click", () => {
+        state.beatSync = !state.beatSync;
+        publish();
+      });
+      $("#bar-sync").addEventListener("click", () => {
+        state.barSync = !state.barSync;
+        state.beatSync = state.beatSync || state.barSync;
+        publish();
+      });
+      $("#demo-mode").addEventListener("click", () => {
+        state.demoMode = !state.demoMode;
+        publish();
+      });
+      $("#save-preset").addEventListener("click", savePreset);
+      $("#record").addEventListener("click", startRecording);
+      $("#play-replay").addEventListener("click", playReplay);
+      $("#stop-replay").addEventListener("click", stopReplay);
+      $("#reset").addEventListener("click", () => {
+        Object.assign(state, defaultState(), {
+          flashVersion: state.flashVersion,
+          resetVersion: state.resetVersion + 1,
+        });
+        pendingCue = null;
+        syncInputs();
+        publish();
+      });
+
+      renderPresets();
+      syncInputs();
+      setInterval(publish, 500);
+      setInterval(render, 500);
+      connect();
+      render();
+    </script>
+  </body>
+</html>
+

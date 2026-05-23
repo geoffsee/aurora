@@ -1,0 +1,40 @@
+[package]
+name = "bevyosc"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = [".", "plugins/bevyosc-vst", "plugins/bevyosc-vst/xtask"]
+resolver = "2"
+
+[dependencies]
+bevy = { version = "0.17", default-features = false, features = [
+  "std",
+  "async_executor",
+  "bevy_asset",
+  "bevy_camera",
+  "bevy_color",
+  "bevy_core_pipeline",
+  "bevy_image",
+  "bevy_log",
+  "bevy_mesh",
+  "bevy_render",
+  "bevy_shader",
+  "bevy_sprite",
+  "bevy_sprite_render",
+  "bevy_text",
+  "bevy_ui",
+  "bevy_ui_render",
+  "bevy_window",
+  "bevy_winit",
+  "default_font",
+  "png",
+  "webgpu",
+] }
+wasm-bindgen = "0.2.122"
+
+[profile.release]
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+
