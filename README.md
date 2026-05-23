@@ -1,6 +1,8 @@
-# bevyosc VJ
+# bevy-osc
 
 Browser/WebAssembly Bevy app for live Video DJ performance. The first show build favors dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.
+
+![Projector output: a procedural grid of tiles around a central beam burst](screenshots/example.webp)
 
 ## Requirements
 
@@ -50,6 +52,8 @@ bun run check:vst    # cargo check the VST plugin crate
 ## Performance Controls
 
 Use the controls app on port `3001` for show operation. The projector output on port `3000` has no visible HUD or help overlay.
+
+![Controls app: crossfade, cues, deck modes, BPM/speed/intensity sliders, color, and safety toggles](screenshots/control-panel.webp)
 
 The controls app includes show-oriented controls:
 

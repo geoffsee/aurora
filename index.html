@@ -96,6 +96,7 @@
         replaying: false,
       };
 
+      const METER_GAIN = 2.5;
       const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
       const clampInt = (value, min, max, fallback = min) => {
         const number = Number(value);
@@ -143,7 +144,9 @@
       }
 
       function recomputeEnergy() {
-        const meters = oscState.meters.slice(0, oscState.meterCount).map(clamp01);
+        const meters = oscState.meters
+          .slice(0, oscState.meterCount)
+          .map((value) => clamp01(clamp01(value) * METER_GAIN));
         const mapping = controlState.trackMapping;
         const avg = average(meters);
         const peak = Math.max(avg, ...meters);

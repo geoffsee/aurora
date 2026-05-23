@@ -1,6 +1,7 @@
 use std::f32::consts::TAU;
 
 use bevy::{
+    core_pipeline::tonemapping::Tonemapping,
     prelude::*,
     window::{PresentMode, WindowResolution},
     winit::WinitSettings,
@@ -91,6 +92,8 @@ const DECK_B_COLS: usize = 14;
 const DECK_B_ROWS: usize = 8;
 const OSC_PULSE_GAIN: f32 = 0.08;
 const AUDIO_GEOMETRY_GAIN: f32 = 0.28;
+const TUNNEL_RING_COUNT: usize = 18;
+const TUNNEL_DEPTH: f32 = 32.0;
 const AUDIO_GATE_START: f32 = 0.02;
 const AUDIO_GATE_END: f32 = 0.08;
 const AUDIO_ATTACK_SPEED: f32 = 14.0;
@@ -123,6 +126,7 @@ fn main() {
                 keyboard_controls,
                 advance_clock,
                 update_visuals,
+                update_tunnel_rings,
             )
                 .chain(),
         )
@@ -247,16 +251,53 @@ struct VisualElement {
     seed: f32,
 }
 
+#[derive(Component)]
+struct TunnelRing {
+    lane: usize,
+}
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn(Camera2d);
 
+    commands.spawn((
+        Camera3d::default(),
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        Tonemapping::None,
+        Transform::from_xyz(0.0, 0.0, 6.0).looking_at(Vec3::new(0.0, 0.0, -1.0), Vec3::Y),
+    ));
+
     let quad = meshes.add(Rectangle::default());
     let circle = meshes.add(Circle::new(1.0));
+    let torus = meshes.add(Torus {
+        minor_radius: 0.035,
+        major_radius: 1.0,
+    });
     let transparent = Color::BLACK.with_alpha(0.0);
+
+    for lane in 0..TUNNEL_RING_COUNT {
+        let phase = lane as f32 / TUNNEL_RING_COUNT as f32;
+        commands.spawn((
+            Mesh3d(torus.clone()),
+            MeshMaterial3d(standard_materials.add(StandardMaterial {
+                base_color: Color::BLACK.with_alpha(0.0),
+                unlit: true,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            })),
+            Transform::from_xyz(0.0, 0.0, -(1.0 - phase) * TUNNEL_DEPTH),
+            Visibility::Hidden,
+            TunnelRing { lane },
+        ));
+    }
 
     commands.spawn((
         Mesh2d(quad.clone()),
@@ -844,6 +885,70 @@ fn update_visuals(
         let lightness = lightness * (0.45 + state.max_brightness * 0.55);
         if let Some(material) = materials.get_mut(&material_handle.0) {
             material.color = palette_color(state.palette, hue, saturation, lightness, alpha);
+        }
+    }
+}
+
+fn update_tunnel_rings(
+    state: Res<VjState>,
+    mut rings: Query<(
+        &TunnelRing,
+        &mut Transform,
+        &mut Visibility,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let tunnel_a = matches!(state.deck_a_mode, VisualMode::Tunnel);
+    let tunnel_b = matches!(state.deck_b_mode, VisualMode::Tunnel);
+    let active = (tunnel_a || tunnel_b) && !state.blackout;
+
+    if !active {
+        for (_, _, mut visibility, _) in &mut rings {
+            *visibility = Visibility::Hidden;
+        }
+        return;
+    }
+
+    let bass = state.osc_bass.clamp(0.0, 1.0);
+    let mid = state.osc_mid.clamp(0.0, 1.0);
+    let drive = state.osc_energy.clamp(0.0, 1.0);
+    let beat_hit = if state.osc_connected {
+        state.osc_pulse.clamp(0.0, 1.0) * (bass * 0.8 + drive * 0.2)
+    } else {
+        let beat = (state.show_time * state.bpm / 60.0).fract();
+        (1.0 - beat).powf(8.0)
+    };
+    let rate = 0.18 + state.speed * 0.22 + drive * 0.18;
+    let deck_mix = if tunnel_a && tunnel_b {
+        1.0
+    } else if tunnel_a {
+        1.0 - state.crossfade
+    } else {
+        state.crossfade
+    };
+
+    for (ring, mut transform, mut visibility, material_handle) in &mut rings {
+        *visibility = Visibility::Inherited;
+
+        let phase = (state.show_time * rate + ring.lane as f32 / TUNNEL_RING_COUNT as f32)
+            .rem_euclid(1.0);
+        let z = -(1.0 - phase) * TUNNEL_DEPTH;
+        let radius = 1.5 + state.depth * 0.7 + bass * 0.25 + beat_hit * 0.18;
+        transform.translation = Vec3::new(0.0, 0.0, z);
+        transform.scale = Vec3::splat(radius);
+        transform.rotation =
+            Quat::from_rotation_z(state.show_time * 0.4 + ring.lane as f32 * 0.6);
+
+        let hue = (state.palette * 360.0 + ring.lane as f32 * 18.0 + phase * 60.0)
+            .rem_euclid(360.0);
+        let lightness = (0.45 + drive * 0.2 + mid * 0.15 + state.flash * 0.25).clamp(0.05, 0.85);
+        let bell = (phase * TAU * 0.5).sin();
+        let alpha = (bell * (0.55 + beat_hit * 0.45) * deck_mix * state.max_brightness)
+            .clamp(0.0, 1.0);
+
+        if let Some(material) = materials.get_mut(&material_handle.0) {
+            material.base_color = Color::hsla(hue, 0.85, lightness, alpha);
         }
     }
 }
