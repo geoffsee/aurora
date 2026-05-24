@@ -1,0 +1,78 @@
+name: Deploy
+
+# Publishes the projector page and controls UI to GitHub Pages.
+# Note: GH Pages can only host the static front-end. The OSC/WebSocket
+# bridge in index.ts requires a local Bun server and is not deployed.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  WASM_BINDGEN_VERSION: "0.2.122"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-bindgen-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@${{ env.WASM_BINDGEN_VERSION }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS deps
+        run: bun install --frozen-lockfile
+
+      - name: Build WASM (web target)
+        run: bun run build:web
+
+      - name: Stage static site
+        run: |
+          set -euo pipefail
+          cp index.html controls.html styles.css controls.css dist/
+          cp -r assets dist/
+          # In dev, the Bun server serves the repo root so the HTML imports
+          # `./dist/pkg/bevyosc.js`. In the Pages bundle, HTML and WASM sit
+          # together, so the WASM lives at `./pkg/bevyosc.js`.
+          sed -i 's|./dist/pkg/|./pkg/|g' dist/index.html
+          touch dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
