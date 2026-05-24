@@ -1,0 +1,188 @@
+{
+  "artifact": "framing-final",
+  "version": "1.0.0",
+  "project": "bevy-osc-app",
+  "date": "2026-05-24",
+  "owner": "Geoff Seemueller",
+  "status": "finalized",
+  "supersedes": [".caretta/discovery/workspace.json"],
+  "downstream_consumers": ["planning", "implementation", "rehearsal-checklist", "show-day-runbook"],
+
+  "frame": {
+    "name": "Show-reliability VJ rig",
+    "one_liner": "A browser-based, procedural Bevy/WebGPU visual rig driven by Ableton + MIDI-via-VST3, optimized for one solo operator to run a confident first live show.",
+    "primary_user": "Geoff Seemueller (solo developer/operator/VJ)",
+    "primary_outcome": "v0.1.0 first-show build that runs a 45–60 min live set without dropouts, desyncs, crashes, or audience-safety incidents."
+  },
+
+  "mvp": {
+    "definition": "The smallest build that lets Geoff run one real 45–60 min live set, end-to-end, with Ableton beat/meter reactivity, MIDI-via-VST cueing, and hard safety controls — nothing more.",
+    "north_star": "First-show confidence: zero crashes, zero safety incidents, <15 min setup/teardown.",
+    "in_scope": [
+      "Procedural visuals only: Beams, Tunnel, Burst, Mirror, Wash (CPU-fed material params).",
+      "Two-page split: clean projector at :3000, rich controls at :3001.",
+      "Ableton reactivity via Bun OSC bridge (ports 11000/11001) — tempo, beat, play state, track meters.",
+      "VST3 plugin (bevyosc VJ Bridge) on macOS for Ableton-mapped MIDI → OSC → bridge (port 12000).",
+      "Six cues: Warmup, Drop, Tunnel, Burst, Wash, Panic Dim — fireable on beat/bar.",
+      "Safety controls: max brightness cap, strobe lockout, blackout, freeze, reset.",
+      "Six in-browser preset slots (localStorage).",
+      "In-memory record/replay for rehearsal.",
+      "Diagnostics: OSC live, bridge status, viewer count, energy bands, meter activity.",
+      "Keyboard fallback on projector page.",
+      "Show-day checklist + wasm-bindgen 0.2.122 version pin verification."
+    ],
+    "out_of_scope_v0_1": [
+      "GPU palette pass (assets/shaders/vj_palette.wgsl stays reserved).",
+      "Live video sampling or real-time browser video decoding.",
+      "Windows/Linux VST install paths.",
+      "WebGL2 fallback (deferred until WebGPU proves unreliable in rehearsal).",
+      "Multi-machine / networked operation.",
+      "Persistent server-side preset storage.",
+      "Direct Web MIDI in the browser (routed via Ableton+VST3 instead).",
+      "New cue types, new visual modes, or expanded parameter surface."
+    ],
+    "explicit_non_goals": [
+      "Generic browser VJ engine.",
+      "Asset/library management.",
+      "Cross-DAW support.",
+      "Polished UX beyond what the solo operator needs under stage pressure."
+    ],
+    "acceptance_criteria": [
+      {"id": "AC1", "metric": "Stable 60+ FPS on projector during 45–60 min set, zero crashes."},
+      {"id": "AC2", "metric": "End-to-end cue response (controls or MIDI → projector) <200ms."},
+      {"id": "AC3", "metric": "OSC live indicator stays connected for full set; no silent reactivity loss."},
+      {"id": "AC4", "metric": "All safety toggles reachable in <2s from controls page."},
+      {"id": "AC5", "metric": "Six preset slots persist across browser reload."},
+      {"id": "AC6", "metric": "Setup/teardown <15 min using show-day checklist."},
+      {"id": "AC7", "metric": "Zero strobe/brightness misfires in rehearsal + show."},
+      {"id": "AC8", "metric": "Geoff reports high post-rehearsal confidence (qualitative)."}
+    ]
+  },
+
+  "decision_gate": {
+    "decision": "Ship v0.1.0 as the MVP Show-reliability VJ rig — procedural Bevy/WebGPU visuals + two-page UI + Ableton/VST3/OSC bridge + safety controls. Defer everything else until after one successful live show.",
+    "status": "approved",
+    "approver": "Geoff Seemueller",
+    "approved_on": "2026-05-24",
+    "gate_to_pass_before_expanding_scope": {
+      "name": "Post-first-show review",
+      "criteria": [
+        "One real 45–60 min live set completed under stage conditions.",
+        "All AC1–AC8 acceptance criteria met or explicitly waived with notes.",
+        "Operator debrief captured (cognitive load, failure modes, missed creative ceiling).",
+        "Audience-safety review: zero incidents documented."
+      ],
+      "if_passed": "Reopen scope: evaluate GPU palette pass, additional visual modes, cross-platform VST, WebGL2 fallback.",
+      "if_failed": "Iterate within v0.1.x on stability/safety only — no feature expansion."
+    }
+  },
+
+  "rationale": {
+    "summary": "Constraining v0.1.0 to procedural-only visuals + Ableton-tight integration + safety-first controls directly attacks the highest-impact risks (crashes, desync, audience-safety, operator cognitive load) for a solo operator under stage pressure. Every deferred feature trades real reliability for hypothetical creative ceiling; for a first show, reliability wins.",
+    "supporting_evidence": [
+      "README explicitly favors 'dependable procedural visuals... over risky real-time browser video decoding.'",
+      "Codebase already implements the full primary path: src/main.rs (Bevy WASM), index.ts (Bun OSC bridge), plugins/bevyosc-vst (VST3), controls.html (rich operator UI).",
+      "Safety surface (Panic Dim cue, strobe lockout, max brightness cap, blackout, freeze, reset) is already wired through controls and VST parameter list.",
+      "Reserved vj_palette.wgsl signals an extension path that is intentionally not blocking v0.1.0."
+    ],
+    "tradeoffs_accepted": [
+      "Lower creative ceiling (no live video, no GPU palette richness) — accepted for stability.",
+      "macOS-only VST install — accepted because operator is on macOS.",
+      "WebGPU-only browser support — accepted because operator controls the show machine.",
+      "Single-machine local operation — accepted; removes network failure modes.",
+      "Two-page UI cognitive load — mitigated by rehearsal + clear diagnostics, not by redesign."
+    ],
+    "alternatives_rejected": [
+      {"option": "Generic browser VJ engine", "why_rejected": "Higher engineering cost and more failure modes; cannot ship a confident first show within scope."},
+      {"option": "GPU palette pass in v0.1.0", "why_rejected": "Increases visual risk surface (shader bugs, GPU stalls) for marginal first-show value."},
+      {"option": "Direct Web MIDI in browser", "why_rejected": "Less deterministic than Ableton-mapped MIDI through VST3+OSC; harder to debug live."},
+      {"option": "Single-page combined UI", "why_rejected": "Risks HUD bleed onto projector and conflates operator/audience views."}
+    ]
+  },
+
+  "unresolved_assumptions": [
+    {
+      "id": "A1",
+      "claim": "CPU-fed material parameters in Bevy 0.17 hold a stable 60+ FPS for a full 45–60 min set on the show machine.",
+      "confidence": "medium",
+      "validate_by": "Full-length dry run in rehearsal with projector + controls + Ableton under realistic thermal load.",
+      "blocking_for": "AC1",
+      "owner": "Geoff Seemueller"
+    },
+    {
+      "id": "A2",
+      "claim": "wasm-bindgen CLI stays pinned to 0.2.122 on the show machine; no silent drift breaks the build pre-show.",
+      "confidence": "medium",
+      "validate_by": "Add `bun run check:wasm` to pre-show routine; verify version in show-day checklist.",
+      "blocking_for": "show-day build",
+      "owner": "Geoff Seemueller"
+    },
+    {
+      "id": "A3",
+      "claim": "AbletonOSC + VST OSC ports (11000/11001/12000) are free and reachable on the show machine.",
+      "confidence": "medium",
+      "validate_by": "Pre-show port check; env overrides (LIVE_HOST/LIVE_SEND_PORT/LIVE_RECV_PORT/VST_CONTROL_RECV_PORT) documented and rehearsed.",
+      "blocking_for": "AC3",
+      "owner": "Geoff Seemueller"
+    },
+    {
+      "id": "A4",
+      "claim": "Two-page UI split is manageable for one operator under stage pressure with rehearsal practice.",
+      "confidence": "medium",
+      "validate_by": "Rehearsal debrief on cognitive load; record/replay used to drill cue sequences.",
+      "blocking_for": "AC8",
+      "owner": "Geoff Seemueller"
+    },
+    {
+      "id": "A5",
+      "claim": "Procedural-only visuals are creatively sufficient for the first show audience.",
+      "confidence": "medium",
+      "validate_by": "Operator + trusted-listener review at rehearsal; deferred to post-show retro if it falls short.",
+      "blocking_for": "post-show scope decisions",
+      "owner": "Geoff Seemueller"
+    },
+    {
+      "id": "A6",
+      "claim": "Reserved GPU palette pass (assets/shaders/vj_palette.wgsl) is safe to leave dormant for v0.1.0 without dead-code rot.",
+      "confidence": "low",
+      "validate_by": "Confirm shader file does not break builds; revisit at post-show review.",
+      "blocking_for": "none (post-MVP)",
+      "owner": "Geoff Seemueller"
+    },
+    {
+      "id": "A7",
+      "claim": "macOS-only VST install path is acceptable for v0.1.0 (no Windows/Linux operator in scope).",
+      "confidence": "high",
+      "validate_by": "Confirmed by operator; revisit only if a second operator joins.",
+      "blocking_for": "none (post-MVP)",
+      "owner": "Geoff Seemueller"
+    }
+  ],
+
+  "risks_carried_forward": [
+    {"id": "R1", "trigger": "WebGPU disabled or throttled on show machine", "likelihood": "medium", "impact": "high", "mitigation": "Pre-flight check in show-day checklist; consider WebGL2 fallback post-show only."},
+    {"id": "R2", "trigger": "wasm-bindgen CLI version drift", "likelihood": "medium", "impact": "high", "mitigation": "Pin in README; add check:wasm to pre-show routine."},
+    {"id": "R3", "trigger": "AbletonOSC port not bound or conflicting", "likelihood": "medium", "impact": "high", "mitigation": "Controls diagnostics surface OSC state; env-var port overrides documented."},
+    {"id": "R4", "trigger": "Strobe / max-brightness misfire", "likelihood": "low", "impact": "high", "mitigation": "Strobe lockout, max brightness cap, Panic Dim, blackout, freeze, reset — tested every rehearsal."},
+    {"id": "R5", "trigger": "Operator cognitive load under stage fatigue", "likelihood": "medium", "impact": "medium", "mitigation": "Rehearsal with record/replay; one-touch safety; show-day checklist."},
+    {"id": "R6", "trigger": "VST OSC port 12000 conflicts with another local service", "likelihood": "low", "impact": "medium", "mitigation": "VST_CONTROL_RECV_PORT override documented."}
+  ],
+
+  "action_list": [
+    {"id": "T1", "action": "Lock v0.1.0 MVP scope in repo (no new features until post-show review).", "owner": "Geoff Seemueller", "blocking": false},
+    {"id": "T2", "action": "Write show-day checklist covering: wasm-bindgen version, port checks, build:web, serve, AbletonOSC, VST load, safety toggle test.", "owner": "Geoff Seemueller", "blocking": true},
+    {"id": "T3", "action": "Run full-length rehearsal (45–60 min) end-to-end; record AC1–AC8 outcomes.", "owner": "Geoff Seemueller", "blocking": true},
+    {"id": "T4", "action": "Drill safety toggles (strobe lockout, max brightness, Panic Dim, blackout, freeze, reset) at least once per rehearsal.", "owner": "Geoff Seemueller", "blocking": true},
+    {"id": "T5", "action": "Verify six preset slots persist across browser reload on show machine.", "owner": "Geoff Seemueller", "blocking": false},
+    {"id": "T6", "action": "Run show.", "owner": "Geoff Seemueller", "blocking": true, "depends_on": ["T2", "T3", "T4"]},
+    {"id": "T7", "action": "Post-show retro: capture AC results, operator debrief, audience-safety review; decide on scope expansion.", "owner": "Geoff Seemueller", "blocking": false, "depends_on": ["T6"]}
+  ],
+
+  "handoff_pointers": {
+    "primary_source": "README.md",
+    "code_entry_points": ["src/main.rs", "index.ts", "controls.html", "plugins/bevyosc-vst/"],
+    "discovery_predecessor": ".caretta/discovery/workspace.json",
+    "persona_reference": ".caretta/personas/persona-dj-jazzy-jeff.json",
+    "next_artifact": "rehearsal-checklist (to be produced by downstream workflow)"
+  }
+}
