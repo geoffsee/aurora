@@ -1,10 +1,10 @@
-project_name = "autopilot-example-project"
+project_name = "bevy-osc-app"
 
 [test]
-command = ["bun", "test"]
-format_command = ["bunx", "--bun", "@biomejs/biome", "format", "./src"]
+command = ["bun", "run", "test"]
+format_command = ["bun", "run", "format"]
 
-[security_scan]
-paths = [
-# nothing here yet
-]
+#[security_scan]
+#paths = [
+## todo
+#]
