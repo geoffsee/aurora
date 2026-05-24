@@ -149,6 +149,19 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, finiteNumber(value, fallback)));
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
+const isNumericOscArg = (arg: OscArg): boolean => {
+	if (arg && typeof arg === "object" && "type" in arg) {
+		const t = (arg as { type: string }).type;
+		return t === "f" || t === "i" || t === "d" || t === "h";
+	}
+	return typeof arg === "number";
+};
+const oscArgType = (arg: OscArg): string => {
+	if (arg && typeof arg === "object" && "type" in arg) {
+		return (arg as { type: string }).type;
+	}
+	return typeof arg;
+};
 const defaultTrackMapping = (): TrackMapping => ({
 	deckAStart: 0,
 	deckACount: 8,
@@ -279,6 +292,12 @@ const validateVstOscMsg = (msg: OscMsg, origin: string): boolean => {
 			);
 			return false;
 		}
+		if (!isNumericOscArg(args[0])) {
+			console.error(
+				`[VST OSC] dropping malformed payload for "${address}" — expected numeric arg, got type "${oscArgType(args[0])}" from ${origin}`,
+			);
+			return false;
+		}
 		return true;
 	}
 
@@ -296,6 +315,12 @@ const validateVstOscMsg = (msg: OscMsg, origin: string): boolean => {
 			);
 			return false;
 		}
+		if (!isNumericOscArg(args[0])) {
+			console.error(
+				`[VST OSC] dropping malformed payload for "${address}" — expected numeric arg, got type "${oscArgType(args[0])}" from ${origin}`,
+			);
+			return false;
+		}
 		return true;
 	}
 
@@ -310,6 +335,12 @@ const validateVstOscMsg = (msg: OscMsg, origin: string): boolean => {
 		if (args.length !== 1) {
 			console.error(
 				`[VST OSC] dropping malformed payload for "${address}" — expected 1 arg, got ${args.length} from ${origin}`,
+			);
+			return false;
+		}
+		if (!isNumericOscArg(args[0])) {
+			console.error(
+				`[VST OSC] dropping malformed payload for "${address}" — expected numeric arg, got type "${oscArgType(args[0])}" from ${origin}`,
 			);
 			return false;
 		}
