@@ -2,3 +2,4 @@
 set -euo pipefail
 
 bun run typecheck
+bun run clippy

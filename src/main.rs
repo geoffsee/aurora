@@ -350,7 +350,7 @@ fn setup(
                     index,
                     col,
                     row,
-                    seed: index as f32 * 0.318,
+                    seed: index as f32 * 0.317,
                 },
             ));
         }
@@ -806,7 +806,7 @@ fn update_visuals(
                     }
                     VisualMode::Mirror => {
                         if (element.col + element.row) % 2 == 0 {
-                            transform.rotation = transform.rotation * Quat::from_rotation_z(TAU * 0.25);
+                            transform.rotation *= Quat::from_rotation_z(TAU * 0.25);
                         }
                         transform.translation.x = transform.translation.x.abs() * if element.col % 2 == 0 { 1.0 } else { -1.0 };
                         alpha *= 0.8 + wave(t * 4.0 + diagonal) * 0.45;
