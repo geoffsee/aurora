@@ -23,6 +23,7 @@
         CONNECTED: "/bevyosc/osc/connected",
         DEMO: "/bevyosc/demo/audio",
         DIAGNOSTICS: "/bevyosc/server/diagnostics",
+        DEV_RELOAD: "/bevyosc/dev/reload",
       };
       const CONTROL = {
         STATE: "/bevyosc/control/state",
@@ -209,6 +210,8 @@
           recomputeEnergy();
         } else if (address === CONTROL.STATE) {
           applyControlState(args[0]);
+        } else if (address === OSC.DEV_RELOAD) {
+          handleHotReload();
         }
       }
 
@@ -272,6 +275,22 @@
             midTrack: clampInt(next.trackMapping.midTrack, 0, 31, controlState.trackMapping.midTrack),
             highTrack: clampInt(next.trackMapping.highTrack, 0, 31, controlState.trackMapping.highTrack),
           };
+        }
+      }
+
+      let hotReloading = false;
+      async function handleHotReload() {
+        if (hotReloading) return;
+        hotReloading = true;
+        console.log("[hot-reload] WASM package changed, reloading...");
+        try {
+          const { default: init } = await import(`./dist/pkg/bevyosc.js?t=${Date.now()}`);
+          await init();
+          console.log("[hot-reload] WASM reinitialised in-place");
+          hotReloading = false;
+        } catch (error) {
+          console.warn("[hot-reload] in-place reinit failed, reloading page", error);
+          location.reload();
         }
       }
 
