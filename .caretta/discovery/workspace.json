@@ -1,0 +1,166 @@
+{
+  "problem": "Live VJ performances, especially for solo operator Geoff under stage pressure and time constraints, need a dependable browser-based visual rig that reacts reliably to Ableton tempo, beat, and track meter data without the fragility, latency, CPU spikes, codec incompatibilities, or frame drops common in real-time browser video decoding (which can lead to crashes, desync, and performance anxiety). The rig must be driven from both a separate clean controls UI and a MIDI controller mapped via Ableton, minimizing operator cognitive load, enabling quick safety interventions, and ensuring immersive, hazard-free visuals for the audience.",
+  "stakeholders": "Solo developer/operator Geoff Seemueller (author, 2026) acting as VJ – requires zero-downtime reliability, low cognitive load during live cueing, quick rehearsal-to-show workflows, and confidence-inspiring safety controls while managing Ableton + bridge + dual browser pages on the same machine. An Ableton Live performer providing tempo and track meter data – needs seamless, low-latency sync and intuitive MIDI mapping without disrupting music flow. The audience viewing the projector output – expects beat-synced, engaging procedural visuals without technical glitches, HUD bleed, or health risks (e.g., unintended strobes/brightness triggering photosensitivity). No external team or customer surfaced in the repo.",
+  "evidence": "README.md describes 'Browser/WebAssembly Bevy app for live Video DJ performance' favoring 'dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.' Cargo.toml pins bevy 0.17 with webgpu; index.ts implements OSC<->WebSocket bridge to AbletonOSC (ports 11000/11001) plus VST OSC ingress (12000); plugins/bevyosc-vst exposes parameter list mirroring controls.html cues; package.json defines build:web/serve/build:vst/install:vst:mac scripts.",
+  "desired_outcome": "A first show build that can run a live set: projector page at :3000 renders clean procedural visuals (beams/tunnel/burst/mirror/wash) reacting to Ableton beat and meter data, while the operator drives cues, decks, BPM, and safety toggles from the controls app at :3001 or a MIDI controller through the bevyosc VJ Bridge VST3 plugin. Includes high operator confidence via clear diagnostics, persistent presets, in-memory record/replay for rehearsal, and zero audience-safety incidents.",
+  "constraints": "Browser must support WebGPU (Chrome/Edge); requires Rust wasm32-unknown-unknown target and a pinned wasm-bindgen 0.2.122 matching the Rust build; Bun runtime for the bridge; AbletonOSC must listen on UDP 11000 with replies on 11001; macOS-only VST install script (install:vst:mac copies into ~/Library/Audio/Plug-Ins/VST3); release profile tuned for size (opt-level=z, lto=thin).",
+  "dependencies": "Bevy 0.17 (default-features off, webgpu feature on); wasm-bindgen 0.2.122; Bun + `osc` npm package; AbletonOSC inside Ableton Live; VST3 host (Ableton) for the bevyosc-vst plugin; browser WebGPU implementation; xtask crate for VST bundling.",
+  "existing_systems": "Single Rust binary in src/main.rs compiled to wasm; Bun server in index.ts hosting projector (index.html/styles.css) on :3000 and controls (controls.html/controls.css) on :3001 plus /ws WebSocket; VST3 plugin in plugins/bevyosc-vst that emits OSC to the Bun bridge on :12000; reserved GPU shader at assets/shaders/vj_palette.wgsl (not yet used). README notes the OSC bridge pattern is mirrored from a prior `ableton-osc-visualizer` project.",
+  "hypotheses": "1) CPU-fed material parameters in Bevy are reliable enough for a live set without a custom WGSL palette pass. 2) Procedural visuals beat real-time browser video decoding for show reliability. 3) Routing MIDI through an Ableton-hosted VST3 that emits OSC is more dependable than direct Web MIDI in the browser. 4) Two separate browser pages (projector clean, controls rich) avoid HUD bleed onto the projection.",
+  "success_metrics": "Explicit/show-oriented but now measurable for first show: projector renders without HUD and maintains stable 60+ FPS with zero dropouts/desyncs (>200ms latency) or crashes during 45–60 min set; cues (Warmup, Drop, Tunnel, Burst, Wash, Panic Dim) fire on beat/bar with <200ms end-to-end response via controls or MIDI; controls app shows `OSC live` plus energy bands, deck averages, viewer count and meter activity with no disconnects; safety toggles (max brightness, strobe lockout, blackout, freeze, reset) reachable in <2s; six preset slots persist in browser; in-memory record/replay works reliably for rehearsal; Geoff reports high post-rehearsal confidence with zero audience-safety incidents and setup/teardown <15 min.",
+  "tradeoffs": "Procedural-only visuals trade creative ceiling (no live video sampling or asset variety) for stability and deterministic reactivity under live conditions; CPU-fed parameters trade GPU-driven richness for debuggability and lower crash risk before a set; WebGPU requirement trades broad browser support for modern rendering; routing MIDI via a VST3+OSC bridge trades setup complexity and single-machine dependency for deterministic Ableton-side mapping and reduced browser-side fragility; two-page split trades app cohesion for clean projector output but may increase operator cognitive load (mitigated by clear diagnostics and rehearsal practice).",
+  "risks": "WebGPU availability/stability on show machines (including long-session throttling or stuttering); wasm-bindgen CLI version drift vs. crate lock (0.2.122) breaks build; AbletonOSC misconfiguration or port conflict (11000/11001/12000) silently kills reactivity; strobe/brightness misfire harming audience (photosensitivity edge case); macOS-only VST install path leaves Windows/Linux operators unsupported; reserved GPU shader path implies an incomplete future direction; operator cognitive load or setup errors managing dual pages + Ableton + MIDI mapping under stage fatigue/pressure; browser power management or thermal throttling during extended sets.",
+  "assumption_summary": "Operator runs Ableton + the Bun bridge + a WebGPU browser on the same machine and trusts procedural visuals for a first show; AbletonOSC and a VST3-capable host are available; MIDI controller can be mapped in Ableton; macOS is the target install platform; single-machine local operation avoids external network variables; dual-page UI remains manageable for solo operator with rehearsal practice.",
+  "frame_notes": "Framing this as a show-reliability product, not a generic VJ engine: the README explicitly prioritizes 'dependable procedural visuals' for a 'first show build' over richer but riskier real-time video. The split between projector (clean) and controls (rich) and the safety controls (lockout/blackout/Panic Dim) reinforce a live-performance frame focused on operator confidence and audience safety under real stage conditions.",
+  "decision": "Adopt 'Show-reliability VJ rig' as primary frame for v0.1.0 first show build: proceed with procedural Bevy/WebGPU visuals, two-page UI split, Ableton+VST3+OSC bridge, and emphasized safety controls. Defer generic engine features, live video decoding, and full GPU palette shader until after successful rehearsal/live validation.",
+  "decision_rationale": "Directly addresses the core problem of live fragility and operator needs for dependability/safety under pressure. Aligns with README priorities, all hypotheses, evidence from existing systems, and frame comparisons (which recommend this over broader scopes). Minimizes high-impact risks (crashes, safety incidents, cognitive overload) for a confident first show while enabling post-show iteration based on real usage data. Accepts procedural and macOS tradeoffs for immediate reliability.",
+  "risk_accepted": true,
+  "risk_notes": "Author has explicitly accepted the limitation of procedural-only visuals for the first show build; strobe/brightness risk is acknowledged via dedicated safety toggles (strobe lockout, max brightness, Panic Dim, blackout, freeze, reset). Additional tradeoffs around operator cognitive load and platform limits are accepted in favor of shipping a dependable v0.1 rig validated through rehearsal.",
+  "assumptions": [
+    {
+      "status": "open",
+      "confidence": "medium",
+      "evidence": "README: 'first show build favors dependable procedural visuals... over risky real-time browser video decoding'",
+      "owner": "Geoff Seemueller",
+      "validation_next_step": "Run a full rehearsal with Ableton + projector + controls and confirm no dropouts under show load; gather Geoff's qualitative feedback on visual engagement and cognitive load."
+    },
+    {
+      "status": "open",
+      "confidence": "medium",
+      "evidence": "Cargo.toml pins wasm-bindgen 0.2.122 and README requires the CLI to match.",
+      "owner": "Geoff Seemueller",
+      "validation_next_step": "Document the wasm-bindgen install step in show-day checklist; consider pinning via rust-toolchain or CI check and test before each rehearsal."
+    },
+    {
+      "status": "open",
+      "confidence": "low",
+      "evidence": "install:vst:mac script in package.json targets only macOS VST3 path.",
+      "owner": "Geoff Seemueller",
+      "validation_next_step": "Decide whether Windows/Linux VST install paths are in scope or explicitly out for v0.1; simulate cross-platform considerations in rehearsal planning."
+    },
+    {
+      "status": "open",
+      "confidence": "low",
+      "evidence": "assets/shaders/vj_palette.wgsl exists but README notes it is 'reserved for a future GPU-material pass.'",
+      "owner": "Geoff Seemueller",
+      "validation_next_step": "Decide whether GPU palette pass is post-show work or a blocker for visual quality; assess in rehearsal and plan post-first-show iteration."
+    }
+  ],
+  "frame_comparisons": [
+    {
+      "frame": "Show-reliability VJ rig",
+      "framing": "Optimize for first-show dependability: procedural Bevy visuals, separated projector/controls pages, hard safety toggles.",
+      "evidence": "README opening paragraph and 'Safety controls for max brightness, strobe lockout, blackout, freeze, and reset.'",
+      "tradeoffs": "Lower creative ceiling, no live video sampling; simpler debug path; predictable behavior under stage conditions.",
+      "recommendation": "Primary frame for v0.1.0."
+    },
+    {
+      "frame": "Generic browser VJ engine",
+      "framing": "Build a flexible WebGPU VJ engine with pluggable visuals and broad input support.",
+      "evidence": "Reserved vj_palette.wgsl shader and the wide parameter surface in the VST/controls suggest extensibility.",
+      "tradeoffs": "Higher engineering cost, more failure modes, harder to ship a confident first show.",
+      "recommendation": "Defer until after the first show validates the reliability frame."
+    },
+    {
+      "frame": "Ableton-tight performance tool",
+      "framing": "Treat the app as an Ableton accessory: tempo/meter/MIDI flow exclusively through Ableton + AbletonOSC + VST3.",
+      "evidence": "index.ts OSC bridge ports (11000/11001), plugins/bevyosc-vst, README 'Ableton MIDI Control Surface Bridge' section.",
+      "tradeoffs": "Requires Ableton on stage; deterministic mapping; excludes non-Ableton workflows.",
+      "recommendation": "Consistent with current implementation; keep as default integration path."
+    }
+  ],
+  "decision_log": [
+    {
+      "date": "2026-05-24",
+      "decision": "Adopt Show-reliability VJ rig primary frame for v0.1.0 first show build (procedural visuals + safety-focused architecture)",
+      "rationale": "User-research refinement confirms alignment with solo operator needs, live safety priorities, and evidence; defers higher-risk expansions post-validation.",
+      "owner": "Geoff Seemueller"
+    }
+  ],
+  "risk_dashboard": [
+    {
+      "likelihood": "medium",
+      "impact": "high",
+      "trigger": "WebGPU disabled or broken on the show browser/laptop (including long-session throttling or stuttering)",
+      "mitigation": "Require Chrome/Edge with WebGPU pre-flight; document in show checklist; consider WebGL2 fallback investigation; test under simulated load in rehearsal."
+    },
+    {
+      "likelihood": "medium",
+      "impact": "high",
+      "trigger": "wasm-bindgen CLI version mismatch vs. crate lock 0.2.122",
+      "mitigation": "Pin install command in README (already present); add `bun run check:wasm` to pre-show routine."
+    },
+    {
+      "likelihood": "medium",
+      "impact": "medium",
+      "trigger": "AbletonOSC not listening on 11000 or port already bound",
+      "mitigation": "Controls app exposes OSC/bridge diagnostics; env overrides LIVE_HOST/LIVE_SEND_PORT/LIVE_RECV_PORT documented."
+    },
+    {
+      "likelihood": "low",
+      "impact": "high",
+      "trigger": "Strobe or max-brightness misfire harming audience",
+      "mitigation": "Dedicated strobe lockout, max brightness cap, blackout, freeze, Panic Dim cue, reset; include safety test in every rehearsal."
+    },
+    {
+      "likelihood": "low",
+      "impact": "medium",
+      "trigger": "VST3 install path differs on non-macOS hosts",
+      "mitigation": "Document macOS-only install:vst:mac; add Windows/Linux paths if scope expands."
+    },
+    {
+      "likelihood": "low",
+      "impact": "medium",
+      "trigger": "VST OSC port 12000 conflicts with another local service",
+      "mitigation": "VST_CONTROL_RECV_PORT env override documented in README."
+    },
+    {
+      "likelihood": "medium",
+      "impact": "medium",
+      "trigger": "Operator cognitive load or setup errors during live set (dual pages, fatigue, pressure)",
+      "mitigation": "Clear diagnostics in controls, one-touch safety toggles, comprehensive show-day checklist, and rehearsal practice with record/replay."
+    }
+  ],
+  "dependency_graph": [
+    {
+      "from": "Ableton Live",
+      "to": "AbletonOSC",
+      "reason": "Hosts the OSC server that exposes tempo, beat, play state, and track meter data."
+    },
+    {
+      "from": "AbletonOSC",
+      "to": "Bun bridge (index.ts)",
+      "reason": "UDP OSC on 11000/11001 carries tempo/beat/meter frames into the bridge."
+    },
+    {
+      "from": "bevyosc-vst (VST3)",
+      "to": "Bun bridge (index.ts)",
+      "reason": "Plugin emits parameter changes as OSC to VST_CONTROL_RECV_PORT (12000)."
+    },
+    {
+      "from": "Bun bridge (index.ts)",
+      "to": "Projector page (:3000)",
+      "reason": "Broadcasts OSC and control state over /ws WebSocket to the Bevy/WASM projector."
+    },
+    {
+      "from": "Bun bridge (index.ts)",
+      "to": "Controls page (:3001)",
+      "reason": "Same /ws stream drives the controls UI and surfaces diagnostics."
+    },
+    {
+      "from": "Bevy WASM app",
+      "to": "Browser WebGPU",
+      "reason": "Rendering backend; requires Chrome/Edge with WebGPU enabled."
+    },
+    {
+      "from": "Build pipeline",
+      "to": "wasm-bindgen 0.2.122",
+      "reason": "CLI must match the crate version locked by Cargo.lock to produce a working bundle."
+    },
+    {
+      "from": "install:vst:mac",
+      "to": "~/Library/Audio/Plug-Ins/VST3",
+      "reason": "Copies bundled `bevyosc VJ Bridge.vst3` to the macOS VST3 directory for Ableton to load."
+    }
+  ]
+}

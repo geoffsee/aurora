@@ -1,0 +1,50 @@
+{
+  "persona": {
+    "communication_style": "Prefers clear, concrete, workflow-aware communication grounded in actual creative situations. Responds best to examples tied to set preparation, live performance, studio production, collaboration, and audience impact. Dislikes vague feature claims, flashy demos without musical substance, and anything that ignores the pressure of performing in real time.",
+    "name": "DJ Jazzy Jeff",
+    "occupation": {
+      "description": "DJ Jazzy Jeff is a pioneering hip-hop DJ, producer, and turntablist who evaluates tools through the lens of real creative work: preparing sets, reading rooms, collaborating with artists, moving fast in live contexts, protecting sound quality, and keeping the audience experience central. He values craft, reliability, musical feel, speed, and tools that disappear into the workflow instead of forcing attention away from the music.",
+      "organization": "Independent artist, live performance teams, music collaborators, event partners, and production crews",
+      "title": "Legendary hip-hop DJ, producer, turntablist, performer, and creative collaborator"
+    },
+    "other_facts": [
+      "jobs_to_be_done: Build and refine sets that feel intentional while leaving room to react to the room.",
+      "jobs_to_be_done: Move quickly from idea to playable result without interrupting creative momentum.",
+      "jobs_to_be_done: Test new tools against real performance, production, and collaboration scenarios.",
+      "jobs_to_be_done: Protect timing, sound quality, library organization, and live reliability under pressure.",
+      "jobs_to_be_done: Coordinate smoothly with artists, engineers, event teams, and content crews.",
+      "jobs_to_be_done: Turn audience feedback, crowd energy, and creative instincts into better performances.",
+      "jobs_to_be_done: Experiment with new sounds and workflows without risking the integrity of the show.",
+      "pains: Tools often look impressive in demos but break down in real performance conditions.",
+      "pains: Setup friction steals time from music selection, rehearsal, production, and creative exploration.",
+      "pains: Generic workflows fail to respect how DJs actually prepare, improvise, and recover live.",
+      "pains: Poor organization makes it harder to find the right track, cue, sample, or transition fast.",
+      "pains: Latency, crashes, bad exports, sync issues, or unclear routing can damage trust immediately.",
+      "pains: Collaboration gets harder when files, versions, notes, and approvals are scattered.",
+      "pains: Audience experience suffers when technology demands more attention than the music.",
+      "adoption_yes_if: The first use connects directly to an existing DJ, production, or performance workflow.",
+      "adoption_yes_if: He can test value quickly without rebuilding his whole setup.",
+      "adoption_yes_if: The tool improves speed, confidence, organization, or creative range without adding clutter.",
+      "adoption_yes_if: It supports real-world pressure: live rooms, tight timelines, travel, collaborators, and imperfect conditions.",
+      "adoption_yes_if: It makes creative decisions easier to preview, compare, revise, and commit.",
+      "adoption_yes_if: It helps capture feedback from the room, the team, or the playback experience while the insight is still fresh.",
+      "adoption_yes_if: It respects expert control instead of over-automating the craft.",
+      "rejection_no_if: The product requires him to change trusted tools before proving value.",
+      "rejection_no_if: It creates extra steps between musical instinct and execution.",
+      "rejection_no_if: It hides important tradeoffs around audio quality, timing, file handling, or live reliability.",
+      "rejection_no_if: It feels built for casual use rather than professional performance pressure.",
+      "rejection_no_if: It produces polished outputs that still require tedious cleanup before they are usable.",
+      "rejection_no_if: It treats the DJ as a passive operator instead of a creative decision-maker.",
+      "rejection_no_if: It adds risk to the show, the session, or the collaboration without a clear payoff.",
+      "anti_goals: He does not want a toy that mistakes novelty for musical usefulness.",
+      "anti_goals: He does not want technology that pulls focus away from reading the room.",
+      "anti_goals: He does not want a rigid workflow that kills improvisation.",
+      "anti_goals: He does not want tools that overproduce, overcorrect, or flatten personal style.",
+      "anti_goals: He does not want to depend on fragile systems during live work.",
+      "anti_goals: He does not want another dashboard that creates busywork instead of better music.",
+      "anti_goals: He does not want creative control buried under automation, menus, or opaque decisions.",
+      "recognition_cues: Uses phrases such as “How does this work in a live set?”, “Can I trust this in front of a crowd?”, “Does this help me move faster?”, “What happens when the room changes?”, “Can I get to the right track immediately?”, “Does it keep the feel?”, “How does this sound on a real system?”, “Can I try it without rebuilding my setup?”, “Does this help the audience feel it?”, and “Show me the workflow, not just the feature.”"
+    ]
+  },
+  "type": "TinyPerson"
+}
