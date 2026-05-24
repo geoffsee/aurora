@@ -70,6 +70,29 @@ const OSC_ADDRESSES = {
 	ERROR: "/live/error",
 } as const;
 
+const VST_CONTROL_NAMES = new Set([
+	"crossfade",
+	"bpm",
+	"speed",
+	"intensity",
+	"feedback",
+	"depth",
+	"palette",
+	"deck_a_mode",
+	"deck_b_mode",
+	"rings",
+	"ring_opacity",
+	"strobe",
+	"strobe_lockout",
+	"blackout",
+	"freeze",
+	"max_brightness",
+	"beat_sync",
+	"bar_sync",
+	"demo_mode",
+]);
+const VST_TRIGGER_NAMES = new Set(["flash", "reset"]);
+
 const port = Number(Bun.env.PORT ?? 3000);
 const controlsPort = Number(Bun.env.CONTROLS_PORT ?? 3001);
 const root = import.meta.dir;
@@ -225,6 +248,80 @@ const cuePresets: Record<string, Partial<ControlState>> = {
 		strobeLockout: true,
 	},
 };
+const validateLiveOscMsg = (msg: OscMsg, origin: string): boolean => {
+	if (!msg.address.startsWith("/live/")) {
+		console.error(
+			`[OSC] dropping unrecognised address "${msg.address}" from ${origin}`,
+		);
+		return false;
+	}
+	return true;
+};
+
+const validateVstOscMsg = (msg: OscMsg, origin: string): boolean => {
+	const { address } = msg;
+	const args = msg.args ?? [];
+	const controlPrefix = "/bevyosc/vst/control/";
+	const triggerPrefix = "/bevyosc/vst/trigger/";
+	const cuePrefix = "/bevyosc/vst/cue/";
+
+	if (address.startsWith(controlPrefix)) {
+		const name = address.slice(controlPrefix.length);
+		if (!VST_CONTROL_NAMES.has(name)) {
+			console.error(
+				`[VST OSC] dropping unrecognised address "${address}" from ${origin}`,
+			);
+			return false;
+		}
+		if (args.length !== 1) {
+			console.error(
+				`[VST OSC] dropping malformed payload for "${address}" — expected 1 arg, got ${args.length} from ${origin}`,
+			);
+			return false;
+		}
+		return true;
+	}
+
+	if (address.startsWith(triggerPrefix)) {
+		const name = address.slice(triggerPrefix.length);
+		if (!VST_TRIGGER_NAMES.has(name)) {
+			console.error(
+				`[VST OSC] dropping unrecognised address "${address}" from ${origin}`,
+			);
+			return false;
+		}
+		if (args.length !== 1) {
+			console.error(
+				`[VST OSC] dropping malformed payload for "${address}" — expected 1 arg, got ${args.length} from ${origin}`,
+			);
+			return false;
+		}
+		return true;
+	}
+
+	if (address.startsWith(cuePrefix)) {
+		const name = address.slice(cuePrefix.length);
+		if (!(name in cuePresets)) {
+			console.error(
+				`[VST OSC] dropping unrecognised address "${address}" from ${origin}`,
+			);
+			return false;
+		}
+		if (args.length !== 1) {
+			console.error(
+				`[VST OSC] dropping malformed payload for "${address}" — expected 1 arg, got ${args.length} from ${origin}`,
+			);
+			return false;
+		}
+		return true;
+	}
+
+	console.error(
+		`[VST OSC] dropping unrecognised address "${address}" from ${origin}`,
+	);
+	return false;
+};
+
 const coerceControlState = (state: unknown): ControlState => {
 	const source =
 		state && typeof state === "object" ? (state as Partial<ControlState>) : {};
@@ -620,14 +717,20 @@ udp.on("ready", () => {
 	sockets.forEach((ws) => ws.send(data));
 });
 
-udp.on("message", broadcast);
+udp.on("message", (msg: OscMsg) => {
+	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
+	broadcast(msg);
+});
 udp.on("error", (error: Error) => console.error("OSC error:", error.message));
 udp.open();
 
 vstControlUdp.on("ready", () => {
 	console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
 });
-vstControlUdp.on("message", applyVstControlMessage);
+vstControlUdp.on("message", (msg: OscMsg) => {
+	if (!validateVstOscMsg(msg, `VST :${vstControlRecvPort}`)) return;
+	applyVstControlMessage(msg);
+});
 vstControlUdp.on("error", (error: Error) =>
 	console.error("VST control OSC error:", error.message),
 );
