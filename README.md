@@ -49,7 +49,9 @@ bun run check:wasm   # cargo check against wasm32-unknown-unknown
 bun run check:vst    # cargo check the VST plugin crate
 ```
 
-The projector crate (`bevyosc`) expects `wasm32-unknown-unknown`. A plain `cargo check` or `cargo build` without that target (often seen on CI or Linux workstations) pulls in Bevy's `bevy_winit` stack with desktop window features disabled for that path, which makes `winit` stop with `"The platform you're compiling for is not supported by winit"`. Use `bun run check:wasm` / `bun run build:web`, or append `--target wasm32-unknown-unknown`.
+The projector crate (`bevyosc`) expects `wasm32-unknown-unknown`. Running **`cargo check` / `cargo build` against `bevyosc` on Linux without that target pulls in Bevy's `bevy_winit` stack with desktop backends disabled for that path, which makes `winit` stop with `"The platform you're compiling for is not supported by winit"` (often seen when automation invokes bare `cargo` on GitHub-hosted runners).
+
+The Cargo workspace **`default-members`** is intentionally only `plugins/bevyosc-vst/xtask`, so a plain **`cargo check`** at the repo root does **not** touch `bevyosc`. Prefer **`bun run check:wasm`** / **`bun run build:web`**, or **`cargo check -p bevyosc --target wasm32-unknown-unknown`**. Use **`cargo check --workspace`** only when you deliberately need every workspace crate.
 
 ## Performance Controls
 
