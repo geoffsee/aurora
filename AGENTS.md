@@ -61,7 +61,13 @@ The bridge is the **single source of truth for `ControlState`**. `coerceControlS
 
 ### Cargo workspace and target dirs
 
-The root `Cargo.toml` declares a workspace with three members: the root `bevyosc` crate (wasm target), `plugins/bevyosc-vst` (host target, links audio libs), and `plugins/bevyosc-vst/xtask` (host target, plain Rust). The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for the wasm build, `target-vst/` for VST builds — to keep their incompatible build graphs from invalidating each other's caches. Preserve this split when adding new build commands.
+The root `Cargo.toml` declares a workspace with three members: the root `bevyosc` crate (wasm target), `plugins/bevyosc-vst` (host target, links audio libs), and `plugins/bevyosc-vst/xtask` (host target, plain Rust).
+
+`bevy` is listed with **`default-features = false`**, which also turns off `bevy_winit`'s normal `winit` feature stack. The dependency therefore includes **`x11`** so bare host **`cargo check`** on Linux still enables **`winit`'s X11 path** (automation that types `cargo check` before push). The runtime build for the browser stays **`wasm32-unknown-unknown`** via `bun run build:web` / `bun run check:wasm`.
+
+**`.cargo/config.toml`** defines **`cargo check-wasm`** / **`cargo build-wasm`** / **`cargo clippy-wasm`** aliases. Don't set **`[build] target = "wasm32-unknown-unknown"`** globally: it tries to compile `xtask` as wasm and `nih_plug_xtask` does not support that triple.
+
+The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for the wasm build, `target-vst/` for VST builds — to keep their incompatible build graphs from invalidating each other's caches. Preserve this split when adding new build commands.
 
 ### Deploy
 

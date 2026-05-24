@@ -6,16 +6,6 @@ edition = "2024"
 [workspace]
 members = [".", "plugins/bevyosc-vst", "plugins/bevyosc-vst/xtask"]
 resolver = "2"
-# Bare `cargo build` / `cargo check` / `cargo test` at the workspace root only
-# run against these packages (not the whole `--workspace` membership list).
-#
-# Automation (and humans) accidentally invoke host `cargo check` without
-# `--target wasm32-unknown-unknown`, which pulls `bevy_winit`'s stripped-down
-# `winit` dep and triggers "platform … not supported" on Linux runners.
-#
-# Explicit package selection still works: `cargo check -p bevyosc --target wasm32-unknown-unknown`,
-# `cargo check -p bevyosc-vst`, `bun run check:wasm`, etc.
-default-members = ["plugins/bevyosc-vst/xtask"]
 
 [dependencies]
 bevy = { version = "0.17", default-features = false, features = [
@@ -41,6 +31,9 @@ bevy = { version = "0.17", default-features = false, features = [
   "default_font",
   "png",
   "webgpu",
+  # With `default-features = false`, bevy_winit does not forward winit's X11 stack;
+  # host `cargo check` on Linux would hit winit's unsupported-platform stub.
+  "x11",
 ] }
 wasm-bindgen = "0.2.122"
 

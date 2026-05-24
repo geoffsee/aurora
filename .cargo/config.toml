@@ -1,0 +1,13 @@
+# Projector crate runs in the browser (`wasm32-unknown-unknown`). Scripts and CI
+# use explicit `--target` + `-p bevyosc`. These aliases are for local agents who
+# type plain `cargo` from the workspace root — they don’t flip the default triple
+# (that would compile `xtask` as wasm and break `nih_plug_xtask`).
+#
+# bare `cargo check`/`build` on Linux must still compile native `xtask`/VST; the
+# `bevy` dependency enables `x11` so `winit` gets an X11 backend even with
+# `default-features = false` on Bevy upstream.
+
+[alias]
+check-wasm = "check -p bevyosc --target wasm32-unknown-unknown"
+build-wasm = "build --release -p bevyosc --target wasm32-unknown-unknown"
+clippy-wasm = "clippy -p bevyosc --target wasm32-unknown-unknown -- -D warnings"
