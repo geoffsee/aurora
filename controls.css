@@ -867,6 +867,106 @@ meter::-moz-meter-bar {
   background: linear-gradient(90deg, rgba(244, 114, 182, 0.3), var(--deck-b));
 }
 
+/* ============== Error banners ============== */
+#error-banners {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-width: min(24rem, calc(100vw - 1.5rem));
+  pointer-events: none;
+}
+
+.error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem 0.65rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(50, 8, 8, 0.95);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  animation: banner-in 160ms ease;
+}
+
+.error-banner--warn {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(50, 30, 4, 0.95);
+}
+
+.error-banner__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.error-banner__msg {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #fecaca;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.error-banner--warn .error-banner__msg {
+  color: #fde68a;
+}
+
+.error-banner__ts {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text-mute);
+  margin-top: 0.18rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.error-banner__dismiss {
+  flex-shrink: 0;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--text-mute);
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  min-height: unset;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.3rem;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.error-banner__dismiss:hover,
+.error-banner__dismiss:focus-visible {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateX(0.6rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* ============== Responsive ============== */
 @media (max-width: 1200px) {
   .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }

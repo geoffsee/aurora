@@ -367,6 +367,14 @@ const broadcastControl = (state: unknown) => {
 	});
 	sockets.forEach((ws) => ws.send(data));
 };
+const broadcastError = (description: string) => {
+	const data = JSON.stringify({
+		address: "/bevyosc/error",
+		error: description,
+		args: [],
+	});
+	sockets.forEach((ws) => ws.send(data));
+};
 const booleanArg = (arg: OscArg | undefined) => {
 	const value = valueOf(arg);
 	return Boolean(typeof value === "number" ? value >= 0.5 : value);
@@ -621,16 +629,20 @@ udp.on("ready", () => {
 });
 
 udp.on("message", broadcast);
-udp.on("error", (error: Error) => console.error("OSC error:", error.message));
+udp.on("error", (error: Error) => {
+	console.error("OSC error:", error.message);
+	broadcastError(`OSC UDP error: ${error.message}`);
+});
 udp.open();
 
 vstControlUdp.on("ready", () => {
 	console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
 });
 vstControlUdp.on("message", applyVstControlMessage);
-vstControlUdp.on("error", (error: Error) =>
-	console.error("VST control OSC error:", error.message),
-);
+vstControlUdp.on("error", (error: Error) => {
+	console.error("VST control OSC error:", error.message);
+	broadcastError(`VST control UDP error: ${error.message}`);
+});
 vstControlUdp.open();
 
 setInterval(() => {

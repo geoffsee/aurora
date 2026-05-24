@@ -175,6 +175,8 @@
       </section>
     </main>
 
+    <div id="error-banners" role="alert" aria-live="assertive" aria-atomic="false"></div>
+
     <script type="module">
       const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash"];
       const cuePresets = {
@@ -254,6 +256,39 @@
       let recording = [];
       let replayTimers = [];
 
+      function addBanner(description, type) {
+        const container = document.getElementById("error-banners");
+        if (!container) return;
+        const existing = container.querySelectorAll(".error-banner");
+        if (existing.length >= 10) existing[0].remove();
+
+        const banner = document.createElement("div");
+        const isWarn = type === "warn" || type === "disconnect";
+        banner.className = isWarn ? "error-banner error-banner--warn" : "error-banner";
+        banner.dataset.bannerType = type || "error";
+
+        const body = document.createElement("div");
+        body.className = "error-banner__body";
+
+        const msg = document.createElement("span");
+        msg.className = "error-banner__msg";
+        msg.textContent = description;
+
+        const ts = document.createElement("span");
+        ts.className = "error-banner__ts";
+        ts.textContent = new Date().toLocaleTimeString();
+
+        const dismiss = document.createElement("button");
+        dismiss.className = "error-banner__dismiss";
+        dismiss.setAttribute("aria-label", "Dismiss");
+        dismiss.textContent = "×";
+        dismiss.addEventListener("click", () => banner.remove());
+
+        body.append(msg, ts);
+        banner.append(body, dismiss);
+        container.appendChild(banner);
+      }
+
       const clamp = (value, min, max, fallback = min) => {
         const number = Number(value);
         return Math.max(min, Math.min(max, Number.isFinite(number) ? number : fallback));
@@ -276,11 +311,13 @@
         ws.onopen = () => {
           bridgeStatus.textContent = "bridge live";
           bridgeStatus.dataset.state = "live";
+          document.querySelectorAll("[data-banner-type='disconnect']").forEach((b) => b.remove());
           publish({ record: false });
         };
         ws.onclose = () => {
           bridgeStatus.textContent = "bridge reconnecting";
           bridgeStatus.dataset.state = "connecting";
+          addBanner("Bridge WebSocket disconnected — reconnecting…", "disconnect");
           reconnectTimer = setTimeout(connect, 1000);
         };
         ws.onerror = () => {
@@ -330,6 +367,9 @@
       }
 
       function applyFrame(frame) {
+        if (frame?.error) {
+          addBanner(String(frame.error));
+        }
         const args = Array.isArray(frame?.args) ? frame.args : [];
         if (frame?.address === "/bevyosc/control/state" && args[0] && typeof args[0] === "object") {
           syncFromRemote(args[0]);
