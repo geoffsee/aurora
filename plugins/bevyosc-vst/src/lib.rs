@@ -1,8 +1,4 @@
-use std::{
-    net::UdpSocket,
-    num::NonZeroU32,
-    sync::Arc,
-};
+use std::{net::UdpSocket, num::NonZeroU32, sync::Arc};
 
 use nih_plug::prelude::*;
 use rosc::{encoder, OscMessage, OscPacket, OscType};
@@ -355,7 +351,8 @@ impl ParameterCache {
 
 impl OscSender {
     fn new() -> Self {
-        let target = std::env::var("BEVYOSC_VST_TARGET").unwrap_or_else(|_| DEFAULT_TARGET.to_string());
+        let target =
+            std::env::var("BEVYOSC_VST_TARGET").unwrap_or_else(|_| DEFAULT_TARGET.to_string());
         let socket = UdpSocket::bind("127.0.0.1:0").ok();
         if let Some(socket) = &socket {
             let _ = socket.set_nonblocking(true);
@@ -365,7 +362,10 @@ impl OscSender {
     }
 
     fn send_f32(&self, name: &str, value: f32) {
-        self.send(&format!("/bevyosc/vst/control/{name}"), OscType::Float(value));
+        self.send(
+            &format!("/bevyosc/vst/control/{name}"),
+            OscType::Float(value),
+        );
     }
 
     fn send_i32(&self, name: &str, value: i32) {
@@ -402,7 +402,8 @@ impl OscSender {
 }
 
 fn float_param(name: &str, default: f32, min: f32, max: f32) -> FloatParam {
-    FloatParam::new(name, default, FloatRange::Linear { min, max }).with_smoother(SmoothingStyle::None)
+    FloatParam::new(name, default, FloatRange::Linear { min, max })
+        .with_smoother(SmoothingStyle::None)
 }
 
 fn trigger_param(name: &str) -> FloatParam {

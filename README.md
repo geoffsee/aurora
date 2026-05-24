@@ -49,6 +49,8 @@ bun run check:wasm   # cargo check against wasm32-unknown-unknown
 bun run check:vst    # cargo check the VST plugin crate
 ```
 
+The projector crate (`bevyosc`) expects `wasm32-unknown-unknown`. A plain `cargo check` or `cargo build` without that target (often seen on CI or Linux workstations) pulls in Bevy's `bevy_winit` stack with desktop window features disabled for that path, which makes `winit` stop with `"The platform you're compiling for is not supported by winit"`. Use `bun run check:wasm` / `bun run build:web`, or append `--target wasm32-unknown-unknown`.
+
 ## Performance Controls
 
 Use the controls app on port `3001` for show operation. The projector output on port `3000` has no visible HUD or help overlay.

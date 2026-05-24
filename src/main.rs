@@ -586,7 +586,8 @@ fn update_visuals(
         manual_beat_hit
     }) + cue_hit * 0.38;
     let band_drive = bass * 0.45 + mid * 0.35 + high * 0.2;
-    let intensity_drive = (state.intensity * (0.75 + band_drive * 0.95 + cue_hit * 0.55)).clamp(0.05, 2.4);
+    let intensity_drive =
+        (state.intensity * (0.75 + band_drive * 0.95 + cue_hit * 0.55)).clamp(0.05, 2.4);
     let motion_drive = if state.osc_connected {
         (band_drive * AUDIO_GEOMETRY_GAIN).clamp(0.0, 1.0)
     } else {
@@ -734,7 +735,8 @@ fn update_visuals(
                 match deck_mode {
                     VisualMode::Tunnel => {
                         let offset = (fraction - 0.5) * state.depth * 220.0;
-                        transform.translation = Vec3::new(offset * wave(t + fraction), offset, 24.0 + fraction * 20.0);
+                        transform.translation =
+                            Vec3::new(offset * wave(t + fraction), offset, 24.0 + fraction * 20.0);
                         transform.scale *= 0.75 + fraction * 1.3 + beat_hit * 0.6;
                         alpha *= 1.15 + state.depth;
                     }
@@ -808,7 +810,8 @@ fn update_visuals(
                         if (element.col + element.row) % 2 == 0 {
                             transform.rotation *= Quat::from_rotation_z(TAU * 0.25);
                         }
-                        transform.translation.x = transform.translation.x.abs() * if element.col % 2 == 0 { 1.0 } else { -1.0 };
+                        transform.translation.x = transform.translation.x.abs()
+                            * if element.col % 2 == 0 { 1.0 } else { -1.0 };
                         alpha *= 0.8 + wave(t * 4.0 + diagonal) * 0.45;
                         hue += 110.0;
                     }
@@ -931,21 +934,20 @@ fn update_tunnel_rings(
     for (ring, mut transform, mut visibility, material_handle) in &mut rings {
         *visibility = Visibility::Inherited;
 
-        let phase = (state.show_time * rate + ring.lane as f32 / TUNNEL_RING_COUNT as f32)
-            .rem_euclid(1.0);
+        let phase =
+            (state.show_time * rate + ring.lane as f32 / TUNNEL_RING_COUNT as f32).rem_euclid(1.0);
         let z = -(1.0 - phase) * TUNNEL_DEPTH;
         let radius = 1.5 + state.depth * 0.7 + bass * 0.25 + beat_hit * 0.18;
         transform.translation = Vec3::new(0.0, 0.0, z);
         transform.scale = Vec3::splat(radius);
-        transform.rotation =
-            Quat::from_rotation_z(state.show_time * 0.4 + ring.lane as f32 * 0.6);
+        transform.rotation = Quat::from_rotation_z(state.show_time * 0.4 + ring.lane as f32 * 0.6);
 
-        let hue = (state.palette * 360.0 + ring.lane as f32 * 18.0 + phase * 60.0)
-            .rem_euclid(360.0);
+        let hue =
+            (state.palette * 360.0 + ring.lane as f32 * 18.0 + phase * 60.0).rem_euclid(360.0);
         let lightness = (0.45 + drive * 0.2 + mid * 0.15 + state.flash * 0.25).clamp(0.05, 0.85);
         let bell = (phase * TAU * 0.5).sin();
-        let alpha = (bell * (0.55 + beat_hit * 0.45) * deck_mix * state.max_brightness)
-            .clamp(0.0, 1.0);
+        let alpha =
+            (bell * (0.55 + beat_hit * 0.45) * deck_mix * state.max_brightness).clamp(0.0, 1.0);
 
         if let Some(material) = materials.get_mut(&material_handle.0) {
             material.base_color = Color::hsla(hue, 0.85, lightness, alpha);
