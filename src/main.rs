@@ -3,6 +3,9 @@ use std::f32::consts::TAU;
 use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
+    render::render_resource::AsBindGroup,
+    shader::ShaderRef,
+    sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
     window::{PresentMode, WindowResolution},
     winit::WinitSettings,
 };
@@ -84,6 +87,28 @@ unsafe extern "C" {
     fn browser_control_cue_deck_b_mode() -> f32;
 }
 
+/// GPU material driven by the `palette` OSC control.
+/// The fragment shader (`assets/shaders/vj_palette.wgsl`) receives `params`
+/// as a vec4 uniform: x=hue_shift (0..1), y=show_time (seconds).
+#[derive(AsBindGroup, Asset, TypePath, Clone)]
+struct VjPaletteMaterial {
+    #[uniform(0)]
+    params: Vec4,
+}
+
+impl Material2d for VjPaletteMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/vj_palette.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
+    }
+}
+
+#[derive(Resource)]
+struct VjPaletteHandle(Handle<VjPaletteMaterial>);
+
 const STAGE_WIDTH: f32 = 1280.0;
 const STAGE_HEIGHT: f32 = 720.0;
 const DECK_A_BEAMS: usize = 72;
@@ -106,6 +131,7 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(WinitSettings::continuous())
         .insert_resource(VjState::default())
+        .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "bevyosc VJ".into(),
@@ -127,6 +153,7 @@ fn main() {
                 advance_clock,
                 update_visuals,
                 update_tunnel_rings,
+                update_palette_material,
             )
                 .chain(),
         )
@@ -261,6 +288,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
+    mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
 ) {
     commands.spawn(Camera2d);
 
@@ -371,6 +399,20 @@ fn setup(
             },
         ));
     }
+
+    // GPU palette background: sits between the black fill (z=-20) and the ghost
+    // layer (z=-8). Alpha-blended; hue_shift and show_time are updated each frame
+    // by `update_palette_material` from the live `VjState`.
+    let gpu_mat = palette_materials.add(VjPaletteMaterial {
+        params: Vec4::ZERO,
+    });
+    commands.insert_resource(VjPaletteHandle(gpu_mat.clone()));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(gpu_mat),
+        Transform::from_xyz(0.0, 0.0, -15.0)
+            .with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+    ));
 
     // The control surface now lives on port 3001, so the projector output has no HUD.
 }
@@ -952,6 +994,16 @@ fn update_tunnel_rings(
         if let Some(material) = materials.get_mut(&material_handle.0) {
             material.base_color = Color::hsla(hue, 0.85, lightness, alpha);
         }
+    }
+}
+
+fn update_palette_material(
+    state: Res<VjState>,
+    handle: Res<VjPaletteHandle>,
+    mut materials: ResMut<Assets<VjPaletteMaterial>>,
+) {
+    if let Some(mat) = materials.get_mut(&handle.0) {
+        mat.params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
     }
 }
 
