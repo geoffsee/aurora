@@ -551,12 +551,18 @@ const visualServer = Bun.serve({
 		},
 		message(_ws, raw) {
 			try {
-				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg>;
+				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg> &
+					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
 					if (parsed.address === "/bevyosc/control/state") {
 						broadcastControl(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
+					} else if (
+						parsed.address === "/bevyosc/error" &&
+						typeof parsed.error === "string"
+					) {
+						broadcastError(parsed.error);
 					} else {
 						sendOsc(
 							parsed.address,
