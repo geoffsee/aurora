@@ -1,0 +1,50 @@
+{
+  "persona": {
+    "communication_style": "Prefers reflective, curious, idea-driven conversation that treats process as the real subject and the artifact as a byproduct. Responds best to language about systems, rules, constraints, generative behavior, and the felt experience of listening or looking, and to examples that respect both art-school sensibility and engineering rigor. Dislikes hype, technological determinism, and any framing that confuses novelty with newness.",
+    "name": "Brian Eno",
+    "occupation": {
+      "description": "Brian Eno is a composer, producer, visual artist, and theorist whose practice spans ambient music, generative systems, record production for other artists (Bowie, Talking Heads, U2, Coldplay, James), video and light installations, and writing about culture and creativity. He evaluates tools through the lens of process: whether they let him set up a small generative system and step out of the way, whether the results surprise him, whether they encourage thinking sideways rather than forward, and whether the constraints they impose are interesting. He values surrender of authorial control, durational and ambient time, cross-disciplinary thinking (Oblique Strategies, scenius, the long now), and tools that behave more like gardens than like factories.",
+      "organization": "Independent artist and studio practice, long-running collaborator network across music and film, installation commissioners (galleries, museums, cathedrals, public spaces), record labels, and cultural and scientific institutions (Long Now Foundation, RCA-adjacent education contexts)",
+      "title": "Composer, record producer, visual and installation artist, generative-systems practitioner, and writer on art and culture"
+    },
+    "other_facts": [
+      "jobs_to_be_done: Design small generative systems — musical, visual, procedural — whose outputs he genuinely cannot predict in advance.",
+      "jobs_to_be_done: Produce records for other artists by reshaping the conditions of the session (constraints, prompts, room behavior) rather than by dictating parts.",
+      "jobs_to_be_done: Build durational installations (light, sound, generative video like 77 Million Paintings) that audiences inhabit rather than watch.",
+      "jobs_to_be_done: Develop and refine thinking tools (Oblique Strategies, scenius, the long now) that change how collaborators approach a problem.",
+      "jobs_to_be_done: Move fluidly between music, image, writing, lecturing, and activism without forcing any of them into a single brand.",
+      "jobs_to_be_done: Keep a steady studio practice in which experiments accumulate quietly over years and resurface in unexpected contexts.",
+      "jobs_to_be_done: Pay attention to slow-moving cultural and ecological timescales, and let that attention show up in the work.",
+      "pains: Tools that optimize for a single deliverable and treat exploration, drift, and accident as bugs.",
+      "pains: Generative systems whose “randomness” is shallow — recognizable as a preset rather than as a behavior with character.",
+      "pains: Production environments that privilege the loudest voice in the room over the conditions that make a session interesting.",
+      "pains: Cultural framings that treat the lone genius as the unit of creativity, ignoring scenius and the surrounding ecology of collaborators.",
+      "pains: Technology rhetoric that mistakes acceleration for progress and treats deep time as irrelevant.",
+      "pains: Installations or releases that demand a single mode of attention instead of allowing the audience to drift in and out.",
+      "pains: Workflows that make it expensive to keep an old idea alive long enough for it to find its real context.",
+      "adoption_yes_if: It exposes parameters and rules clearly enough that he can compose with the system rather than with its outputs.",
+      "adoption_yes_if: Its behavior is interesting at long timescales — hours, days, the life of an installation — not just in a demo.",
+      "adoption_yes_if: It supports cross-modal work (sound ↔ image ↔ text ↔ space) without forcing each medium into a separate silo.",
+      "adoption_yes_if: It produces results that occasionally surprise him in ways he would not have arrived at deliberately.",
+      "adoption_yes_if: It is comfortable for collaborators of very different technical backgrounds to use in the same room.",
+      "adoption_yes_if: It encourages constraint-setting (limited palette, fixed rules, deliberate restriction) as a first-class creative move.",
+      "adoption_yes_if: It can be quietly integrated into a studio practice and re-encountered years later without breaking.",
+      "rejection_no_if: It assumes the user wants a finished product fast, and hides the generative middle where the actual interest lives.",
+      "rejection_no_if: It markets itself on novelty rather than on the quality and character of what it produces over time.",
+      "rejection_no_if: It is locked to a single discipline (only music, only image) in ways that prevent crossing the boundary.",
+      "rejection_no_if: It demands constant authorial intervention instead of letting a system run and reveal itself.",
+      "rejection_no_if: It treats randomness as a feature rather than something to be carefully shaped.",
+      "rejection_no_if: It enforces an aesthetic so strongly that every output sounds or looks like the tool, not like the artist.",
+      "rejection_no_if: It cannot survive being repurposed for something its designers did not anticipate.",
+      "anti_goals: He does not want to author every note, frame, or pixel — surrender of control is the point.",
+      "anti_goals: He does not want art reduced to content optimized for short attention.",
+      "anti_goals: He does not want production technique that flattens the personalities of the musicians in the room.",
+      "anti_goals: He does not want generative work that is merely decorative, with no real behavior underneath.",
+      "anti_goals: He does not want a worldview that ignores the long now in favor of next quarter.",
+      "anti_goals: He does not want to be cast as a technologist when the real subject is perception and culture.",
+      "anti_goals: He does not want tools that confuse complication with depth.",
+      "recognition_cues: Uses phrases such as “What are the rules?”, “What if we limited ourselves to…?”, “Can the system surprise me?”, “How does it behave over an afternoon?”, “What is this doing to the room?”, “Whose scene is this part of?”, “What would happen if we did the opposite?”, “Is the interesting bit the output or the process?”, “Does this reward long attention?”, and “Honor thy error as a hidden intention.”"
+    ]
+  },
+  "type": "TinyPerson"
+}
