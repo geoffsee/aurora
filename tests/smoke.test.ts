@@ -1,6 +1,6 @@
 import { expect, test, afterEach } from "vitest";
 
-test("vitest browser mode is wired up", () => {
+test("vitest happy-dom environment is wired up", () => {
 	expect(typeof window).toBe("object");
 	expect(typeof document).toBe("object");
 });
@@ -19,7 +19,7 @@ function addBanner(
 	type?: string,
 ): Element {
 	const existing = container.querySelectorAll(".error-banner");
-	if (existing.length >= 10) existing[0].remove();
+	if (existing.length >= 10) existing.item(0)?.remove();
 	const banner = document.createElement("div");
 	const isWarn = type === "warn" || type === "disconnect";
 	banner.className = isWarn
@@ -34,10 +34,7 @@ function addBanner(
 	return banner;
 }
 
-function applyFrame(
-	container: Element,
-	frame: Record<string, unknown> | null,
-) {
+function applyFrame(container: Element, frame: Record<string, unknown> | null) {
 	if (frame?.address === "/bevyosc/error" && frame.error) {
 		addBanner(container, String(frame.error));
 	}
@@ -53,9 +50,9 @@ test("addBanner caps at 10 and evicts the oldest", () => {
 	const banners = container.querySelectorAll(".error-banner");
 	expect(banners.length).toBe(10);
 	// oldest (Error 0) was evicted; first remaining is Error 1
-	expect(banners[0].querySelector(".error-banner__msg")?.textContent).toBe(
-		"Error 1",
-	);
+	expect(
+		banners.item(0)?.querySelector(".error-banner__msg")?.textContent,
+	).toBe("Error 1");
 });
 
 test("applyFrame shows banner for /bevyosc/error frames", () => {
@@ -66,9 +63,9 @@ test("applyFrame shows banner for /bevyosc/error frames", () => {
 		args: [],
 	});
 	expect(container.querySelectorAll(".error-banner").length).toBe(1);
-	expect(
-		container.querySelector(".error-banner__msg")?.textContent,
-	).toBe("something broke");
+	expect(container.querySelector(".error-banner__msg")?.textContent).toBe(
+		"something broke",
+	);
 	// unrelated frame must not add a banner
 	applyFrame(container, { address: "/bevyosc/control/state", args: [] });
 	expect(container.querySelectorAll(".error-banner").length).toBe(1);
@@ -76,7 +73,11 @@ test("applyFrame shows banner for /bevyosc/error frames", () => {
 
 test("disconnect banners are removed on reconnect", () => {
 	const container = makeContainer();
-	addBanner(container, "Bridge WebSocket disconnected — reconnecting…", "disconnect");
+	addBanner(
+		container,
+		"Bridge WebSocket disconnected — reconnecting…",
+		"disconnect",
+	);
 	addBanner(container, "Some other error", "error");
 	expect(container.querySelectorAll(".error-banner").length).toBe(2);
 	// simulate ws.onopen cleanup
@@ -84,7 +85,5 @@ test("disconnect banners are removed on reconnect", () => {
 		.querySelectorAll("[data-banner-type='disconnect']")
 		.forEach((b) => b.remove());
 	expect(container.querySelectorAll(".error-banner").length).toBe(1);
-	expect(
-		container.querySelector("[data-banner-type='error']"),
-	).not.toBeNull();
+	expect(container.querySelector("[data-banner-type='error']")).not.toBeNull();
 });

@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { watch } from "node:fs";
 import type { ServerWebSocket } from "bun";
 
 type OscArg = { type: string; value: unknown } | unknown;
@@ -78,6 +79,7 @@ const liveHost = Bun.env.LIVE_HOST ?? "127.0.0.1";
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
 const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
+const hotReload = Bun.env.HOT_RELOAD === "1";
 const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
 let oscReady = false;
@@ -707,3 +709,28 @@ setInterval(() => {
 
 console.log(`bevyosc VJ output listening on ${visualServer.url}`);
 console.log(`bevyosc controls listening on ${controlsServer.url}`);
+
+if (hotReload) {
+	const pkgDir = `${root}/dist/pkg`;
+	let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+	try {
+		watch(pkgDir, () => {
+			if (reloadTimer) clearTimeout(reloadTimer);
+			reloadTimer = setTimeout(() => {
+				reloadTimer = null;
+				const data = JSON.stringify({
+					address: "/bevyosc/dev/reload",
+					args: [],
+				});
+				sockets.forEach((ws) => ws.send(data));
+				console.log("[hot-reload] dist/pkg changed — reload signal sent");
+			}, 300);
+		});
+		console.log("[hot-reload] watching dist/pkg/");
+	} catch (error) {
+		console.warn(
+			"[hot-reload] watcher failed to start:",
+			error instanceof Error ? error.message : error,
+		);
+	}
+}
