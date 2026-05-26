@@ -4,6 +4,7 @@ import { playwright } from "@vitest/browser-playwright";
 export default defineConfig({
 	test: {
 		include: ["tests/**/*.test.ts"],
+		globalSetup: ["tests/global-setup.ts"],
 		browser: {
 			provider: playwright(),
 			enabled: true,

@@ -9,10 +9,12 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "@types/ws": "^8",
         "@vitest/browser": "^4.0.0",
         "@vitest/browser-playwright": "^4.0.0",
         "playwright": "^1.50.0",
         "vitest": "^4.0.0",
+        "ws": "^8",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -109,6 +111,8 @@
     "@types/estree": ["@types/estree@1.0.9", "", {}, "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg=="],
 
     "@types/node": ["@types/node@25.9.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg=="],
+
+    "@types/ws": ["@types/ws@8.18.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg=="],
 
     "@vitest/browser": ["@vitest/browser@4.1.7", "", { "dependencies": { "@blazediff/core": "1.9.1", "@vitest/mocker": "4.1.7", "@vitest/utils": "4.1.7", "magic-string": "^0.30.21", "pngjs": "^7.0.0", "sirv": "^3.0.2", "tinyrainbow": "^3.1.0", "ws": "^8.19.0" }, "peerDependencies": { "vitest": "4.1.7" } }, "sha512-N2JFGfXoEGVAut+kHeru9dD4BUMq/q5xDvBARNl0tUsly3m5KglLOu8VO/6MkDfOlgxXTycojkt6gBKsuyR+IQ=="],
 
