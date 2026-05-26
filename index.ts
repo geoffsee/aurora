@@ -4,10 +4,12 @@ import type { ServerWebSocket } from "bun";
 import {
 	type OscArg,
 	type OscMsg,
+	CONTROL_STATE_SCHEMA_VERSION,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
 	VST_TRIGGER_PREFIX,
+	validateControlStateVersion,
 	validateLiveOscMsg,
 	validateVstOscMsg,
 } from "./osc-validation.ts";
@@ -22,6 +24,7 @@ type TrackMapping = {
 	highTrack: number;
 };
 type ControlState = {
+	schemaVersion: number;
 	crossfade: number;
 	bpm: number;
 	speed: number;
@@ -147,6 +150,7 @@ const defaultTrackMapping = (): TrackMapping => ({
 	highTrack: 2,
 });
 const defaultControlState = (): ControlState => ({
+	schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
 	crossfade: 0.5,
 	bpm: 124,
 	speed: 1,
@@ -248,6 +252,7 @@ const coerceControlState = (state: unknown): ControlState => {
 			: {};
 
 	return {
+		schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
 		crossfade: clamp(source.crossfade, 0, 1, defaults.crossfade),
 		bpm: clamp(source.bpm, 40, 240, defaults.bpm),
 		speed: clamp(source.speed, 0.1, 3, defaults.speed),
@@ -600,9 +605,14 @@ const visualServer = Bun.serve({
 					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
 					if (parsed.address === "/bevyosc/control/state") {
-						broadcastControl(
-							Array.isArray(parsed.args) ? parsed.args[0] : null,
-						);
+						const rawState = Array.isArray(parsed.args)
+							? parsed.args[0]
+							: null;
+						if (
+							!validateControlStateVersion(rawState, "WebSocket client")
+						)
+							return;
+						broadcastControl(rawState);
 					} else if (
 						parsed.address === "/bevyosc/error" &&
 						typeof parsed.error === "string"
