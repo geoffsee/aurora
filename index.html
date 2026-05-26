@@ -280,39 +280,36 @@
         }
       }
 
-      let hotReloading = false;
-      async function handleHotReload() {
-        if (hotReloading) return;
-        hotReloading = true;
-        console.log("[hot-reload] WASM package changed, reloading...");
-        try {
-          const { default: init } = await import(`./dist/pkg/bevyosc.js?t=${Date.now()}`);
-          await init();
-          console.log("[hot-reload] WASM reinitialised in-place");
-          hotReloading = false;
-        } catch (error) {
-          console.warn("[hot-reload] in-place reinit failed, reloading page", error);
-          location.reload();
+      function handleHotReload() {
+        console.log("[hot-reload] WASM package changed, reloading page...");
+        location.reload();
+      }
+
+      let oscWs = null;
+
+      function sendErrorToControls(description) {
+        if (oscWs?.readyState === WebSocket.OPEN) {
+          oscWs.send(JSON.stringify({ address: "/bevyosc/error", error: description, args: [] }));
         }
       }
 
       function connectOscSocket() {
         const scheme = location.protocol === "https:" ? "wss" : "ws";
-        const ws = new WebSocket(`${scheme}://${location.host}/ws`);
+        oscWs = new WebSocket(`${scheme}://${location.host}/ws`);
 
-        ws.onopen = () => {
+        oscWs.onopen = () => {
           oscState.bridgeReady = true;
         };
-        ws.onclose = () => {
+        oscWs.onclose = () => {
           oscState.connected = false;
           oscState.bridgeReady = false;
           setTimeout(connectOscSocket, 2000);
         };
-        ws.onerror = () => {
+        oscWs.onerror = () => {
           oscState.connected = false;
           oscState.bridgeReady = false;
         };
-        ws.onmessage = (event) => {
+        oscWs.onmessage = (event) => {
           try {
             applyOscFrame(JSON.parse(event.data));
           } catch (error) {
@@ -320,6 +317,15 @@
           }
         };
       }
+
+      window.addEventListener("unhandledrejection", (event) => {
+        const msg = event.reason instanceof Error ? event.reason.message : String(event.reason ?? "Unknown error");
+        sendErrorToControls(`Unhandled rejection: ${msg}`);
+      });
+      window.addEventListener("error", (event) => {
+        const msg = event.error instanceof Error ? event.error.message : (event.message || 'Unknown error');
+        sendErrorToControls(`Runtime error: ${msg}`);
+      });
 
       window.__bevyoscOscConnected = () => {
         oscState.connected = controlState.demoMode || performance.now() - oscState.lastFrameAt < 3000;
@@ -380,6 +386,8 @@
         boot?.remove();
       } catch (error) {
         console.error(error);
+        const msg = error instanceof Error ? error.message : String(error);
+        sendErrorToControls(`WASM init failed: ${msg}`);
         if (boot) {
           boot.innerHTML =
             "Could not load the WASM build. Run <code>bun run build:web</code>, then <code>bun run serve</code>.";

@@ -134,7 +134,6 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(WinitSettings::continuous())
         .insert_resource(VjState::default())
-        .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "bevyosc VJ".into(),
@@ -147,6 +146,7 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
         .add_systems(Startup, setup)
         .add_systems(
             Update,

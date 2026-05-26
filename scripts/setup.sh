@@ -5,8 +5,7 @@
 #
 # Steps:
 #   1. bun install (npm deps + git hooks via postinstall)
-#   2. bunx playwright install --with-deps chromium (browser test runtime)
-#   3. Verify wasm-bindgen-cli version matches the pinned WASM_BINDGEN_VERSION
+#   2. Verify wasm-bindgen-cli version matches the pinned WASM_BINDGEN_VERSION
 
 set -euo pipefail
 
@@ -23,13 +22,7 @@ log "bun install"
 bun install
 
 # ---------------------------------------------------------------------------
-# Step 2: install Playwright + Chromium for browser tests
-# ---------------------------------------------------------------------------
-log "bunx playwright install --with-deps chromium"
-bunx playwright install --with-deps chromium
-
-# ---------------------------------------------------------------------------
-# Step 3: verify wasm-bindgen-cli version
+# Step 2: verify wasm-bindgen-cli version
 # ---------------------------------------------------------------------------
 log "checking wasm-bindgen-cli version"
 
