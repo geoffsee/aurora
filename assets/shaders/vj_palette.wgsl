@@ -3,6 +3,8 @@
 const TAU: f32 = 6.283185307179586;
 
 @group(2) @binding(0) var<uniform> params: vec4<f32>;
+// palette_extra.x = saturation multiplier (0..1), palette_extra.y = brightness multiplier (0..1)
+@group(2) @binding(1) var<uniform> palette_extra: vec4<f32>;
 
 fn hue_to_rgb(hue: f32) -> vec3<f32> {
   let h = fract(hue);
@@ -92,9 +94,11 @@ fn geometry_field(
   let vignette = 1.0 - smoothstep(0.2, 1.0, radius);
   let line_glow = 0.12 * pow(1.0 - clamp(radius, 0.0, 1.0), 2.8);
 
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
   let hue_phase = angle / TAU * 0.42 + radius * 0.52 + time * 0.03 + 0.21 * drift;
-  let base = vj_palette(hue_shift, hue_phase, 0.62, 0.82);
-  let accent = vj_palette(hue_shift, hue_phase + 0.33 + 0.45 * grain, 0.74, 1.0);
+  let base = vj_palette(hue_shift, hue_phase, 0.62 * sat, 0.82 * bri);
+  let accent = vj_palette(hue_shift, hue_phase + 0.33 + 0.45 * grain, 0.74 * sat, bri);
   let fill = mix(base, accent, 0.38 + 0.35 * energy);
   let color = fill * clamp(0.32 + layer, 0.0, 1.0) + vec3<f32>(line_glow) * accent + vec3<f32>(core * 0.45);
   let alpha = clamp(
