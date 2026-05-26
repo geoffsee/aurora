@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-	validateLiveOscMsg,
-	validateVstOscMsg,
-} from "../osc-validation.ts";
+import { validateLiveOscMsg, validateVstOscMsg } from "../osc-validation.ts";
 
 const CUE_NAMES: ReadonlySet<string> = new Set([
 	"warmup",
@@ -20,15 +17,15 @@ const stringArg = { type: "s", value: "hello" };
 
 describe("validateLiveOscMsg", () => {
 	test("accepts /live/ address", () => {
-		expect(validateLiveOscMsg({ address: "/live/song/get/tempo" }, "test")).toBe(
-			true,
-		);
+		expect(
+			validateLiveOscMsg({ address: "/live/song/get/tempo" }, "test"),
+		).toBe(true);
 	});
 
 	test("rejects address without /live/ prefix", () => {
-		expect(
-			validateLiveOscMsg({ address: "/bevyosc/something" }, "test"),
-		).toBe(false);
+		expect(validateLiveOscMsg({ address: "/bevyosc/something" }, "test")).toBe(
+			false,
+		);
 	});
 
 	test("rejects empty address", () => {

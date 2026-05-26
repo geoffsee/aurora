@@ -5,11 +5,12 @@ import {
 	type OscMsg,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
-	VST_TRIGGER_PREFIX,
 	VST_CUE_PREFIX,
+	VST_TRIGGER_PREFIX,
 	validateLiveOscMsg,
 	validateVstOscMsg,
 } from "./osc-validation.ts";
+
 type TrackMapping = {
 	deckAStart: number;
 	deckACount: number;
@@ -35,7 +36,6 @@ type ControlState = {
 	strobeLockout: boolean;
 	blackout: boolean;
 	freeze: boolean;
-	showGpuPalette: boolean;
 	maxBrightness: number;
 	showGpuPalette: boolean;
 	beatSync: boolean;
@@ -160,7 +160,6 @@ const defaultControlState = (): ControlState => ({
 	strobeLockout: false,
 	blackout: false,
 	freeze: false,
-	showGpuPalette: false,
 	maxBrightness: 0.9,
 	showGpuPalette: false,
 	beatSync: true,
@@ -262,7 +261,6 @@ const coerceControlState = (state: unknown): ControlState => {
 		strobeLockout: Boolean(source.strobeLockout),
 		blackout: Boolean(source.blackout),
 		freeze: Boolean(source.freeze),
-		showGpuPalette: source.showGpuPalette === true,
 		maxBrightness: clamp(source.maxBrightness, 0.1, 1, defaults.maxBrightness),
 		showGpuPalette: source.showGpuPalette === true,
 		beatSync: source.beatSync !== false,
@@ -378,6 +376,14 @@ const broadcastControl = (state: unknown) => {
 	const data = JSON.stringify({
 		address: "/bevyosc/control/state",
 		args: [latestControlState],
+	});
+	sockets.forEach((ws) => ws.send(data));
+};
+const broadcastError = (description: string) => {
+	const data = JSON.stringify({
+		address: "/bevyosc/error",
+		error: description,
+		args: [],
 	});
 	sockets.forEach((ws) => ws.send(data));
 };
@@ -588,12 +594,18 @@ const visualServer = Bun.serve({
 		},
 		message(_ws, raw) {
 			try {
-				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg>;
+				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg> &
+					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
 					if (parsed.address === "/bevyosc/control/state") {
 						broadcastControl(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
+					} else if (
+						parsed.address === "/bevyosc/error" &&
+						typeof parsed.error === "string"
+					) {
+						broadcastError(parsed.error);
 					} else {
 						sendOsc(
 							parsed.address,
@@ -669,7 +681,10 @@ udp.on("message", (msg: OscMsg) => {
 	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
 	broadcast(msg);
 });
-udp.on("error", (error: Error) => console.error("OSC error:", error.message));
+udp.on("error", (error: Error) => {
+	console.error("OSC error:", error.message);
+	broadcastError(`OSC UDP error: ${error.message}`);
+});
 udp.open();
 
 vstControlUdp.on("ready", () => {
@@ -679,9 +694,10 @@ vstControlUdp.on("message", (msg: OscMsg) => {
 	if (!validateVstOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)) return;
 	applyVstControlMessage(msg);
 });
-vstControlUdp.on("error", (error: Error) =>
-	console.error("VST control OSC error:", error.message),
-);
+vstControlUdp.on("error", (error: Error) => {
+	console.error("VST control OSC error:", error.message);
+	broadcastError(`VST control UDP error: ${error.message}`);
+});
 vstControlUdp.open();
 
 setInterval(() => {
