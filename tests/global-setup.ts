@@ -13,11 +13,11 @@ export async function setup(): Promise<() => Promise<void>> {
 	// Vitest calls globalSetup once per internal project (node + browser instances).
 	// If the port is already bound by an earlier setup() call, return a no-op teardown
 	// so the already-running server continues to serve all test connections.
-	const ready = await new Promise<boolean>((resolve) => {
+	const ready = await new Promise<boolean>((resolve, reject) => {
 		wss.once("listening", () => resolve(true));
 		wss.once("error", (err: NodeJS.ErrnoException) => {
 			if (err.code === "EADDRINUSE") resolve(false);
-			else throw err;
+			else reject(err);
 		});
 	});
 	if (!ready) return async () => {};
