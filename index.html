@@ -310,11 +310,11 @@
 
       window.addEventListener("unhandledrejection", (event) => {
         const msg = event.reason instanceof Error ? event.reason.message : String(event.reason ?? "Unknown error");
-        sendErrorToControls(`WASM panic: ${msg}`);
+        sendErrorToControls(`Unhandled rejection: ${msg}`);
       });
       window.addEventListener("error", (event) => {
         const msg = event.error instanceof Error ? event.error.message : event.message;
-        sendErrorToControls(`WASM runtime error: ${msg}`);
+        sendErrorToControls(`Runtime error: ${msg}`);
       });
 
       window.__bevyoscOscConnected = () => {

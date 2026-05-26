@@ -367,7 +367,7 @@
       }
 
       function applyFrame(frame) {
-        if (frame?.error) {
+        if (frame?.address === "/bevyosc/error" && frame.error) {
           addBanner(String(frame.error));
         }
         const args = Array.isArray(frame?.args) ? frame.args : [];

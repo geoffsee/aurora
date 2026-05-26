@@ -17,7 +17,8 @@
     "dev": "bun run build:web && bun run serve",
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",
-    "test:web": "bunx playwright install chromium --with-deps && vitest run",
+    "test:web": "vitest run",
+    "setup": "bunx playwright install chromium --with-deps",
     "postinstall": "bash .dev/setup-git-hooks.sh",
     "typecheck": "tsc --noEmit",
     "format": "bash scripts/format-code.sh"
