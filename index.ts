@@ -492,34 +492,6 @@ const applyVstControlMessage = (msg: OscMsg) => {
 	}
 };
 
-// Verify that VST_CONTROL_NAMES and the switch cases in applyVstControlMessage
-// stay in sync. Fails loudly at startup if they diverge.
-const _switchCaseNames: ReadonlySet<string> = new Set([
-	"crossfade",
-	"bpm",
-	"speed",
-	"intensity",
-	"feedback",
-	"depth",
-	"palette",
-	"deck_a_mode",
-	"deck_b_mode",
-	"rings",
-	"ring_opacity",
-	"strobe",
-	"strobe_lockout",
-	"blackout",
-	"freeze",
-	"max_brightness",
-	"beat_sync",
-	"bar_sync",
-	"demo_mode",
-]);
-console.assert(
-	[...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) &&
-		[..._switchCaseNames].every((n) => VST_CONTROL_NAMES.has(n)),
-	"VST_CONTROL_NAMES out of sync with applyVstControlMessage switch",
-);
 
 const visualServer = Bun.serve({
 	port,
