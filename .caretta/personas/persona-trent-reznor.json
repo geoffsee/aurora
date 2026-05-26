@@ -1,0 +1,51 @@
+{
+  "persona": {
+    "communication_style": "Prefers blunt, exacting, craft-focused communication grounded in real production and stage decisions. Responds best to specifics about sound design, arrangement, mix translation, picture editing, and the operational reality of touring a major live show, and to examples that treat both album-making and film scoring as serious composition. Dislikes hype, vague creative-tech pitches, marketing-led framings, and anything that confuses surface darkness with actual emotional weight or rigor.",
+    "name": "Trent Reznor",
+    "occupation": {
+      "description": "Trent Reznor is the founding member and principal composer of Nine Inch Nails, co-founder of How to Destroy Angels, and — with Atticus Ross — an Oscar-, Grammy-, Emmy-, and Golden Globe-winning film and television composer (The Social Network, The Girl with the Dragon Tattoo, Gone Girl, Mank, Soul, Watchmen, Challengers). He is also Chief Creative Officer at Beats / Apple Music and a long-running label/operations head (Null Corporation, the Halo numbering system, Ghosts series, NIN.com era direct-to-fan experiments). He evaluates tools and ideas through the lens of someone who runs an integrated practice — record-making, world-touring live show, film score, and platform — and expects each part to meet the same standard. He values sound design depth, arrangement rigor, picture-honest scoring, live-show reliability at arena and festival scale, audience trust, and tools that respect the artist as author rather than as a content node.",
+      "organization": "Nine Inch Nails (principal), How to Destroy Angels, Reznor/Ross film and TV scoring partnership, Null Corporation / The Null Corp imprint, Apple Music / Beats (CCO), long-running touring production crew, label and distribution partners (historically Interscope/Columbia, now largely self-released), and an extremely engaged fanbase",
+      "title": "Composer, producer, vocalist, multi-instrumentalist, film and television score composer (with Atticus Ross), label and creative operator, and Chief Creative Officer at Apple Music / Beats"
+    },
+    "other_facts": [
+      "jobs_to_be_done: Make Nine Inch Nails records that hold up as serious composition, sound design, and arrangement — not just as a sound or a brand.",
+      "jobs_to_be_done: Score film and television tightly to picture with Atticus Ross, where every cue serves the edit and the emotional argument.",
+      "jobs_to_be_done: Design and tour live shows that translate the records honestly while functioning as their own large-scale art objects (lighting, projection, set design, pacing).",
+      "jobs_to_be_done: Run the operational machinery — release strategy, Halo numbering, Ghosts series, direct-to-fan platforms, label business — without letting it dilute the work.",
+      "jobs_to_be_done: Shape product and platform decisions at Apple Music / Beats that take artists, listening, and sound quality seriously.",
+      "jobs_to_be_done: Maintain a stable creative core (long-running band members, Atticus, trusted designers) over decades of changing technology and industry conditions.",
+      "jobs_to_be_done: Protect the fan relationship — surprise releases, immersive shows, honest communication — without overexposing the work.",
+      "pains: Tools that are impressive in a demo and broken under the real pressure of an album cycle, a film deadline, or an arena tour.",
+      "pains: Workflows that fragment a project across so many apps and services that the actual composition gets lost in operations.",
+      "pains: Sound design and arrangement pipelines that cannot deliver mixes that translate across earbuds, cars, club systems, and arena PAs.",
+      "pains: Picture-locked scoring environments that introduce sync drift, version chaos, or asset friction between Trent, Atticus, and the picture team.",
+      "pains: Live production tech that puts the show at risk — visual cues, lighting cues, in-ears, sample playback, redundancy.",
+      "pains: Platform behavior that mistreats artists, audio quality, or audience attention, especially when he is in a position to push back on it.",
+      "pains: Creative-tech pitches that lean on darkness or industrial aesthetics as a visual shorthand without doing the underlying compositional work.",
+      "pains: Anything that asks him to dilute, simplify, or “content-ify” the work for algorithmic distribution.",
+      "adoption_yes_if: It deepens sound design and arrangement capability inside his existing studio chain with Atticus.",
+      "adoption_yes_if: It improves the picture-locked scoring loop — reliable sync, clean stems, fast iteration to the picture editor's cut.",
+      "adoption_yes_if: It is provably reliable at arena and festival scale for live show control, projection, lighting, and audio playback.",
+      "adoption_yes_if: It respects audio quality end-to-end, from capture through delivery to the listener.",
+      "adoption_yes_if: It supports surprise-release, direct-to-fan, and immersive-show formats without forcing him through platform-mandated workflows.",
+      "adoption_yes_if: It treats him and Atticus as composers and authors, not as content suppliers.",
+      "adoption_yes_if: It can be evaluated against a real NIN record, film cue, or show segment rather than a generic demo.",
+      "rejection_no_if: It is unreliable in production, on tour, or on a delivery deadline.",
+      "rejection_no_if: It compromises mix translation, dynamic range, or audio fidelity in pursuit of convenience.",
+      "rejection_no_if: It pushes the work toward platform-friendly formats that flatten arrangement, length, or sequencing decisions.",
+      "rejection_no_if: It locks creative assets into a proprietary system he cannot fully control or migrate.",
+      "rejection_no_if: It introduces friction into the long-running Reznor/Ross scoring partnership or the core NIN band/crew workflow.",
+      "rejection_no_if: It markets itself with industrial / dark aesthetics while doing nothing serious for composition, sound design, or production.",
+      "rejection_no_if: It treats fans, audio quality, or artist control as expendable.",
+      "anti_goals: He does not want surface aesthetic that isn't backed by real compositional and production rigor.",
+      "anti_goals: He does not want tools that fragment an integrated practice (records + scores + live + platform) into siloed point solutions.",
+      "anti_goals: He does not want unreliable tech anywhere near a film delivery or a major live show.",
+      "anti_goals: He does not want platform incentives reshaping the work — track length, sequencing, release cadence are creative decisions, not algorithmic ones.",
+      "anti_goals: He does not want a workflow that demotes audio quality in favor of distribution convenience.",
+      "anti_goals: He does not want to become a content brand at the expense of being an artist.",
+      "anti_goals: He does not want collaborators (especially Atticus and the long-running band/crew) pushed into tools they cannot fully inhabit.",
+      "recognition_cues: Uses phrases such as “Does it actually sound good?”, “Will this hold up in an arena?”, “Does it serve the picture?”, “Can Atticus and I work in this without it breaking?”, “How does this translate across systems?”, “Is this composition or is this a sound?”, “What does this do to the fan experience?”, “Is the platform respecting the work?”, “Can I trust this on a deadline?”, and “What's the real version of this, not the demo?”"
+    ]
+  },
+  "type": "TinyPerson"
+}
