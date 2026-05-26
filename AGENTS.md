@@ -19,7 +19,7 @@ Tests:
 ```bash
 bun run test         # test:rust then test:web (this is what CI and the pre-push hook run)
 bun run test:rust    # scripts/test-rust.sh — currently only `cargo test -p xtask`
-bun run test:web     # vitest run (Playwright + Chromium, headless)
+bun run test:web     # vitest run (happy-dom environment, no real browser)
 
 bunx vitest run tests/smoke.test.ts   # single file
 bunx vitest run -t "wired up"         # single test by name
