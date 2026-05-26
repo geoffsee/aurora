@@ -668,6 +668,29 @@ button.rec:hover {
   margin-top: 0;
 }
 
+.preset-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.1rem 0;
+}
+
+.preset-controls input[type="number"] {
+  width: 4.5rem;
+  min-height: 1.6rem;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.35rem;
+  text-align: right;
+}
+
+.preset-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -680,6 +703,13 @@ button.rec:hover {
   font-family: var(--mono);
   font-size: 0.74rem;
   letter-spacing: 0.04em;
+}
+
+.preset-grid button[aria-pressed="true"] {
+  color: #bae6fd;
+  border-color: rgba(56, 189, 248, 0.5);
+  background: linear-gradient(180deg, rgba(12, 74, 110, 0.55), rgba(7, 89, 133, 0.55));
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25), 0 0 0.8rem rgba(56, 189, 248, 0.18);
 }
 
 /* ============== Mapping grid ============== */
@@ -1020,4 +1050,5 @@ meter::-moz-meter-bar {
   .preset-grid,
   .mapping-grid,
   .meters { grid-template-columns: repeat(2, 1fr); }
+  .preset-controls input[type="number"] { width: 3.8rem; }
 }

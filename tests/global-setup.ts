@@ -56,6 +56,12 @@ export async function setup(): Promise<() => Promise<void>> {
 						args: [latestControlState],
 					});
 					sockets.forEach((s) => s.send(data));
+				} else if (
+					typeof parsed.address === "string" &&
+					parsed.address.startsWith("/bevyosc/preset/")
+				) {
+					const data = JSON.stringify({ address: parsed.address, args: [] });
+					sockets.forEach((s) => s.send(data));
 				}
 			} catch {
 				// ignore malformed messages

@@ -5,6 +5,11 @@ export const VST_CONTROL_PREFIX = "/bevyosc/vst/control/";
 export const VST_TRIGGER_PREFIX = "/bevyosc/vst/trigger/";
 export const VST_CUE_PREFIX = "/bevyosc/vst/cue/";
 
+export const PRESET_SAVE_PREFIX = "/bevyosc/preset/save/";
+export const PRESET_RECALL_PREFIX = "/bevyosc/preset/recall/";
+export const PRESET_SLOT_MIN = 1;
+export const PRESET_SLOT_MAX = 6;
+
 export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
 	"crossfade",
 	"bpm",
@@ -49,6 +54,25 @@ export const validateLiveOscMsg = (msg: OscMsg, origin: string): boolean => {
 	if (!msg.address.startsWith("/live/")) {
 		console.error(
 			`[OSC] dropping unrecognised address "${msg.address}" from ${origin}`,
+		);
+		return false;
+	}
+	return true;
+};
+
+export const validatePresetOscMsg = (msg: OscMsg, origin: string): boolean => {
+	const { address } = msg;
+	const isSave = address.startsWith(PRESET_SAVE_PREFIX);
+	const isRecall = address.startsWith(PRESET_RECALL_PREFIX);
+	if (!isSave && !isRecall) return false;
+
+	const suffix = isSave
+		? address.slice(PRESET_SAVE_PREFIX.length)
+		: address.slice(PRESET_RECALL_PREFIX.length);
+	const n = Number(suffix);
+	if (!Number.isInteger(n) || n < PRESET_SLOT_MIN || n > PRESET_SLOT_MAX) {
+		console.error(
+			`[OSC] dropping invalid preset slot "${address}" from ${origin} — slot must be ${PRESET_SLOT_MIN}–${PRESET_SLOT_MAX}`,
 		);
 		return false;
 	}

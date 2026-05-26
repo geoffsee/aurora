@@ -17,6 +17,7 @@
         <div class="status" role="status" aria-live="polite">
           <span id="bridge-status" class="pill" data-state="connecting">bridge connecting</span>
           <span id="osc-status" class="pill" data-state="idle">OSC idle</span>
+          <span id="preset-status" class="pill" data-state="idle">No preset</span>
           <span id="diagnostics-status" class="pill" data-state="info">0 viewers</span>
         </div>
       </header>
@@ -56,6 +57,11 @@
           <button id="bar-sync" aria-pressed="false">Bar Sync</button>
           <button id="flash" class="accent">Flash</button>
           <button id="save-preset">Save Preset</button>
+        </div>
+        <div class="preset-controls">
+          <span class="preset-label">Transition</span>
+          <input id="preset-transition" type="number" min="0" max="10000" step="100" value="500" aria-label="Transition duration in milliseconds" />
+          <span class="preset-label">ms</span>
         </div>
         <div id="preset-grid" class="preset-grid" aria-label="Saved presets"></div>
       </section>
@@ -398,11 +404,20 @@
         if (frame?.address === "/live/song/get/track_data") {
           applyTrackData(args);
         }
+        if (frame?.address?.startsWith("/bevyosc/preset/recall/")) {
+          const n = Number(frame.address.split("/").pop());
+          if (Number.isInteger(n) && n >= 1 && n <= 6) recallPreset(n);
+        }
+        if (frame?.address?.startsWith("/bevyosc/preset/save/")) {
+          const n = Number(frame.address.split("/").pop());
+          if (Number.isInteger(n) && n >= 1 && n <= 6) savePresetSilent(n);
+        }
         render();
       }
 
       function syncFromRemote(next) {
         if (next.replaying && !state.replaying) return;
+        if (activeTransitionRaf !== null) return;
         Object.assign(state, { ...state, ...next, trackMapping: { ...state.trackMapping, ...(next.trackMapping || {}) } });
         syncInputs();
       }
@@ -480,31 +495,145 @@
         publish();
       }
 
+      const PRESETS_KEY = "bevyosc.presets";
+      const loadPresets = () => {
+        try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}"); } catch { return {}; }
+      };
+      const savePresetsToStorage = (p) => localStorage.setItem(PRESETS_KEY, JSON.stringify(p));
+      const normalizePreset = (raw) => {
+        if (!raw) return null;
+        if (typeof raw === "object" && "state" in raw) return raw;
+        return { name: null, state: raw };
+      };
+
+      const INTERPOLATED_KEYS = ["crossfade", "speed", "intensity", "feedback", "depth", "palette", "ringOpacity", "maxBrightness"];
+      let transitionDurationMs = 500;
+      let activePresetIndex = null;
+      let activeTransitionRaf = null;
+
+      function recallPreset(n) {
+        const presets = loadPresets();
+        const preset = normalizePreset(presets[`slot-${n}`]);
+        if (!preset) return;
+        const from = cloneState();
+        const to = preset.state;
+        const start = performance.now();
+        activePresetIndex = n;
+        state.cueVersion += 1;
+        if (activeTransitionRaf !== null) {
+          cancelAnimationFrame(activeTransitionRaf);
+          activeTransitionRaf = null;
+        }
+        function applyAt(t) {
+          const lerped = Object.assign({}, to);
+          for (const key of INTERPOLATED_KEYS) {
+            const a = typeof from[key] === "number" ? from[key] : (typeof to[key] === "number" ? to[key] : 0);
+            const b = typeof to[key] === "number" ? to[key] : a;
+            lerped[key] = a + (b - a) * t;
+          }
+          const { cueVersion, flashVersion, resetVersion, ...rest } = lerped;
+          Object.assign(state, rest, { replaying: false });
+          syncInputs();
+          publish({ record: false });
+        }
+        function tick() {
+          const elapsed = performance.now() - start;
+          const t = Math.min(1, elapsed / Math.max(1, transitionDurationMs));
+          applyAt(t);
+          if (t < 1) {
+            activeTransitionRaf = requestAnimationFrame(tick);
+          } else {
+            activeTransitionRaf = null;
+            renderPresets();
+          }
+        }
+        if (transitionDurationMs <= 0) {
+          applyAt(1);
+          renderPresets();
+        } else {
+          tick();
+        }
+      }
+
+      function savePresetSilent(n) {
+        const presets = loadPresets();
+        const existing = normalizePreset(presets[`slot-${n}`]);
+        presets[`slot-${n}`] = { name: existing?.name || `Preset ${n}`, state: cloneState() };
+        savePresetsToStorage(presets);
+        activePresetIndex = n;
+        renderPresets();
+      }
+
+      function savePresetToSlot(n) {
+        const presets = loadPresets();
+        const existing = normalizePreset(presets[`slot-${n}`]);
+        const defaultName = existing?.name || `Preset ${n}`;
+        const name = prompt(`Name for slot ${n}:`, defaultName);
+        if (name === null) return;
+        presets[`slot-${n}`] = { name: name.trim() || defaultName, state: cloneState() };
+        savePresetsToStorage(presets);
+        activePresetIndex = n;
+        renderPresets();
+      }
+
       function savePreset() {
-        const slot = Math.max(1, Math.min(6, Number(prompt("Preset slot 1-6", "1")) || 1));
-        const presets = JSON.parse(localStorage.getItem("bevyosc.presets") || "{}");
-        presets[`slot-${slot}`] = cloneState();
-        localStorage.setItem("bevyosc.presets", JSON.stringify(presets));
+        const presets = loadPresets();
+        let defaultSlot = 1;
+        for (let i = 1; i <= 6; i++) {
+          if (!presets[`slot-${i}`]) { defaultSlot = i; break; }
+        }
+        const slotStr = prompt("Save to slot (1–6):", String(defaultSlot));
+        if (!slotStr) return;
+        const n = Math.max(1, Math.min(6, Number(slotStr) || defaultSlot));
+        savePresetToSlot(n);
+      }
+
+      function renamePreset(n) {
+        const presets = loadPresets();
+        const existing = normalizePreset(presets[`slot-${n}`]);
+        if (!existing) return;
+        const name = prompt("Rename preset:", existing.name || `Preset ${n}`);
+        if (name === null) return;
+        presets[`slot-${n}`] = { ...existing, name: name.trim() || `Preset ${n}` };
+        savePresetsToStorage(presets);
         renderPresets();
       }
 
       function renderPresets() {
         const root = $("#preset-grid");
-        const presets = JSON.parse(localStorage.getItem("bevyosc.presets") || "{}");
+        const presets = loadPresets();
         root.innerHTML = "";
-        for (let i = 1; i <= 6; i += 1) {
-          const button = document.createElement("button");
-          button.textContent = presets[`slot-${i}`] ? `Preset ${i}` : `Empty ${i}`;
-          button.disabled = !presets[`slot-${i}`];
-          button.addEventListener("click", () => {
-            const preset = JSON.parse(localStorage.getItem("bevyosc.presets") || "{}")[`slot-${i}`];
-            if (!preset) return;
-            Object.assign(state, preset, { replaying: false });
-            state.cueVersion += 1;
-            syncInputs();
-            publish();
+        for (let i = 1; i <= 6; i++) {
+          const preset = normalizePreset(presets[`slot-${i}`]);
+          const isActive = activePresetIndex === i;
+          const btn = document.createElement("button");
+          btn.textContent = preset ? (preset.name || `Preset ${i}`) : `— ${i} —`;
+          btn.disabled = !preset;
+          btn.setAttribute("aria-pressed", String(isActive));
+          btn.title = preset
+            ? "Click to recall · Shift+click to overwrite · Dbl-click to rename"
+            : "Empty — use Save Preset to fill";
+          btn.addEventListener("click", (e) => {
+            if (e.shiftKey) {
+              savePresetToSlot(i);
+            } else if (preset) {
+              recallPreset(i);
+            }
           });
-          root.append(button);
+          btn.addEventListener("dblclick", (e) => {
+            e.preventDefault();
+            if (preset) renamePreset(i);
+          });
+          root.append(btn);
+        }
+        const activePill = $("#preset-status");
+        if (activePill) {
+          const activePreset = activePresetIndex !== null
+            ? normalizePreset(loadPresets()[`slot-${activePresetIndex}`])
+            : null;
+          const label = activePreset ? (activePreset.name || `Preset ${activePresetIndex}`) : "No preset";
+          activePill.textContent = label;
+          activePill.dataset.state = activePreset ? "info" : "idle";
         }
       }
 
@@ -737,6 +866,10 @@
         pendingCue = null;
         syncInputs();
         publish();
+      });
+
+      $("#preset-transition").addEventListener("input", (event) => {
+        transitionDurationMs = Math.max(0, Math.min(10000, Number(event.target.value) || 0));
       });
 
       renderPresets();
