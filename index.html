@@ -62,10 +62,11 @@
         rings: true,
         ringOpacity: 1,
         strobe: false,
-        strobeLockout: true,
+        strobeLockout: false,
         blackout: false,
         freeze: false,
         maxBrightness: 0.9,
+        showGpuPalette: false,
         beatSync: true,
         barSync: false,
         demoMode: false,
@@ -246,10 +247,11 @@
         controlState.rings = next.rings !== false;
         controlState.ringOpacity = next.ringOpacity === undefined ? controlState.ringOpacity : clamp01(next.ringOpacity);
         controlState.strobe = Boolean(next.strobe);
-        controlState.strobeLockout = next.strobeLockout !== false;
+        controlState.strobeLockout = Boolean(next.strobeLockout);
         controlState.blackout = Boolean(next.blackout);
         controlState.freeze = Boolean(next.freeze);
         controlState.maxBrightness = Math.max(0.1, Math.min(1, Number(next.maxBrightness) || controlState.maxBrightness));
+        controlState.showGpuPalette = Boolean(next.showGpuPalette);
         controlState.beatSync = next.beatSync !== false;
         controlState.barSync = Boolean(next.barSync);
         controlState.demoMode = Boolean(next.demoMode);
@@ -354,6 +356,7 @@
       window.__bevyoscControlBlackout = () => controlState.blackout;
       window.__bevyoscControlFreeze = () => controlState.freeze;
       window.__bevyoscControlMaxBrightness = () => controlState.maxBrightness;
+      window.__bevyoscControlShowGpuPalette = () => controlState.showGpuPalette;
       window.__bevyoscControlBeatSync = () => controlState.beatSync;
       window.__bevyoscControlBarSync = () => controlState.barSync;
       window.__bevyoscControlDemoMode = () => controlState.demoMode;
@@ -386,4 +389,3 @@
     </script>
   </body>
 </html>
-

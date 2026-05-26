@@ -123,6 +123,7 @@
           <button id="rings" aria-pressed="true">Rings</button>
           <button id="strobe" aria-pressed="false">Strobe</button>
           <button id="strobe-lockout" aria-pressed="true">Strobe Lock</button>
+          <button id="show-gpu-palette" aria-pressed="false">GPU Rehoboam</button>
           <button id="freeze" aria-pressed="false">Freeze</button>
           <button id="blackout" aria-pressed="false">Blackout</button>
           <button id="reset" class="danger">Reset</button>
@@ -200,10 +201,11 @@
         rings: true,
         ringOpacity: 1,
         strobe: false,
-        strobeLockout: true,
+        strobeLockout: false,
         blackout: false,
         freeze: false,
         maxBrightness: 0.9,
+        showGpuPalette: false,
         beatSync: true,
         barSync: false,
         demoMode: false,
@@ -589,6 +591,7 @@
         $("#strobe").setAttribute("aria-pressed", String(state.strobe));
         $("#strobe-lockout").setAttribute("aria-pressed", String(state.strobeLockout));
         $("#freeze").setAttribute("aria-pressed", String(state.freeze));
+        $("#show-gpu-palette").setAttribute("aria-pressed", String(state.showGpuPalette));
         $("#blackout").setAttribute("aria-pressed", String(state.blackout));
         $("#beat-sync").setAttribute("aria-pressed", String(state.beatSync));
         $("#bar-sync").setAttribute("aria-pressed", String(state.barSync));
@@ -684,12 +687,21 @@
         publish();
       });
       $("#strobe").addEventListener("click", () => {
-        if (!state.strobeLockout) state.strobe = !state.strobe;
+        if (state.strobeLockout) {
+          state.strobeLockout = false;
+          state.strobe = true;
+        } else {
+          state.strobe = !state.strobe;
+        }
         publish();
       });
       $("#strobe-lockout").addEventListener("click", () => {
         state.strobeLockout = !state.strobeLockout;
         if (state.strobeLockout) state.strobe = false;
+        publish();
+      });
+      $("#show-gpu-palette").addEventListener("click", () => {
+        state.showGpuPalette = !state.showGpuPalette;
         publish();
       });
       $("#freeze").addEventListener("click", () => {
@@ -736,4 +748,3 @@
     </script>
   </body>
 </html>
-
