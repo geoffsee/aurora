@@ -67,6 +67,8 @@ unsafe extern "C" {
     fn browser_control_blackout() -> bool;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlFreeze)]
     fn browser_control_freeze() -> bool;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlShowGpuPalette)]
+    fn browser_control_show_gpu_palette() -> bool;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlMaxBrightness)]
     fn browser_control_max_brightness() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlFlashVersion)]
@@ -87,9 +89,10 @@ unsafe extern "C" {
     fn browser_control_cue_deck_b_mode() -> f32;
 }
 
-/// GPU material driven by the `palette` OSC control.
+/// GPU material driven by the `palette` controls.
 /// The fragment shader (`assets/shaders/vj_palette.wgsl`) receives `params`
-/// as a vec4 uniform: x=hue_shift (0..1), y=show_time (seconds).
+/// as a vec4 uniform: x=hue_shift (0..1), y=show_time (seconds),
+/// z=bass_activity (0..1), w=melodic_activity (>=0 active, <0 inactive).
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
 struct VjPaletteMaterial {
     #[uniform(0)]
@@ -177,6 +180,7 @@ struct VjState {
     strobe_lockout: bool,
     blackout: bool,
     freeze: bool,
+    show_gpu_palette: bool,
     max_brightness: f32,
     show_time: f32,
     flash: f32,
@@ -189,6 +193,8 @@ struct VjState {
     osc_bass: f32,
     osc_mid: f32,
     osc_high: f32,
+    bass_activity: f32,
+    melodic_activity: f32,
     osc_pulse: f32,
     last_control_flash_version: u32,
     last_control_reset_version: u32,
@@ -210,9 +216,10 @@ impl Default for VjState {
             rings_enabled: true,
             ring_opacity: 1.0,
             strobe: false,
-            strobe_lockout: true,
+            strobe_lockout: false,
             blackout: false,
             freeze: false,
+            show_gpu_palette: false,
             max_brightness: 0.9,
             show_time: 0.0,
             flash: 0.0,
@@ -225,6 +232,8 @@ impl Default for VjState {
             osc_bass: 0.0,
             osc_mid: 0.0,
             osc_high: 0.0,
+            bass_activity: 0.0,
+            melodic_activity: 0.0,
             osc_pulse: 0.0,
             last_control_flash_version: 0,
             last_control_reset_version: 0,
@@ -400,9 +409,6 @@ fn setup(
         ));
     }
 
-    // GPU palette background: sits between the black fill (z=-20) and the ghost
-    // layer (z=-8). Alpha-blended; hue_shift and show_time are updated each frame
-    // by `update_palette_material` from the live `VjState`.
     let gpu_mat = palette_materials.add(VjPaletteMaterial {
         params: Vec4::ZERO,
     });
@@ -410,8 +416,7 @@ fn setup(
     commands.spawn((
         Mesh2d(meshes.add(Rectangle::default())),
         MeshMaterial2d(gpu_mat),
-        Transform::from_xyz(0.0, 0.0, -15.0)
-            .with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Transform::from_xyz(0.0, 0.0, -15.0).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
     ));
 
     // The control surface now lives on port 3001, so the projector output has no HUD.
@@ -460,12 +465,34 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         0.0
     };
 
+    let previous_bass = state.osc_bass;
+    let previous_mid = state.osc_mid;
+    let previous_high = state.osc_high;
+    let previous_melodic = previous_mid * 0.62 + previous_high * 0.38;
+    let target_melodic = target_mid * 0.62 + target_high * 0.38;
+    let bass_attack = (target_bass - previous_bass).max(0.0) * 2.4;
+    let melodic_attack = (target_melodic - previous_melodic).max(0.0) * 2.0;
+
     state.osc_energy = smooth_audio(state.osc_energy, target_energy, dt);
     state.osc_deck_a = smooth_audio(state.osc_deck_a, target_deck_a, dt);
     state.osc_deck_b = smooth_audio(state.osc_deck_b, target_deck_b, dt);
     state.osc_bass = smooth_audio(state.osc_bass, target_bass, dt);
     state.osc_mid = smooth_audio(state.osc_mid, target_mid, dt);
     state.osc_high = smooth_audio(state.osc_high, target_high, dt);
+    state.bass_activity = smooth_signal(
+        state.bass_activity,
+        (target_bass * 0.72 + bass_attack).clamp(0.0, 1.0),
+        dt,
+        18.0,
+        4.8,
+    );
+    state.melodic_activity = smooth_signal(
+        state.melodic_activity,
+        (target_melodic * 0.82 + melodic_attack).clamp(0.0, 1.0),
+        dt,
+        12.0,
+        3.6,
+    );
     state.osc_pulse = smooth_signal(
         state.osc_pulse,
         target_pulse,
@@ -505,6 +532,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.strobe = browser_control_strobe() && !state.strobe_lockout;
         state.blackout = browser_control_blackout();
         state.freeze = browser_control_freeze();
+        state.show_gpu_palette = browser_control_show_gpu_palette();
         state.max_brightness = browser_control_max_brightness().clamp(0.1, 1.0);
 
         if flash_version != state.last_control_flash_version {
@@ -582,6 +610,9 @@ fn keyboard_controls(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut state
     if keys.just_pressed(KeyCode::KeyF) {
         state.flash = 1.0;
     }
+    if keys.just_pressed(KeyCode::KeyG) {
+        state.show_gpu_palette = !state.show_gpu_palette;
+    }
     if keys.just_pressed(KeyCode::KeyT) {
         state.strobe = !state.strobe && !state.strobe_lockout;
     }
@@ -619,15 +650,17 @@ fn update_visuals(
     let bass = state.osc_bass.clamp(0.0, 1.0);
     let mid = state.osc_mid.clamp(0.0, 1.0);
     let high = state.osc_high.clamp(0.0, 1.0);
+    let bass_activity = state.bass_activity.clamp(0.0, 1.0);
+    let melodic_activity = state.melodic_activity.clamp(0.0, 1.0);
     let audio_active = osc_drive > 0.001 || bass > 0.001 || mid > 0.001 || high > 0.001;
     let manual_beat_hit = (1.0 - beat).powf(8.0);
     let cue_hit = state.cue_boost.powf(1.25);
     let beat_hit = (if state.osc_connected {
-        state.osc_pulse.powf(1.35) * (bass * 0.8 + osc_drive * 0.2) * OSC_PULSE_GAIN
+        state.osc_pulse.powf(1.35) * (bass_activity * 0.82 + osc_drive * 0.18) * OSC_PULSE_GAIN
     } else {
         manual_beat_hit
     }) + cue_hit * 0.38;
-    let band_drive = bass * 0.45 + mid * 0.35 + high * 0.2;
+    let band_drive = bass_activity * 0.46 + melodic_activity * 0.42 + osc_drive * 0.12;
     let intensity_drive =
         (state.intensity * (0.75 + band_drive * 0.95 + cue_hit * 0.55)).clamp(0.05, 2.4);
     let motion_drive = if state.osc_connected {
@@ -699,9 +732,10 @@ fn update_visuals(
                     + depth * layer * 14.0;
                 let angle = fraction * TAU + spin;
                 let radial_offset =
-                    depth * (layer - 0.5) * (130.0 + depth_wave * 70.0) + bass * 8.0;
+                    depth * (layer - 0.5) * (130.0 + depth_wave * 70.0) + bass_activity * 14.0;
                 let side_offset =
-                    depth * (depth_wave - 0.5) * 60.0 + high * 6.0 * wave(t * 9.0 + fraction);
+                    depth * (depth_wave - 0.5) * 60.0
+                        + melodic_activity * 10.0 * wave(t * 9.0 + fraction);
 
                 transform.translation = Vec3::new(
                     angle.cos() * radial_offset - angle.sin() * side_offset,
@@ -718,7 +752,7 @@ fn update_visuals(
                         transform.scale.x *= 0.55 + tunnel * 0.18;
                         transform.scale.y *= tunnel + beat_hit * 0.9;
                         alpha *= 0.8 + layer * 0.9;
-                        hue += 80.0 + layer * 120.0;
+                        hue += 10.0 + layer * 12.0;
                     }
                     VisualMode::Burst => {
                         let burst = (beat_hit * 2.8 + cue_hit * 1.4).clamp(0.0, 2.2);
@@ -748,11 +782,14 @@ fn update_visuals(
                     VisualMode::Beams => {}
                 }
 
-                hue += fraction * 180.0;
+                hue += match deck_mode {
+                    VisualMode::Tunnel => fraction * 18.0,
+                    _ => fraction * 180.0,
+                };
                 alpha *= 0.04
                     + 0.64 * intensity_drive * wobble * motion_drive
-                    + bass * 0.08
-                    + high * 0.05 * wave(t * 16.0 + element.seed)
+                    + bass_activity * 0.1
+                    + melodic_activity * 0.08 * wave(t * 16.0 + element.seed)
                     + state.flash * 0.35;
                 lightness += beat_hit * 0.04
                     + state.flash * 0.2
@@ -768,7 +805,7 @@ fn update_visuals(
                     + pulse * 80.0 * motion_drive
                     + beat_hit * 110.0
                     + deck_drive * 130.0
-                    + mid * 35.0;
+                    + melodic_activity * 52.0;
 
                 transform.translation = Vec3::new(0.0, 0.0, 18.0 + fraction);
                 transform.rotation = Quat::from_rotation_z(-t * (0.4 + fraction));
@@ -802,7 +839,7 @@ fn update_visuals(
                 alpha *= 0.02
                     + pulse * 0.18 * motion_drive
                     + beat_hit * 0.05
-                    + mid * 0.08
+                    + melodic_activity * 0.12
                     + state.flash * 0.24;
                 alpha *= state.ring_opacity;
                 if !state.rings_enabled {
@@ -816,14 +853,19 @@ fn update_visuals(
                 let x = -STAGE_WIDTH / 2.0 + x_step * (element.col as f32 + 0.5);
                 let y = -STAGE_HEIGHT / 2.0 + y_step * (element.row as f32 + 0.5);
                 let diagonal = element.col as f32 * 0.32 + element.row as f32 * 0.41;
-                let pulse =
-                    wave(t * (3.8 + high * 4.0) - diagonal * 1.7 + beat_hit * 2.0 + deck_drive);
+                let pulse = wave(
+                    t * (3.8 + melodic_activity * 5.5)
+                        - diagonal * 1.7
+                        + beat_hit * 2.0
+                        + deck_drive,
+                );
                 let size = 14.0
                     + pulse * 58.0 * intensity_drive * motion_drive
                     + beat_hit * 30.0
                     + deck_drive * 42.0
-                    + high * 7.0;
-                let shear = wave(t * (1.1 + high * 1.0) + element.seed) * (0.35 + high * 0.08);
+                    + melodic_activity * 11.0;
+                let shear = wave(t * (1.1 + melodic_activity * 1.6) + element.seed)
+                    * (0.35 + melodic_activity * 0.12);
 
                 transform.translation = Vec3::new(x + shear * 26.0, y - shear * 18.0, 8.0 + pulse);
                 transform.rotation = Quat::from_rotation_z((pulse - 0.5) * 0.5 + t * 0.07);
@@ -846,7 +888,7 @@ fn update_visuals(
                         transform.translation.x += x.signum() * center_push;
                         transform.translation.y += y.signum() * center_push * 0.56;
                         transform.scale *= 0.7 + beat_hit * 2.1 + high;
-                        alpha *= 0.65 + beat_hit * 1.6 + high;
+                        alpha *= 0.65 + beat_hit * 1.6 + melodic_activity;
                     }
                     VisualMode::Mirror => {
                         if (element.col + element.row) % 2 == 0 {
@@ -869,9 +911,9 @@ fn update_visuals(
                 hue += 190.0 + diagonal * 38.0;
                 alpha *= 0.05
                     + pulse * 0.8 * intensity_drive * motion_drive
-                    + high * 0.08 * wave(t * 14.0 + element.seed)
+                    + melodic_activity * 0.11 * wave(t * 14.0 + element.seed)
                     + state.flash * 0.35;
-                lightness += pulse * 0.12 + high * 0.04;
+                lightness += pulse * 0.12 + melodic_activity * 0.06;
             }
             VisualKind::Ghost => {
                 let fraction = element.index as f32 / 18.0;
@@ -887,8 +929,8 @@ fn update_visuals(
                 transform.scale = Vec3::new(
                     STAGE_WIDTH * (0.22 + state.feedback * 0.9 + bass * 0.05),
                     18.0 + 180.0 * state.feedback * wave(t + element.seed)
-                        + mid * 18.0
-                        + bass * 16.0,
+                        + melodic_activity * 24.0
+                        + bass_activity * 22.0,
                     1.0,
                 );
 
@@ -955,11 +997,11 @@ fn update_tunnel_rings(
         return;
     }
 
-    let bass = state.osc_bass.clamp(0.0, 1.0);
-    let mid = state.osc_mid.clamp(0.0, 1.0);
     let drive = state.osc_energy.clamp(0.0, 1.0);
+    let bass_activity = state.bass_activity.clamp(0.0, 1.0);
+    let melodic_activity = state.melodic_activity.clamp(0.0, 1.0);
     let beat_hit = if state.osc_connected {
-        state.osc_pulse.clamp(0.0, 1.0) * (bass * 0.8 + drive * 0.2)
+        state.osc_pulse.clamp(0.0, 1.0) * (bass_activity * 0.82 + drive * 0.18)
     } else {
         let beat = (state.show_time * state.bpm / 60.0).fract();
         (1.0 - beat).powf(8.0)
@@ -979,20 +1021,21 @@ fn update_tunnel_rings(
         let phase =
             (state.show_time * rate + ring.lane as f32 / TUNNEL_RING_COUNT as f32).rem_euclid(1.0);
         let z = -(1.0 - phase) * TUNNEL_DEPTH;
-        let radius = 1.5 + state.depth * 0.7 + bass * 0.25 + beat_hit * 0.18;
+        let radius = 1.5 + state.depth * 0.7 + bass_activity * 0.38 + beat_hit * 0.18;
         transform.translation = Vec3::new(0.0, 0.0, z);
         transform.scale = Vec3::splat(radius);
         transform.rotation = Quat::from_rotation_z(state.show_time * 0.4 + ring.lane as f32 * 0.6);
 
-        let hue =
-            (state.palette * 360.0 + ring.lane as f32 * 18.0 + phase * 60.0).rem_euclid(360.0);
-        let lightness = (0.45 + drive * 0.2 + mid * 0.15 + state.flash * 0.25).clamp(0.05, 0.85);
+        let hue = (ring.lane as f32 * 18.0 + phase * 60.0).rem_euclid(360.0);
+        let lightness =
+            (0.45 + drive * 0.14 + melodic_activity * 0.24 + state.flash * 0.25)
+                .clamp(0.05, 0.85);
         let bell = (phase * TAU * 0.5).sin();
         let alpha =
             (bell * (0.55 + beat_hit * 0.45) * deck_mix * state.max_brightness).clamp(0.0, 1.0);
 
         if let Some(material) = materials.get_mut(&material_handle.0) {
-            material.base_color = Color::hsla(hue, 0.85, lightness, alpha);
+            material.base_color = palette_color(state.palette, hue, 0.85, lightness, alpha);
         }
     }
 }
@@ -1002,8 +1045,23 @@ fn update_palette_material(
     handle: Res<VjPaletteHandle>,
     mut materials: ResMut<Assets<VjPaletteMaterial>>,
 ) {
-    if let Some(mat) = materials.get_mut(&handle.0) {
-        mat.params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
+    if let Some(material) = materials.get_mut(&handle.0) {
+        let bass_activity = if state.show_gpu_palette {
+            state.bass_activity.max(0.0)
+        } else {
+            0.0
+        };
+        let melodic_activity = if state.show_gpu_palette {
+            state.melodic_activity.max(0.0)
+        } else {
+            -1.0
+        };
+        material.params = Vec4::new(
+            state.palette,
+            state.show_time,
+            bass_activity,
+            melodic_activity,
+        );
     }
 }
 

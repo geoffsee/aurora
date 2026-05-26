@@ -30,6 +30,7 @@ type ControlState = {
 	blackout: boolean;
 	freeze: boolean;
 	maxBrightness: number;
+	showGpuPalette: boolean;
 	beatSync: boolean;
 	barSync: boolean;
 	demoMode: boolean;
@@ -150,10 +151,11 @@ const defaultControlState = (): ControlState => ({
 	rings: true,
 	ringOpacity: 1,
 	strobe: false,
-	strobeLockout: true,
+	strobeLockout: false,
 	blackout: false,
 	freeze: false,
 	maxBrightness: 0.9,
+	showGpuPalette: false,
 	beatSync: true,
 	barSync: false,
 	demoMode: false,
@@ -249,10 +251,11 @@ const coerceControlState = (state: unknown): ControlState => {
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
-		strobeLockout: source.strobeLockout !== false,
+		strobeLockout: Boolean(source.strobeLockout),
 		blackout: Boolean(source.blackout),
 		freeze: Boolean(source.freeze),
 		maxBrightness: clamp(source.maxBrightness, 0.1, 1, defaults.maxBrightness),
+		showGpuPalette: source.showGpuPalette === true,
 		beatSync: source.beatSync !== false,
 		barSync: Boolean(source.barSync),
 		demoMode: Boolean(source.demoMode),
@@ -433,6 +436,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				break;
 			case "freeze":
 				mergeControlState({ freeze: booleanArg(arg) });
+				break;
+			case "show_gpu_palette":
+				mergeControlState({ showGpuPalette: booleanArg(arg) });
 				break;
 			case "max_brightness":
 				mergeControlState({ maxBrightness: value });
