@@ -370,6 +370,14 @@ const broadcastControl = (state: unknown) => {
 	});
 	sockets.forEach((ws) => ws.send(data));
 };
+const broadcastError = (description: string) => {
+	const data = JSON.stringify({
+		address: "/bevyosc/error",
+		error: description,
+		args: [],
+	});
+	sockets.forEach((ws) => ws.send(data));
+};
 const booleanArg = (arg: OscArg | undefined) => {
 	const value = valueOf(arg);
 	return Boolean(typeof value === "number" ? value >= 0.5 : value);
@@ -549,12 +557,18 @@ const visualServer = Bun.serve({
 		},
 		message(_ws, raw) {
 			try {
-				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg>;
+				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg> &
+					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
 					if (parsed.address === "/bevyosc/control/state") {
 						broadcastControl(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
+					} else if (
+						parsed.address === "/bevyosc/error" &&
+						typeof parsed.error === "string"
+					) {
+						broadcastError(parsed.error);
 					} else {
 						sendOsc(
 							parsed.address,
@@ -627,16 +641,20 @@ udp.on("ready", () => {
 });
 
 udp.on("message", broadcast);
-udp.on("error", (error: Error) => console.error("OSC error:", error.message));
+udp.on("error", (error: Error) => {
+	console.error("OSC error:", error.message);
+	broadcastError(`OSC UDP error: ${error.message}`);
+});
 udp.open();
 
 vstControlUdp.on("ready", () => {
 	console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
 });
 vstControlUdp.on("message", applyVstControlMessage);
-vstControlUdp.on("error", (error: Error) =>
-	console.error("VST control OSC error:", error.message),
-);
+vstControlUdp.on("error", (error: Error) => {
+	console.error("VST control OSC error:", error.message);
+	broadcastError(`VST control UDP error: ${error.message}`);
+});
 vstControlUdp.open();
 
 setInterval(() => {
