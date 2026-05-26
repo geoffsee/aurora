@@ -313,7 +313,7 @@
         sendErrorToControls(`Unhandled rejection: ${msg}`);
       });
       window.addEventListener("error", (event) => {
-        const msg = event.error instanceof Error ? event.error.message : event.message;
+        const msg = event.error instanceof Error ? event.error.message : (event.message || 'Unknown error');
         sendErrorToControls(`Runtime error: ${msg}`);
       });
 
