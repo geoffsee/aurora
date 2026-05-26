@@ -21,6 +21,7 @@ export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
 	"strobe_lockout",
 	"blackout",
 	"freeze",
+	"show_gpu_palette",
 	"max_brightness",
 	"beat_sync",
 	"bar_sync",

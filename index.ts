@@ -35,6 +35,7 @@ type ControlState = {
 	strobeLockout: boolean;
 	blackout: boolean;
 	freeze: boolean;
+	showGpuPalette: boolean;
 	maxBrightness: number;
 	beatSync: boolean;
 	barSync: boolean;
@@ -158,6 +159,7 @@ const defaultControlState = (): ControlState => ({
 	strobeLockout: true,
 	blackout: false,
 	freeze: false,
+	showGpuPalette: false,
 	maxBrightness: 0.9,
 	beatSync: true,
 	barSync: false,
@@ -258,6 +260,7 @@ const coerceControlState = (state: unknown): ControlState => {
 		strobeLockout: source.strobeLockout !== false,
 		blackout: Boolean(source.blackout),
 		freeze: Boolean(source.freeze),
+		showGpuPalette: source.showGpuPalette === true,
 		maxBrightness: clamp(source.maxBrightness, 0.1, 1, defaults.maxBrightness),
 		beatSync: source.beatSync !== false,
 		barSync: Boolean(source.barSync),
@@ -437,6 +440,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			case "freeze":
 				mergeControlState({ freeze: booleanArg(arg) });
 				break;
+			case "show_gpu_palette":
+				mergeControlState({ showGpuPalette: booleanArg(arg) });
+				break;
 			case "max_brightness":
 				mergeControlState({ maxBrightness: value });
 				break;
@@ -492,6 +498,36 @@ const applyVstControlMessage = (msg: OscMsg) => {
 	}
 };
 
+const _switchCaseNames: ReadonlySet<string> = new Set([
+	"crossfade",
+	"bpm",
+	"speed",
+	"intensity",
+	"feedback",
+	"depth",
+	"palette",
+	"deck_a_mode",
+	"deck_b_mode",
+	"rings",
+	"ring_opacity",
+	"strobe",
+	"strobe_lockout",
+	"blackout",
+	"freeze",
+	"show_gpu_palette",
+	"max_brightness",
+	"beat_sync",
+	"bar_sync",
+	"demo_mode",
+]);
+if (
+	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
+	![..._switchCaseNames].every((n) => VST_CONTROL_NAMES.has(n))
+) {
+	throw new Error(
+		"VST_CONTROL_NAMES out of sync with applyVstControlMessage switch",
+	);
+}
 
 const visualServer = Bun.serve({
 	port,
