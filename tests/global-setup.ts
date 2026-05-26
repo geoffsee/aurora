@@ -10,6 +10,18 @@ export async function setup(): Promise<() => Promise<void>> {
 
 	const wss = new WebSocketServer({ port: TEST_WS_PORT, host: "127.0.0.1" });
 
+	// Vitest calls globalSetup once per internal project (node + browser instances).
+	// If the port is already bound by an earlier setup() call, return a no-op teardown
+	// so the already-running server continues to serve all test connections.
+	const ready = await new Promise<boolean>((resolve) => {
+		wss.once("listening", () => resolve(true));
+		wss.once("error", (err: NodeJS.ErrnoException) => {
+			if (err.code === "EADDRINUSE") resolve(false);
+			else throw err;
+		});
+	});
+	if (!ready) return async () => {};
+
 	wss.on("connection", (ws, request) => {
 		if (request.url !== "/ws") {
 			ws.close();
@@ -50,8 +62,6 @@ export async function setup(): Promise<() => Promise<void>> {
 			}
 		});
 	});
-
-	await new Promise<void>((resolve) => wss.once("listening", resolve));
 
 	return async () => {
 		sockets.forEach((s) => s.terminate());
