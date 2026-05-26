@@ -594,7 +594,7 @@ const visualServer = Bun.serve({
 		close(ws) {
 			sockets.delete(ws);
 		},
-		message(_ws, raw) {
+		message(ws, raw) {
 			try {
 				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg> &
 					Record<string, unknown>;
@@ -608,6 +608,10 @@ const visualServer = Bun.serve({
 						typeof parsed.error === "string"
 					) {
 						broadcastError(parsed.error);
+					} else if (parsed.address === "/bevyosc/ping") {
+						ws.send(
+							JSON.stringify({ address: "/bevyosc/pong", id: parsed.id ?? 0 }),
+						);
 					} else {
 						sendOsc(
 							parsed.address,
