@@ -23,6 +23,7 @@
         CONNECTED: "/bevyosc/osc/connected",
         DEMO: "/bevyosc/demo/audio",
         DIAGNOSTICS: "/bevyosc/server/diagnostics",
+        DEV_RELOAD: "/bevyosc/dev/reload",
       };
       const CONTROL = {
         STATE: "/bevyosc/control/state",
@@ -210,6 +211,8 @@
           recomputeEnergy();
         } else if (address === CONTROL.STATE) {
           applyControlState(args[0]);
+        } else if (address === OSC.DEV_RELOAD) {
+          handleHotReload();
         }
       }
 
@@ -275,6 +278,11 @@
             highTrack: clampInt(next.trackMapping.highTrack, 0, 31, controlState.trackMapping.highTrack),
           };
         }
+      }
+
+      function handleHotReload() {
+        console.log("[hot-reload] WASM package changed, reloading page...");
+        location.reload();
       }
 
       let oscWs = null;

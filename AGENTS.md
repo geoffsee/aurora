@@ -19,10 +19,10 @@ Tests:
 ```bash
 bun run test         # test:rust then test:web (this is what CI and the pre-push hook run)
 bun run test:rust    # scripts/test-rust.sh — currently only `cargo test -p xtask`
-bun run test:web     # vitest run (happy-dom environment, no real browser)
+bun run test:web     # vitest run (happy-dom)
 
 bunx vitest run tests/smoke.test.ts   # single file
-bunx vitest run -t "wired up"         # single test by name
+bunx vitest run -t "happy-dom"        # single test by name
 ```
 
 Note: `test:rust` intentionally skips the root `bevyosc` crate (wasm-only, links the desktop windowing/renderer stack natively) and the `bevyosc-vst` crate (links host audio/MIDI libs not present on CI runners). The justification lives at the top of `scripts/test-rust.sh` — if you add cargo invocations there, follow the existing format: one explicit line per crate with a comment block explaining why it is enabled or skipped.
@@ -35,11 +35,10 @@ bun run build:vst        # uses xtask bundler; writes target-vst/bundled/bevyosc
 bun run install:vst:mac  # copies the bundle into ~/Library/Audio/Plug-Ins/VST3
 ```
 
-**First-time setup:** run `bun run setup` once before anything else. It executes all three onboarding steps in order and exits non-zero on the first failure:
+**First-time setup:** run `bun run setup` once before anything else. It executes both onboarding steps in order and exits non-zero on the first failure:
 
 1. `bun install` — installs npm/Bun deps and wires up git hooks via `postinstall` (`.dev/setup-git-hooks.sh` points `core.hooksPath` at `.dev/hooks/`, giving pre-commit → typecheck and pre-push → full test).
-2. `bunx playwright install --with-deps chromium` — downloads the browser runtime needed by `bun run test:web`.
-3. Verifies that the installed `wasm-bindgen-cli` version matches the pinned `0.2.122`. A mismatch produces opaque link errors — the script prints the exact `cargo install` command to fix it.
+2. Verifies that the installed `wasm-bindgen-cli` version matches the pinned `0.2.122`. A mismatch produces opaque link errors — the script prints the exact `cargo install` command to fix it.
 
 The web target requires `wasm-bindgen-cli` **pinned to 0.2.122** (matches the `wasm-bindgen` crate version in `Cargo.toml` and the `WASM_BINDGEN_VERSION` env var in both GitHub workflows). Bump all three together if you ever change it: the `wasm-bindgen` crate in `Cargo.toml` and `WASM_BINDGEN_VERSION` in both GitHub workflows. `scripts/setup.sh` reads the version directly from `Cargo.toml` and requires no separate update.
 
