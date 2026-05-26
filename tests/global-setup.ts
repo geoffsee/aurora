@@ -1,18 +1,10 @@
 import { WebSocketServer } from "ws";
 import type { WebSocket } from "ws";
-
-export const TEST_WS_PORT = 47000;
-
-const STARTED_KEY = "__bevyosc_test_ws_started__";
+import { TEST_WS_PORT } from "./constants.js";
 
 type OscMsg = { address: string; args?: unknown[] };
 
-export async function setup(): Promise<() => void> {
-	if (process.env[STARTED_KEY]) {
-		return () => {};
-	}
-	process.env[STARTED_KEY] = "1";
-
+export async function setup(): Promise<() => Promise<void>> {
 	const sockets = new Set<WebSocket>();
 	let latestControlState: unknown = null;
 
@@ -61,10 +53,9 @@ export async function setup(): Promise<() => void> {
 
 	await new Promise<void>((resolve) => wss.once("listening", resolve));
 
-	return () => {
-		delete process.env[STARTED_KEY];
+	return async () => {
 		sockets.forEach((s) => s.terminate());
 		sockets.clear();
-		wss.close();
+		await new Promise<void>((res) => wss.close(() => res()));
 	};
 }
