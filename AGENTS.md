@@ -41,7 +41,7 @@ bun run install:vst:mac  # copies the bundle into ~/Library/Audio/Plug-Ins/VST3
 2. `bunx playwright install --with-deps chromium` — downloads the browser runtime needed by `bun run test:web`.
 3. Verifies that the installed `wasm-bindgen-cli` version matches the pinned `0.2.122`. A mismatch produces opaque link errors — the script prints the exact `cargo install` command to fix it.
 
-The web target requires `wasm-bindgen-cli` **pinned to 0.2.122** (matches the `wasm-bindgen` crate version in `Cargo.toml` and the `WASM_BINDGEN_VERSION` env var in both GitHub workflows). Bump all four together if you ever change it: the `wasm-bindgen` crate in `Cargo.toml`, `WASM_BINDGEN_VERSION` in both GitHub workflows, and the pinned version in `scripts/setup.sh`.
+The web target requires `wasm-bindgen-cli` **pinned to 0.2.122** (matches the `wasm-bindgen` crate version in `Cargo.toml` and the `WASM_BINDGEN_VERSION` env var in both GitHub workflows). Bump all three together if you ever change it: the `wasm-bindgen` crate in `Cargo.toml` and `WASM_BINDGEN_VERSION` in both GitHub workflows. `scripts/setup.sh` reads the version directly from `Cargo.toml` and requires no separate update.
 
 ## Architecture
 

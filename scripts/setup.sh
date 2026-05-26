@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-WASM_BINDGEN_VERSION="$(grep -m1 'wasm-bindgen = ' Cargo.toml | grep -oP '"\K[0-9.]+(?=")')"
+WASM_BINDGEN_VERSION="$(awk -F'"' '/^wasm-bindgen = /{print $2; exit}' Cargo.toml)"
 
 log()  { printf '\n\033[1;36m[setup] %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m[setup] %s\033[0m\n' "$*"; }
