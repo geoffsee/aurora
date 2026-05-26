@@ -1,9 +1,17 @@
 import { createRequire } from "node:module";
 import { watch } from "node:fs";
 import type { ServerWebSocket } from "bun";
+import {
+	type OscArg,
+	type OscMsg,
+	VST_CONTROL_NAMES,
+	VST_CONTROL_PREFIX,
+	VST_CUE_PREFIX,
+	VST_TRIGGER_PREFIX,
+	validateLiveOscMsg,
+	validateVstOscMsg,
+} from "./osc-validation.ts";
 
-type OscArg = { type: string; value: unknown } | unknown;
-type OscMsg = { address: string; args?: OscArg[] };
 type TrackMapping = {
 	deckAStart: number;
 	deckACount: number;
@@ -229,6 +237,7 @@ const cuePresets: Record<string, Partial<ControlState>> = {
 		strobeLockout: true,
 	},
 };
+const cueNames: ReadonlySet<string> = new Set(Object.keys(cuePresets));
 const coerceControlState = (state: unknown): ControlState => {
 	const source =
 		state && typeof state === "object" ? (state as Partial<ControlState>) : {};
@@ -389,14 +398,11 @@ const numericArg = (arg: OscArg | undefined, fallback: number) =>
 const applyVstControlMessage = (msg: OscMsg) => {
 	latestVstControlAt = Date.now();
 
-	const controlPrefix = "/bevyosc/vst/control/";
-	const triggerPrefix = "/bevyosc/vst/trigger/";
-	const cuePrefix = "/bevyosc/vst/cue/";
 	const current = currentControlState();
 	const arg = msg.args?.[0];
 
-	if (msg.address.startsWith(controlPrefix)) {
-		const name = msg.address.slice(controlPrefix.length);
+	if (msg.address.startsWith(VST_CONTROL_PREFIX)) {
+		const name = msg.address.slice(VST_CONTROL_PREFIX.length);
 		const value = numericArg(arg, 0);
 
 		switch (name) {
@@ -468,8 +474,8 @@ const applyVstControlMessage = (msg: OscMsg) => {
 		return;
 	}
 
-	if (msg.address.startsWith(triggerPrefix)) {
-		const name = msg.address.slice(triggerPrefix.length);
+	if (msg.address.startsWith(VST_TRIGGER_PREFIX)) {
+		const name = msg.address.slice(VST_TRIGGER_PREFIX.length);
 		if (name === "flash") {
 			mergeControlState({ flashVersion: current.flashVersion + 1 });
 		} else if (name === "reset") {
@@ -484,8 +490,8 @@ const applyVstControlMessage = (msg: OscMsg) => {
 		return;
 	}
 
-	if (msg.address.startsWith(cuePrefix)) {
-		const name = msg.address.slice(cuePrefix.length);
+	if (msg.address.startsWith(VST_CUE_PREFIX)) {
+		const name = msg.address.slice(VST_CUE_PREFIX.length);
 		const cue = cuePresets[name];
 		if (!cue) return;
 
@@ -502,6 +508,37 @@ const applyVstControlMessage = (msg: OscMsg) => {
 		});
 	}
 };
+
+const _switchCaseNames: ReadonlySet<string> = new Set([
+	"crossfade",
+	"bpm",
+	"speed",
+	"intensity",
+	"feedback",
+	"depth",
+	"palette",
+	"deck_a_mode",
+	"deck_b_mode",
+	"rings",
+	"ring_opacity",
+	"strobe",
+	"strobe_lockout",
+	"blackout",
+	"freeze",
+	"show_gpu_palette",
+	"max_brightness",
+	"beat_sync",
+	"bar_sync",
+	"demo_mode",
+]);
+if (
+	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
+	![..._switchCaseNames].every((n) => VST_CONTROL_NAMES.has(n))
+) {
+	throw new Error(
+		"VST_CONTROL_NAMES out of sync with applyVstControlMessage switch",
+	);
+}
 
 const visualServer = Bun.serve({
 	port,
@@ -642,7 +679,10 @@ udp.on("ready", () => {
 	sockets.forEach((ws) => ws.send(data));
 });
 
-udp.on("message", broadcast);
+udp.on("message", (msg: OscMsg) => {
+	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
+	broadcast(msg);
+});
 udp.on("error", (error: Error) => {
 	console.error("OSC error:", error.message);
 	broadcastError(`OSC UDP error: ${error.message}`);
@@ -652,7 +692,10 @@ udp.open();
 vstControlUdp.on("ready", () => {
 	console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
 });
-vstControlUdp.on("message", applyVstControlMessage);
+vstControlUdp.on("message", (msg: OscMsg) => {
+	if (!validateVstOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)) return;
+	applyVstControlMessage(msg);
+});
 vstControlUdp.on("error", (error: Error) => {
 	console.error("VST control OSC error:", error.message);
 	broadcastError(`VST control UDP error: ${error.message}`);
