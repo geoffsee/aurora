@@ -37,6 +37,7 @@ type ControlState = {
 	freeze: boolean;
 	showGpuPalette: boolean;
 	maxBrightness: number;
+	showGpuPalette: boolean;
 	beatSync: boolean;
 	barSync: boolean;
 	demoMode: boolean;
@@ -156,11 +157,12 @@ const defaultControlState = (): ControlState => ({
 	rings: true,
 	ringOpacity: 1,
 	strobe: false,
-	strobeLockout: true,
+	strobeLockout: false,
 	blackout: false,
 	freeze: false,
 	showGpuPalette: false,
 	maxBrightness: 0.9,
+	showGpuPalette: false,
 	beatSync: true,
 	barSync: false,
 	demoMode: false,
@@ -257,11 +259,12 @@ const coerceControlState = (state: unknown): ControlState => {
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
-		strobeLockout: source.strobeLockout !== false,
+		strobeLockout: Boolean(source.strobeLockout),
 		blackout: Boolean(source.blackout),
 		freeze: Boolean(source.freeze),
 		showGpuPalette: source.showGpuPalette === true,
 		maxBrightness: clamp(source.maxBrightness, 0.1, 1, defaults.maxBrightness),
+		showGpuPalette: source.showGpuPalette === true,
 		beatSync: source.beatSync !== false,
 		barSync: Boolean(source.barSync),
 		demoMode: Boolean(source.demoMode),

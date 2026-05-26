@@ -18,17 +18,20 @@
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",
     "test:web": "vitest run",
+    "setup": "bash scripts/setup.sh",
     "postinstall": "bash .dev/setup-git-hooks.sh",
     "typecheck": "tsc --noEmit",
     "format": "bash scripts/format-code.sh"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/ws": "^8",
     "@vitest/browser": "^4.0.0",
     "@vitest/browser-playwright": "^4.0.0",
     "happy-dom": "^20.9.0",
     "playwright": "^1.50.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "ws": "^8"
   },
   "peerDependencies": {
     "typescript": "^5"

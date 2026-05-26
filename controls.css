@@ -749,21 +749,17 @@ button.rec:hover {
 }
 
 .palette-strip {
-  height: 0.32rem;
+  height: 1.6rem;
   border-radius: 999px;
+  border: 1px solid var(--panel-border-hi);
   background: linear-gradient(
     90deg,
-    hsl(0 100% 60%),
-    hsl(60 100% 60%),
-    hsl(120 100% 55%),
-    hsl(180 100% 55%),
-    hsl(240 100% 65%),
-    hsl(300 100% 65%),
-    hsl(360 100% 60%)
+    #111827,
+    #334155,
+    var(--accent),
+    #e2e8f0
   );
-  border: 1px solid var(--panel-border-hi);
-  opacity: 0.85;
-  margin-top: -0.05rem;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
 .safety {

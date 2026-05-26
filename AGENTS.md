@@ -35,9 +35,13 @@ bun run build:vst        # uses xtask bundler; writes target-vst/bundled/bevyosc
 bun run install:vst:mac  # copies the bundle into ~/Library/Audio/Plug-Ins/VST3
 ```
 
-First-time setup the README does not show: `bun install` triggers `.dev/setup-git-hooks.sh` via `postinstall`, which points `core.hooksPath` at `.dev/hooks/` (pre-commit → typecheck, pre-push → full test). Browser tests also need `bunx playwright install --with-deps chromium` once.
+**First-time setup:** run `bun run setup` once before anything else. It executes all three onboarding steps in order and exits non-zero on the first failure:
 
-The web target requires `wasm-bindgen-cli` **pinned to 0.2.122** (matches the `wasm-bindgen` crate version in `Cargo.toml` and the `WASM_BINDGEN_VERSION` env var in both GitHub workflows). A mismatch produces opaque link errors — bump all three together if you ever change it.
+1. `bun install` — installs npm/Bun deps and wires up git hooks via `postinstall` (`.dev/setup-git-hooks.sh` points `core.hooksPath` at `.dev/hooks/`, giving pre-commit → typecheck and pre-push → full test).
+2. `bunx playwright install --with-deps chromium` — downloads the browser runtime needed by `bun run test:web`.
+3. Verifies that the installed `wasm-bindgen-cli` version matches the pinned `0.2.122`. A mismatch produces opaque link errors — the script prints the exact `cargo install` command to fix it.
+
+The web target requires `wasm-bindgen-cli` **pinned to 0.2.122** (matches the `wasm-bindgen` crate version in `Cargo.toml` and the `WASM_BINDGEN_VERSION` env var in both GitHub workflows). Bump all three together if you ever change it: the `wasm-bindgen` crate in `Cargo.toml` and `WASM_BINDGEN_VERSION` in both GitHub workflows. `scripts/setup.sh` reads the version directly from `Cargo.toml` and requires no separate update.
 
 ## Architecture
 

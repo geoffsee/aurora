@@ -133,7 +133,7 @@ impl Default for BevyoscParams {
             rings: BoolParam::new("Rings", true),
             ring_opacity: float_param("Ring Opacity", 1.0, 0.0, 1.0),
             strobe: BoolParam::new("Strobe", false),
-            strobe_lockout: BoolParam::new("Strobe Lockout", true),
+            strobe_lockout: BoolParam::new("Strobe Lockout", false),
             blackout: BoolParam::new("Blackout", false),
             freeze: BoolParam::new("Freeze", false),
             max_brightness: float_param("Max Brightness", 0.9, 0.1, 1.0),
