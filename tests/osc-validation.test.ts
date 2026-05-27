@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { validateLiveOscMsg, validateVstOscMsg } from "../osc-validation.ts";
+import {
+	CONTROL_STATE_SCHEMA_VERSION,
+	validateControlStateVersion,
+	validateLiveOscMsg,
+	validateVstOscMsg,
+} from "../osc-validation.ts";
 
 const CUE_NAMES: ReadonlySet<string> = new Set([
 	"warmup",
@@ -194,6 +199,48 @@ describe("validateVstOscMsg cue branch", () => {
 				"test",
 				CUE_NAMES,
 			),
+		).toBe(false);
+	});
+});
+
+// ── validateControlStateVersion ──────────────────────────────────────────────
+
+describe("validateControlStateVersion", () => {
+	test("accepts state with matching schemaVersion", () => {
+		expect(
+			validateControlStateVersion(
+				{ schemaVersion: CONTROL_STATE_SCHEMA_VERSION, crossfade: 0.5 },
+				"test",
+			),
+		).toBe(true);
+	});
+
+	test("rejects state with a different version number", () => {
+		expect(
+			validateControlStateVersion(
+				{ schemaVersion: CONTROL_STATE_SCHEMA_VERSION + 1, crossfade: 0.5 },
+				"test",
+			),
+		).toBe(false);
+	});
+
+	test("rejects state missing schemaVersion", () => {
+		expect(
+			validateControlStateVersion({ crossfade: 0.5 }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects null state", () => {
+		expect(validateControlStateVersion(null, "test")).toBe(false);
+	});
+
+	test("rejects non-object state", () => {
+		expect(validateControlStateVersion("not-an-object", "test")).toBe(false);
+	});
+
+	test("rejects state with schemaVersion set to zero", () => {
+		expect(
+			validateControlStateVersion({ schemaVersion: 0 }, "test"),
 		).toBe(false);
 	});
 });
