@@ -11,6 +11,7 @@ import {
 	VST_TRIGGER_PREFIX,
 	validateControlStateVersion,
 	validateLiveOscMsg,
+	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "./osc-validation.ts";
 
@@ -400,6 +401,10 @@ const broadcastError = (description: string) => {
 	});
 	sockets.forEach((ws) => ws.send(data));
 };
+const broadcastPresetCommand = (address: string) => {
+	const data = JSON.stringify({ address, args: [] });
+	sockets.forEach((ws) => ws.send(data));
+};
 const booleanArg = (arg: OscArg | undefined) => {
 	const value = valueOf(arg);
 	return Boolean(typeof value === "number" ? value >= 0.5 : value);
@@ -629,6 +634,15 @@ const visualServer = Bun.serve({
 						typeof parsed.error === "string"
 					) {
 						broadcastError(parsed.error);
+					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
+						if (
+							validatePresetOscMsg(
+								{ address: parsed.address },
+								"WS client",
+							)
+						) {
+							broadcastPresetCommand(parsed.address);
+						}
 					} else if (parsed.address === "/bevyosc/ping") {
 						ws.send(
 							JSON.stringify({ address: "/bevyosc/pong", id: typeof parsed.id === "number" ? parsed.id : 0 }),
@@ -718,6 +732,12 @@ vstControlUdp.on("ready", () => {
 	console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
 });
 vstControlUdp.on("message", (msg: OscMsg) => {
+	if (msg.address.startsWith("/bevyosc/preset/")) {
+		if (validatePresetOscMsg(msg, `VST :${vstControlRecvPort}`)) {
+			broadcastPresetCommand(msg.address);
+		}
+		return;
+	}
 	if (!validateVstOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)) return;
 	applyVstControlMessage(msg);
 });

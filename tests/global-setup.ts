@@ -65,6 +65,12 @@ export async function setup(): Promise<() => Promise<void>> {
 						args: [arg],
 					});
 					sockets.forEach((s) => s.send(data));
+				} else if (
+					typeof parsed.address === "string" &&
+					parsed.address.startsWith("/bevyosc/preset/")
+				) {
+					const data = JSON.stringify({ address: parsed.address, args: [] });
+					sockets.forEach((s) => s.send(data));
 				} else if (parsed.address === "/bevyosc/ping") {
 					const id = typeof parsed.id === "number" ? parsed.id : 0;
 					ws.send(JSON.stringify({ address: "/bevyosc/pong", id }));
