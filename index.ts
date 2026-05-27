@@ -24,7 +24,7 @@ type TrackMapping = {
 	highTrack: number;
 };
 type ControlState = {
-	schemaVersion: number;
+	readonly schemaVersion: number;
 	crossfade: number;
 	bpm: number;
 	speed: number;
@@ -599,7 +599,7 @@ const visualServer = Bun.serve({
 		close(ws) {
 			sockets.delete(ws);
 		},
-		message(_ws, raw) {
+		message(ws, raw) {
 			try {
 				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg> &
 					Record<string, unknown>;
@@ -610,8 +610,13 @@ const visualServer = Bun.serve({
 							: null;
 						if (
 							!validateControlStateVersion(rawState, "WebSocket client")
-						)
+						) {
+							ws.send(JSON.stringify({
+								address: "/bevyosc/error",
+								error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
+							}));
 							return;
+						}
 						broadcastControl(rawState);
 					} else if (
 						parsed.address === "/bevyosc/error" &&
