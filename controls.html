@@ -18,6 +18,7 @@
           <span id="bridge-status" class="pill" data-state="connecting">bridge connecting</span>
           <span id="osc-status" class="pill" data-state="idle">OSC idle</span>
           <span id="diagnostics-status" class="pill" data-state="info">0 viewers</span>
+          <span id="latency-status" class="pill" data-state="info">P95 —ms</span>
         </div>
       </header>
 
@@ -250,6 +251,10 @@
       const oscStatus = $("#osc-status");
       const diagnosticsStatus = $("#diagnostics-status");
       const recordingStatus = $("#recording-status");
+      const latencyStatus = $("#latency-status");
+      const latencyWindow = [];
+      let pingId = 0;
+      let pendingPings = {};
       let ws;
       let reconnectTimer;
       let pendingCue = null;
@@ -305,6 +310,13 @@
       };
       const cloneState = () => JSON.parse(JSON.stringify(state));
 
+      function sendPing() {
+        if (ws?.readyState !== WebSocket.OPEN) return;
+        pingId += 1;
+        pendingPings[pingId] = performance.now();
+        ws.send(JSON.stringify({ address: "/bevyosc/ping", id: pingId }));
+      }
+
       function connect() {
         clearTimeout(reconnectTimer);
         const scheme = location.protocol === "https:" ? "wss" : "ws";
@@ -320,6 +332,7 @@
           bridgeStatus.textContent = "bridge reconnecting";
           bridgeStatus.dataset.state = "connecting";
           addBanner("Bridge WebSocket disconnected — reconnecting…", "disconnect");
+          pendingPings = {};
           reconnectTimer = setTimeout(connect, 1000);
         };
         ws.onerror = () => {
@@ -397,6 +410,14 @@
         }
         if (frame?.address === "/live/song/get/track_data") {
           applyTrackData(args);
+        }
+        if (frame?.address === "/bevyosc/pong" && typeof frame.id === "number") {
+          const sentAt = pendingPings[frame.id];
+          if (sentAt !== undefined) {
+            delete pendingPings[frame.id];
+            latencyWindow.push(performance.now() - sentAt);
+            if (latencyWindow.length > 20) latencyWindow.shift();
+          }
         }
         render();
       }
@@ -616,6 +637,16 @@
         oscStatus.dataset.state = state.demoMode ? "demo" : oscLive ? "live" : "idle";
         diagnosticsStatus.textContent = `${diagnostics.sockets} viewer${diagnostics.sockets === 1 ? "" : "s"} · ${diagnostics.oscReady ? "OSC ready" : "OSC wait"}`;
         diagnosticsStatus.dataset.state = diagnostics.oscReady ? "info" : "warn";
+        if (latencyWindow.length > 0) {
+          const sorted = [...latencyWindow].sort((a, b) => a - b);
+          const idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+          const p95 = sorted[idx];
+          latencyStatus.textContent = `P95 ${p95.toFixed(0)}ms`;
+          latencyStatus.dataset.state = p95 < 30 ? "live" : p95 < 100 ? "info" : "warn";
+        } else {
+          latencyStatus.textContent = "P95 —ms";
+          latencyStatus.dataset.state = "info";
+        }
         recordingStatus.textContent = state.replaying
           ? `Replaying ${recording.length} frames`
           : isRecording
@@ -743,6 +774,7 @@
       syncInputs();
       setInterval(publish, 500);
       setInterval(render, 500);
+      setInterval(sendPing, 1000);
       connect();
       render();
     </script>
