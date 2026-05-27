@@ -406,10 +406,12 @@
         }
         if (frame?.address?.startsWith("/bevyosc/preset/recall/")) {
           const n = Number(frame.address.split("/").pop());
+          // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
           if (Number.isInteger(n) && n >= 1 && n <= 6) recallPreset(n);
         }
         if (frame?.address?.startsWith("/bevyosc/preset/save/")) {
           const n = Number(frame.address.split("/").pop());
+          // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
           if (Number.isInteger(n) && n >= 1 && n <= 6) savePresetSilent(n);
         }
         render();
@@ -417,9 +419,9 @@
 
       function syncFromRemote(next) {
         if (next.replaying && !state.replaying) return;
-        if (activeTransitionRaf !== null) return;
         Object.assign(state, { ...state, ...next, trackMapping: { ...state.trackMapping, ...(next.trackMapping || {}) } });
         syncInputs();
+        // If a transition is running, state is already the live 'from'; no extra action needed.
       }
 
       function applyTrackData(args) {
@@ -629,7 +631,7 @@
         const activePill = $("#preset-status");
         if (activePill) {
           const activePreset = activePresetIndex !== null
-            ? normalizePreset(loadPresets()[`slot-${activePresetIndex}`])
+            ? normalizePreset(presets[`slot-${activePresetIndex}`])
             : null;
           const label = activePreset ? (activePreset.name || `Preset ${activePresetIndex}`) : "No preset";
           activePill.textContent = label;
