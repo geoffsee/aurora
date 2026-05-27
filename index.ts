@@ -29,6 +29,8 @@ type ControlState = {
 	feedback: number;
 	depth: number;
 	palette: number;
+	paletteSaturation: number;
+	paletteBrightness: number;
 	deckAMode: number;
 	deckBMode: number;
 	rings: boolean;
@@ -154,6 +156,8 @@ const defaultControlState = (): ControlState => ({
 	feedback: 0.35,
 	depth: 0,
 	palette: 0,
+	paletteSaturation: 1,
+	paletteBrightness: 1,
 	deckAMode: 0,
 	deckBMode: 1,
 	rings: true,
@@ -255,6 +259,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		feedback: clamp(source.feedback, 0, 1, defaults.feedback),
 		depth: clamp(source.depth, 0, 1, defaults.depth),
 		palette: clamp(source.palette, 0, 1, defaults.palette),
+		paletteSaturation: clamp(source.paletteSaturation, 0, 1, defaults.paletteSaturation),
+		paletteBrightness: clamp(source.paletteBrightness, 0, 1, defaults.paletteBrightness),
 		deckAMode: clampInt(source.deckAMode, 0, 4, defaults.deckAMode),
 		deckBMode: clampInt(source.deckBMode, 0, 4, defaults.deckBMode),
 		rings: source.rings !== false,
