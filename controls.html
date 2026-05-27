@@ -19,6 +19,7 @@
           <span id="osc-status" class="pill" data-state="idle">OSC idle</span>
           <span id="preset-status" class="pill" data-state="idle">No preset</span>
           <span id="diagnostics-status" class="pill" data-state="info">0 viewers</span>
+          <span id="latency-status" class="pill" data-state="info">P95 —ms</span>
         </div>
       </header>
 
@@ -125,6 +126,14 @@
           <input id="palette" type="range" min="0" max="1" step="0.001" value="0" />
           <div class="palette-strip" aria-hidden="true"></div>
         </label>
+        <label class="slot">
+          <div class="slot-head"><span>GPU Saturation</span><output id="palette-saturation-value">100%</output></div>
+          <input id="palette-saturation" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>GPU Brightness</span><output id="palette-brightness-value">100%</output></div>
+          <input id="palette-brightness" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
         <div class="button-grid">
           <button id="rings" aria-pressed="true">Rings</button>
           <button id="strobe" aria-pressed="false">Strobe</button>
@@ -195,6 +204,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
+        schemaVersion: 1, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -202,6 +212,8 @@
         feedback: 0.35,
         depth: 0,
         palette: 0,
+        paletteSaturation: 1,
+        paletteBrightness: 1,
         deckAMode: 0,
         deckBMode: 1,
         rings: true,
@@ -256,6 +268,10 @@
       const oscStatus = $("#osc-status");
       const diagnosticsStatus = $("#diagnostics-status");
       const recordingStatus = $("#recording-status");
+      const latencyStatus = $("#latency-status");
+      const latencyWindow = [];
+      let pingId = 0;
+      let pendingPings = {};
       let ws;
       let reconnectTimer;
       let pendingCue = null;
@@ -311,6 +327,13 @@
       };
       const cloneState = () => JSON.parse(JSON.stringify(state));
 
+      function sendPing() {
+        if (ws?.readyState !== WebSocket.OPEN) return;
+        pingId += 1;
+        pendingPings[pingId] = performance.now();
+        ws.send(JSON.stringify({ address: "/bevyosc/ping", id: pingId }));
+      }
+
       function connect() {
         clearTimeout(reconnectTimer);
         const scheme = location.protocol === "https:" ? "wss" : "ws";
@@ -326,6 +349,7 @@
           bridgeStatus.textContent = "bridge reconnecting";
           bridgeStatus.dataset.state = "connecting";
           addBanner("Bridge WebSocket disconnected — reconnecting…", "disconnect");
+          pendingPings = {};
           reconnectTimer = setTimeout(connect, 1000);
         };
         ws.onerror = () => {
@@ -413,6 +437,14 @@
           const n = Number(frame.address.split("/").pop());
           // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
           if (Number.isInteger(n) && n >= 1 && n <= 6) savePresetSilent(n);
+        }
+        if (frame?.address === "/bevyosc/pong" && typeof frame.id === "number") {
+          const sentAt = pendingPings[frame.id];
+          if (sentAt !== undefined) {
+            delete pendingPings[frame.id];
+            latencyWindow.push(performance.now() - sentAt);
+            if (latencyWindow.length > 20) latencyWindow.shift();
+          }
         }
         render();
       }
@@ -687,6 +719,8 @@
           ["depth", "depth"],
           ["ring-opacity", "ringOpacity"],
           ["palette", "palette"],
+          ["palette-saturation", "paletteSaturation"],
+          ["palette-brightness", "paletteBrightness"],
           ["max-brightness", "maxBrightness"],
           ["deck-a-mode", "deckAMode"],
           ["deck-b-mode", "deckBMode"],
@@ -715,6 +749,8 @@
         $("#depth-value").textContent = state.depth.toFixed(2);
         $("#ring-opacity-value").textContent = `${Math.round(state.ringOpacity * 100)}%`;
         $("#palette-value").textContent = `${Math.round(state.palette * 360)} deg`;
+        $("#palette-saturation-value").textContent = `${Math.round(state.paletteSaturation * 100)}%`;
+        $("#palette-brightness-value").textContent = `${Math.round(state.paletteBrightness * 100)}%`;
         $("#max-brightness-value").textContent = `${Math.round(state.maxBrightness * 100)}%`;
         $("#deck-a-mode").title = visualModes[state.deckAMode] || "Mode";
         $("#deck-b-mode").title = visualModes[state.deckBMode] || "Mode";
@@ -747,6 +783,16 @@
         oscStatus.dataset.state = state.demoMode ? "demo" : oscLive ? "live" : "idle";
         diagnosticsStatus.textContent = `${diagnostics.sockets} viewer${diagnostics.sockets === 1 ? "" : "s"} · ${diagnostics.oscReady ? "OSC ready" : "OSC wait"}`;
         diagnosticsStatus.dataset.state = diagnostics.oscReady ? "info" : "warn";
+        if (latencyWindow.length > 0) {
+          const sorted = [...latencyWindow].sort((a, b) => a - b);
+          const idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+          const p95 = sorted[idx];
+          latencyStatus.textContent = `P95 ${p95.toFixed(0)}ms`;
+          latencyStatus.dataset.state = p95 < 30 ? "live" : p95 < 100 ? "info" : "warn";
+        } else {
+          latencyStatus.textContent = "P95 —ms";
+          latencyStatus.dataset.state = "info";
+        }
         recordingStatus.textContent = state.replaying
           ? `Replaying ${recording.length} frames`
           : isRecording
@@ -766,6 +812,8 @@
         ["depth", "depth"],
         ["ring-opacity", "ringOpacity"],
         ["palette", "palette"],
+        ["palette-saturation", "paletteSaturation"],
+        ["palette-brightness", "paletteBrightness"],
         ["max-brightness", "maxBrightness"],
       ]) {
         $(`#${id}`).addEventListener("input", (event) => {
@@ -878,6 +926,7 @@
       syncInputs();
       setInterval(publish, 500);
       setInterval(render, 500);
+      setInterval(sendPing, 1000);
       connect();
       render();
     </script>

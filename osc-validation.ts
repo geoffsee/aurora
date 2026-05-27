@@ -1,6 +1,36 @@
 export type OscArg = { type: string; value: unknown } | unknown;
 export type OscMsg = { address: string; args?: OscArg[] };
 
+// CONTROL_STATE_SCHEMA_VERSION tracks the ControlState wire format.
+// To bump: increment this integer, add a migration branch in the WebSocket
+// message handler in index.ts that transforms the old payload shape before
+// passing it to broadcastControl, and update defaultState() in controls.html
+// to emit the new version number.
+export const CONTROL_STATE_SCHEMA_VERSION = 1;
+
+export const validateControlStateVersion = (
+	state: unknown,
+	origin: string,
+): boolean => {
+	const version =
+		state && typeof state === "object"
+			? (state as Record<string, unknown>).schemaVersion
+			: undefined;
+	if (version !== CONTROL_STATE_SCHEMA_VERSION) {
+		console.error(
+			JSON.stringify({
+				event: "control_state_rejected",
+				reason: "schema_version_mismatch",
+				expected: CONTROL_STATE_SCHEMA_VERSION,
+				received: version ?? null,
+				origin,
+			}),
+		);
+		return false;
+	}
+	return true;
+};
+
 export const VST_CONTROL_PREFIX = "/bevyosc/vst/control/";
 export const VST_TRIGGER_PREFIX = "/bevyosc/vst/trigger/";
 export const VST_CUE_PREFIX = "/bevyosc/vst/cue/";
