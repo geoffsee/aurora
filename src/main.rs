@@ -87,16 +87,21 @@ unsafe extern "C" {
     fn browser_control_cue_deck_a_mode() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCueDeckBMode)]
     fn browser_control_cue_deck_b_mode() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteSaturation)]
+    fn browser_control_palette_saturation() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteBrightness)]
+    fn browser_control_palette_brightness() -> f32;
 }
 
 /// GPU material driven by the `palette` controls.
-/// The fragment shader (`assets/shaders/vj_palette.wgsl`) receives `params`
-/// as a vec4 uniform: x=hue_shift (0..1), y=show_time (seconds),
-/// z=bass_activity (0..1), w=melodic_activity (>=0 active, <0 inactive).
+/// `params`: x=hue_shift (0..1), y=show_time (s), z=bass_activity, w=melodic_activity.
+/// `palette_extra`: x=saturation multiplier (0..1), y=brightness multiplier (0..1).
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
 struct VjPaletteMaterial {
     #[uniform(0)]
     params: Vec4,
+    #[uniform(1)]
+    palette_extra: Vec4,
 }
 
 impl Material2d for VjPaletteMaterial {
@@ -172,6 +177,8 @@ struct VjState {
     feedback: f32,
     depth: f32,
     palette: f32,
+    palette_saturation: f32,
+    palette_brightness: f32,
     deck_a_mode: VisualMode,
     deck_b_mode: VisualMode,
     rings_enabled: bool,
@@ -211,6 +218,8 @@ impl Default for VjState {
             feedback: 0.35,
             depth: 0.0,
             palette: 0.0,
+            palette_saturation: 1.0,
+            palette_brightness: 1.0,
             deck_a_mode: VisualMode::Beams,
             deck_b_mode: VisualMode::Tunnel,
             rings_enabled: true,
@@ -411,6 +420,7 @@ fn setup(
 
     let gpu_mat = palette_materials.add(VjPaletteMaterial {
         params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
     });
     commands.insert_resource(VjPaletteHandle(gpu_mat.clone()));
     commands.spawn((
@@ -524,6 +534,8 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.feedback = browser_control_feedback().clamp(0.0, 1.0);
         state.depth = browser_control_depth().clamp(0.0, 1.0);
         state.palette = browser_control_palette().clamp(0.0, 1.0);
+        state.palette_saturation = browser_control_palette_saturation().clamp(0.0, 1.0);
+        state.palette_brightness = browser_control_palette_brightness().clamp(0.0, 1.0);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.rings_enabled = browser_control_rings();
@@ -733,9 +745,8 @@ fn update_visuals(
                 let angle = fraction * TAU + spin;
                 let radial_offset =
                     depth * (layer - 0.5) * (130.0 + depth_wave * 70.0) + bass_activity * 14.0;
-                let side_offset =
-                    depth * (depth_wave - 0.5) * 60.0
-                        + melodic_activity * 10.0 * wave(t * 9.0 + fraction);
+                let side_offset = depth * (depth_wave - 0.5) * 60.0
+                    + melodic_activity * 10.0 * wave(t * 9.0 + fraction);
 
                 transform.translation = Vec3::new(
                     angle.cos() * radial_offset - angle.sin() * side_offset,
@@ -854,8 +865,7 @@ fn update_visuals(
                 let y = -STAGE_HEIGHT / 2.0 + y_step * (element.row as f32 + 0.5);
                 let diagonal = element.col as f32 * 0.32 + element.row as f32 * 0.41;
                 let pulse = wave(
-                    t * (3.8 + melodic_activity * 5.5)
-                        - diagonal * 1.7
+                    t * (3.8 + melodic_activity * 5.5) - diagonal * 1.7
                         + beat_hit * 2.0
                         + deck_drive,
                 );
@@ -1028,8 +1038,7 @@ fn update_tunnel_rings(
 
         let hue = (ring.lane as f32 * 18.0 + phase * 60.0).rem_euclid(360.0);
         let lightness =
-            (0.45 + drive * 0.14 + melodic_activity * 0.24 + state.flash * 0.25)
-                .clamp(0.05, 0.85);
+            (0.45 + drive * 0.14 + melodic_activity * 0.24 + state.flash * 0.25).clamp(0.05, 0.85);
         let bell = (phase * TAU * 0.5).sin();
         let alpha =
             (bell * (0.55 + beat_hit * 0.45) * deck_mix * state.max_brightness).clamp(0.0, 1.0);
@@ -1062,6 +1071,8 @@ fn update_palette_material(
             bass_activity,
             melodic_activity,
         );
+        material.palette_extra =
+            Vec4::new(state.palette_saturation, state.palette_brightness, 0.0, 0.0);
     }
 }
 
