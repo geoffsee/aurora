@@ -4,11 +4,14 @@ import type { ServerWebSocket } from "bun";
 import {
 	type OscArg,
 	type OscMsg,
+	CONTROL_STATE_SCHEMA_VERSION,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
 	VST_TRIGGER_PREFIX,
+	validateControlStateVersion,
 	validateLiveOscMsg,
+	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "./osc-validation.ts";
 
@@ -22,6 +25,7 @@ type TrackMapping = {
 	highTrack: number;
 };
 type ControlState = {
+	readonly schemaVersion: number;
 	crossfade: number;
 	bpm: number;
 	speed: number;
@@ -149,6 +153,7 @@ const defaultTrackMapping = (): TrackMapping => ({
 	highTrack: 2,
 });
 const defaultControlState = (): ControlState => ({
+	schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
 	crossfade: 0.5,
 	bpm: 124,
 	speed: 1,
@@ -252,6 +257,7 @@ const coerceControlState = (state: unknown): ControlState => {
 			: {};
 
 	return {
+		schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
 		crossfade: clamp(source.crossfade, 0, 1, defaults.crossfade),
 		bpm: clamp(source.bpm, 40, 240, defaults.bpm),
 		speed: clamp(source.speed, 0.1, 3, defaults.speed),
@@ -259,18 +265,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		feedback: clamp(source.feedback, 0, 1, defaults.feedback),
 		depth: clamp(source.depth, 0, 1, defaults.depth),
 		palette: clamp(source.palette, 0, 1, defaults.palette),
-		paletteSaturation: clamp(
-			source.paletteSaturation,
-			0,
-			1,
-			defaults.paletteSaturation,
-		),
-		paletteBrightness: clamp(
-			source.paletteBrightness,
-			0,
-			1,
-			defaults.paletteBrightness,
-		),
+		paletteSaturation: clamp(source.paletteSaturation, 0, 1, defaults.paletteSaturation),
+		paletteBrightness: clamp(source.paletteBrightness, 0, 1, defaults.paletteBrightness),
 		deckAMode: clampInt(source.deckAMode, 0, 4, defaults.deckAMode),
 		deckBMode: clampInt(source.deckBMode, 0, 4, defaults.deckBMode),
 		rings: source.rings !== false,
@@ -403,6 +399,10 @@ const broadcastError = (description: string) => {
 		error: description,
 		args: [],
 	});
+	sockets.forEach((ws) => ws.send(data));
+};
+const broadcastPresetCommand = (address: string) => {
+	const data = JSON.stringify({ address, args: [] });
 	sockets.forEach((ws) => ws.send(data));
 };
 const booleanArg = (arg: OscArg | undefined) => {
@@ -610,20 +610,43 @@ const visualServer = Bun.serve({
 		close(ws) {
 			sockets.delete(ws);
 		},
-		message(_ws, raw) {
+		message(ws, raw) {
 			try {
 				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg> &
 					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
 					if (parsed.address === "/bevyosc/control/state") {
-						broadcastControl(
-							Array.isArray(parsed.args) ? parsed.args[0] : null,
-						);
+						const rawState = Array.isArray(parsed.args)
+							? parsed.args[0]
+							: null;
+						if (
+							!validateControlStateVersion(rawState, "WebSocket client")
+						) {
+							ws.send(JSON.stringify({
+								address: "/bevyosc/error",
+								error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
+							}));
+							return;
+						}
+						broadcastControl(rawState);
 					} else if (
 						parsed.address === "/bevyosc/error" &&
 						typeof parsed.error === "string"
 					) {
 						broadcastError(parsed.error);
+					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
+						if (
+							validatePresetOscMsg(
+								{ address: parsed.address },
+								"WS client",
+							)
+						) {
+							broadcastPresetCommand(parsed.address);
+						}
+					} else if (parsed.address === "/bevyosc/ping") {
+						ws.send(
+							JSON.stringify({ address: "/bevyosc/pong", id: typeof parsed.id === "number" ? parsed.id : 0 }),
+						);
 					} else {
 						sendOsc(
 							parsed.address,
@@ -709,6 +732,12 @@ vstControlUdp.on("ready", () => {
 	console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
 });
 vstControlUdp.on("message", (msg: OscMsg) => {
+	if (msg.address.startsWith("/bevyosc/preset/")) {
+		if (validatePresetOscMsg(msg, `VST :${vstControlRecvPort}`)) {
+			broadcastPresetCommand(msg.address);
+		}
+		return;
+	}
 	if (!validateVstOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)) return;
 	applyVstControlMessage(msg);
 });

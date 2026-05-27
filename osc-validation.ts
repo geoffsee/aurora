@@ -1,9 +1,44 @@
 export type OscArg = { type: string; value: unknown } | unknown;
 export type OscMsg = { address: string; args?: OscArg[] };
 
+// CONTROL_STATE_SCHEMA_VERSION tracks the ControlState wire format.
+// To bump: increment this integer, add a migration branch in the WebSocket
+// message handler in index.ts that transforms the old payload shape before
+// passing it to broadcastControl, and update defaultState() in controls.html
+// to emit the new version number.
+export const CONTROL_STATE_SCHEMA_VERSION = 1;
+
+export const validateControlStateVersion = (
+	state: unknown,
+	origin: string,
+): boolean => {
+	const version =
+		state && typeof state === "object"
+			? (state as Record<string, unknown>).schemaVersion
+			: undefined;
+	if (version !== CONTROL_STATE_SCHEMA_VERSION) {
+		console.error(
+			JSON.stringify({
+				event: "control_state_rejected",
+				reason: "schema_version_mismatch",
+				expected: CONTROL_STATE_SCHEMA_VERSION,
+				received: version ?? null,
+				origin,
+			}),
+		);
+		return false;
+	}
+	return true;
+};
+
 export const VST_CONTROL_PREFIX = "/bevyosc/vst/control/";
 export const VST_TRIGGER_PREFIX = "/bevyosc/vst/trigger/";
 export const VST_CUE_PREFIX = "/bevyosc/vst/cue/";
+
+export const PRESET_SAVE_PREFIX = "/bevyosc/preset/save/";
+export const PRESET_RECALL_PREFIX = "/bevyosc/preset/recall/";
+export const PRESET_SLOT_MIN = 1;
+export const PRESET_SLOT_MAX = 6;
 
 export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
 	"crossfade",
@@ -49,6 +84,25 @@ export const validateLiveOscMsg = (msg: OscMsg, origin: string): boolean => {
 	if (!msg.address.startsWith("/live/")) {
 		console.error(
 			`[OSC] dropping unrecognised address "${msg.address}" from ${origin}`,
+		);
+		return false;
+	}
+	return true;
+};
+
+export const validatePresetOscMsg = (msg: OscMsg, origin: string): boolean => {
+	const { address } = msg;
+	const isSave = address.startsWith(PRESET_SAVE_PREFIX);
+	const isRecall = address.startsWith(PRESET_RECALL_PREFIX);
+	if (!isSave && !isRecall) return false;
+
+	const suffix = isSave
+		? address.slice(PRESET_SAVE_PREFIX.length)
+		: address.slice(PRESET_RECALL_PREFIX.length);
+	const n = Number(suffix);
+	if (!Number.isInteger(n) || n < PRESET_SLOT_MIN || n > PRESET_SLOT_MAX) {
+		console.error(
+			`[OSC] dropping invalid preset slot "${address}" from ${origin} — slot must be ${PRESET_SLOT_MIN}–${PRESET_SLOT_MAX}`,
 		);
 		return false;
 	}

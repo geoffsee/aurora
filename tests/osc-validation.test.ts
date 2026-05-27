@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { validateLiveOscMsg, validateVstOscMsg } from "../osc-validation.ts";
+import {
+	CONTROL_STATE_SCHEMA_VERSION,
+	validateControlStateVersion,
+	validateLiveOscMsg,
+	validatePresetOscMsg,
+	validateVstOscMsg,
+} from "../osc-validation.ts";
 
 const CUE_NAMES: ReadonlySet<string> = new Set([
 	"warmup",
@@ -194,6 +200,104 @@ describe("validateVstOscMsg cue branch", () => {
 				"test",
 				CUE_NAMES,
 			),
+		).toBe(false);
+	});
+});
+
+// ── validatePresetOscMsg ──────────────────────────────────────────────────────
+
+describe("validatePresetOscMsg", () => {
+	test("accepts valid recall address for slot 1", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/recall/1" }, "test"),
+		).toBe(true);
+	});
+
+	test("accepts valid recall address for slot 6", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/recall/6" }, "test"),
+		).toBe(true);
+	});
+
+	test("accepts valid save address", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/save/3" }, "test"),
+		).toBe(true);
+	});
+
+	test("rejects slot 0 (below min)", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/recall/0" }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects slot 7 (above max)", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/save/7" }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects non-integer slot", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/recall/foo" }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects fractional slot", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/recall/1.5" }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects unrelated bevyosc address", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/control/state" }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects empty address", () => {
+		expect(validatePresetOscMsg({ address: "" }, "test")).toBe(false);
+	});
+});
+
+// ── validateControlStateVersion ──────────────────────────────────────────────
+
+describe("validateControlStateVersion", () => {
+	test("accepts state with matching schemaVersion", () => {
+		expect(
+			validateControlStateVersion(
+				{ schemaVersion: CONTROL_STATE_SCHEMA_VERSION, crossfade: 0.5 },
+				"test",
+			),
+		).toBe(true);
+	});
+
+	test("rejects state with a different version number", () => {
+		expect(
+			validateControlStateVersion(
+				{ schemaVersion: CONTROL_STATE_SCHEMA_VERSION + 1, crossfade: 0.5 },
+				"test",
+			),
+		).toBe(false);
+	});
+
+	test("rejects state missing schemaVersion", () => {
+		expect(
+			validateControlStateVersion({ crossfade: 0.5 }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects null state", () => {
+		expect(validateControlStateVersion(null, "test")).toBe(false);
+	});
+
+	test("rejects non-object state", () => {
+		expect(validateControlStateVersion("not-an-object", "test")).toBe(false);
+	});
+
+	test("rejects state with schemaVersion set to zero", () => {
+		expect(
+			validateControlStateVersion({ schemaVersion: 0 }, "test"),
 		).toBe(false);
 	});
 });

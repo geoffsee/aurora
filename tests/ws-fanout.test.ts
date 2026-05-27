@@ -72,6 +72,44 @@ test("controls-page state mutation is reflected on projector page within 500ms",
 	}
 });
 
+test("preset recall command is broadcast to all connected clients", async () => {
+	const [senderWs, observerWs] = await Promise.all([
+		openWebSocket(),
+		openWebSocket(),
+	]);
+
+	try {
+		const received = new Promise<string>((resolve, reject) => {
+			const timerId = setTimeout(
+				() => reject(new Error("No preset recall message received within 500ms")),
+				500,
+			);
+			function onMessage(event: MessageEvent) {
+				const msg = JSON.parse(event.data as string) as {
+					address: string;
+					args: unknown[];
+				};
+				if (msg.address === "/bevyosc/preset/recall/3") {
+					clearTimeout(timerId);
+					observerWs.removeEventListener("message", onMessage);
+					resolve(msg.address);
+				}
+			}
+			observerWs.addEventListener("message", onMessage);
+		});
+
+		senderWs.send(
+			JSON.stringify({ address: "/bevyosc/preset/recall/3", args: [] }),
+		);
+
+		const address = await received;
+		expect(address).toBe("/bevyosc/preset/recall/3");
+	} finally {
+		senderWs.close();
+		observerWs.close();
+	}
+});
+
 test("second simultaneous controls-page client receives the same state update", async () => {
 	const [projectorWs, controlsWs, observerWs] = await Promise.all([
 		openWebSocket(),
