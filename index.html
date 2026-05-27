@@ -58,6 +58,8 @@
         feedback: 0.35,
         depth: 0,
         palette: 0,
+        paletteSaturation: 1,
+        paletteBrightness: 1,
         deckAMode: 0,
         deckBMode: 1,
         rings: true,
@@ -245,6 +247,8 @@
         controlState.feedback = clamp01(next.feedback);
         controlState.depth = clamp01(next.depth);
         controlState.palette = clamp01(next.palette);
+        controlState.paletteSaturation = next.paletteSaturation === undefined ? controlState.paletteSaturation : clamp01(next.paletteSaturation);
+        controlState.paletteBrightness = next.paletteBrightness === undefined ? controlState.paletteBrightness : clamp01(next.paletteBrightness);
         controlState.deckAMode = clampInt(next.deckAMode, 0, 4, controlState.deckAMode);
         controlState.deckBMode = clampInt(next.deckBMode, 0, 4, controlState.deckBMode);
         controlState.rings = next.rings !== false;
@@ -355,6 +359,8 @@
       window.__bevyoscControlFeedback = () => controlState.feedback;
       window.__bevyoscControlDepth = () => controlState.depth;
       window.__bevyoscControlPalette = () => controlState.palette;
+      window.__bevyoscControlPaletteSaturation = () => controlState.paletteSaturation;
+      window.__bevyoscControlPaletteBrightness = () => controlState.paletteBrightness;
       window.__bevyoscControlDeckAMode = () => controlState.deckAMode;
       window.__bevyoscControlDeckBMode = () => controlState.deckBMode;
       window.__bevyoscControlRings = () => controlState.rings;

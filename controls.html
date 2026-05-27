@@ -120,6 +120,14 @@
           <input id="palette" type="range" min="0" max="1" step="0.001" value="0" />
           <div class="palette-strip" aria-hidden="true"></div>
         </label>
+        <label class="slot">
+          <div class="slot-head"><span>GPU Saturation</span><output id="palette-saturation-value">100%</output></div>
+          <input id="palette-saturation" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>GPU Brightness</span><output id="palette-brightness-value">100%</output></div>
+          <input id="palette-brightness" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
         <div class="button-grid">
           <button id="rings" aria-pressed="true">Rings</button>
           <button id="strobe" aria-pressed="false">Strobe</button>
@@ -198,6 +206,8 @@
         feedback: 0.35,
         depth: 0,
         palette: 0,
+        paletteSaturation: 1,
+        paletteBrightness: 1,
         deckAMode: 0,
         deckBMode: 1,
         rings: true,
@@ -578,6 +588,8 @@
           ["depth", "depth"],
           ["ring-opacity", "ringOpacity"],
           ["palette", "palette"],
+          ["palette-saturation", "paletteSaturation"],
+          ["palette-brightness", "paletteBrightness"],
           ["max-brightness", "maxBrightness"],
           ["deck-a-mode", "deckAMode"],
           ["deck-b-mode", "deckBMode"],
@@ -606,6 +618,8 @@
         $("#depth-value").textContent = state.depth.toFixed(2);
         $("#ring-opacity-value").textContent = `${Math.round(state.ringOpacity * 100)}%`;
         $("#palette-value").textContent = `${Math.round(state.palette * 360)} deg`;
+        $("#palette-saturation-value").textContent = `${Math.round(state.paletteSaturation * 100)}%`;
+        $("#palette-brightness-value").textContent = `${Math.round(state.paletteBrightness * 100)}%`;
         $("#max-brightness-value").textContent = `${Math.round(state.maxBrightness * 100)}%`;
         $("#deck-a-mode").title = visualModes[state.deckAMode] || "Mode";
         $("#deck-b-mode").title = visualModes[state.deckBMode] || "Mode";
@@ -667,6 +681,8 @@
         ["depth", "depth"],
         ["ring-opacity", "ringOpacity"],
         ["palette", "palette"],
+        ["palette-saturation", "paletteSaturation"],
+        ["palette-brightness", "paletteBrightness"],
         ["max-brightness", "maxBrightness"],
       ]) {
         $(`#${id}`).addEventListener("input", (event) => {
