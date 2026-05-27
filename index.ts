@@ -610,7 +610,7 @@ const visualServer = Bun.serve({
 						broadcastError(parsed.error);
 					} else if (parsed.address === "/bevyosc/ping") {
 						ws.send(
-							JSON.stringify({ address: "/bevyosc/pong", id: parsed.id ?? 0 }),
+							JSON.stringify({ address: "/bevyosc/pong", id: typeof parsed.id === "number" ? parsed.id : 0 }),
 						);
 					} else {
 						sendOsc(

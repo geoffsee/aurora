@@ -639,7 +639,8 @@
         diagnosticsStatus.dataset.state = diagnostics.oscReady ? "info" : "warn";
         if (latencyWindow.length > 0) {
           const sorted = [...latencyWindow].sort((a, b) => a - b);
-          const p95 = sorted[Math.floor(sorted.length * 0.95)];
+          const idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+          const p95 = sorted[idx];
           latencyStatus.textContent = `P95 ${p95.toFixed(0)}ms`;
           latencyStatus.dataset.state = p95 < 30 ? "live" : p95 < 100 ? "info" : "warn";
         } else {

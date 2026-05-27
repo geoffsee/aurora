@@ -21,7 +21,8 @@ function openWebSocket(): Promise<WebSocket> {
 
 function p95(samples: number[]): number {
 	const sorted = [...samples].sort((a, b) => a - b);
-	return sorted[Math.floor(sorted.length * 0.95)] ?? 0;
+	const idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+	return sorted[idx] ?? 0;
 }
 
 test(
@@ -96,3 +97,36 @@ test(
 	},
 	30_000,
 );
+
+test("ping handler returns pong with matching id", async () => {
+	const ws = await openWebSocket();
+	try {
+		const pong = await new Promise<{ address: string; id: number }>(
+			(resolve, reject) => {
+				const timerId = setTimeout(
+					() => reject(new Error("pong not received within 1000ms")),
+					1000,
+				);
+				ws.addEventListener("message", (event) => {
+					try {
+						const msg = JSON.parse(event.data as string) as {
+							address: string;
+							id: number;
+						};
+						if (msg.address === "/bevyosc/pong") {
+							clearTimeout(timerId);
+							resolve(msg);
+						}
+					} catch {
+						// ignore parse errors
+					}
+				});
+				ws.send(JSON.stringify({ address: "/bevyosc/ping", id: 42 }));
+			},
+		);
+		expect(pong.address).toBe("/bevyosc/pong");
+		expect(pong.id).toBe(42);
+	} finally {
+		ws.close();
+	}
+}, 5_000);
