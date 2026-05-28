@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { watch } from "node:fs";
+import { createReadStream, watch } from "node:fs";
 import type { ServerWebSocket } from "bun";
 import {
 	type OscArg,
@@ -14,6 +14,12 @@ import {
 	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "./osc-validation.ts";
+import {
+	MIDI_CLOCK_TICK,
+	MIDI_CLOCK_WINDOW,
+	MIDI_CLOCK_TIMEOUT_MS,
+	deriveBpmFromTimestamps,
+} from "./midi-clock.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -93,6 +99,7 @@ const liveHost = Bun.env.LIVE_HOST ?? "127.0.0.1";
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
 const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
+const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? "";
 const hotReload = Bun.env.HOT_RELOAD === "1";
 const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
@@ -100,6 +107,9 @@ let oscReady = false;
 let latestControlState: ControlState | null = null;
 let latestOscFrameAt = 0;
 let latestVstControlAt = 0;
+let midiClockTimestamps: number[] = [];
+let lastMidiClockAt = 0;
+let lastMidiClockBpmUpdate = 0;
 
 const mimeTypes: Record<string, string> = {
 	".css": "text/css; charset=utf-8",
@@ -525,6 +535,63 @@ const applyVstControlMessage = (msg: OscMsg) => {
 	}
 };
 
+const isMidiClockActive = (): boolean =>
+	lastMidiClockAt > 0 && Date.now() - lastMidiClockAt < MIDI_CLOCK_TIMEOUT_MS;
+
+const MIDI_BPM_UPDATE_INTERVAL_MS = 50;
+
+function onMidiClock(): void {
+	const now = Date.now();
+
+	// Clear stale window when clock restarts after a gap
+	const lastTs = midiClockTimestamps[midiClockTimestamps.length - 1];
+	if (lastTs !== undefined && now - lastTs > MIDI_CLOCK_TIMEOUT_MS) {
+		midiClockTimestamps = [];
+	}
+
+	lastMidiClockAt = now;
+	midiClockTimestamps.push(now);
+	if (midiClockTimestamps.length > MIDI_CLOCK_WINDOW + 1) {
+		midiClockTimestamps.shift();
+	}
+
+	if (now - lastMidiClockBpmUpdate < MIDI_BPM_UPDATE_INTERVAL_MS) return;
+
+	const bpm = deriveBpmFromTimestamps(midiClockTimestamps);
+	if (bpm === null) return;
+
+	lastMidiClockBpmUpdate = now;
+	mergeControlState({ bpm });
+	// Also deliver tempo on the AbletonOSC path so the renderer picks it up
+	// regardless of whether the control page is connected.
+	const tempoData = JSON.stringify({
+		address: OSC_ADDRESSES.TEMPO,
+		args: [bpm],
+	});
+	sockets.forEach((ws) => ws.send(tempoData));
+}
+
+function openMidiClockDevice(devicePath: string): void {
+	try {
+		const stream = createReadStream(devicePath);
+		stream.on("data", (chunk: Buffer | string) => {
+			const buf = typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
+			for (const byte of buf) {
+				if (byte === MIDI_CLOCK_TICK) onMidiClock();
+			}
+		});
+		stream.on("error", (err: Error) => {
+			console.error(`MIDI clock error on ${devicePath}:`, err.message);
+		});
+		console.log(`MIDI clock: listening on ${devicePath}`);
+	} catch (err) {
+		console.error(
+			"MIDI clock: failed to open device:",
+			err instanceof Error ? err.message : err,
+		);
+	}
+}
+
 const _switchCaseNames: ReadonlySet<string> = new Set([
 	"crossfade",
 	"bpm",
@@ -720,6 +787,8 @@ udp.on("ready", () => {
 
 udp.on("message", (msg: OscMsg) => {
 	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
+	// MIDI clock is authoritative for tempo; suppress AbletonOSC tempo while active
+	if (msg.address === OSC_ADDRESSES.TEMPO && isMidiClockActive()) return;
 	broadcast(msg);
 });
 udp.on("error", (error: Error) => {
@@ -757,6 +826,8 @@ setInterval(() => {
 		liveSendPort,
 		liveRecvPort,
 		vstControlRecvPort,
+		midiClockDevice: midiClockDevice || null,
+		midiClockActive: isMidiClockActive(),
 		visualPort: port,
 		controlsPort,
 		numTracks,
@@ -797,6 +868,10 @@ setInterval(() => {
 
 console.log(`bevyosc VJ output listening on ${visualServer.url}`);
 console.log(`bevyosc controls listening on ${controlsServer.url}`);
+
+if (midiClockDevice) {
+	openMidiClockDevice(midiClockDevice);
+}
 
 if (hotReload) {
 	const pkgDir = `${root}/dist/pkg`;
