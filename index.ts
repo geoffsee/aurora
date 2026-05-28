@@ -572,20 +572,19 @@ function onMidiClock(): void {
 }
 
 function openMidiClockDevice(devicePath: string): void {
-	try {
-		const stream = createReadStream(devicePath);
-		stream.on("data", (chunk: Buffer | string) => {
-			const buf = typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
-			for (const byte of buf) {
-				if (byte === MIDI_CLOCK_TICK) onMidiClock();
-			}
-		});
-		stream.on("error", (err: Error) => {
-			console.error(`MIDI clock error on ${devicePath}:`, err.message);
-		});
-		stream.once("open", () => {
-			console.log(`MIDI clock: listening on ${devicePath}`);
-		});
+	const stream = createReadStream(devicePath);
+	stream.on("data", (chunk: Buffer | string) => {
+		const buf = typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
+		for (const byte of buf) {
+			if (byte === MIDI_CLOCK_TICK) onMidiClock();
+		}
+	});
+	stream.on("error", (err: Error) => {
+		console.error(`MIDI clock error on ${devicePath}:`, err.message);
+	});
+	stream.once("open", () => {
+		console.log(`MIDI clock: listening on ${devicePath}`);
+	});
 }
 
 const _switchCaseNames: ReadonlySet<string> = new Set([
