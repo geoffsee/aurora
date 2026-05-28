@@ -3,10 +3,7 @@ export const MIDI_CLOCKS_PER_BEAT = 24;
 export const MIDI_CLOCK_WINDOW = 24;
 export const MIDI_CLOCK_TIMEOUT_MS = 2000;
 
-/**
- * Derives BPM from a sliding window of MIDI clock timestamps (milliseconds).
- * Returns null when there is insufficient data or the result falls outside [40, 240].
- */
+// returns null when < 3 timestamps or derived BPM is outside [40, 240]
 export function deriveBpmFromTimestamps(timestamps: readonly number[]): number | null {
 	if (timestamps.length < 3) return null;
 	const oldest = timestamps[0] as number;

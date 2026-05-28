@@ -583,13 +583,9 @@ function openMidiClockDevice(devicePath: string): void {
 		stream.on("error", (err: Error) => {
 			console.error(`MIDI clock error on ${devicePath}:`, err.message);
 		});
-		console.log(`MIDI clock: listening on ${devicePath}`);
-	} catch (err) {
-		console.error(
-			"MIDI clock: failed to open device:",
-			err instanceof Error ? err.message : err,
-		);
-	}
+		stream.once("open", () => {
+			console.log(`MIDI clock: listening on ${devicePath}`);
+		});
 }
 
 const _switchCaseNames: ReadonlySet<string> = new Set([
