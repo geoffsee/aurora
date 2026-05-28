@@ -274,6 +274,7 @@
       let pendingPings = {};
       let ws;
       let reconnectTimer;
+      let reconnectDelay = 1000;
       let pendingCue = null;
       let isRecording = false;
       let recordStart = 0;
@@ -343,6 +344,7 @@
           bridgeStatus.textContent = "bridge live";
           bridgeStatus.dataset.state = "live";
           document.querySelectorAll("[data-banner-type='disconnect']").forEach((b) => b.remove());
+          reconnectDelay = 1000;
           publish({ record: false });
         };
         ws.onclose = () => {
@@ -350,7 +352,8 @@
           bridgeStatus.dataset.state = "connecting";
           addBanner("Bridge WebSocket disconnected — reconnecting…", "disconnect");
           pendingPings = {};
-          reconnectTimer = setTimeout(connect, 1000);
+          reconnectTimer = setTimeout(connect, reconnectDelay);
+          reconnectDelay = Math.min(reconnectDelay * 2, 16000);
         };
         ws.onerror = () => {
           bridgeStatus.textContent = "bridge error";

@@ -290,6 +290,7 @@
       }
 
       let oscWs = null;
+      let wsReconnectDelay = 1000;
 
       function sendErrorToControls(description) {
         if (oscWs?.readyState === WebSocket.OPEN) {
@@ -303,11 +304,13 @@
 
         oscWs.onopen = () => {
           oscState.bridgeReady = true;
+          wsReconnectDelay = 1000;
         };
         oscWs.onclose = () => {
           oscState.connected = false;
           oscState.bridgeReady = false;
-          setTimeout(connectOscSocket, 2000);
+          setTimeout(connectOscSocket, wsReconnectDelay);
+          wsReconnectDelay = Math.min(wsReconnectDelay * 2, 16000);
         };
         oscWs.onerror = () => {
           oscState.connected = false;
