@@ -1,4 +1,5 @@
 import { expect, test, afterEach } from "vitest";
+import { nextReconnectDelay } from "../src/reconnect.ts";
 
 test("vitest happy-dom environment is wired up", () => {
 	expect(typeof window).toBe("object");
@@ -88,11 +89,6 @@ test("disconnect banners are removed on reconnect", () => {
 	expect(container.querySelector("[data-banner-type='error']")).not.toBeNull();
 });
 
-// Mirrors the exponential backoff logic in index.html and controls.html.
-function nextReconnectDelay(current: number, max = 16000): number {
-	return Math.min(current * 2, max);
-}
-
 test("reconnect backoff doubles each failure up to the 16 s cap", () => {
 	const delays: number[] = [];
 	let delay = 1000;
@@ -104,10 +100,12 @@ test("reconnect backoff doubles each failure up to the 16 s cap", () => {
 });
 
 test("reconnect delay resets to 1 s on successful connection", () => {
-	let delay = 16000;
-	// simulate ws.onopen handler
+	let delay = nextReconnectDelay(nextReconnectDelay(nextReconnectDelay(1000))); // 8000
+	// onopen contract: always resets to the initial value
 	delay = 1000;
 	expect(delay).toBe(1000);
+	// assert that the next attempt doubles from 1 s, not from the prior max
+	expect(nextReconnectDelay(delay)).toBe(2000);
 });
 
 test("worst-case reconnect window stays within 30 s given a 16 s cap", () => {
