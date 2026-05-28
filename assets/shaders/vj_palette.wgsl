@@ -3,8 +3,10 @@
 const TAU: f32 = 6.283185307179586;
 
 @group(2) @binding(0) var<uniform> params: vec4<f32>;
-// palette_extra.x = saturation multiplier (0..1), palette_extra.y = brightness multiplier (0..1)
+// palette_extra.x = saturation (0..1), y = brightness (0..1), z = pulse (0..1)
 @group(2) @binding(1) var<uniform> palette_extra: vec4<f32>;
+// audio_uniforms.x = energy (-1.0 = inactive), y = bass, z = mid, w = high (0..1 when active)
+@group(2) @binding(2) var<uniform> audio_uniforms: vec4<f32>;
 
 fn hue_to_rgb(hue: f32) -> vec3<f32> {
   let h = fract(hue);
@@ -113,21 +115,15 @@ fn geometry_field(
 @fragment
 fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let uv = (frag.uv - vec2<f32>(0.5)) * 2.0;
-  let active = params.w >= 0.0;
-  let bass_activity = max(params.z, 0.0);
-  let melodic_activity = max(params.w, 0.0);
-  let activity = max(bass_activity, melodic_activity);
-  let pulse = max(bass_activity * 1.2, melodic_activity * 0.7);
-  let energy = select(-1.0, activity, active);
 
   return geometry_field(
     uv,
     params.y,
     params.x,
-    pulse,
-    energy,
-    bass_activity,
-    melodic_activity * 0.72,
-    melodic_activity
+    palette_extra.z,
+    audio_uniforms.x,
+    audio_uniforms.y,
+    audio_uniforms.z,
+    audio_uniforms.w,
   );
 }
