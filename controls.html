@@ -577,12 +577,13 @@
         }
         function applyAt(t) {
           const lerped = Object.assign({}, to);
+          const snapAll = transitionDurationMs <= 0;
           for (const key of INTERPOLATED_KEYS) {
             const a = typeof from[key] === "number" ? from[key] : (typeof to[key] === "number" ? to[key] : 0);
             const b = typeof to[key] === "number" ? to[key] : a;
             const curve = pendingCurves[key] ?? "snap";
             let tv;
-            if (curve === "snap" || transitionDurationMs <= 0) {
+            if (curve === "snap" || snapAll) {
               tv = 1;
             } else if (curve === "ease") {
               tv = t * t * (3 - 2 * t);
@@ -697,30 +698,41 @@
         }
       }
 
+      function syncCurveRow(row, key) {
+        const current = pendingCurves[key] ?? "snap";
+        for (const btn of row.querySelectorAll(".curve-btn")) {
+          btn.setAttribute("aria-pressed", String(btn.dataset.mode === current));
+        }
+      }
+
       function renderCurves() {
         const grid = document.getElementById("curves-grid");
         if (!grid) return;
-        grid.innerHTML = "";
-        for (const key of INTERPOLATED_KEYS) {
-          const current = pendingCurves[key] ?? "snap";
-          const row = document.createElement("div");
-          row.className = "curve-row";
-          const lbl = document.createElement("span");
-          lbl.className = "curve-param";
-          lbl.textContent = CURVE_PARAM_LABELS[key] || key;
-          row.appendChild(lbl);
-          for (const mode of CURVE_MODES) {
-            const btn = document.createElement("button");
-            btn.className = "curve-btn";
-            btn.textContent = mode;
-            btn.setAttribute("aria-pressed", String(current === mode));
-            btn.addEventListener("click", () => {
-              pendingCurves[key] = mode;
-              renderCurves();
-            });
-            row.appendChild(btn);
+        if (!grid.children.length) {
+          for (const key of INTERPOLATED_KEYS) {
+            const row = document.createElement("div");
+            row.className = "curve-row";
+            row.dataset.key = key;
+            const lbl = document.createElement("span");
+            lbl.className = "curve-param";
+            lbl.textContent = CURVE_PARAM_LABELS[key] || key;
+            row.appendChild(lbl);
+            for (const mode of CURVE_MODES) {
+              const btn = document.createElement("button");
+              btn.className = "curve-btn";
+              btn.textContent = mode;
+              btn.dataset.mode = mode;
+              btn.addEventListener("click", () => {
+                pendingCurves[key] = mode;
+                syncCurveRow(row, key);
+              });
+              row.appendChild(btn);
+            }
+            grid.appendChild(row);
           }
-          grid.appendChild(row);
+        }
+        for (const row of grid.children) {
+          syncCurveRow(row, row.dataset.key);
         }
       }
 
