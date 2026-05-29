@@ -389,7 +389,7 @@ h2 {
 /* ============== Cues panel internals ============== */
 .s-cues {
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto auto auto auto 1fr;
   gap: 0.4rem;
 }
 
@@ -1051,4 +1051,67 @@ meter::-moz-meter-bar {
   .mapping-grid,
   .meters { grid-template-columns: repeat(2, 1fr); }
   .preset-controls input[type="number"] { width: 3.8rem; }
+}
+
+/* ============== Curves config ============== */
+.curves-config {
+  margin-top: 0.1rem;
+}
+
+.curves-config > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0;
+}
+
+.curves-config > summary::-webkit-details-marker { display: none; }
+
+.curves-config > summary::after {
+  content: "›";
+  font-size: 0.75rem;
+  color: var(--text-mute);
+  transition: transform 160ms ease;
+}
+
+.curves-config[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.curves-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  margin-top: 0.3rem;
+}
+
+.curve-row {
+  display: grid;
+  grid-template-columns: 5.5rem repeat(3, 1fr);
+  gap: 0.18rem;
+  align-items: center;
+}
+
+.curve-param {
+  font-size: 0.57rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.curve-btn {
+  min-height: 1.55rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.25rem;
+  text-transform: capitalize;
+  border-radius: 0.4rem;
 }

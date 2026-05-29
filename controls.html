@@ -64,6 +64,10 @@
           <input id="preset-transition" type="number" min="0" max="10000" step="100" value="500" aria-label="Transition duration in milliseconds" />
           <span class="preset-label">ms</span>
         </div>
+        <details class="curves-config">
+          <summary class="preset-label">Curves</summary>
+          <div id="curves-grid" class="curves-grid" aria-label="Per-parameter transition curves"></div>
+        </details>
         <div id="preset-grid" class="preset-grid" aria-label="Saved presets"></div>
       </section>
 
@@ -274,6 +278,7 @@
       let pendingPings = {};
       let ws;
       let reconnectTimer;
+      let reconnectDelay = 1000;
       let pendingCue = null;
       let isRecording = false;
       let recordStart = 0;
@@ -343,6 +348,7 @@
           bridgeStatus.textContent = "bridge live";
           bridgeStatus.dataset.state = "live";
           document.querySelectorAll("[data-banner-type='disconnect']").forEach((b) => b.remove());
+          reconnectDelay = 1000;
           publish({ record: false });
         };
         ws.onclose = () => {
@@ -350,7 +356,8 @@
           bridgeStatus.dataset.state = "connecting";
           addBanner("Bridge WebSocket disconnected — reconnecting…", "disconnect");
           pendingPings = {};
-          reconnectTimer = setTimeout(connect, 1000);
+          reconnectTimer = setTimeout(connect, reconnectDelay);
+          reconnectDelay = Math.min(reconnectDelay * 2, 16000);
         };
         ws.onerror = () => {
           bridgeStatus.textContent = "bridge error";
@@ -541,9 +548,16 @@
       };
 
       const INTERPOLATED_KEYS = ["crossfade", "speed", "intensity", "feedback", "depth", "palette", "ringOpacity", "maxBrightness"];
+      const CURVE_MODES = ["snap", "linear", "ease"];
+      const CURVE_PARAM_LABELS = {
+        crossfade: "Crossfade", speed: "Speed", intensity: "Intensity",
+        feedback: "Trails", depth: "3D Lines", palette: "Color",
+        ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
+      };
       let transitionDurationMs = 500;
       let activePresetIndex = null;
       let activeTransitionRaf = null;
+      const pendingCurves = Object.fromEntries(INTERPOLATED_KEYS.map(k => [k, "snap"]));
 
       function recallPreset(n) {
         const presets = loadPresets();
@@ -551,19 +565,35 @@
         if (!preset) return;
         const from = cloneState();
         const to = preset.state;
+        const presetCurves = preset.curves && typeof preset.curves === "object" ? preset.curves : {};
         const start = performance.now();
         activePresetIndex = n;
         state.cueVersion += 1;
+        for (const key of INTERPOLATED_KEYS) {
+          const c = presetCurves[key];
+          pendingCurves[key] = CURVE_MODES.includes(c) ? c : "snap";
+        }
+        renderCurves();
         if (activeTransitionRaf !== null) {
           cancelAnimationFrame(activeTransitionRaf);
           activeTransitionRaf = null;
         }
         function applyAt(t) {
           const lerped = Object.assign({}, to);
+          const snapAll = transitionDurationMs <= 0;
           for (const key of INTERPOLATED_KEYS) {
             const a = typeof from[key] === "number" ? from[key] : (typeof to[key] === "number" ? to[key] : 0);
             const b = typeof to[key] === "number" ? to[key] : a;
-            lerped[key] = a + (b - a) * t;
+            const curve = pendingCurves[key] ?? "snap";
+            let tv;
+            if (curve === "snap" || snapAll) {
+              tv = 1;
+            } else if (curve === "ease") {
+              tv = t * t * (3 - 2 * t);
+            } else {
+              tv = t;
+            }
+            lerped[key] = a + (b - a) * tv;
           }
           const { cueVersion, flashVersion, resetVersion, ...rest } = lerped;
           Object.assign(state, rest, { replaying: false });
@@ -592,7 +622,7 @@
       function savePresetSilent(n) {
         const presets = loadPresets();
         const existing = normalizePreset(presets[`slot-${n}`]);
-        presets[`slot-${n}`] = { name: existing?.name || `Preset ${n}`, state: cloneState() };
+        presets[`slot-${n}`] = { name: existing?.name || `Preset ${n}`, state: cloneState(), curves: { ...pendingCurves } };
         savePresetsToStorage(presets);
         activePresetIndex = n;
         renderPresets();
@@ -604,7 +634,7 @@
         const defaultName = existing?.name || `Preset ${n}`;
         const name = prompt(`Name for slot ${n}:`, defaultName);
         if (name === null) return;
-        presets[`slot-${n}`] = { name: name.trim() || defaultName, state: cloneState() };
+        presets[`slot-${n}`] = { name: name.trim() || defaultName, state: cloneState(), curves: { ...pendingCurves } };
         savePresetsToStorage(presets);
         activePresetIndex = n;
         renderPresets();
@@ -668,6 +698,44 @@
           const label = activePreset ? (activePreset.name || `Preset ${activePresetIndex}`) : "No preset";
           activePill.textContent = label;
           activePill.dataset.state = activePreset ? "info" : "idle";
+        }
+      }
+
+      function syncCurveRow(row, key) {
+        const current = pendingCurves[key] ?? "snap";
+        for (const btn of row.querySelectorAll(".curve-btn")) {
+          btn.setAttribute("aria-pressed", String(btn.dataset.mode === current));
+        }
+      }
+
+      function renderCurves() {
+        const grid = document.getElementById("curves-grid");
+        if (!grid) return;
+        if (!grid.children.length) {
+          for (const key of INTERPOLATED_KEYS) {
+            const row = document.createElement("div");
+            row.className = "curve-row";
+            row.dataset.key = key;
+            const lbl = document.createElement("span");
+            lbl.className = "curve-param";
+            lbl.textContent = CURVE_PARAM_LABELS[key] || key;
+            row.appendChild(lbl);
+            for (const mode of CURVE_MODES) {
+              const btn = document.createElement("button");
+              btn.className = "curve-btn";
+              btn.textContent = mode;
+              btn.dataset.mode = mode;
+              btn.addEventListener("click", () => {
+                pendingCurves[key] = mode;
+                syncCurveRow(row, key);
+              });
+              row.appendChild(btn);
+            }
+            grid.appendChild(row);
+          }
+        }
+        for (const row of grid.children) {
+          syncCurveRow(row, row.dataset.key);
         }
       }
 
@@ -923,6 +991,7 @@
       });
 
       renderPresets();
+      renderCurves();
       syncInputs();
       setInterval(publish, 500);
       setInterval(render, 500);
