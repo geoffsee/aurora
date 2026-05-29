@@ -94,14 +94,17 @@ unsafe extern "C" {
 }
 
 /// GPU material driven by the `palette` controls.
-/// `params`: x=hue_shift (0..1), y=show_time (s), z=bass_activity, w=melodic_activity.
-/// `palette_extra`: x=saturation multiplier (0..1), y=brightness multiplier (0..1).
+/// `params`: x=hue_shift (0..1), y=show_time (s), z=unused, w=unused.
+/// `palette_extra`: x=saturation multiplier (0..1), y=brightness multiplier (0..1), z=pulse (0..1).
+/// `audio_uniforms`: x=energy (-1.0 = inactive), y=bass, z=mid, w=high (all 0..1 when active).
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
 struct VjPaletteMaterial {
     #[uniform(0)]
     params: Vec4,
     #[uniform(1)]
     palette_extra: Vec4,
+    #[uniform(2)]
+    audio_uniforms: Vec4,
 }
 
 impl Material2d for VjPaletteMaterial {
@@ -421,6 +424,7 @@ fn setup(
     let gpu_mat = palette_materials.add(VjPaletteMaterial {
         params: Vec4::ZERO,
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
     });
     commands.insert_resource(VjPaletteHandle(gpu_mat.clone()));
     commands.spawn((
@@ -1055,24 +1059,20 @@ fn update_palette_material(
     mut materials: ResMut<Assets<VjPaletteMaterial>>,
 ) {
     if let Some(material) = materials.get_mut(&handle.0) {
-        let bass_activity = if state.show_gpu_palette {
-            state.bass_activity.max(0.0)
+        let active = state.show_gpu_palette;
+        let energy = if active { state.osc_energy.max(0.0) } else { -1.0 };
+        let bass = if active { state.osc_bass.max(0.0) } else { 0.0 };
+        let mid = if active { state.osc_mid.max(0.0) } else { 0.0 };
+        let high = if active { state.osc_high.max(0.0) } else { 0.0 };
+        let pulse = if active {
+            state.osc_pulse.clamp(0.0, 1.0)
         } else {
             0.0
         };
-        let melodic_activity = if state.show_gpu_palette {
-            state.melodic_activity.max(0.0)
-        } else {
-            -1.0
-        };
-        material.params = Vec4::new(
-            state.palette,
-            state.show_time,
-            bass_activity,
-            melodic_activity,
-        );
+        material.params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
         material.palette_extra =
-            Vec4::new(state.palette_saturation, state.palette_brightness, 0.0, 0.0);
+            Vec4::new(state.palette_saturation, state.palette_brightness, pulse, 0.0);
+        material.audio_uniforms = Vec4::new(energy, bass, mid, high);
     }
 }
 
