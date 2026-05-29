@@ -891,4 +891,28 @@ if (hotReload) {
 			error instanceof Error ? error.message : error,
 		);
 	}
+
+	const shadersDir = `${root}/assets/shaders`;
+	let shaderReloadTimer: ReturnType<typeof setTimeout> | null = null;
+	try {
+		watch(shadersDir, (_event, filename) => {
+			if (!filename?.endsWith(".wgsl")) return;
+			if (shaderReloadTimer) clearTimeout(shaderReloadTimer);
+			shaderReloadTimer = setTimeout(() => {
+				shaderReloadTimer = null;
+				const data = JSON.stringify({
+					address: "/bevyosc/dev/reload",
+					args: [],
+				});
+				sockets.forEach((ws) => ws.send(data));
+				console.log(`[hot-reload] shader changed (${filename ?? "unknown"}) — reload signal sent`);
+			}, 150); // shorter than pkgDir watcher — shader files are small and don't trigger cascading rebuilds
+		});
+		console.log("[hot-reload] watching assets/shaders/");
+	} catch (error) {
+		console.warn(
+			"[hot-reload] shader watcher failed to start:",
+			error instanceof Error ? error.message : error,
+		);
+	}
 }
