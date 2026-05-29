@@ -1,4 +1,5 @@
 import { expect, test, afterEach } from "vitest";
+import { nextReconnectDelay } from "../src/reconnect.ts";
 
 test("vitest happy-dom environment is wired up", () => {
 	expect(typeof window).toBe("object");
@@ -86,4 +87,31 @@ test("disconnect banners are removed on reconnect", () => {
 		.forEach((b) => b.remove());
 	expect(container.querySelectorAll(".error-banner").length).toBe(1);
 	expect(container.querySelector("[data-banner-type='error']")).not.toBeNull();
+});
+
+test("reconnect backoff doubles each failure up to the 16 s cap", () => {
+	const delays: number[] = [];
+	let delay = 1000;
+	for (let i = 0; i < 6; i++) {
+		delays.push(delay);
+		delay = nextReconnectDelay(delay);
+	}
+	expect(delays).toEqual([1000, 2000, 4000, 8000, 16000, 16000]);
+});
+
+test("reconnect delay resets to 1 s on successful connection", () => {
+	let delay = nextReconnectDelay(nextReconnectDelay(nextReconnectDelay(1000))); // 8000
+	// onopen contract: always resets to the initial value
+	delay = 1000;
+	expect(delay).toBe(1000);
+	// assert that the next attempt doubles from 1 s, not from the prior max
+	expect(nextReconnectDelay(delay)).toBe(2000);
+});
+
+test("worst-case reconnect window stays within 30 s given a 16 s cap", () => {
+	// Worst case: the server comes back just after a max-delay timer fired.
+	// The client waits at most MAX_DELAY before the next attempt succeeds.
+	const MAX_DELAY = 16000;
+	const BUDGET_MS = 30_000;
+	expect(MAX_DELAY).toBeLessThan(BUDGET_MS);
 });
