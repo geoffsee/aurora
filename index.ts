@@ -20,6 +20,12 @@ import {
 	MIDI_CLOCK_TIMEOUT_MS,
 	deriveBpmFromTimestamps,
 } from "./midi-clock.ts";
+import {
+	DEFAULT_AUDIO_EMA_ALPHA,
+	type AudioFeatures,
+	makeAudioEmaState,
+	stepAudioEma,
+} from "./audio-ema.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -110,6 +116,7 @@ let latestVstControlAt = 0;
 let midiClockTimestamps: number[] = [];
 let lastMidiClockAt = 0;
 let lastMidiClockBpmUpdate = 0;
+const demoAudioEma = makeAudioEmaState();
 
 const mimeTypes: Record<string, string> = {
 	".css": "text/css; charset=utf-8",
@@ -153,6 +160,7 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, finiteNumber(value, fallback)));
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
+const audioEmaAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
 const defaultTrackMapping = (): TrackMapping => ({
 	deckAStart: 0,
 	deckACount: 8,
@@ -846,16 +854,24 @@ setInterval(() => {
 	const beat = ((now * state.bpm) / 60) % 4;
 	const energy =
 		0.45 + Math.sin(now * 2.1) * 0.2 + Math.max(0, Math.sin(now * 8.0)) * 0.25;
-	const demo = {
-		tempo: state.bpm,
-		beat,
+	const rawFeatures: AudioFeatures = {
 		energy: clamp(energy, 0, 1, 0.5),
-		deckA: clamp(0.48 + Math.sin(now * 1.7) * 0.42, 0, 1, 0.5),
-		deckB: clamp(0.48 + Math.cos(now * 1.35) * 0.42, 0, 1, 0.5),
 		bass: clamp(0.56 + Math.sin(now * 2.4) * 0.36, 0, 1, 0.5),
 		mid: clamp(0.45 + Math.sin(now * 3.1 + 1.4) * 0.3, 0, 1, 0.5),
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
+	};
+	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, audioEmaAlpha);
+	const demo = {
+		tempo: state.bpm,
+		beat,
+		deckA: clamp(0.48 + Math.sin(now * 1.7) * 0.42, 0, 1, 0.5),
+		deckB: clamp(0.48 + Math.cos(now * 1.35) * 0.42, 0, 1, 0.5),
+		energy: smoothed.energy,
+		bass: smoothed.bass,
+		mid: smoothed.mid,
+		high: smoothed.high,
+		pulse: smoothed.pulse,
 	};
 	const data = JSON.stringify({ address: "/bevyosc/demo/audio", args: [demo] });
 	sockets.forEach((ws) => ws.send(data));
