@@ -7,6 +7,8 @@ export type StateLogEntry = {
  * Compute a shallow diff between two plain objects. Nested object values are
  * compared by shallow-equality of their own properties. Returns null when
  * nothing changed.
+ *
+ * Keys present in `prev` but absent from `next` are not reported.
  */
 export function diffObjects(
 	prev: Record<string, unknown>,
@@ -46,21 +48,25 @@ export function makeStateLog(capacity: number): {
 	toArray(): StateLogEntry[];
 	readonly size: number;
 } {
-	const entries: StateLogEntry[] = [];
+	const entries = new Array<StateLogEntry>(capacity);
+	let head = 0;
+	let count = 0;
 
 	return {
 		record(prev, next) {
 			const diff =
 				prev === null ? { ...next } : diffObjects(prev, next);
 			if (diff === null) return;
-			if (entries.length >= capacity) entries.shift();
-			entries.push({ ts: Date.now(), diff });
+			entries[head] = { ts: Date.now(), diff };
+			head = (head + 1) % capacity;
+			if (count < capacity) count++;
 		},
 		toArray() {
-			return entries.slice();
+			const start = count < capacity ? 0 : head;
+			return Array.from({ length: count }, (_, i) => entries[(start + i) % capacity]!);
 		},
 		get size() {
-			return entries.length;
+			return count;
 		},
 	};
 }

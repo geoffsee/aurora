@@ -112,10 +112,10 @@ let midiClockTimestamps: number[] = [];
 let lastMidiClockAt = 0;
 let lastMidiClockBpmUpdate = 0;
 
-const stateLogCapacity = Math.max(
-	1,
-	Math.floor(Number(Bun.env.STATE_LOG_CAPACITY ?? 500)),
-);
+const _raw = Number(Bun.env.STATE_LOG_CAPACITY);
+const stateLogCapacity = Number.isFinite(_raw) && _raw >= 1
+	? Math.floor(_raw)
+	: 500;
 const controlStateLog = makeStateLog(stateLogCapacity);
 
 const mimeTypes: Record<string, string> = {
