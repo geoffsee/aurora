@@ -20,6 +20,7 @@ import {
 	MIDI_CLOCK_TIMEOUT_MS,
 	deriveBpmFromTimestamps,
 } from "./midi-clock.ts";
+import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
 	type AudioFeatures,
@@ -117,6 +118,12 @@ let midiClockTimestamps: number[] = [];
 let lastMidiClockAt = 0;
 let lastMidiClockBpmUpdate = 0;
 const demoAudioEma = makeAudioEmaState();
+
+const _raw = Number(Bun.env.STATE_LOG_CAPACITY);
+const stateLogCapacity = Number.isFinite(_raw) && _raw >= 1
+	? Math.floor(_raw)
+	: 500;
+const controlStateLog = makeStateLog(stateLogCapacity);
 
 const mimeTypes: Record<string, string> = {
 	".css": "text/css; charset=utf-8",
@@ -404,7 +411,12 @@ const broadcast = (msg: OscMsg) => {
 };
 
 const broadcastControl = (state: unknown) => {
+	const prev = latestControlState;
 	latestControlState = coerceControlState(state);
+	controlStateLog.record(
+		prev as Record<string, unknown> | null,
+		latestControlState as unknown as Record<string, unknown>,
+	);
 	const data = JSON.stringify({
 		address: "/bevyosc/control/state",
 		args: [latestControlState],
@@ -635,6 +647,12 @@ const visualServer = Bun.serve({
 		if (pathname === "/ws") {
 			if (server.upgrade(request)) return undefined;
 			return new Response("WebSocket upgrade failed", { status: 400 });
+		}
+
+		if (pathname === "/debug/state-log") {
+			return new Response(JSON.stringify(controlStateLog.toArray()), {
+				headers: { "content-type": "application/json; charset=utf-8" },
+			});
 		}
 
 		const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
