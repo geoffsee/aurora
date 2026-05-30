@@ -827,10 +827,15 @@
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
       };
 
+      let _cachedBindings = null;
       function loadMidiBindings() {
-        try { return JSON.parse(localStorage.getItem(MIDI_CC_BINDINGS_KEY) || "[]"); } catch { return []; }
+        if (_cachedBindings) return _cachedBindings;
+        try { _cachedBindings = JSON.parse(localStorage.getItem(MIDI_CC_BINDINGS_KEY) || "[]"); }
+        catch { _cachedBindings = []; }
+        return _cachedBindings;
       }
       function saveMidiBindings(bindings) {
+        _cachedBindings = bindings;
         localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(bindings));
       }
 
