@@ -185,6 +185,46 @@
         </div>
       </section>
 
+      <section class="panel s-midi-cc" aria-label="MIDI CC Mapping">
+        <div class="section-title">
+          <h2>MIDI CC Mapping</h2>
+          <span id="midi-cc-status" class="badge">No MIDI</span>
+        </div>
+        <div class="midi-cc-head">
+          <button id="midi-cc-enable" aria-pressed="false">Enable MIDI</button>
+        </div>
+        <div id="midi-cc-bindings" class="midi-cc-bindings" aria-label="CC bindings list"></div>
+        <details class="midi-cc-add-wrap">
+          <summary class="preset-label">Add Binding</summary>
+          <div class="midi-cc-form">
+            <label><span>CC#</span><input id="midi-cc-cc" type="number" min="0" max="127" step="1" value="74" /></label>
+            <label><span>Ch (0=any)</span><input id="midi-cc-channel" type="number" min="0" max="16" step="1" value="0" /></label>
+            <label><span>Parameter</span>
+              <select id="midi-cc-param">
+                <option value="crossfade">Crossfade</option>
+                <option value="bpm">BPM</option>
+                <option value="speed">Speed</option>
+                <option value="intensity" selected>Intensity</option>
+                <option value="feedback">Trails</option>
+                <option value="depth">3D Lines</option>
+                <option value="palette">Color</option>
+                <option value="paletteSaturation">GPU Sat</option>
+                <option value="paletteBrightness">GPU Bright</option>
+                <option value="deckAMode">Deck A Mode</option>
+                <option value="deckBMode">Deck B Mode</option>
+                <option value="ringOpacity">Ring Opacity</option>
+                <option value="maxBrightness">Max Brightness</option>
+              </select>
+            </label>
+            <label><span>CC Min</span><input id="midi-cc-cc-min" type="number" min="0" max="127" step="1" value="0" /></label>
+            <label><span>CC Max</span><input id="midi-cc-cc-max" type="number" min="0" max="127" step="1" value="127" /></label>
+            <label><span>Param Min</span><input id="midi-cc-param-min" type="number" step="0.01" value="0" /></label>
+            <label><span>Param Max</span><input id="midi-cc-param-max" type="number" step="0.01" value="1" /></label>
+            <button id="midi-cc-add-btn">Add</button>
+          </div>
+        </details>
+      </section>
+
       <section class="panel meters s-meters">
         <div data-channel="energy"><span>Energy</span><meter id="energy" min="0" max="1" value="0"></meter></div>
         <div data-channel="bass"><span>Bass</span><meter id="bass" min="0" max="1" value="0"></meter></div>
@@ -777,6 +817,155 @@
         publish({ record: false });
       }
 
+      const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
+      const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);
+      const MIDI_CC_PARAM_LABELS = {
+        crossfade: "Crossfade", bpm: "BPM", speed: "Speed",
+        intensity: "Intensity", feedback: "Trails", depth: "3D Lines",
+        palette: "Color", paletteSaturation: "GPU Sat", paletteBrightness: "GPU Bright",
+        deckAMode: "Deck A Mode", deckBMode: "Deck B Mode",
+        ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
+      };
+
+      let _cachedBindings = null;
+      function loadMidiBindings() {
+        if (_cachedBindings) return _cachedBindings;
+        try { _cachedBindings = JSON.parse(localStorage.getItem(MIDI_CC_BINDINGS_KEY) || "[]"); }
+        catch { _cachedBindings = []; }
+        return _cachedBindings;
+      }
+      function saveMidiBindings(bindings) {
+        _cachedBindings = bindings;
+        localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(bindings));
+      }
+
+      function scaleCcToParam(ccValue, binding) {
+        const { ccMin, ccMax, paramMin, paramMax } = binding;
+        const range = ccMax - ccMin;
+        if (range === 0) return paramMin;
+        const t = Math.max(0, Math.min(1, (ccValue - ccMin) / range));
+        return paramMin + t * (paramMax - paramMin);
+      }
+
+      let midiAccess = null;
+      let midiEnabled = false;
+
+      function applyMidiCc(ccNumber, ccChannel, ccValue) {
+        const bindings = loadMidiBindings();
+        let changed = false;
+        for (const binding of bindings) {
+          if (binding.cc !== ccNumber) continue;
+          if (binding.channel !== 0 && binding.channel !== ccChannel) continue;
+          const raw = scaleCcToParam(ccValue, binding);
+          state[binding.param] = MIDI_CC_INTEGER_PARAMS.has(binding.param) ? Math.round(raw) : raw;
+          if (binding.param === "deckAMode" || binding.param === "deckBMode") {
+            state.cueVersion += 1;
+          }
+          changed = true;
+        }
+        if (changed) {
+          syncInputs();
+          publish();
+        }
+      }
+
+      function onMidiMessage(event) {
+        const [status, data1, data2] = event.data;
+        if ((status & 0xf0) !== 0xb0) return;
+        applyMidiCc(data1, (status & 0x0f) + 1, data2);
+      }
+
+      function enableMidi() {
+        if (!navigator.requestMIDIAccess) {
+          addBanner("Web MIDI API not supported in this browser.", "warn");
+          return;
+        }
+        navigator.requestMIDIAccess().then(
+          (access) => {
+            midiAccess = access;
+            midiEnabled = true;
+            $("#midi-cc-enable").setAttribute("aria-pressed", "true");
+            for (const input of access.inputs.values()) {
+              input.onmidimessage = onMidiMessage;
+            }
+            access.onstatechange = () => {
+              for (const input of access.inputs.values()) {
+                input.onmidimessage = onMidiMessage;
+              }
+              renderMidiStatus();
+            };
+            renderMidiStatus();
+          },
+          (err) => {
+            addBanner(`MIDI access denied: ${err.message}`, "warn");
+          },
+        );
+      }
+
+      function renderMidiStatus() {
+        const badge = $("#midi-cc-status");
+        if (!badge) return;
+        if (!midiEnabled) {
+          badge.textContent = "No MIDI";
+          badge.dataset.state = "idle";
+          return;
+        }
+        const count = midiAccess ? [...midiAccess.inputs.values()].length : 0;
+        badge.textContent = count > 0 ? `${count} MIDI in` : "MIDI ready";
+        badge.dataset.state = count > 0 ? "live" : "info";
+      }
+
+      function renderMidiBindings() {
+        const container = $("#midi-cc-bindings");
+        if (!container) return;
+        const bindings = loadMidiBindings();
+        container.innerHTML = "";
+        if (!bindings.length) {
+          const empty = document.createElement("p");
+          empty.className = "midi-cc-empty";
+          empty.textContent = "No bindings — use Add Binding to create one.";
+          container.appendChild(empty);
+          return;
+        }
+        for (let i = 0; i < bindings.length; i++) {
+          const b = bindings[i];
+          const row = document.createElement("div");
+          row.className = "midi-cc-row";
+          const info = document.createElement("span");
+          info.className = "midi-cc-row-label";
+          const chStr = b.channel === 0 ? "any" : `ch${b.channel}`;
+          info.textContent = `CC${b.cc} (${chStr}) → ${MIDI_CC_PARAM_LABELS[b.param] || b.param} [${b.paramMin}–${b.paramMax}]`;
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "midi-cc-remove";
+          removeBtn.setAttribute("aria-label", `Remove CC${b.cc} binding`);
+          removeBtn.textContent = "×";
+          removeBtn.addEventListener("click", () => {
+            const current = loadMidiBindings();
+            current.splice(i, 1);
+            saveMidiBindings(current);
+            renderMidiBindings();
+          });
+          row.append(info, removeBtn);
+          container.appendChild(row);
+        }
+      }
+
+      $("#midi-cc-enable").addEventListener("click", enableMidi);
+      $("#midi-cc-add-btn").addEventListener("click", () => {
+        const cc = Math.max(0, Math.min(127, Math.floor(Number($("#midi-cc-cc").value))));
+        const channel = Math.max(0, Math.min(16, Math.floor(Number($("#midi-cc-channel").value))));
+        const param = $("#midi-cc-param").value;
+        const ccMin = Math.max(0, Math.min(127, Math.floor(Number($("#midi-cc-cc-min").value))));
+        const ccMax = Math.max(0, Math.min(127, Math.floor(Number($("#midi-cc-cc-max").value))));
+        const paramMin = Number($("#midi-cc-param-min").value);
+        const paramMax = Number($("#midi-cc-param-max").value);
+        if (!Number.isFinite(paramMin) || !Number.isFinite(paramMax)) return;
+        const bindings = loadMidiBindings();
+        bindings.push({ cc, channel, param, ccMin, ccMax, paramMin, paramMax });
+        saveMidiBindings(bindings);
+        renderMidiBindings();
+      });
+
       function syncInputs() {
         for (const [id, key] of [
           ["crossfade", "crossfade"],
@@ -992,6 +1181,8 @@
 
       renderPresets();
       renderCurves();
+      renderMidiBindings();
+      renderMidiStatus();
       syncInputs();
       setInterval(publish, 500);
       setInterval(render, 500);
