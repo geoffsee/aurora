@@ -61,7 +61,7 @@ An integer enum is preferred over a string path. String paths require allow-list
 shaderMode: clampInt(source.shaderMode, 0, MAX_SHADER_MODE, defaults.shaderMode),
 ```
 
-`MAX_SHADER_MODE` grows as new shaders are shipped; it is a named constant, not a magic number.
+`MAX_SHADER_MODE` grows as new shaders are shipped; it is a named constant, not a magic number. By existing project convention, schema-boundary constants (`CONTROL_STATE_SCHEMA_VERSION`, `VST_CONTROL_NAMES`) live in `osc-validation.ts` — `MAX_SHADER_MODE` must be exported from there too, not defined as a local in `index.ts`.
 
 #### 3. `defaultControlState()` in `index.ts`
 
@@ -71,7 +71,7 @@ shaderMode: 0,
 
 #### 4. `CONTROL_STATE_SCHEMA_VERSION` in `osc-validation.ts`
 
-Bump from `1` → `2`. Add a migration branch in the WebSocket handler in `index.ts` that projects a v1 payload to v2 defaults (`shaderMode: 0`). Update `defaultState()` in `controls.html` to emit `schemaVersion: 2`.
+Bump from `1` → `2`. In the WebSocket message handler in `index.ts`, insert a migration step *before* the `validateControlStateVersion` call (currently at `index.ts:684`): if `rawState.schemaVersion === 1`, attach `shaderMode: 0` and rewrite `schemaVersion` to `2` before the version gate runs. Then `validateControlStateVersion` sees a v2 payload and passes. Inserting the migration *after* that call means v1 clients are hard-rejected as soon as the version constant is bumped and the migration never executes. Update `defaultState()` in `controls.html` to emit `schemaVersion: 2`.
 
 #### 5. `index.html` (projector page)
 
@@ -152,7 +152,7 @@ Load WGSL shaders as `Handle<Shader>` assets via `AssetServer`. Use `ShaderRef::
 
 This is how live WGSL patching would work for user-defined shaders. It is architecturally cleanest for open-ended shader extensibility (Brian Eno / generative scenario).
 
-**Trade-off:** The pipeline recompile introduces a 1-3 frame visual stutter on switch. The shader handle must be pre-loaded or the switch is deferred until the asset is ready. Also requires that all active shaders share the same bind group layout (same `@group(2)` binding slots) or the pipeline cache creates separate entries per layout — manageable if standardised upfront.
+**Trade-off:** The pipeline recompile introduces a visible stutter on switch — up to several hundred milliseconds (100–500 ms) on first compile in mobile browsers or for non-trivial shaders, which is 6–30 frames at 60 fps. "1-3 frames" is only realistic for a trivial shader on a warmed desktop GPU; set expectations accordingly. The shader handle must be pre-loaded or the switch is deferred until the asset is ready. Also requires that all active shaders share the same bind group layout (same `@group(2)` binding slots) or the pipeline cache creates separate entries per layout — manageable if standardised upfront.
 
 ---
 
@@ -203,3 +203,4 @@ When a second WGSL file is genuinely needed (distinct bind group layout, user-su
 | `src/main.rs` | Add `active_shader: u32` to `VjState`; add `browser_control_shader_mode` extern; read in `read_osc_inputs`; add `shader_ctrl` uniform to `VjPaletteMaterial`; pass it in `update_palette_material` |
 | `assets/shaders/vj_palette.wgsl` | Add `@group(2) @binding(3)` for `shader_ctrl`; add dispatch logic |
 | `plugins/bevyosc-vst/src/lib.rs` | Add `shader_mode: IntParam` to `BevyoscParams`, `ParameterCache`, change detection, OSC emission |
+| `tests/osc-validation.test.ts` | Update schema-version fixtures (currently at lines 269-278) to use `schemaVersion: 2`; add test for v1→v2 migration path |
