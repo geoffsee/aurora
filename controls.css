@@ -62,6 +62,7 @@ main {
     "hero hero hero hero cues cues cues cues cues cues cues cues"
     "slid slid slid slid slid slid slid slid slid slid slid slid"
     "mast mast mast mast mast map  map  map  map  reh  reh  reh"
+    "midi midi midi midi midi midi midi midi midi midi midi midi"
     "mete mete mete mete mete mete mete mete mete mete mete mete";
   gap: 0.75rem;
 }
@@ -73,6 +74,7 @@ header { grid-area: head; }
 .s-master { grid-area: mast; }
 .s-mapping { grid-area: map; }
 .s-rehearsal { grid-area: reh; }
+.s-midi-cc { grid-area: midi; }
 .s-meters { grid-area: mete; }
 
 /* ============== Header ============== */
@@ -1007,6 +1009,7 @@ meter::-moz-meter-bar {
       "slid slid slid slid slid slid slid slid slid slid slid slid"
       "mast mast mast mast mast mast mast mast mast mast mast mast"
       "map  map  map  map  map  map  reh  reh  reh  reh  reh  reh"
+      "midi midi midi midi midi midi midi midi midi midi midi midi"
       "mete mete mete mete mete mete mete mete mete mete mete mete";
   }
   .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1035,6 +1038,7 @@ meter::-moz-meter-bar {
       "mast mast mast mast mast mast mast mast mast mast mast mast"
       "map  map  map  map  map  map  map  map  map  map  map  map"
       "reh  reh  reh  reh  reh  reh  reh  reh  reh  reh  reh  reh"
+      "midi midi midi midi midi midi midi midi midi midi midi midi"
       "mete mete mete mete mete mete mete mete mete mete mete mete";
   }
   header {
@@ -1114,4 +1118,169 @@ meter::-moz-meter-bar {
   padding: 0.18rem 0.25rem;
   text-transform: capitalize;
   border-radius: 0.4rem;
+}
+
+/* ============== MIDI CC Mapping ============== */
+.s-midi-cc {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  gap: 0.45rem;
+}
+
+.midi-cc-head {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.midi-cc-head button {
+  min-height: 2.4rem;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.85rem;
+}
+
+.midi-cc-bindings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-height: 1.4rem;
+}
+
+.midi-cc-empty {
+  margin: 0;
+  color: var(--text-mute);
+  font-size: 0.7rem;
+  padding: 0.2rem 0;
+}
+
+.midi-cc-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.4rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--panel-border);
+  background: rgba(8, 10, 20, 0.55);
+}
+
+.midi-cc-row-label {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.midi-cc-remove {
+  min-height: unset;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+  border-radius: 0.3rem;
+  display: grid;
+  place-items: center;
+  color: var(--text-mute);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.midi-cc-remove:hover,
+.midi-cc-remove:focus-visible {
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(127, 29, 29, 0.25);
+  box-shadow: none;
+  transform: none;
+}
+
+.midi-cc-add-wrap {
+  margin-top: 0.1rem;
+}
+
+.midi-cc-add-wrap > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0;
+}
+
+.midi-cc-add-wrap > summary::-webkit-details-marker { display: none; }
+
+.midi-cc-add-wrap > summary::after {
+  content: "›";
+  font-size: 0.75rem;
+  color: var(--text-mute);
+  transition: transform 160ms ease;
+}
+
+.midi-cc-add-wrap[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.midi-cc-form {
+  display: grid;
+  grid-template-columns: 3.2rem 3.2rem 1fr 3.2rem 3.2rem 4.2rem 4.2rem auto;
+  gap: 0.4rem;
+  align-items: end;
+  margin-top: 0.3rem;
+}
+
+.midi-cc-form label {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.midi-cc-form > label > span {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.midi-cc-form input,
+.midi-cc-form select {
+  width: 100%;
+  min-height: 2.1rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.3rem;
+}
+
+.midi-cc-form button {
+  min-height: 2.1rem;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.8rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .midi-cc-form {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .midi-cc-form button {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .midi-cc-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .midi-cc-form button {
+    grid-column: span 2;
+  }
 }
