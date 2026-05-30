@@ -20,7 +20,7 @@ A parameter automation recorder captures time-series mutations to `ControlState`
 | Symbol | Location | Behavior |
 |---|---|---|
 | `recording` | `controls.html` in-memory array | `Array<{ t: number, state: ControlState }>` — full snapshots, one per control event |
-| `isRecording` | local flag | set by `startRecording()` |
+| `isRecording` | local flag | toggled inline (`isRecording = !isRecording`) at `controls.html:743` |
 | `playReplay()` | `controls.html` | schedules each frame with `setTimeout`, applies full state via `Object.assign`, sets `state.replaying = true` |
 | `stopReplay()` | `controls.html` | clears all timers, sets `state.replaying = false` |
 | `syncFromRemote()` | `controls.html` | drops incoming bridge state while `state.replaying === true` to prevent live input clobbering playback |
@@ -79,6 +79,8 @@ Store only changed fields per frame. This reduces file size by roughly 10–30x 
 
 `strobeLockout` is excluded permanently: automating a safety interlock could be hazardous in a dark venue.
 
+**Implementation requirement:** `strobe` is recorded (it is a valid cue), but the automation player (or a patched `mergeControlState`) must check `currentControlState().strobeLockout` before applying any diff frame that sets `strobe: true`. If the lockout is active at playback time, the `strobe` field must be silently dropped from that diff. This is necessary because `mergeControlState` is currently a plain spread with no lockout guard, so the safety check must live in the player's apply path.
+
 ### Capture Logic (How Diffs Are Derived)
 
 On each control event during recording, compute `diff = changedKeys(previousState, newState)`. A naïve implementation does a shallow field comparison; for `trackMapping` it descends one level. Frames with an empty diff are dropped.
@@ -133,7 +135,13 @@ The player holds a cursor index into the sorted `frames` array to avoid re-scann
 
 ### `replaying` Flag
 
-The bridge sets `replaying: true` in `ControlState` at the moment `play()` is called and `replaying: false` when `stop()` is called. This is already wired in `controls.html`'s `syncFromRemote()`: it drops incoming state updates while `replaying === true`, preventing the live knob position from overwriting playback. No change is needed to the existing guard.
+The bridge sets `replaying: true` in `ControlState` at the moment `play()` is called and `replaying: false` when `stop()` is called. The existing guard in `controls.html`'s `syncFromRemote()` is:
+
+```js
+if (next.replaying && !state.replaying) return;
+```
+
+This is a one-shot race guard — it fires only when the *incoming* state transitions `replaying` from `false` to `true`, preventing double-initialisation. It does **not** drop subsequent bridge state updates while `replaying` is already `true`. In the client-side prototype this gap is harmless (the bridge does not drive `replaying`), but the migration plan must account for it. Once the bridge drives `replaying`, the flow is: the bridge broadcasts `replaying: true` in the first state update, the guard fires and returns, and from that point forward the bridge is the only writer of `ControlState` — so later bridge updates must be applied (they are the playback output). The guard therefore behaves correctly in the bridge-driven model, but for the right reason: it prevents a double-apply of the transition frame, not a blanket drop of all updates during playback. Implementors should confirm this is the intended semantics and not add a broader guard that would swallow legitimate playback state.
 
 ---
 
@@ -170,8 +178,8 @@ Punch-in during loop playback is scoped to the current loop iteration — the br
 | `/bevyosc/automation/stop` | client → bridge | `{}` | Stop playback |
 | `/bevyosc/automation/punch/in` | client → bridge | `{}` | Begin punch-in during active playback |
 | `/bevyosc/automation/punch/out` | client → bridge | `{}` | End punch-in |
-| `/bevyosc/automation/save` | client → bridge | `{ slot: 1–6 }` | Persist recording to disk slot |
-| `/bevyosc/automation/load` | client → bridge | `{ slot: 1–6 }` | Load recording from disk slot into memory |
+| `/bevyosc/automation/save` | client → bridge | `{ slot: 1–6 }` | Persist recording to disk slot. `slot` must be validated as an integer in `[PRESET_SLOT_MIN, PRESET_SLOT_MAX]` (reuse `validatePresetSlot` from `osc-validation.ts`) before the file path is constructed. |
+| `/bevyosc/automation/load` | client → bridge | `{ slot: 1–6 }` | Load recording from disk slot into memory. Same slot validation as `/save` applies. |
 | `/bevyosc/automation/status` | bridge → all clients | `{ active, loop, positionMs, durationMs, slot }` | Emitted on every tick while active; once on stop |
 
 These addresses follow the existing `/bevyosc/*` namespace convention. The bridge's `websocket.message` handler in `index.ts` grows one new routing branch for `address.startsWith("/bevyosc/automation/")`.
@@ -237,6 +245,8 @@ The migration is additive — the WebSocket message protocol already carries eve
 4. **Export / import:** Recordings as JSON files are human-readable and can be version-controlled alongside presets, enabling Eno-style archival and resurrection of old patches.
 
 5. **Multi-layer automation:** A single recording layer is sufficient for v1. A future design could stack layers (one per parameter group), but this is out of scope and probably over-engineering for the generative use case here.
+
+6. **Status broadcast frequency:** At ~16 ms tick interval, `/bevyosc/automation/status` generates ~62 WebSocket messages/second to all connected clients. For 1–3 clients this is acceptable. If client count grows, the status emit could be throttled (e.g., every 5th tick / ~80 ms) or made opt-in via a `/bevyosc/automation/subscribe` message. The v1 spec uses broadcast-on-every-tick for simplicity; throttling is a straightforward follow-up if profiling shows it matters.
 
 ---
 
