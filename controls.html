@@ -225,6 +225,41 @@
         </details>
       </section>
 
+      <section class="panel s-triggers" aria-label="Automation Triggers">
+        <div class="section-title">
+          <h2>Playback Triggers</h2>
+          <span id="trigger-status" class="badge">0 triggers</span>
+        </div>
+        <div id="trigger-bindings" class="midi-cc-bindings" aria-label="Trigger bindings list"></div>
+        <details class="midi-cc-add-wrap">
+          <summary class="preset-label">Add Trigger</summary>
+          <div class="trigger-form">
+            <label><span>Type</span>
+              <select id="trigger-type">
+                <option value="midi-note">MIDI Note</option>
+                <option value="midi-cc">MIDI CC</option>
+                <option value="osc">OSC</option>
+              </select>
+            </label>
+            <label id="trigger-note-label"><span>Note (0–127)</span><input id="trigger-note" type="number" min="0" max="127" step="1" value="60" /></label>
+            <label id="trigger-cc-label" style="display:none"><span>CC# (0–127)</span><input id="trigger-cc" type="number" min="0" max="127" step="1" value="64" /></label>
+            <label id="trigger-threshold-label" style="display:none"><span>Threshold ≥</span><input id="trigger-threshold" type="number" min="0" max="127" step="1" value="64" /></label>
+            <label id="trigger-channel-label"><span>Channel (0=any)</span><input id="trigger-channel" type="number" min="0" max="16" step="1" value="0" /></label>
+            <label id="trigger-osc-label" style="display:none"><span>OSC Address</span><input id="trigger-osc-address" type="text" value="/bevyosc/automation/play" /></label>
+            <label><span>Action</span>
+              <select id="trigger-action">
+                <option value="toggle">Toggle play/stop</option>
+                <option value="toggle-loop">Toggle loop/stop</option>
+                <option value="play">Play once</option>
+                <option value="play-loop">Play loop</option>
+                <option value="stop">Stop</option>
+              </select>
+            </label>
+            <button id="trigger-add-btn">Add</button>
+          </div>
+        </details>
+      </section>
+
       <section class="panel meters s-meters">
         <div data-channel="energy"><span>Energy</span><meter id="energy" min="0" max="1" value="0"></meter></div>
         <div data-channel="bass"><span>Bass</span><meter id="bass" min="0" max="1" value="0"></meter></div>
@@ -324,6 +359,7 @@
       let recordStart = 0;
       let recording = [];
       let replayTimers = [];
+      let isReplayLooping = false;
 
       function addBanner(description, type) {
         const container = document.getElementById("error-banners");
@@ -493,6 +529,7 @@
             if (latencyWindow.length > 20) latencyWindow.shift();
           }
         }
+        checkOscTrigger(frame?.address);
         render();
       }
 
@@ -791,11 +828,17 @@
         render();
       }
 
-      function playReplay() {
+      function playReplay(opts) {
         if (!recording.length) return;
         stopReplay();
+        isReplayLooping = Boolean(opts && opts.loop);
         state.replaying = true;
-        const start = performance.now();
+        _runReplayIteration();
+        publish({ record: false });
+      }
+
+      function _runReplayIteration() {
+        const durationMs = recording[recording.length - 1].t;
         for (const item of recording) {
           const timer = setTimeout(() => {
             Object.assign(state, item.state, { replaying: true });
@@ -805,15 +848,21 @@
           replayTimers.push(timer);
         }
         replayTimers.push(setTimeout(() => {
-          if (performance.now() - start >= recording[recording.length - 1].t) stopReplay();
-        }, recording[recording.length - 1].t + 100));
-        publish({ record: false });
+          if (isReplayLooping && state.replaying) {
+            replayTimers.forEach(clearTimeout);
+            replayTimers = [];
+            _runReplayIteration();
+          } else {
+            stopReplay();
+          }
+        }, durationMs + 100));
       }
 
       function stopReplay() {
         replayTimers.forEach(clearTimeout);
         replayTimers = [];
         state.replaying = false;
+        isReplayLooping = false;
         publish({ record: false });
       }
 
@@ -871,8 +920,14 @@
 
       function onMidiMessage(event) {
         const [status, data1, data2] = event.data;
-        if ((status & 0xf0) !== 0xb0) return;
-        applyMidiCc(data1, (status & 0x0f) + 1, data2);
+        const msgType = status & 0xf0;
+        const channel = (status & 0x0f) + 1;
+        if (msgType === 0xb0) {
+          applyMidiCc(data1, channel, data2);
+          checkMidiCcTrigger(data1, channel, data2);
+        } else if (msgType === 0x90 && data2 > 0) {
+          checkMidiNoteTrigger(data1, channel);
+        }
       }
 
       function enableMidi() {
@@ -949,6 +1004,157 @@
           container.appendChild(row);
         }
       }
+
+      // ---------------------------------------------------------------------------
+      // Automation playback triggers (MIDI note, MIDI CC, OSC)
+      // ---------------------------------------------------------------------------
+
+      const AUTOMATION_TRIGGERS_KEY = "bevyosc.automation-triggers";
+      let _cachedTriggers = null;
+
+      function loadTriggerBindings() {
+        if (_cachedTriggers) return _cachedTriggers;
+        try { _cachedTriggers = JSON.parse(localStorage.getItem(AUTOMATION_TRIGGERS_KEY) || "[]"); }
+        catch { _cachedTriggers = []; }
+        return _cachedTriggers;
+      }
+
+      function saveTriggerBindings(bindings) {
+        _cachedTriggers = bindings;
+        localStorage.setItem(AUTOMATION_TRIGGERS_KEY, JSON.stringify(bindings));
+      }
+
+      function executeTriggerAction(action) {
+        const resolved = action === "toggle"
+          ? (state.replaying ? "stop" : "play")
+          : action === "toggle-loop"
+          ? (state.replaying ? "stop" : "play-loop")
+          : action;
+        if (resolved === "stop") stopReplay();
+        else if (resolved === "play") playReplay({ loop: false });
+        else if (resolved === "play-loop") playReplay({ loop: true });
+      }
+
+      function checkMidiNoteTrigger(note, channel) {
+        const bindings = loadTriggerBindings();
+        for (const b of bindings) {
+          if (b.type !== "midi-note") continue;
+          if (b.note !== note) continue;
+          if (b.channel !== 0 && b.channel !== channel) continue;
+          executeTriggerAction(b.action);
+          return;
+        }
+      }
+
+      function checkMidiCcTrigger(cc, channel, value) {
+        const bindings = loadTriggerBindings();
+        for (const b of bindings) {
+          if (b.type !== "midi-cc") continue;
+          if (b.cc !== cc) continue;
+          if (b.channel !== 0 && b.channel !== channel) continue;
+          if (value < b.threshold) continue;
+          executeTriggerAction(b.action);
+          return;
+        }
+      }
+
+      function checkOscTrigger(address) {
+        if (!address) return;
+        const bindings = loadTriggerBindings();
+        for (const b of bindings) {
+          if (b.type === "osc" && b.address === address) {
+            executeTriggerAction(b.action);
+            return;
+          }
+        }
+      }
+
+      function renderTriggerBindings() {
+        const container = document.getElementById("trigger-bindings");
+        if (!container) return;
+        const bindings = loadTriggerBindings();
+        container.innerHTML = "";
+        const badge = document.getElementById("trigger-status");
+        if (badge) badge.textContent = `${bindings.length} trigger${bindings.length !== 1 ? "s" : ""}`;
+        if (!bindings.length) {
+          const empty = document.createElement("p");
+          empty.className = "midi-cc-empty";
+          empty.textContent = "No triggers — use Add Trigger to create one.";
+          container.appendChild(empty);
+          return;
+        }
+        for (let i = 0; i < bindings.length; i++) {
+          const b = bindings[i];
+          const row = document.createElement("div");
+          row.className = "midi-cc-row";
+          const info = document.createElement("span");
+          info.className = "midi-cc-row-label";
+          if (b.type === "midi-note") {
+            const chStr = b.channel === 0 ? "any" : `ch${b.channel}`;
+            info.textContent = `Note ${b.note} (${chStr}) → ${b.action}`;
+          } else if (b.type === "midi-cc") {
+            const chStr = b.channel === 0 ? "any" : `ch${b.channel}`;
+            info.textContent = `CC${b.cc} (${chStr}) ≥ ${b.threshold} → ${b.action}`;
+          } else {
+            info.textContent = `OSC ${b.address} → ${b.action}`;
+          }
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "midi-cc-remove";
+          removeBtn.setAttribute("aria-label", `Remove trigger ${i + 1}`);
+          removeBtn.textContent = "×";
+          removeBtn.addEventListener("click", () => {
+            const current = loadTriggerBindings();
+            current.splice(i, 1);
+            saveTriggerBindings(current);
+            renderTriggerBindings();
+          });
+          row.append(info, removeBtn);
+          container.appendChild(row);
+        }
+      }
+
+      function updateTriggerFormVisibility() {
+        const type = document.getElementById("trigger-type")?.value;
+        const showNote = type === "midi-note";
+        const showCc = type === "midi-cc";
+        const showChannel = type === "midi-note" || type === "midi-cc";
+        const showOsc = type === "osc";
+        const setVis = (id, visible) => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = visible ? "" : "none";
+        };
+        setVis("trigger-note-label", showNote);
+        setVis("trigger-cc-label", showCc);
+        setVis("trigger-threshold-label", showCc);
+        setVis("trigger-channel-label", showChannel);
+        setVis("trigger-osc-label", showOsc);
+      }
+
+      document.getElementById("trigger-type")?.addEventListener("change", updateTriggerFormVisibility);
+
+      document.getElementById("trigger-add-btn")?.addEventListener("click", () => {
+        const type = document.getElementById("trigger-type")?.value;
+        const action = document.getElementById("trigger-action")?.value;
+        if (!type || !action) return;
+        const channel = Math.max(0, Math.min(16, Math.floor(Number(document.getElementById("trigger-channel")?.value) || 0)));
+        const bindings = loadTriggerBindings();
+        if (type === "midi-note") {
+          const note = Math.max(0, Math.min(127, Math.floor(Number(document.getElementById("trigger-note")?.value) || 0)));
+          bindings.push({ type: "midi-note", note, channel, action });
+        } else if (type === "midi-cc") {
+          const cc = Math.max(0, Math.min(127, Math.floor(Number(document.getElementById("trigger-cc")?.value) || 0)));
+          const threshold = Math.max(0, Math.min(127, Math.floor(Number(document.getElementById("trigger-threshold")?.value) || 64)));
+          bindings.push({ type: "midi-cc", cc, channel, threshold, action });
+        } else if (type === "osc") {
+          const address = (document.getElementById("trigger-osc-address")?.value || "").trim();
+          if (!address.startsWith("/")) return;
+          bindings.push({ type: "osc", address, action });
+        }
+        saveTriggerBindings(bindings);
+        renderTriggerBindings();
+      });
+
+      updateTriggerFormVisibility();
 
       $("#midi-cc-enable").addEventListener("click", enableMidi);
       $("#midi-cc-add-btn").addEventListener("click", () => {
@@ -1183,6 +1389,7 @@
       renderCurves();
       renderMidiBindings();
       renderMidiStatus();
+      renderTriggerBindings();
       syncInputs();
       setInterval(publish, 500);
       setInterval(render, 500);
