@@ -1,9 +1,16 @@
 import { describe, expect, test } from "vitest";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
+	DEFAULT_AUDIO_EMA_ALPHAS,
+	type AudioEmaAlphas,
 	makeAudioEmaState,
 	stepAudioEma,
 } from "../audio-ema.ts";
+
+/** Build a uniform AudioEmaAlphas with the same value for all bands. */
+function uniform(alpha: number): AudioEmaAlphas {
+	return { energy: alpha, bass: alpha, mid: alpha, high: alpha, pulse: alpha };
+}
 
 describe("makeAudioEmaState", () => {
 	test("initialises all fields to zero", () => {
@@ -20,7 +27,7 @@ describe("stepAudioEma", () => {
 	test("alpha=1 passes through raw values exactly", () => {
 		const state = makeAudioEmaState();
 		const raw = { energy: 0.8, bass: 0.6, mid: 0.4, high: 0.2, pulse: 1 };
-		stepAudioEma(state, raw, 1);
+		stepAudioEma(state, raw, uniform(1));
 		expect(state.energy).toBeCloseTo(0.8);
 		expect(state.bass).toBeCloseTo(0.6);
 		expect(state.mid).toBeCloseTo(0.4);
@@ -32,7 +39,7 @@ describe("stepAudioEma", () => {
 		const state = makeAudioEmaState();
 		state.energy = 0.5;
 		state.bass = 0.3;
-		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, 0);
+		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0));
 		expect(state.energy).toBeCloseTo(0.5);
 		expect(state.bass).toBeCloseTo(0.3);
 		expect(state.mid).toBeCloseTo(0);
@@ -40,10 +47,10 @@ describe("stepAudioEma", () => {
 
 	test("single step with alpha=0.5 averages previous and raw", () => {
 		const state = makeAudioEmaState();
-		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, 0.5);
+		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0.5));
 		// 0.5 * 1 + 0.5 * 0 = 0.5
 		expect(state.energy).toBeCloseTo(0.5);
-		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, 0.5);
+		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0.5));
 		// 0.5 * 1 + 0.5 * 0.5 = 0.75
 		expect(state.energy).toBeCloseTo(0.75);
 	});
@@ -52,7 +59,7 @@ describe("stepAudioEma", () => {
 		const state = makeAudioEmaState();
 		const target = { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 };
 		for (let i = 0; i < 30; i++) {
-			stepAudioEma(state, target, DEFAULT_AUDIO_EMA_ALPHA);
+			stepAudioEma(state, target, uniform(DEFAULT_AUDIO_EMA_ALPHA));
 		}
 		expect(state.energy).toBeGreaterThan(0.95);
 		expect(state.bass).toBeGreaterThan(0.95);
@@ -66,15 +73,39 @@ describe("stepAudioEma", () => {
 		state.energy = 1;
 		const zero = { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 };
 		for (let i = 0; i < 30; i++) {
-			stepAudioEma(state, zero, DEFAULT_AUDIO_EMA_ALPHA);
+			stepAudioEma(state, zero, uniform(DEFAULT_AUDIO_EMA_ALPHA));
 		}
 		expect(state.energy).toBeLessThan(0.05);
 	});
 
 	test("mutates and returns the same state object", () => {
 		const state = makeAudioEmaState();
-		const returned = stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, 0.5);
+		const returned = stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0.5));
 		expect(returned).toBe(state);
+	});
+
+	test("per-band alphas apply independently", () => {
+		const state = makeAudioEmaState();
+		const raw = { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 };
+		const alphas: AudioEmaAlphas = { energy: 0.1, bass: 0.5, mid: 0.3, high: 0.8, pulse: 1.0 };
+		stepAudioEma(state, raw, alphas);
+		expect(state.energy).toBeCloseTo(0.1);
+		expect(state.bass).toBeCloseTo(0.5);
+		expect(state.mid).toBeCloseTo(0.3);
+		expect(state.high).toBeCloseTo(0.8);
+		expect(state.pulse).toBeCloseTo(1.0);
+	});
+
+	test("bass decays slower than high at default alphas", () => {
+		// After N steps decaying to zero, bass should retain more signal than high
+		const state = makeAudioEmaState();
+		state.bass = 1;
+		state.high = 1;
+		const zero = { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 };
+		for (let i = 0; i < 20; i++) {
+			stepAudioEma(state, zero, DEFAULT_AUDIO_EMA_ALPHAS);
+		}
+		expect(state.bass).toBeGreaterThan(state.high);
 	});
 });
 
@@ -83,5 +114,23 @@ describe("DEFAULT_AUDIO_EMA_ALPHA", () => {
 		expect(DEFAULT_AUDIO_EMA_ALPHA).toBeGreaterThan(0);
 		expect(DEFAULT_AUDIO_EMA_ALPHA).toBeLessThan(1);
 		expect(Number.isFinite(DEFAULT_AUDIO_EMA_ALPHA)).toBe(true);
+	});
+});
+
+describe("DEFAULT_AUDIO_EMA_ALPHAS", () => {
+	test("all band alphas are finite numbers strictly between 0 and 1", () => {
+		for (const [band, alpha] of Object.entries(DEFAULT_AUDIO_EMA_ALPHAS)) {
+			expect(Number.isFinite(alpha), `${band} alpha must be finite`).toBe(true);
+			expect(alpha, `${band} alpha must be > 0`).toBeGreaterThan(0);
+			expect(alpha, `${band} alpha must be < 1`).toBeLessThan(1);
+		}
+	});
+
+	test("bass alpha is smaller than high alpha (longer bass decay)", () => {
+		expect(DEFAULT_AUDIO_EMA_ALPHAS.bass).toBeLessThan(DEFAULT_AUDIO_EMA_ALPHAS.high);
+	});
+
+	test("bass alpha is smaller than mid alpha", () => {
+		expect(DEFAULT_AUDIO_EMA_ALPHAS.bass).toBeLessThan(DEFAULT_AUDIO_EMA_ALPHAS.mid);
 	});
 });

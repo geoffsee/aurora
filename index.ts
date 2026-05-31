@@ -23,6 +23,8 @@ import {
 import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
+	DEFAULT_AUDIO_EMA_ALPHAS,
+	type AudioEmaAlphas,
 	type AudioFeatures,
 	makeAudioEmaState,
 	stepAudioEma,
@@ -167,7 +169,24 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, finiteNumber(value, fallback)));
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
-const audioEmaAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+const audioEmaAlphas: AudioEmaAlphas = {
+	energy: clamp(Bun.env.AUDIO_EMA_ALPHA_ENERGY, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+	bass: clamp(Bun.env.AUDIO_EMA_ALPHA_BASS, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+	mid: clamp(Bun.env.AUDIO_EMA_ALPHA_MID, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+	high: clamp(Bun.env.AUDIO_EMA_ALPHA_HIGH, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
+	pulse: clamp(Bun.env.AUDIO_EMA_ALPHA_PULSE, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+};
+// Legacy AUDIO_EMA_ALPHA env var: if set, overrides all bands that were not individually configured.
+{
+	const legacyAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+	if (Bun.env.AUDIO_EMA_ALPHA !== undefined) {
+		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined) audioEmaAlphas.energy = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined) audioEmaAlphas.bass = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined) audioEmaAlphas.mid = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined) audioEmaAlphas.high = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined) audioEmaAlphas.pulse = legacyAlpha;
+	}
+}
 const defaultTrackMapping = (): TrackMapping => ({
 	deckAStart: 0,
 	deckACount: 8,
@@ -879,7 +898,7 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, audioEmaAlpha);
+	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, audioEmaAlphas);
 	const demo = {
 		tempo: state.bpm,
 		beat,
