@@ -24,6 +24,11 @@ fn vj_palette(selector: f32, phase: f32, saturation: f32, value: f32) -> vec3<f3
   return mix(grayscale, rgb, saturation) * value;
 }
 
+// Exponential saturation curve: smooth onset, soft peak — prevents harsh linear jumps.
+fn audio_curve(x: f32) -> f32 {
+  return 1.0 - exp(-3.0 * x);
+}
+
 fn hash21(st: vec2<f32>) -> f32 {
   return fract(sin(dot(st, vec2<f32>(127.1, 311.7))) * 43758.5453123);
 }
@@ -116,14 +121,22 @@ fn geometry_field(
 fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let uv = (frag.uv - vec2<f32>(0.5)) * 2.0;
 
+  // audio_uniforms.x < 0.0 means OSC is not connected; preserve the -1.0 sentinel.
+  let inactive = audio_uniforms.x < 0.0;
+  let energy = select(audio_curve(audio_uniforms.x), -1.0, inactive);
+  let bass   = select(audio_curve(audio_uniforms.y), 0.0, inactive);
+  let mid    = select(audio_curve(audio_uniforms.z), 0.0, inactive);
+  let high   = select(audio_curve(audio_uniforms.w), 0.0, inactive);
+  let pulse  = select(audio_curve(palette_extra.z),  0.0, inactive);
+
   return geometry_field(
     uv,
     params.y,
     params.x,
-    palette_extra.z,
-    audio_uniforms.x,
-    audio_uniforms.y,
-    audio_uniforms.z,
-    audio_uniforms.w,
+    pulse,
+    energy,
+    bass,
+    mid,
+    high,
   );
 }

@@ -32,48 +32,78 @@ function matchesBinding(
 describe("scaleCcToParam", () => {
 	test("maps CC 0 to paramMin with full range", () => {
 		const b: MidiCcBinding = {
-			cc: 74, channel: 0, param: "intensity",
-			ccMin: 0, ccMax: 127, paramMin: 0.05, paramMax: 1.5,
+			cc: 74,
+			channel: 0,
+			param: "intensity",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 0.05,
+			paramMax: 1.5,
 		};
 		expect(scaleCcToParam(0, b)).toBeCloseTo(0.05, 5);
 	});
 
 	test("maps CC 127 to paramMax with full range", () => {
 		const b: MidiCcBinding = {
-			cc: 74, channel: 0, param: "intensity",
-			ccMin: 0, ccMax: 127, paramMin: 0.05, paramMax: 1.5,
+			cc: 74,
+			channel: 0,
+			param: "intensity",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 0.05,
+			paramMax: 1.5,
 		};
 		expect(scaleCcToParam(127, b)).toBeCloseTo(1.5, 5);
 	});
 
 	test("maps midpoint CC correctly", () => {
 		const b: MidiCcBinding = {
-			cc: 1, channel: 0, param: "crossfade",
-			ccMin: 0, ccMax: 100, paramMin: 0, paramMax: 1,
+			cc: 1,
+			channel: 0,
+			param: "crossfade",
+			ccMin: 0,
+			ccMax: 100,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		expect(scaleCcToParam(50, b)).toBeCloseTo(0.5, 5);
 	});
 
 	test("clamps CC below ccMin to paramMin", () => {
 		const b: MidiCcBinding = {
-			cc: 7, channel: 0, param: "feedback",
-			ccMin: 20, ccMax: 100, paramMin: 0, paramMax: 1,
+			cc: 7,
+			channel: 0,
+			param: "feedback",
+			ccMin: 20,
+			ccMax: 100,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		expect(scaleCcToParam(0, b)).toBeCloseTo(0, 5);
 	});
 
 	test("clamps CC above ccMax to paramMax", () => {
 		const b: MidiCcBinding = {
-			cc: 7, channel: 0, param: "feedback",
-			ccMin: 20, ccMax: 100, paramMin: 0, paramMax: 1,
+			cc: 7,
+			channel: 0,
+			param: "feedback",
+			ccMin: 20,
+			ccMax: 100,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		expect(scaleCcToParam(127, b)).toBeCloseTo(1, 5);
 	});
 
 	test("zero CC range returns paramMin without division-by-zero", () => {
 		const b: MidiCcBinding = {
-			cc: 1, channel: 0, param: "depth",
-			ccMin: 64, ccMax: 64, paramMin: 0.5, paramMax: 0.5,
+			cc: 1,
+			channel: 0,
+			param: "depth",
+			ccMin: 64,
+			ccMax: 64,
+			paramMin: 0.5,
+			paramMax: 0.5,
 		};
 		expect(scaleCcToParam(64, b)).toBe(0.5);
 	});
@@ -81,8 +111,13 @@ describe("scaleCcToParam", () => {
 	test("inverted range: CC floor maps to paramMin, CC ceiling maps to paramMax", () => {
 		// ccMin=127, ccMax=0: pulling the fader down increases the parameter
 		const b: MidiCcBinding = {
-			cc: 1, channel: 0, param: "crossfade",
-			ccMin: 127, ccMax: 0, paramMin: 0, paramMax: 1,
+			cc: 1,
+			channel: 0,
+			param: "crossfade",
+			ccMin: 127,
+			ccMax: 0,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		expect(scaleCcToParam(127, b)).toBeCloseTo(0, 5);
 		expect(scaleCcToParam(0, b)).toBeCloseTo(1, 5);
@@ -90,8 +125,13 @@ describe("scaleCcToParam", () => {
 
 	test("non-zero paramMin is preserved at CC floor", () => {
 		const b: MidiCcBinding = {
-			cc: 7, channel: 0, param: "bpm",
-			ccMin: 0, ccMax: 127, paramMin: 60, paramMax: 180,
+			cc: 7,
+			channel: 0,
+			param: "bpm",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 60,
+			paramMax: 180,
 		};
 		expect(scaleCcToParam(0, b)).toBeCloseTo(60, 5);
 		expect(scaleCcToParam(127, b)).toBeCloseTo(180, 5);
@@ -100,8 +140,13 @@ describe("scaleCcToParam", () => {
 	test("partial CC range scales correctly within param range", () => {
 		// Only use CC 64-127 to sweep the full param range
 		const b: MidiCcBinding = {
-			cc: 1, channel: 0, param: "speed",
-			ccMin: 64, ccMax: 127, paramMin: 0.1, paramMax: 3,
+			cc: 1,
+			channel: 0,
+			param: "speed",
+			ccMin: 64,
+			ccMax: 127,
+			paramMin: 0.1,
+			paramMax: 3,
 		};
 		expect(scaleCcToParam(64, b)).toBeCloseTo(0.1, 4);
 		expect(scaleCcToParam(127, b)).toBeCloseTo(3, 4);
@@ -114,8 +159,13 @@ describe("scaleCcToParam", () => {
 describe("MIDI CC binding channel matching", () => {
 	test("omni channel (0) matches any incoming MIDI channel", () => {
 		const b: MidiCcBinding = {
-			cc: 74, channel: 0, param: "intensity",
-			ccMin: 0, ccMax: 127, paramMin: 0, paramMax: 1,
+			cc: 74,
+			channel: 0,
+			param: "intensity",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		expect(matchesBinding(74, 1, b)).toBe(true);
 		expect(matchesBinding(74, 7, b)).toBe(true);
@@ -124,8 +174,13 @@ describe("MIDI CC binding channel matching", () => {
 
 	test("specific channel only matches that channel", () => {
 		const b: MidiCcBinding = {
-			cc: 7, channel: 2, param: "feedback",
-			ccMin: 0, ccMax: 127, paramMin: 0, paramMax: 1,
+			cc: 7,
+			channel: 2,
+			param: "feedback",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		expect(matchesBinding(7, 2, b)).toBe(true);
 		expect(matchesBinding(7, 1, b)).toBe(false);
@@ -134,8 +189,13 @@ describe("MIDI CC binding channel matching", () => {
 
 	test("wrong CC number never matches regardless of channel", () => {
 		const b: MidiCcBinding = {
-			cc: 74, channel: 0, param: "intensity",
-			ccMin: 0, ccMax: 127, paramMin: 0, paramMax: 1,
+			cc: 74,
+			channel: 0,
+			param: "intensity",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		expect(matchesBinding(7, 1, b)).toBe(false);
 		expect(matchesBinding(0, 1, b)).toBe(false);
@@ -144,12 +204,22 @@ describe("MIDI CC binding channel matching", () => {
 
 	test("CC 0 (mod wheel) and CC 127 are legal binding targets", () => {
 		const bLow: MidiCcBinding = {
-			cc: 0, channel: 0, param: "crossfade",
-			ccMin: 0, ccMax: 127, paramMin: 0, paramMax: 1,
+			cc: 0,
+			channel: 0,
+			param: "crossfade",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 0,
+			paramMax: 1,
 		};
 		const bHigh: MidiCcBinding = {
-			cc: 127, channel: 0, param: "maxBrightness",
-			ccMin: 0, ccMax: 127, paramMin: 0.1, paramMax: 1,
+			cc: 127,
+			channel: 0,
+			param: "maxBrightness",
+			ccMin: 0,
+			ccMax: 127,
+			paramMin: 0.1,
+			paramMax: 1,
 		};
 		expect(matchesBinding(0, 1, bLow)).toBe(true);
 		expect(matchesBinding(127, 1, bHigh)).toBe(true);
