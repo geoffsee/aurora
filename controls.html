@@ -818,6 +818,7 @@
       }
 
       const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
+      const MIDI_CC_SCHEMA_VERSION = 1; // keep in sync with midi-cc-schema.ts
       const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);
       const MIDI_CC_PARAM_LABELS = {
         crossfade: "Crossfade", bpm: "BPM", speed: "Speed",
@@ -827,16 +828,34 @@
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
       };
 
+      // Mirrors migrateMidiBindings() in midi-cc-schema.ts — keep in sync.
+      function migrateMidiBindings(raw) {
+        if (Array.isArray(raw)) {
+          return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: raw };
+        }
+        if (raw !== null && typeof raw === "object") {
+          const bindings = Array.isArray(raw.bindings) ? raw.bindings : [];
+          return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings };
+        }
+        return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: [] };
+      }
+
       let _cachedBindings = null;
       function loadMidiBindings() {
         if (_cachedBindings) return _cachedBindings;
-        try { _cachedBindings = JSON.parse(localStorage.getItem(MIDI_CC_BINDINGS_KEY) || "[]"); }
-        catch { _cachedBindings = []; }
+        try {
+          const stored = localStorage.getItem(MIDI_CC_BINDINGS_KEY);
+          if (!stored) { _cachedBindings = []; return _cachedBindings; }
+          const store = migrateMidiBindings(JSON.parse(stored));
+          _cachedBindings = store.bindings;
+          // Write back the migrated format so future loads start from a known version.
+          localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(store));
+        } catch { _cachedBindings = []; }
         return _cachedBindings;
       }
       function saveMidiBindings(bindings) {
         _cachedBindings = bindings;
-        localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(bindings));
+        localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify({ schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings }));
       }
 
       function scaleCcToParam(ccValue, binding) {
