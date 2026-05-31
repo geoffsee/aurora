@@ -1061,7 +1061,11 @@ fn update_palette_material(
     if let Some(material) = materials.get_mut(&handle.0) {
         // Active whenever OSC is delivering audio; show_gpu_palette forces it on without OSC.
         let active = state.osc_connected || state.show_gpu_palette;
-        let energy = if active { state.osc_energy.max(0.0) } else { -1.0 };
+        let energy = if active {
+            state.osc_energy.max(0.0)
+        } else {
+            -1.0
+        };
         let bass = if active { state.osc_bass.max(0.0) } else { 0.0 };
         let mid = if active { state.osc_mid.max(0.0) } else { 0.0 };
         let high = if active { state.osc_high.max(0.0) } else { 0.0 };
@@ -1071,8 +1075,12 @@ fn update_palette_material(
             0.0
         };
         material.params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
-        material.palette_extra =
-            Vec4::new(state.palette_saturation, state.palette_brightness, pulse, 0.0);
+        material.palette_extra = Vec4::new(
+            state.palette_saturation,
+            state.palette_brightness,
+            pulse,
+            0.0,
+        );
         material.audio_uniforms = Vec4::new(energy, bass, mid, high);
     }
 }
