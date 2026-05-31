@@ -71,6 +71,7 @@ type ControlState = {
 	cueDeckAMode: number;
 	cueDeckBMode: number;
 	trackMapping: TrackMapping;
+	activeShader: number;
 };
 
 const require = createRequire(import.meta.url);
@@ -211,6 +212,7 @@ const defaultControlState = (): ControlState => ({
 	cueDeckAMode: 0,
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
+	activeShader: 0,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -373,7 +375,21 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
+		activeShader: clampInt(source.activeShader, 0, 1, defaults.activeShader),
 	};
+};
+
+// Migrate a control state payload from an older schema version to the current one.
+// Called before validateControlStateVersion so that old automation replays and
+// legacy clients can still connect after a schema bump.
+const migrateControlState = (state: unknown): unknown => {
+	if (!state || typeof state !== "object") return state;
+	const s = state as Record<string, unknown>;
+	// v1 → v2: add activeShader field
+	if (s.schemaVersion === 1) {
+		return { ...s, schemaVersion: 2, activeShader: s.activeShader ?? 0 };
+	}
+	return state;
 };
 const currentControlState = () => latestControlState ?? defaultControlState();
 const mergeControlState = (partial: Partial<ControlState>) => {
@@ -515,6 +531,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			case "demo_mode":
 				mergeControlState({ demoMode: booleanArg(arg) });
 				break;
+			case "active_shader":
+				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
+				break;
 		}
 
 		return;
@@ -628,6 +647,7 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"beat_sync",
 	"bar_sync",
 	"demo_mode",
+	"active_shader",
 ]);
 if (
 	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
@@ -704,9 +724,9 @@ const visualServer = Bun.serve({
 					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
 					if (parsed.address === "/bevyosc/control/state") {
-						const rawState = Array.isArray(parsed.args)
-							? parsed.args[0]
-							: null;
+						const rawState = migrateControlState(
+							Array.isArray(parsed.args) ? parsed.args[0] : null,
+						);
 						if (
 							!validateControlStateVersion(rawState, "WebSocket client")
 						) {

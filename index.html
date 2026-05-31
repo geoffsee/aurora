@@ -91,6 +91,7 @@
           midTrack: 1,
           highTrack: 2,
         },
+        activeShader: 0,
       };
       const diagnostics = {
         sockets: 0,
@@ -271,6 +272,7 @@
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
+        controlState.activeShader = clampInt(next.activeShader, 0, 1, controlState.activeShader);
         if (next.trackMapping && typeof next.trackMapping === "object") {
           controlState.trackMapping = {
             deckAStart: clampInt(next.trackMapping.deckAStart, 0, 31, controlState.trackMapping.deckAStart),
@@ -385,6 +387,7 @@
       window.__bevyoscControlCueCrossfade = () => controlState.cueCrossfade;
       window.__bevyoscControlCueDeckAMode = () => controlState.cueDeckAMode;
       window.__bevyoscControlCueDeckBMode = () => controlState.cueDeckBMode;
+      window.__bevyoscControlActiveShader = () => controlState.activeShader;
       window.__bevyoscDiagnostics = () => diagnostics;
 
       connectOscSocket();

@@ -99,6 +99,13 @@
           </select>
         </label>
         <label class="panel slot">
+          <div class="slot-head"><span>GPU Shader</span></div>
+          <select id="active-shader">
+            <option value="0">Palette (Geometry)</option>
+            <option value="1">Grid (Tiles)</option>
+          </select>
+        </label>
+        <label class="panel slot">
           <div class="slot-head"><span>BPM</span><output id="bpm-value">124</output></div>
           <input id="bpm" type="range" min="60" max="190" step="0.1" value="124" />
         </label>
@@ -248,7 +255,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 1, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 2, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -289,6 +296,7 @@
           midTrack: 1,
           highTrack: 2,
         },
+        activeShader: 0,
       });
       const state = defaultState();
       const osc = {
@@ -981,6 +989,7 @@
           ["max-brightness", "maxBrightness"],
           ["deck-a-mode", "deckAMode"],
           ["deck-b-mode", "deckBMode"],
+          ["active-shader", "activeShader"],
         ]) {
           $(`#${id}`).value = String(state[key]);
         }
@@ -1089,6 +1098,11 @@
           publish();
         });
       }
+
+      $("#active-shader").addEventListener("change", (event) => {
+        state.activeShader = Math.max(0, Math.min(1, Number(event.target.value)));
+        publish();
+      });
 
       for (const [id, key] of [
         ["map-deck-a-start", "deckAStart"],
