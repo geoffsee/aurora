@@ -19,14 +19,6 @@ export type MidiCcStore = {
 	bindings: MidiCcBinding[];
 };
 
-/**
- * Migrate raw localStorage data to the current schema without data loss.
- *
- * Handles:
- * - null/undefined/invalid: returns empty store at current version
- * - legacy unversioned format (plain array): wraps bindings with current version
- * - any versioned object: forwards bindings through future migration steps
- */
 export function migrateMidiBindings(raw: unknown): MidiCcStore {
 	// Legacy (v0): plain array stored directly, no schemaVersion field.
 	if (Array.isArray(raw)) {

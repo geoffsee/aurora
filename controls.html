@@ -837,6 +837,8 @@
           const bindings = Array.isArray(raw.bindings) ? raw.bindings : [];
           return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings };
         }
+        // Add future migration branches here, e.g.:
+        // if (store.schemaVersion === 1) { ...transform bindings for v2... }
         return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: [] };
       }
 
@@ -846,10 +848,12 @@
         try {
           const stored = localStorage.getItem(MIDI_CC_BINDINGS_KEY);
           if (!stored) { _cachedBindings = []; return _cachedBindings; }
-          const store = migrateMidiBindings(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          const store = migrateMidiBindings(parsed);
           _cachedBindings = store.bindings;
-          // Write back the migrated format so future loads start from a known version.
-          localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(store));
+          if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed?.schemaVersion !== MIDI_CC_SCHEMA_VERSION) {
+            localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(store));
+          }
         } catch { _cachedBindings = []; }
         return _cachedBindings;
       }
