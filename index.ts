@@ -121,9 +121,8 @@ let lastMidiClockBpmUpdate = 0;
 const demoAudioEma = makeAudioEmaState();
 
 const _raw = Number(Bun.env.STATE_LOG_CAPACITY);
-const stateLogCapacity = Number.isFinite(_raw) && _raw >= 1
-	? Math.floor(_raw)
-	: 500;
+const stateLogCapacity =
+	Number.isFinite(_raw) && _raw >= 1 ? Math.floor(_raw) : 500;
 const controlStateLog = makeStateLog(stateLogCapacity);
 
 const mimeTypes: Record<string, string> = {
@@ -168,7 +167,12 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, finiteNumber(value, fallback)));
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
-const audioEmaAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+const audioEmaAlpha = clamp(
+	Bun.env.AUDIO_EMA_ALPHA,
+	0.01,
+	1,
+	DEFAULT_AUDIO_EMA_ALPHA,
+);
 const defaultTrackMapping = (): TrackMapping => ({
 	deckAStart: 0,
 	deckACount: 8,
@@ -292,8 +296,18 @@ const coerceControlState = (state: unknown): ControlState => {
 		feedback: clamp(source.feedback, 0, 1, defaults.feedback),
 		depth: clamp(source.depth, 0, 1, defaults.depth),
 		palette: clamp(source.palette, 0, 1, defaults.palette),
-		paletteSaturation: clamp(source.paletteSaturation, 0, 1, defaults.paletteSaturation),
-		paletteBrightness: clamp(source.paletteBrightness, 0, 1, defaults.paletteBrightness),
+		paletteSaturation: clamp(
+			source.paletteSaturation,
+			0,
+			1,
+			defaults.paletteSaturation,
+		),
+		paletteBrightness: clamp(
+			source.paletteBrightness,
+			0,
+			1,
+			defaults.paletteBrightness,
+		),
 		deckAMode: clampInt(source.deckAMode, 0, 4, defaults.deckAMode),
 		deckBMode: clampInt(source.deckBMode, 0, 4, defaults.deckBMode),
 		rings: source.rings !== false,
@@ -613,7 +627,8 @@ function onMidiClock(): void {
 function openMidiClockDevice(devicePath: string): void {
 	const stream = createReadStream(devicePath);
 	stream.on("data", (chunk: Buffer | string) => {
-		const buf = typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
+		const buf =
+			typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
 		for (const byte of buf) {
 			if (byte === MIDI_CLOCK_TICK) onMidiClock();
 		}
@@ -744,16 +759,16 @@ const visualServer = Bun.serve({
 						broadcastError(parsed.error);
 					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
 						if (
-							validatePresetOscMsg(
-								{ address: parsed.address },
-								"WS client",
-							)
+							validatePresetOscMsg({ address: parsed.address }, "WS client")
 						) {
 							broadcastPresetCommand(parsed.address);
 						}
 					} else if (parsed.address === "/bevyosc/ping") {
 						ws.send(
-							JSON.stringify({ address: "/bevyosc/pong", id: typeof parsed.id === "number" ? parsed.id : 0 }),
+							JSON.stringify({
+								address: "/bevyosc/pong",
+								id: typeof parsed.id === "number" ? parsed.id : 0,
+							}),
 						);
 					} else {
 						sendOsc(
@@ -959,7 +974,9 @@ if (hotReload) {
 					args: [],
 				});
 				sockets.forEach((ws) => ws.send(data));
-				console.log(`[hot-reload] shader changed (${filename ?? "unknown"}) — reload signal sent`);
+				console.log(
+					`[hot-reload] shader changed (${filename ?? "unknown"}) — reload signal sent`,
+				);
 			}, 150); // shorter than pkgDir watcher — shader files are small and don't trigger cascading rebuilds
 		});
 		console.log("[hot-reload] watching assets/shaders/");

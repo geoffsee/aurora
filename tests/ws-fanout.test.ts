@@ -81,7 +81,8 @@ test("preset recall command is broadcast to all connected clients", async () => 
 	try {
 		const received = new Promise<string>((resolve, reject) => {
 			const timerId = setTimeout(
-				() => reject(new Error("No preset recall message received within 500ms")),
+				() =>
+					reject(new Error("No preset recall message received within 500ms")),
 				500,
 			);
 			function onMessage(event: MessageEvent) {

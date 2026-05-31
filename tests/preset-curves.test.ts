@@ -129,7 +129,10 @@ describe("normalizePresetCurves backward compatibility", () => {
 
 describe("normalizePresetCurves valid data", () => {
 	test("preserves linear for a single key, snaps the rest", () => {
-		const curves = normalizePresetCurves({ crossfade: "linear" }, INTERPOLATED_KEYS);
+		const curves = normalizePresetCurves(
+			{ crossfade: "linear" },
+			INTERPOLATED_KEYS,
+		);
 		expect(curves.crossfade).toBe("linear");
 		expect(curves.intensity).toBe("snap");
 	});

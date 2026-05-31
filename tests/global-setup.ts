@@ -45,7 +45,8 @@ export async function setup(): Promise<() => Promise<void>> {
 		ws.on("message", (raw) => {
 			try {
 				const text = Buffer.isBuffer(raw) ? raw.toString() : String(raw);
-				const parsed = JSON.parse(text) as Partial<OscMsg> & Record<string, unknown>;
+				const parsed = JSON.parse(text) as Partial<OscMsg> &
+					Record<string, unknown>;
 				if (
 					parsed.address === "/bevyosc/control/state" &&
 					Array.isArray(parsed.args)
@@ -54,7 +55,10 @@ export async function setup(): Promise<() => Promise<void>> {
 					// Cache state without _benchmarkId so new connections don't receive
 					// stale probe fields as their initial state push.
 					if (arg !== null && typeof arg === "object") {
-						const { _benchmarkId: _, ...clean } = arg as Record<string, unknown>;
+						const { _benchmarkId: _, ...clean } = arg as Record<
+							string,
+							unknown
+						>;
 						latestControlState = clean;
 					} else {
 						latestControlState = arg ?? null;
