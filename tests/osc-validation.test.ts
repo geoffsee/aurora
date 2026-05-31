@@ -282,9 +282,7 @@ describe("validateControlStateVersion", () => {
 	});
 
 	test("rejects state missing schemaVersion", () => {
-		expect(
-			validateControlStateVersion({ crossfade: 0.5 }, "test"),
-		).toBe(false);
+		expect(validateControlStateVersion({ crossfade: 0.5 }, "test")).toBe(false);
 	});
 
 	test("rejects null state", () => {
@@ -296,9 +294,9 @@ describe("validateControlStateVersion", () => {
 	});
 
 	test("rejects state with schemaVersion set to zero", () => {
-		expect(
-			validateControlStateVersion({ schemaVersion: 0 }, "test"),
-		).toBe(false);
+		expect(validateControlStateVersion({ schemaVersion: 0 }, "test")).toBe(
+			false,
+		);
 	});
 });
 

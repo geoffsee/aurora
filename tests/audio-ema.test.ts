@@ -73,7 +73,11 @@ describe("stepAudioEma", () => {
 
 	test("mutates and returns the same state object", () => {
 		const state = makeAudioEmaState();
-		const returned = stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, 0.5);
+		const returned = stepAudioEma(
+			state,
+			{ energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 },
+			0.5,
+		);
 		expect(returned).toBe(state);
 	});
 });
