@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { makeStateLog } from "../state-log.ts";
 import {
 	RECORDING_EXCLUDED_FIELDS,
@@ -91,8 +91,10 @@ describe("buildRecording", () => {
 // ---------------------------------------------------------------------------
 
 describe("makeAutomationPlayer", () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
 	test("play() emits replaying:true and stop emits replaying:false", () => {
-		vi.useFakeTimers();
 		const applied: Record<string, unknown>[] = [];
 		const player = makeAutomationPlayer((d) => applied.push({ ...d }));
 		const rec = buildRecording(
@@ -107,11 +109,9 @@ describe("makeAutomationPlayer", () => {
 		vi.advanceTimersByTime(TICK_MS * 3);
 
 		expect(applied[applied.length - 1]).toEqual({ replaying: false });
-		vi.useRealTimers();
 	});
 
 	test("isActive() reflects play/stop state", () => {
-		vi.useFakeTimers();
 		const player = makeAutomationPlayer(() => {});
 		const rec = buildRecording(
 			[{ ts: 0, diff: { crossfade: 0.5 } }],
@@ -126,12 +126,9 @@ describe("makeAutomationPlayer", () => {
 
 		vi.advanceTimersByTime(TICK_MS * 3);
 		expect(player.isActive()).toBe(false);
-
-		vi.useRealTimers();
 	});
 
 	test("stop() halts mid-sequence and does not apply remaining frames", () => {
-		vi.useFakeTimers();
 		const applied: Record<string, unknown>[] = [];
 		const player = makeAutomationPlayer((d) => applied.push({ ...d }));
 		const rec = buildRecording(
@@ -150,12 +147,9 @@ describe("makeAutomationPlayer", () => {
 		expect(player.isActive()).toBe(false);
 		expect(applied[applied.length - 1]).toEqual({ replaying: false });
 		expect(applied.some((d) => d["crossfade"] === 0.9)).toBe(false);
-
-		vi.useRealTimers();
 	});
 
 	test("positionMs() returns elapsed ms during playback and 0 when stopped", () => {
-		vi.useFakeTimers();
 		vi.setSystemTime(0);
 		const player = makeAutomationPlayer(() => {});
 		const rec = buildRecording(
@@ -176,8 +170,6 @@ describe("makeAutomationPlayer", () => {
 
 		player.stop();
 		expect(player.positionMs()).toBe(0);
-
-		vi.useRealTimers();
 	});
 });
 
@@ -186,8 +178,10 @@ describe("makeAutomationPlayer", () => {
 // ---------------------------------------------------------------------------
 
 describe("automation recorder E2E round-trip", () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
 	test("all recorded ControlState diffs are replayed in order", () => {
-		vi.useFakeTimers();
 		vi.setSystemTime(1_000_000);
 
 		// --- record phase ---
@@ -232,11 +226,9 @@ describe("automation recorder E2E round-trip", () => {
 			}
 		}
 
-		vi.useRealTimers();
 	});
 
 	test("playback output matches input within one tick interval (timing tolerance)", () => {
-		vi.useFakeTimers();
 		vi.setSystemTime(0);
 
 		const entries = [
@@ -278,12 +270,9 @@ describe("automation recorder E2E round-trip", () => {
 		const intens = capturedAt.get("intensity")!;
 		expect(intens).toBeGreaterThanOrEqual(2500);
 		expect(intens).toBeLessThanOrEqual(2500 + TICK_MS);
-
-		vi.useRealTimers();
 	});
 
 	test("loop mode replays the full sequence multiple times", () => {
-		vi.useFakeTimers();
 		vi.setSystemTime(0);
 
 		const recording = buildRecording(
@@ -310,12 +299,9 @@ describe("automation recorder E2E round-trip", () => {
 		// First frame of each loop must be crossfade: 0.1
 		expect(diffs[0]).toMatchObject({ crossfade: 0.1 });
 		expect(diffs[2]).toMatchObject({ crossfade: 0.1 });
-
-		vi.useRealTimers();
 	});
 
 	test("no-change frames are not recorded (ring buffer deduplication)", () => {
-		vi.useFakeTimers();
 		vi.setSystemTime(0);
 
 		const log = makeStateLog(10);
@@ -339,6 +325,5 @@ describe("automation recorder E2E round-trip", () => {
 		vi.advanceTimersByTime(TICK_MS * 3);
 
 		expect(dataFrames(applied)).toHaveLength(1);
-		vi.useRealTimers();
 	});
 });

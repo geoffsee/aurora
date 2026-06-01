@@ -120,6 +120,8 @@ export function makeAutomationPlayer(
 	return {
 		load(rec) {
 			recording = rec;
+			cursor = 0;
+			if (active) startedAt = Date.now();
 		},
 		play(opts) {
 			if (!recording) return;
@@ -140,6 +142,7 @@ export function makeAutomationPlayer(
 		isActive() {
 			return active;
 		},
+		// In loop mode, resets to 0 at the start of each iteration.
 		positionMs() {
 			if (!active) return 0;
 			return Date.now() - startedAt;
