@@ -23,10 +23,13 @@ import {
 import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
+	DEFAULT_AUDIO_EMA_ALPHAS,
+	type AudioEmaAlphas,
 	type AudioFeatures,
 	makeAudioEmaState,
 	stepAudioEma,
 } from "./audio-ema.ts";
+import { migrateControlState } from "./control-state-schema.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -71,6 +74,7 @@ type ControlState = {
 	cueDeckAMode: number;
 	cueDeckBMode: number;
 	trackMapping: TrackMapping;
+	activeShader: number;
 };
 
 const require = createRequire(import.meta.url);
@@ -120,9 +124,8 @@ let lastMidiClockBpmUpdate = 0;
 const demoAudioEma = makeAudioEmaState();
 
 const _raw = Number(Bun.env.STATE_LOG_CAPACITY);
-const stateLogCapacity = Number.isFinite(_raw) && _raw >= 1
-	? Math.floor(_raw)
-	: 500;
+const stateLogCapacity =
+	Number.isFinite(_raw) && _raw >= 1 ? Math.floor(_raw) : 500;
 const controlStateLog = makeStateLog(stateLogCapacity);
 
 const mimeTypes: Record<string, string> = {
@@ -167,7 +170,24 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, finiteNumber(value, fallback)));
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
-const audioEmaAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+const audioEmaAlphas: AudioEmaAlphas = {
+	energy: clamp(Bun.env.AUDIO_EMA_ALPHA_ENERGY, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+	bass: clamp(Bun.env.AUDIO_EMA_ALPHA_BASS, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+	mid: clamp(Bun.env.AUDIO_EMA_ALPHA_MID, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+	high: clamp(Bun.env.AUDIO_EMA_ALPHA_HIGH, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
+	pulse: clamp(Bun.env.AUDIO_EMA_ALPHA_PULSE, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+};
+// Legacy AUDIO_EMA_ALPHA env var: if set, overrides all bands that were not individually configured.
+{
+	const legacyAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+	if (Bun.env.AUDIO_EMA_ALPHA !== undefined) {
+		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined) audioEmaAlphas.energy = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined) audioEmaAlphas.bass = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined) audioEmaAlphas.mid = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined) audioEmaAlphas.high = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined) audioEmaAlphas.pulse = legacyAlpha;
+	}
+}
 const defaultTrackMapping = (): TrackMapping => ({
 	deckAStart: 0,
 	deckACount: 8,
@@ -211,6 +231,7 @@ const defaultControlState = (): ControlState => ({
 	cueDeckAMode: 0,
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
+	activeShader: 0,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -290,8 +311,18 @@ const coerceControlState = (state: unknown): ControlState => {
 		feedback: clamp(source.feedback, 0, 1, defaults.feedback),
 		depth: clamp(source.depth, 0, 1, defaults.depth),
 		palette: clamp(source.palette, 0, 1, defaults.palette),
-		paletteSaturation: clamp(source.paletteSaturation, 0, 1, defaults.paletteSaturation),
-		paletteBrightness: clamp(source.paletteBrightness, 0, 1, defaults.paletteBrightness),
+		paletteSaturation: clamp(
+			source.paletteSaturation,
+			0,
+			1,
+			defaults.paletteSaturation,
+		),
+		paletteBrightness: clamp(
+			source.paletteBrightness,
+			0,
+			1,
+			defaults.paletteBrightness,
+		),
 		deckAMode: clampInt(source.deckAMode, 0, 4, defaults.deckAMode),
 		deckBMode: clampInt(source.deckBMode, 0, 4, defaults.deckBMode),
 		rings: source.rings !== false,
@@ -373,8 +404,10 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
+		activeShader: clampInt(source.activeShader, 0, 1, defaults.activeShader),
 	};
 };
+
 const currentControlState = () => latestControlState ?? defaultControlState();
 const mergeControlState = (partial: Partial<ControlState>) => {
 	const current = currentControlState();
@@ -515,6 +548,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			case "demo_mode":
 				mergeControlState({ demoMode: booleanArg(arg) });
 				break;
+			case "active_shader":
+				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
+				break;
 		}
 
 		return;
@@ -594,7 +630,8 @@ function onMidiClock(): void {
 function openMidiClockDevice(devicePath: string): void {
 	const stream = createReadStream(devicePath);
 	stream.on("data", (chunk: Buffer | string) => {
-		const buf = typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
+		const buf =
+			typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
 		for (const byte of buf) {
 			if (byte === MIDI_CLOCK_TICK) onMidiClock();
 		}
@@ -628,6 +665,7 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"beat_sync",
 	"bar_sync",
 	"demo_mode",
+	"active_shader",
 ]);
 if (
 	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
@@ -704,9 +742,9 @@ const visualServer = Bun.serve({
 					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
 					if (parsed.address === "/bevyosc/control/state") {
-						const rawState = Array.isArray(parsed.args)
-							? parsed.args[0]
-							: null;
+						const rawState = migrateControlState(
+							Array.isArray(parsed.args) ? parsed.args[0] : null,
+						);
 						if (
 							!validateControlStateVersion(rawState, "WebSocket client")
 						) {
@@ -724,16 +762,16 @@ const visualServer = Bun.serve({
 						broadcastError(parsed.error);
 					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
 						if (
-							validatePresetOscMsg(
-								{ address: parsed.address },
-								"WS client",
-							)
+							validatePresetOscMsg({ address: parsed.address }, "WS client")
 						) {
 							broadcastPresetCommand(parsed.address);
 						}
 					} else if (parsed.address === "/bevyosc/ping") {
 						ws.send(
-							JSON.stringify({ address: "/bevyosc/pong", id: typeof parsed.id === "number" ? parsed.id : 0 }),
+							JSON.stringify({
+								address: "/bevyosc/pong",
+								id: typeof parsed.id === "number" ? parsed.id : 0,
+							}),
 						);
 					} else {
 						sendOsc(
@@ -879,7 +917,7 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, audioEmaAlpha);
+	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, audioEmaAlphas);
 	const demo = {
 		tempo: state.bpm,
 		beat,
@@ -939,7 +977,9 @@ if (hotReload) {
 					args: [],
 				});
 				sockets.forEach((ws) => ws.send(data));
-				console.log(`[hot-reload] shader changed (${filename ?? "unknown"}) — reload signal sent`);
+				console.log(
+					`[hot-reload] shader changed (${filename ?? "unknown"}) — reload signal sent`,
+				);
 			}, 150); // shorter than pkgDir watcher — shader files are small and don't trigger cascading rebuilds
 		});
 		console.log("[hot-reload] watching assets/shaders/");

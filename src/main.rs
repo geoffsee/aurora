@@ -91,6 +91,8 @@ unsafe extern "C" {
     fn browser_control_palette_saturation() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteBrightness)]
     fn browser_control_palette_brightness() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlActiveShader)]
+    fn browser_control_active_shader() -> u32;
 }
 
 /// GPU material driven by the `palette` controls.
@@ -117,8 +119,38 @@ impl Material2d for VjPaletteMaterial {
     }
 }
 
+/// Second GPU shader variant — shares the same uniform layout as `VjPaletteMaterial`.
+#[derive(AsBindGroup, Asset, TypePath, Clone)]
+struct VjGridMaterial {
+    #[uniform(0)]
+    params: Vec4,
+    #[uniform(1)]
+    palette_extra: Vec4,
+    #[uniform(2)]
+    audio_uniforms: Vec4,
+}
+
+impl Material2d for VjGridMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/vj_grid.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
+    }
+}
+
+/// Marks the fullscreen GPU-shader quads. `index` matches `VjState::active_shader`.
+#[derive(Component)]
+struct GpuShaderQuad {
+    index: u32,
+}
+
 #[derive(Resource)]
 struct VjPaletteHandle(Handle<VjPaletteMaterial>);
+
+#[derive(Resource)]
+struct VjGridHandle(Handle<VjGridMaterial>);
 
 const STAGE_WIDTH: f32 = 1280.0;
 const STAGE_HEIGHT: f32 = 720.0;
@@ -155,6 +187,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
+        .add_plugins(Material2dPlugin::<VjGridMaterial>::default())
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -209,6 +242,7 @@ struct VjState {
     last_control_flash_version: u32,
     last_control_reset_version: u32,
     last_control_cue_version: u32,
+    active_shader: u32,
 }
 
 impl Default for VjState {
@@ -250,6 +284,7 @@ impl Default for VjState {
             last_control_flash_version: 0,
             last_control_reset_version: 0,
             last_control_cue_version: 0,
+            active_shader: 0,
         }
     }
 }
@@ -310,6 +345,7 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
+    mut grid_materials: ResMut<Assets<VjGridMaterial>>,
 ) {
     commands.spawn(Camera2d);
 
@@ -431,6 +467,22 @@ fn setup(
         Mesh2d(meshes.add(Rectangle::default())),
         MeshMaterial2d(gpu_mat),
         Transform::from_xyz(0.0, 0.0, -15.0).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Inherited,
+        GpuShaderQuad { index: 0 },
+    ));
+
+    let grid_mat = grid_materials.add(VjGridMaterial {
+        params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+    });
+    commands.insert_resource(VjGridHandle(grid_mat.clone()));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(grid_mat),
+        Transform::from_xyz(0.0, 0.0, -15.0).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Hidden,
+        GpuShaderQuad { index: 1 },
     ));
 
     // The control surface now lives on port 3001, so the projector output has no HUD.
@@ -540,6 +592,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.palette = browser_control_palette().clamp(0.0, 1.0);
         state.palette_saturation = browser_control_palette_saturation().clamp(0.0, 1.0);
         state.palette_brightness = browser_control_palette_brightness().clamp(0.0, 1.0);
+        state.active_shader = browser_control_active_shader().min(1);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.rings_enabled = browser_control_rings();
@@ -1055,25 +1108,41 @@ fn update_tunnel_rings(
 
 fn update_palette_material(
     state: Res<VjState>,
-    handle: Res<VjPaletteHandle>,
-    mut materials: ResMut<Assets<VjPaletteMaterial>>,
+    palette_handle: Res<VjPaletteHandle>,
+    grid_handle: Res<VjGridHandle>,
+    mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
+    mut grid_materials: ResMut<Assets<VjGridMaterial>>,
+    mut gpu_quads: Query<(&GpuShaderQuad, &mut Visibility)>,
 ) {
-    if let Some(material) = materials.get_mut(&handle.0) {
-        // Active whenever OSC is delivering audio; show_gpu_palette forces it on without OSC.
-        let active = state.osc_connected || state.show_gpu_palette;
-        let energy = if active { state.osc_energy.max(0.0) } else { -1.0 };
-        let bass = if active { state.osc_bass.max(0.0) } else { 0.0 };
-        let mid = if active { state.osc_mid.max(0.0) } else { 0.0 };
-        let high = if active { state.osc_high.max(0.0) } else { 0.0 };
-        let pulse = if active {
-            state.osc_pulse.clamp(0.0, 1.0)
+    // Active whenever OSC is delivering audio; show_gpu_palette forces it on without OSC.
+    let active = state.osc_connected || state.show_gpu_palette;
+    let energy = if active { state.osc_energy.max(0.0) } else { -1.0 };
+    let bass = if active { state.osc_bass.max(0.0) } else { 0.0 };
+    let mid = if active { state.osc_mid.max(0.0) } else { 0.0 };
+    let high = if active { state.osc_high.max(0.0) } else { 0.0 };
+    let pulse = if active { state.osc_pulse.clamp(0.0, 1.0) } else { 0.0 };
+
+    let params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
+    let palette_extra = Vec4::new(state.palette_saturation, state.palette_brightness, pulse, 0.0);
+    let audio_uniforms = Vec4::new(energy, bass, mid, high);
+
+    if let Some(mat) = palette_materials.get_mut(&palette_handle.0) {
+        mat.params = params;
+        mat.palette_extra = palette_extra;
+        mat.audio_uniforms = audio_uniforms;
+    }
+    if let Some(mat) = grid_materials.get_mut(&grid_handle.0) {
+        mat.params = params;
+        mat.palette_extra = palette_extra;
+        mat.audio_uniforms = audio_uniforms;
+    }
+
+    for (quad, mut vis) in &mut gpu_quads {
+        *vis = if quad.index == state.active_shader {
+            Visibility::Inherited
         } else {
-            0.0
+            Visibility::Hidden
         };
-        material.params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
-        material.palette_extra =
-            Vec4::new(state.palette_saturation, state.palette_brightness, pulse, 0.0);
-        material.audio_uniforms = Vec4::new(energy, bass, mid, high);
     }
 }
 
