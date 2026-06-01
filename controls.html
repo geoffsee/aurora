@@ -99,6 +99,13 @@
           </select>
         </label>
         <label class="panel slot">
+          <div class="slot-head"><span>GPU Shader</span></div>
+          <select id="active-shader">
+            <option value="0">Palette (Geometry)</option>
+            <option value="1">Grid (Tiles)</option>
+          </select>
+        </label>
+        <label class="panel slot">
           <div class="slot-head"><span>BPM</span><output id="bpm-value">124</output></div>
           <input id="bpm" type="range" min="60" max="190" step="0.1" value="124" />
         </label>
@@ -248,7 +255,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 1, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 2, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -289,6 +296,7 @@
           midTrack: 1,
           highTrack: 2,
         },
+        activeShader: 0,
       });
       const state = defaultState();
       const osc = {
@@ -818,6 +826,7 @@
       }
 
       const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
+      const MIDI_CC_SCHEMA_VERSION = 1; // keep in sync with midi-cc-schema.ts
       const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);
       const MIDI_CC_PARAM_LABELS = {
         crossfade: "Crossfade", bpm: "BPM", speed: "Speed",
@@ -827,16 +836,38 @@
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
       };
 
+      // Mirrors migrateMidiBindings() in midi-cc-schema.ts — keep in sync.
+      function migrateMidiBindings(raw) {
+        if (Array.isArray(raw)) {
+          return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: raw };
+        }
+        if (raw !== null && typeof raw === "object") {
+          const bindings = Array.isArray(raw.bindings) ? raw.bindings : [];
+          return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings };
+        }
+        // Add future migration branches here, e.g.:
+        // if (store.schemaVersion === 1) { ...transform bindings for v2... }
+        return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: [] };
+      }
+
       let _cachedBindings = null;
       function loadMidiBindings() {
         if (_cachedBindings) return _cachedBindings;
-        try { _cachedBindings = JSON.parse(localStorage.getItem(MIDI_CC_BINDINGS_KEY) || "[]"); }
-        catch { _cachedBindings = []; }
+        try {
+          const stored = localStorage.getItem(MIDI_CC_BINDINGS_KEY);
+          if (!stored) { _cachedBindings = []; return _cachedBindings; }
+          const parsed = JSON.parse(stored);
+          const store = migrateMidiBindings(parsed);
+          _cachedBindings = store.bindings;
+          if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed?.schemaVersion !== MIDI_CC_SCHEMA_VERSION) {
+            localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(store));
+          }
+        } catch { _cachedBindings = []; }
         return _cachedBindings;
       }
       function saveMidiBindings(bindings) {
         _cachedBindings = bindings;
-        localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(bindings));
+        localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify({ schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings }));
       }
 
       function scaleCcToParam(ccValue, binding) {
@@ -981,6 +1012,7 @@
           ["max-brightness", "maxBrightness"],
           ["deck-a-mode", "deckAMode"],
           ["deck-b-mode", "deckBMode"],
+          ["active-shader", "activeShader"],
         ]) {
           $(`#${id}`).value = String(state[key]);
         }
@@ -1089,6 +1121,11 @@
           publish();
         });
       }
+
+      $("#active-shader").addEventListener("change", (event) => {
+        state.activeShader = Math.max(0, Math.min(1, Number(event.target.value)));
+        publish();
+      });
 
       for (const [id, key] of [
         ["map-deck-a-start", "deckAStart"],
