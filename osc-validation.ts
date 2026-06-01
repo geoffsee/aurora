@@ -6,7 +6,8 @@ export type OscMsg = { address: string; args?: OscArg[] };
 // message handler in index.ts that transforms the old payload shape before
 // passing it to broadcastControl, and update defaultState() in controls.html
 // to emit the new version number.
-export const CONTROL_STATE_SCHEMA_VERSION = 1;
+// v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
+export const CONTROL_STATE_SCHEMA_VERSION = 2;
 
 export const validateControlStateVersion = (
 	state: unknown,
@@ -61,6 +62,7 @@ export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
 	"beat_sync",
 	"bar_sync",
 	"demo_mode",
+	"active_shader",
 ]);
 
 export const VST_TRIGGER_NAMES: ReadonlySet<string> = new Set(["flash", "reset"]);
