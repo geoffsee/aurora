@@ -27,6 +27,7 @@ import {
 	makeAudioEmaState,
 	stepAudioEma,
 } from "./audio-ema.ts";
+import { migrateControlState } from "./control-state-schema.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -393,18 +394,6 @@ const coerceControlState = (state: unknown): ControlState => {
 	};
 };
 
-// Migrate a control state payload from an older schema version to the current one.
-// Called before validateControlStateVersion so that old automation replays and
-// legacy clients can still connect after a schema bump.
-const migrateControlState = (state: unknown): unknown => {
-	if (!state || typeof state !== "object") return state;
-	const s = state as Record<string, unknown>;
-	// v1 → v2: add activeShader field
-	if (s.schemaVersion === 1) {
-		return { ...s, schemaVersion: 2, activeShader: s.activeShader ?? 0 };
-	}
-	return state;
-};
 const currentControlState = () => latestControlState ?? defaultControlState();
 const mergeControlState = (partial: Partial<ControlState>) => {
 	const current = currentControlState();
