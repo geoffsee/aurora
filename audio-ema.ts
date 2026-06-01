@@ -33,7 +33,7 @@ export function makeAudioEmaState(): AudioFeatures {
 export function stepAudioEma(
 	state: AudioFeatures,
 	raw: Readonly<AudioFeatures>,
-	alphas: AudioEmaAlphas,
+	alphas: Readonly<AudioEmaAlphas>,
 ): AudioFeatures {
 	state.energy = alphas.energy * raw.energy + (1 - alphas.energy) * state.energy;
 	state.bass = alphas.bass * raw.bass + (1 - alphas.bass) * state.bass;
