@@ -267,6 +267,47 @@
         </details>
       </section>
 
+      <section class="panel s-audio-curves" aria-label="Audio Curve Shaping">
+        <div class="section-title">
+          <h2>Audio Curve Shaping</h2>
+          <span class="badge subtle">per-band</span>
+        </div>
+        <div class="band-curves-grid">
+          <label class="slot">
+            <div class="slot-head"><span>Energy</span></div>
+            <select id="band-curve-energy" aria-label="Energy curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Bass</span></div>
+            <select id="band-curve-bass" aria-label="Bass curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Mid</span></div>
+            <select id="band-curve-mid" aria-label="Mid curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>High</span></div>
+            <select id="band-curve-high" aria-label="High curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
       <section class="panel meters s-meters">
         <div data-channel="energy"><span>Energy</span><meter id="energy" min="0" max="1" value="0"></meter></div>
         <div data-channel="bass"><span>Bass</span><meter id="bass" min="0" max="1" value="0"></meter></div>
@@ -290,7 +331,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 2, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 3, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -332,6 +373,7 @@
           highTrack: 2,
         },
         activeShader: 0,
+        bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
       });
       const state = defaultState();
       const osc = {
@@ -1233,6 +1275,10 @@
         ]) {
           $(`#${id}`).value = String(state.trackMapping[key]);
         }
+        for (const band of ["energy", "bass", "mid", "high"]) {
+          const el = $(`#band-curve-${band}`);
+          if (el) el.value = state.bandCurves?.[band] ?? "linear";
+        }
       }
 
       function render() {
@@ -1332,6 +1378,15 @@
         state.activeShader = Math.max(0, Math.min(1, Number(event.target.value)));
         publish();
       });
+
+      const VALID_CURVES = new Set(["linear", "exponential", "logarithmic"]);
+      for (const band of ["energy", "bass", "mid", "high"]) {
+        $(`#band-curve-${band}`).addEventListener("change", (event) => {
+          if (!state.bandCurves) state.bandCurves = { energy: "linear", bass: "linear", mid: "linear", high: "linear" };
+          state.bandCurves[band] = VALID_CURVES.has(event.target.value) ? event.target.value : "linear";
+          publish();
+        });
+      }
 
       for (const [id, key] of [
         ["map-deck-a-start", "deckAStart"],

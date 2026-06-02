@@ -7,7 +7,17 @@ export type OscMsg = { address: string; args?: OscArg[] };
 // passing it to broadcastControl, and update defaultState() in controls.html
 // to emit the new version number.
 // v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
-export const CONTROL_STATE_SCHEMA_VERSION = 2;
+// v3: added bandCurves field (per-band audio-reactive curve shaping)
+export const CONTROL_STATE_SCHEMA_VERSION = 3;
+
+export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
+export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
+	"linear",
+	"exponential",
+	"logarithmic",
+] as const;
+export const isAudioCurveShape = (v: unknown): v is AudioCurveShape =>
+	v === "linear" || v === "exponential" || v === "logarithmic";
 
 export const validateControlStateVersion = (
 	state: unknown,

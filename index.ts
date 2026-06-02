@@ -4,7 +4,9 @@ import type { ServerWebSocket } from "bun";
 import {
 	type OscArg,
 	type OscMsg,
+	type AudioCurveShape,
 	CONTROL_STATE_SCHEMA_VERSION,
+	isAudioCurveShape,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
@@ -39,6 +41,12 @@ type TrackMapping = {
 	bassTrack: number;
 	midTrack: number;
 	highTrack: number;
+};
+type BandCurves = {
+	energy: AudioCurveShape;
+	bass: AudioCurveShape;
+	mid: AudioCurveShape;
+	high: AudioCurveShape;
 };
 type ControlState = {
 	readonly schemaVersion: number;
@@ -75,6 +83,7 @@ type ControlState = {
 	cueDeckBMode: number;
 	trackMapping: TrackMapping;
 	activeShader: number;
+	bandCurves: BandCurves;
 };
 
 const require = createRequire(import.meta.url);
@@ -232,6 +241,7 @@ const defaultControlState = (): ControlState => ({
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
+	bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -405,6 +415,18 @@ const coerceControlState = (state: unknown): ControlState => {
 			),
 		},
 		activeShader: clampInt(source.activeShader, 0, 1, defaults.activeShader),
+		bandCurves: (() => {
+			const bc =
+				source.bandCurves && typeof source.bandCurves === "object"
+					? (source.bandCurves as Partial<BandCurves>)
+					: {};
+			return {
+				energy: isAudioCurveShape(bc.energy) ? bc.energy : "linear",
+				bass: isAudioCurveShape(bc.bass) ? bc.bass : "linear",
+				mid: isAudioCurveShape(bc.mid) ? bc.mid : "linear",
+				high: isAudioCurveShape(bc.high) ? bc.high : "linear",
+			};
+		})(),
 	};
 };
 
