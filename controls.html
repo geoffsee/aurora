@@ -120,7 +120,13 @@
             <option value="6">Glitch (Y2K)</option>
             <option value="7">Fluid (Ambient)</option>
             <option value="8">Truchet (Geometric)</option>
+            <option value="9">Imported (Shadertoy)</option>
           </select>
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Shadertoy Import</span><output id="shadertoy-import-status">idle</output></div>
+          <input id="shadertoy-import-url" type="text" placeholder="https://www.shadertoy.com/view/XXXXX" style="width:100%;" />
+          <button id="shadertoy-import-btn" type="button" style="margin-top:4px;">Import</button>
         </label>
         <label class="panel slot">
           <div class="slot-head"><span>BPM</span><output id="bpm-value">124</output></div>
@@ -1384,8 +1390,39 @@
       }
 
       $("#active-shader").addEventListener("change", (event) => {
-        state.activeShader = Math.max(0, Math.min(8, Number(event.target.value)));
+        state.activeShader = Math.max(0, Math.min(9, Number(event.target.value)));
         publish();
+      });
+
+      $("#shadertoy-import-btn").addEventListener("click", async () => {
+        const input = $("#shadertoy-import-url");
+        const status = $("#shadertoy-import-status");
+        const value = input.value.trim();
+        if (!value) {
+          status.textContent = "enter URL";
+          return;
+        }
+        status.textContent = "importing…";
+        try {
+          const res = await fetch("/api/shadertoy/import", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: value }),
+          });
+          const body = await res.json();
+          if (!res.ok || body.ok === false) {
+            status.textContent = `err: ${String(body.error ?? res.statusText).slice(0, 60)}`;
+            return;
+          }
+          const meta = body.meta ?? {};
+          const warn = body.usedIChannel ? " (iChannel: lossy)" : "";
+          status.textContent = `loaded: ${meta.name ?? meta.id}${warn}`;
+          state.activeShader = 9;
+          $("#active-shader").value = "9";
+          publish();
+        } catch (err) {
+          status.textContent = `net err: ${(err && err.message) || String(err)}`;
+        }
       });
 
       for (const [id, key] of [

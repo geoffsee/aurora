@@ -168,7 +168,7 @@ impl Default for BevyoscParams {
             active_shader: IntParam::new(
                 "Active Shader",
                 0,
-                IntRange::Linear { min: 0, max: 8 },
+                IntRange::Linear { min: 0, max: 9 },
             ),
             palette_saturation: float_param("Palette Saturation", 1.0, 0.0, 1.0),
             palette_brightness: float_param("Palette Brightness", 1.0, 0.0, 1.0),

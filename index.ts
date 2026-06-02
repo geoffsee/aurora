@@ -31,6 +31,7 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "./control-state-schema.ts";
+import { importShadertoyUrl } from "./shadertoy-import.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -437,7 +438,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 8, defaults.activeShader),
+		activeShader: clampInt(source.activeShader, 0, 9, defaults.activeShader),
 	};
 };
 
@@ -499,6 +500,13 @@ const broadcastError = (description: string) => {
 };
 const broadcastPresetCommand = (address: string) => {
 	const data = JSON.stringify({ address, args: [] });
+	sockets.forEach((ws) => ws.send(data));
+};
+const broadcastImportedShader = (wgsl: string, meta: unknown) => {
+	const data = JSON.stringify({
+		address: "/bevyosc/shader/imported",
+		args: [{ wgsl, meta }],
+	});
 	sockets.forEach((ws) => ws.send(data));
 };
 const booleanArg = (arg: OscArg | undefined) => {
@@ -582,7 +590,7 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				mergeControlState({ demoMode: booleanArg(arg) });
 				break;
 			case "active_shader":
-				mergeControlState({ activeShader: Math.max(0, Math.min(8, Math.floor(value))) });
+				mergeControlState({ activeShader: Math.max(0, Math.min(9, Math.floor(value))) });
 				break;
 			case "palette_saturation":
 				mergeControlState({ paletteSaturation: value });
@@ -849,9 +857,48 @@ const visualServer = Bun.serve({
 
 const controlsServer = Bun.serve({
 	port: controlsPort,
+	hostname: "127.0.0.1",
 	async fetch(request) {
 		const url = new URL(request.url);
 		const pathname = decodeURIComponent(url.pathname);
+
+		if (request.method === "POST" && pathname === "/api/shadertoy/import") {
+			const apiKey = Bun.env.SHADERTOY_API_KEY ?? "";
+			if (!apiKey) {
+				return Response.json(
+					{ ok: false, error: "SHADERTOY_API_KEY env var is not set on the bridge" },
+					{ status: 500 },
+				);
+			}
+			let payload: { url?: string; id?: string };
+			try {
+				payload = (await request.json()) as { url?: string; id?: string };
+			} catch {
+				return Response.json(
+					{ ok: false, error: "Body must be JSON { url: string } or { id: string }" },
+					{ status: 400 },
+				);
+			}
+			const target = payload.url ?? payload.id ?? "";
+			if (typeof target !== "string" || target.length === 0) {
+				return Response.json(
+					{ ok: false, error: "Missing `url` or `id` field" },
+					{ status: 400 },
+				);
+			}
+			const result = await importShadertoyUrl(target, apiKey);
+			if (!result.ok) {
+				return Response.json(result, { status: 400 });
+			}
+			broadcastImportedShader(result.wgsl, result.meta);
+			return Response.json({
+				ok: true,
+				meta: result.meta,
+				usedIChannel: result.usedIChannel,
+				wgslLength: result.wgsl.length,
+			});
+		}
+
 		const relativePath = pathname === "/" ? "controls.html" : pathname.slice(1);
 
 		if (relativePath.includes("..")) {

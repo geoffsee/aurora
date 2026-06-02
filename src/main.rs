@@ -4,7 +4,7 @@ use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
     render::render_resource::AsBindGroup,
-    shader::ShaderRef,
+    shader::{Shader, ShaderRef},
     sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
     window::{PresentMode, WindowResolution},
     winit::WinitSettings,
@@ -101,6 +101,13 @@ unsafe extern "C" {
     fn browser_control_grid_shape_mix() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlActiveShader)]
     fn browser_control_active_shader() -> u32;
+    /// Returns and consumes the pending imported-shader WGSL string, if any.
+    /// JS-side global `window.__bevyoscPendingImportedShader` holds either the
+    /// WGSL source from the most recent /api/shadertoy/import response, or null.
+    /// Each successful call must clear the JS-side slot so the same shader is
+    /// not re-applied on subsequent frames.
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscTakePendingImportedShader)]
+    fn browser_take_pending_imported_shader() -> Option<String>;
 }
 
 /// GPU material driven by the `palette` controls.
@@ -156,7 +163,35 @@ impl Material2d for VjGridMaterial {
     }
 }
 
-/// Marks the fullscreen GPU-shader quads. `index` 0 = palette material, 1 = grid material.
+/// Slot for Shadertoy-imported shaders. Same bind-group layout as the palette
+/// material so the asset-driven hot-swap keeps the existing uniforms bound.
+/// The WGSL at `shaders/imported.wgsl` starts as a transparent placeholder and
+/// is replaced in-place via `Assets<Shader>::insert` when a new shader arrives
+/// from the bridge — Bevy's `AssetEvent::Modified` then triggers a pipeline
+/// rebuild without a page reload.
+#[derive(AsBindGroup, Asset, TypePath, Clone)]
+struct VjImportedMaterial {
+    #[uniform(0)]
+    params: Vec4,
+    #[uniform(1)]
+    palette_extra: Vec4,
+    #[uniform(2)]
+    audio_uniforms: Vec4,
+    #[uniform(3)]
+    _reserved: Vec4,
+}
+
+impl Material2d for VjImportedMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/imported.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
+    }
+}
+
+/// Marks the fullscreen GPU-shader quads. `index` 0 = palette material, 1 = grid material, 2 = imported.
 #[derive(Component)]
 struct GpuShaderQuad {
     index: u32,
@@ -167,6 +202,12 @@ struct VjPaletteHandle(Handle<VjPaletteMaterial>);
 
 #[derive(Resource)]
 struct VjGridHandle(Handle<VjGridMaterial>);
+
+#[derive(Resource)]
+struct VjImportedHandle(Handle<VjImportedMaterial>);
+
+#[derive(Resource)]
+struct VjImportedShaderHandle(Handle<Shader>);
 
 const STAGE_WIDTH: f32 = 1280.0;
 const STAGE_HEIGHT: f32 = 720.0;
@@ -204,6 +245,7 @@ fn main() {
         }))
         .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
         .add_plugins(Material2dPlugin::<VjGridMaterial>::default())
+        .add_plugins(Material2dPlugin::<VjImportedMaterial>::default())
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -214,6 +256,8 @@ fn main() {
                 update_visuals,
                 update_tunnel_rings,
                 update_palette_material,
+                consume_pending_imported_shader,
+                debug_inject_imported_shader,
             )
                 .chain(),
         )
@@ -373,13 +417,16 @@ struct TunnelRing {
     lane: usize,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn setup(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
     mut grid_materials: ResMut<Assets<VjGridMaterial>>,
+    mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
 ) {
     commands.spawn(Camera2d);
 
@@ -521,6 +568,25 @@ fn setup(
         GpuShaderQuad { index: 1 },
     ));
 
+    // Imported (Shadertoy) shader slot — placeholder asset; mutated in place at
+    // runtime via Assets<Shader>::insert when the bridge delivers a new WGSL.
+    let imported_mat = imported_materials.add(VjImportedMaterial {
+        params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        _reserved: Vec4::ZERO,
+    });
+    commands.insert_resource(VjImportedHandle(imported_mat.clone()));
+    let imported_shader: Handle<Shader> = asset_server.load("shaders/imported.wgsl");
+    commands.insert_resource(VjImportedShaderHandle(imported_shader));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(imported_mat),
+        Transform::from_xyz(0.0, 0.0, -15.0).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Hidden,
+        GpuShaderQuad { index: 2 },
+    ));
+
     // The control surface now lives on port 3001, so the projector output has no HUD.
 }
 
@@ -632,7 +698,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.grid_diamond = browser_control_grid_diamond().clamp(0.0, 1.0);
         state.grid_line_width = browser_control_grid_line_width().clamp(0.0, 1.0);
         state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
-        state.active_shader = browser_control_active_shader().min(8);
+        state.active_shader = browser_control_active_shader().min(9);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.rings_enabled = browser_control_rings();
@@ -663,6 +729,66 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn read_osc_inputs(_state: ResMut<VjState>) {}
+
+/// Replaces the imported shader's asset bytes in place when JS has a new WGSL
+/// pending. Bevy fires `AssetEvent::Modified` on the shader's `Handle<Shader>`,
+/// which triggers a pipeline rebuild — no page reload required.
+#[cfg(target_arch = "wasm32")]
+fn consume_pending_imported_shader(
+    handle: Res<VjImportedShaderHandle>,
+    mut shaders: ResMut<Assets<Shader>>,
+) {
+    if let Some(wgsl) = browser_take_pending_imported_shader() {
+        let shader = Shader::from_wgsl(wgsl, "shaders/imported.wgsl".to_string());
+        let _ = shaders.insert(&handle.0, shader);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn consume_pending_imported_shader(
+    _handle: Res<VjImportedShaderHandle>,
+    _shaders: ResMut<Assets<Shader>>,
+) {
+}
+
+/// Dev sanity check: press F10 to inject a known-good WGSL into the imported
+/// shader slot without going through the bridge. Useful when verifying that
+/// the asset hot-swap path is alive (e.g. after Bevy upgrades) even when the
+/// Shadertoy API is unreachable. Also forces `active_shader = 9` so the
+/// imported quad is visible.
+const DEBUG_IMPORTED_WGSL: &str = r#"#import bevy_sprite::mesh2d_vertex_output::VertexOutput
+
+@group(2) @binding(0) var<uniform> params: vec4<f32>;
+@group(2) @binding(1) var<uniform> palette_extra: vec4<f32>;
+@group(2) @binding(2) var<uniform> audio_uniforms: vec4<f32>;
+@group(2) @binding(3) var<uniform> _reserved: vec4<f32>;
+
+@fragment
+fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
+  let uv = frag.uv;
+  let t = params.y;
+  let stripe = step(0.5, fract(uv.x * 8.0 + t * 0.5));
+  let r = 0.85 + 0.15 * sin(t * 3.0);
+  let g = 0.10 + 0.10 * stripe;
+  let b = 0.65 + 0.30 * cos(t * 2.1 + uv.y * 6.28);
+  return vec4<f32>(r, g, b, 0.95);
+}
+"#;
+
+fn debug_inject_imported_shader(
+    keys: Res<ButtonInput<KeyCode>>,
+    handle: Res<VjImportedShaderHandle>,
+    mut shaders: ResMut<Assets<Shader>>,
+    mut state: ResMut<VjState>,
+) {
+    if keys.just_pressed(KeyCode::F10) {
+        let shader =
+            Shader::from_wgsl(DEBUG_IMPORTED_WGSL.to_string(), "shaders/imported.wgsl".to_string());
+        let _ = shaders.insert(&handle.0, shader);
+        state.active_shader = 9;
+        state.show_gpu_palette = true;
+    }
+}
 
 fn keyboard_controls(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut state: ResMut<VjState>) {
     let dt = time.delta_secs();
@@ -1288,12 +1414,15 @@ fn update_tunnel_rings(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_palette_material(
     state: Res<VjState>,
     palette_handle: Res<VjPaletteHandle>,
     grid_handle: Res<VjGridHandle>,
+    imported_handle: Res<VjImportedHandle>,
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
     mut grid_materials: ResMut<Assets<VjGridMaterial>>,
+    mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
     mut gpu_quads: Query<(&GpuShaderQuad, &mut Visibility)>,
 ) {
     // Active whenever OSC is delivering audio; show_gpu_palette forces it on without OSC.
@@ -1308,8 +1437,11 @@ fn update_palette_material(
     //   0..=3 → palette quad with palette_variant set (Web/Spokes/Rings/Plasma)
     //   4     → grid quad
     //   5..=8 → palette quad with palette_variant set (Tunnel/Glitch/Fluid/Truchet)
+    //   9     → imported quad (Shadertoy hot-swap slot)
     let (quad_index, palette_variant) = if state.active_shader == 4 {
         (1u32, 0.0)
+    } else if state.active_shader == 9 {
+        (2u32, 0.0)
     } else {
         (0u32, state.active_shader as f32)
     };
@@ -1333,6 +1465,11 @@ fn update_palette_material(
             state.grid_line_width,
             state.grid_shape_mix,
         );
+    }
+    if let Some(mat) = imported_materials.get_mut(&imported_handle.0) {
+        mat.params = params;
+        mat.palette_extra = palette_extra;
+        mat.audio_uniforms = audio_uniforms;
     }
 
     for (quad, mut vis) in &mut gpu_quads {

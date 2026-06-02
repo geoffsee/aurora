@@ -24,6 +24,7 @@
         DEMO: "/bevyosc/demo/audio",
         DIAGNOSTICS: "/bevyosc/server/diagnostics",
         DEV_RELOAD: "/bevyosc/dev/reload",
+        SHADER_IMPORTED: "/bevyosc/shader/imported",
       };
       const CONTROL = {
         STATE: "/bevyosc/control/state",
@@ -220,7 +221,15 @@
           applyControlState(args[0]);
         } else if (address === OSC.DEV_RELOAD) {
           handleHotReload();
+        } else if (address === OSC.SHADER_IMPORTED) {
+          handleImportedShader(args[0]);
         }
+      }
+
+      let pendingImportedShader = null;
+      function handleImportedShader(payload) {
+        if (!payload || typeof payload !== "object" || typeof payload.wgsl !== "string") return;
+        pendingImportedShader = payload.wgsl;
       }
 
       function applyDemoFrame(frame) {
@@ -280,7 +289,7 @@
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 9, controlState.cueDeckAMode);
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 9, controlState.cueDeckBMode);
-        controlState.activeShader = clampInt(next.activeShader, 0, 8, controlState.activeShader);
+        controlState.activeShader = clampInt(next.activeShader, 0, 9, controlState.activeShader);
         if (next.trackMapping && typeof next.trackMapping === "object") {
           controlState.trackMapping = {
             deckAStart: clampInt(next.trackMapping.deckAStart, 0, 31, controlState.trackMapping.deckAStart),
@@ -400,6 +409,11 @@
       window.__bevyoscControlCueDeckAMode = () => controlState.cueDeckAMode;
       window.__bevyoscControlCueDeckBMode = () => controlState.cueDeckBMode;
       window.__bevyoscControlActiveShader = () => controlState.activeShader;
+      window.__bevyoscTakePendingImportedShader = () => {
+        const wgsl = pendingImportedShader;
+        pendingImportedShader = null;
+        return wgsl;
+      };
       window.__bevyoscDiagnostics = () => diagnostics;
 
       connectOscSocket();
