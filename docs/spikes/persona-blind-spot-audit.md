@@ -88,13 +88,13 @@ human gesture and expand it into geological time. "Can I do a whole record on
 just this?" only works if "this" can be stretched to fill the record.
 
 **Candidate feature:** A `timeScale` multiplier on the automation player
-(`AutomationPlayer.play({ loop: true, timeScale: 0.1 })`). The player divides
-each `frame.tMs` by `timeScale` when advancing the playhead. A 4-second
+(`AutomationPlayer.play({ loop: true, timeScale: 0.1 })`). A 4-second
 recording played at `timeScale: 0.1` unfolds over 40 seconds; at `timeScale:
 0.01` it unfolds over 400 seconds (~6.5 minutes).
 
 **Implementation surface (bridge-side only):** The `positionMs()` calculation
-in `AutomationPlayer` becomes `(Date.now() - playbackStartedAt) * timeScale`.
+in `AutomationPlayer` becomes `(Date.now() - playbackStartedAt) * timeScale`
+(equivalent to dividing each `frame.tMs` by `timeScale` before comparison).
 The `durationMs` used for loop wrap is similarly scaled. No recording format
 changes required — this is a playback parameter, not a storage parameter.
 
