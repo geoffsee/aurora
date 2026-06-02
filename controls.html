@@ -306,6 +306,32 @@
             </select>
           </label>
         </div>
+        <div class="section-title" style="margin-top:0.75rem">
+          <h3 style="font-size:0.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.7">EMA Decay</h3>
+          <span class="badge subtle">per-band smoothing</span>
+        </div>
+        <div class="band-curves-grid">
+          <label class="slot">
+            <div class="slot-head"><span>Energy</span><output id="ema-energy-value">0.12</output></div>
+            <input id="ema-alpha-energy" type="range" min="0.01" max="1" step="0.01" value="0.12" aria-label="Energy EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Bass</span><output id="ema-bass-value">0.08</output></div>
+            <input id="ema-alpha-bass" type="range" min="0.01" max="1" step="0.01" value="0.08" aria-label="Bass EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Mid</span><output id="ema-mid-value">0.15</output></div>
+            <input id="ema-alpha-mid" type="range" min="0.01" max="1" step="0.01" value="0.15" aria-label="Mid EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>High</span><output id="ema-high-value">0.22</output></div>
+            <input id="ema-alpha-high" type="range" min="0.01" max="1" step="0.01" value="0.22" aria-label="High EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Pulse</span><output id="ema-pulse-value">0.28</output></div>
+            <input id="ema-alpha-pulse" type="range" min="0.01" max="1" step="0.01" value="0.28" aria-label="Pulse EMA decay alpha" />
+          </label>
+        </div>
       </section>
 
       <section class="panel meters s-meters">
@@ -331,7 +357,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 3, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 4, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -374,6 +400,7 @@
         },
         activeShader: 0,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+        emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 },
       });
       const state = defaultState();
       const osc = {
@@ -609,13 +636,17 @@
         const now = performance.now();
         const dtMs = Math.max(16, Math.min(250, now - (osc.lastEnvelopeAt || now)));
 
+        // Convert per-band EMA alpha to smoothSignal time constants.
+        // Attack uses the alpha directly; release is 2.4× slower for musical feel.
+        const alphas = state.emaAlphas ?? { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 };
+        const emaMs = (alpha) => -dtMs / Math.log(Math.max(1e-9, 1 - Math.min(0.999, alpha)));
         osc.lastFrameAt = now;
-        osc.energy = smoothSignal(osc.energy, energyTarget, dtMs, 120, 280);
-        osc.bass = smoothSignal(osc.bass, mappedTrack(mapping.bassTrack, energyTarget), dtMs, 260, 620);
-        osc.mid = smoothSignal(osc.mid, mappedTrack(mapping.midTrack, avg), dtMs, 150, 360);
-        osc.high = smoothSignal(osc.high, Math.max(mappedTrack(mapping.highTrack, 0), Math.min(1, transient * 2.2)), dtMs, 90, 260);
-        osc.deckA = smoothSignal(osc.deckA, mappedAverage(mapping.deckAStart, mapping.deckACount) || avg, dtMs, 140, 320);
-        osc.deckB = smoothSignal(osc.deckB, mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg, dtMs, 140, 320);
+        osc.energy = smoothSignal(osc.energy, energyTarget, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
+        osc.bass = smoothSignal(osc.bass, mappedTrack(mapping.bassTrack, energyTarget), dtMs, emaMs(alphas.bass), emaMs(alphas.bass) * 2.4);
+        osc.mid = smoothSignal(osc.mid, mappedTrack(mapping.midTrack, avg), dtMs, emaMs(alphas.mid), emaMs(alphas.mid) * 2.4);
+        osc.high = smoothSignal(osc.high, Math.max(mappedTrack(mapping.highTrack, 0), Math.min(1, transient * 2.2)), dtMs, emaMs(alphas.high), emaMs(alphas.high) * 2.9);
+        osc.deckA = smoothSignal(osc.deckA, mappedAverage(mapping.deckAStart, mapping.deckACount) || avg, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
+        osc.deckB = smoothSignal(osc.deckB, mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
         osc.previousEnergy = energyTarget;
         osc.lastEnvelopeAt = now;
       }
@@ -1279,6 +1310,12 @@
           const el = $(`#band-curve-${band}`);
           if (el) el.value = state.bandCurves?.[band] ?? "linear";
         }
+        for (const band of ["energy", "bass", "mid", "high", "pulse"]) {
+          const el = $(`#ema-alpha-${band}`);
+          if (el) el.value = String(state.emaAlphas?.[band] ?? 0.15);
+          const out = $(`#ema-${band}-value`);
+          if (out) out.textContent = (state.emaAlphas?.[band] ?? 0.15).toFixed(2);
+        }
       }
 
       function render() {
@@ -1384,6 +1421,17 @@
         $(`#band-curve-${band}`).addEventListener("change", (event) => {
           if (!state.bandCurves) state.bandCurves = { energy: "linear", bass: "linear", mid: "linear", high: "linear" };
           state.bandCurves[band] = VALID_CURVES.has(event.target.value) ? event.target.value : "linear";
+          publish();
+        });
+      }
+
+      for (const band of ["energy", "bass", "mid", "high", "pulse"]) {
+        $(`#ema-alpha-${band}`)?.addEventListener("input", (event) => {
+          if (!state.emaAlphas) state.emaAlphas = { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 };
+          const v = Math.max(0.01, Math.min(1, Number(event.target.value)));
+          state.emaAlphas[band] = v;
+          const out = $(`#ema-${band}-value`);
+          if (out) out.textContent = v.toFixed(2);
           publish();
         });
       }

@@ -8,7 +8,8 @@ export type OscMsg = { address: string; args?: OscArg[] };
 // to emit the new version number.
 // v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
 // v3: added bandCurves field (per-band audio-reactive curve shaping)
-export const CONTROL_STATE_SCHEMA_VERSION = 3;
+// v4: added emaAlphas field (per-band EMA decay constants for preset bundling)
+export const CONTROL_STATE_SCHEMA_VERSION = 4;
 
 export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [

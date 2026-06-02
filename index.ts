@@ -84,6 +84,7 @@ type ControlState = {
 	trackMapping: TrackMapping;
 	activeShader: number;
 	bandCurves: BandCurves;
+	emaAlphas: AudioEmaAlphas;
 };
 
 const require = createRequire(import.meta.url);
@@ -242,6 +243,7 @@ const defaultControlState = (): ControlState => ({
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
 	bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -425,6 +427,19 @@ const coerceControlState = (state: unknown): ControlState => {
 				bass: isAudioCurveShape(bc.bass) ? bc.bass : "linear",
 				mid: isAudioCurveShape(bc.mid) ? bc.mid : "linear",
 				high: isAudioCurveShape(bc.high) ? bc.high : "linear",
+			};
+		})(),
+		emaAlphas: (() => {
+			const ea =
+				source.emaAlphas && typeof source.emaAlphas === "object"
+					? (source.emaAlphas as Partial<AudioEmaAlphas>)
+					: {};
+			return {
+				energy: clamp(ea.energy, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+				bass: clamp(ea.bass, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+				mid: clamp(ea.mid, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+				high: clamp(ea.high, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
+				pulse: clamp(ea.pulse, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
 			};
 		})(),
 	};
@@ -939,7 +954,7 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, audioEmaAlphas);
+	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
 	const demo = {
 		tempo: state.bpm,
 		beat,
