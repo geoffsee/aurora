@@ -62,6 +62,7 @@ fn geometry_field(
   uv: vec2<f32>,
   time: f32,
   hue_shift: f32,
+  variant: f32,
   pulse: f32,
   energy: f32,
   bass: f32,
@@ -75,14 +76,20 @@ fn geometry_field(
   let grain = noise(center * 4.0 + vec2<f32>(time * 0.22, energy * 1.3));
   let drift = fbm(center * 2.2 + vec2<f32>(grain, pulse * 1.5));
 
-  let spoke_count = 18.0 + floor(drift * 8.0);
+  // Variant: 0=Web (all), 1=Spokes, 2=Rings, 3=Plasma (no hard lines).
+  let v = i32(round(variant));
+
+  // Per-variant tuning: spokes thin out + ring count drops in Spokes/Rings modes
+  // so they read as their own thing instead of a web.
+  let spoke_count = select(18.0, 9.0, v == 1) + floor(drift * 8.0);
   let spoke = 1.0 - smoothstep(
     0.0,
     0.055 + 0.015 * mid,
     abs(fract(angle / TAU * spoke_count + time * 0.08 + grain * 0.4) - 0.5) * 2.0
   );
 
-  let ring_wave = fract(radius * (16.0 + high * 12.0) + time * (0.22 + bass * 0.18) + grain);
+  let ring_density = select(16.0, 8.0, v == 2);
+  let ring_wave = fract(radius * (ring_density + high * 12.0) + time * (0.22 + bass * 0.18) + grain);
   let ring = 1.0 - smoothstep(0.0, 0.16 - 0.06 * bass, abs(ring_wave - 0.5) * 2.0);
 
   let lattice_uv = center * (8.0 + mid * 6.0 + bass * 2.0);
@@ -91,10 +98,23 @@ fn geometry_field(
 
   let core = exp(-pow(radius * 2.2, 2.0)) * (0.9 + 0.1 * pulse);
   let pulse_wave = 1.0 + 0.45 * sin(time * 1.3 + ring_wave * 6.28318 + pulse * 5.0);
-  let geometry = max(
-    spoke,
-    max(ring * (0.75 + 0.25 * energy), lattice * (0.35 + 0.35 * high)) * 0.75
-  );
+
+  // Plasma: continuous fbm/drift field, no thresholded lines.
+  let plasma = clamp(0.45 + 0.55 * drift + 0.25 * grain, 0.0, 1.2);
+
+  var geometry: f32;
+  if (v == 1) {
+    geometry = spoke;
+  } else if (v == 2) {
+    geometry = ring * (0.85 + 0.15 * energy);
+  } else if (v == 3) {
+    geometry = plasma;
+  } else {
+    geometry = max(
+      spoke,
+      max(ring * (0.75 + 0.25 * energy), lattice * (0.35 + 0.35 * high)) * 0.75
+    );
+  }
   let layer = geometry * pulse_wave;
   let enabled = select(1.0, 0.0, energy < 0.0);
 
@@ -133,6 +153,7 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
     uv,
     params.y,
     params.x,
+    params.z,
     pulse,
     energy,
     bass,

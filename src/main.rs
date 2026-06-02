@@ -91,6 +91,14 @@ unsafe extern "C" {
     fn browser_control_palette_saturation() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteBrightness)]
     fn browser_control_palette_brightness() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridDensity)]
+    fn browser_control_grid_density() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridDiamond)]
+    fn browser_control_grid_diamond() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridLineWidth)]
+    fn browser_control_grid_line_width() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridShapeMix)]
+    fn browser_control_grid_shape_mix() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlActiveShader)]
     fn browser_control_active_shader() -> u32;
 }
@@ -107,6 +115,11 @@ struct VjPaletteMaterial {
     palette_extra: Vec4,
     #[uniform(2)]
     audio_uniforms: Vec4,
+    /// Unused by the palette shader, but keeps the bind-group layout structurally
+    /// identical to `VjGridMaterial` so Bevy's Material2d pipeline cache doesn't
+    /// reuse the wrong layout for the grid pipeline.
+    #[uniform(3)]
+    _reserved: Vec4,
 }
 
 impl Material2d for VjPaletteMaterial {
@@ -119,7 +132,8 @@ impl Material2d for VjPaletteMaterial {
     }
 }
 
-/// Second GPU shader variant — shares the same uniform layout as `VjPaletteMaterial`.
+/// Second GPU shader variant — shares the palette layout plus a grid-specific `grid_extra` slot.
+/// `grid_extra`: x=density (0..1), y=diamond size (0..1), z=line width (0..1), w=shape mix (0..1, 0=diamond, 1=cross).
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
 struct VjGridMaterial {
     #[uniform(0)]
@@ -128,6 +142,8 @@ struct VjGridMaterial {
     palette_extra: Vec4,
     #[uniform(2)]
     audio_uniforms: Vec4,
+    #[uniform(3)]
+    grid_extra: Vec4,
 }
 
 impl Material2d for VjGridMaterial {
@@ -140,7 +156,7 @@ impl Material2d for VjGridMaterial {
     }
 }
 
-/// Marks the fullscreen GPU-shader quads. `index` matches `VjState::active_shader`.
+/// Marks the fullscreen GPU-shader quads. `index` 0 = palette material, 1 = grid material.
 #[derive(Component)]
 struct GpuShaderQuad {
     index: u32,
@@ -215,6 +231,10 @@ struct VjState {
     palette: f32,
     palette_saturation: f32,
     palette_brightness: f32,
+    grid_density: f32,
+    grid_diamond: f32,
+    grid_line_width: f32,
+    grid_shape_mix: f32,
     deck_a_mode: VisualMode,
     deck_b_mode: VisualMode,
     rings_enabled: bool,
@@ -257,6 +277,10 @@ impl Default for VjState {
             palette: 0.0,
             palette_saturation: 1.0,
             palette_brightness: 1.0,
+            grid_density: 0.5,
+            grid_diamond: 0.5,
+            grid_line_width: 0.5,
+            grid_shape_mix: 0.5,
             deck_a_mode: VisualMode::Beams,
             deck_b_mode: VisualMode::Tunnel,
             rings_enabled: true,
@@ -461,6 +485,7 @@ fn setup(
         params: Vec4::ZERO,
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        _reserved: Vec4::ZERO,
     });
     commands.insert_resource(VjPaletteHandle(gpu_mat.clone()));
     commands.spawn((
@@ -475,6 +500,7 @@ fn setup(
         params: Vec4::ZERO,
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        grid_extra: Vec4::new(0.5, 0.5, 0.5, 0.5),
     });
     commands.insert_resource(VjGridHandle(grid_mat.clone()));
     commands.spawn((
@@ -592,7 +618,11 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.palette = browser_control_palette().clamp(0.0, 1.0);
         state.palette_saturation = browser_control_palette_saturation().clamp(0.0, 1.0);
         state.palette_brightness = browser_control_palette_brightness().clamp(0.0, 1.0);
-        state.active_shader = browser_control_active_shader().min(1);
+        state.grid_density = browser_control_grid_density().clamp(0.0, 1.0);
+        state.grid_diamond = browser_control_grid_diamond().clamp(0.0, 1.0);
+        state.grid_line_width = browser_control_grid_line_width().clamp(0.0, 1.0);
+        state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
+        state.active_shader = browser_control_active_shader().min(4);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.rings_enabled = browser_control_rings();
@@ -1122,7 +1152,14 @@ fn update_palette_material(
     let high = if active { state.osc_high.max(0.0) } else { 0.0 };
     let pulse = if active { state.osc_pulse.clamp(0.0, 1.0) } else { 0.0 };
 
-    let params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
+    // active_shader 0..=3 → palette quad with variant index; 4 → grid quad.
+    let (quad_index, palette_variant) = if state.active_shader >= 4 {
+        (1u32, 0.0)
+    } else {
+        (0u32, state.active_shader as f32)
+    };
+
+    let params = Vec4::new(state.palette, state.show_time, palette_variant, 0.0);
     let palette_extra = Vec4::new(state.palette_saturation, state.palette_brightness, pulse, 0.0);
     let audio_uniforms = Vec4::new(energy, bass, mid, high);
 
@@ -1135,10 +1172,16 @@ fn update_palette_material(
         mat.params = params;
         mat.palette_extra = palette_extra;
         mat.audio_uniforms = audio_uniforms;
+        mat.grid_extra = Vec4::new(
+            state.grid_density,
+            state.grid_diamond,
+            state.grid_line_width,
+            state.grid_shape_mix,
+        );
     }
 
     for (quad, mut vis) in &mut gpu_quads {
-        *vis = if quad.index == state.active_shader {
+        *vis = if quad.index == quad_index {
             Visibility::Inherited
         } else {
             Visibility::Hidden

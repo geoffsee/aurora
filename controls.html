@@ -101,8 +101,11 @@
         <label class="panel slot">
           <div class="slot-head"><span>GPU Shader</span></div>
           <select id="active-shader">
-            <option value="0">Palette (Geometry)</option>
-            <option value="1">Grid (Tiles)</option>
+            <option value="0">Palette - Web</option>
+            <option value="1">Palette - Spokes</option>
+            <option value="2">Palette - Rings</option>
+            <option value="3">Palette - Plasma</option>
+            <option value="4">Grid (Tiles)</option>
           </select>
         </label>
         <label class="panel slot">
@@ -144,6 +147,22 @@
         <label class="slot">
           <div class="slot-head"><span>GPU Brightness</span><output id="palette-brightness-value">100%</output></div>
           <input id="palette-brightness" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Density</span><output id="grid-density-value">50%</output></div>
+          <input id="grid-density" type="range" min="0" max="1" step="0.01" value="0.5" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Diamond</span><output id="grid-diamond-value">50%</output></div>
+          <input id="grid-diamond" type="range" min="0" max="1" step="0.01" value="0.5" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Lines</span><output id="grid-line-width-value">50%</output></div>
+          <input id="grid-line-width" type="range" min="0" max="1" step="0.01" value="0.5" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Shape (◆↔+)</span><output id="grid-shape-mix-value">50%</output></div>
+          <input id="grid-shape-mix" type="range" min="0" max="1" step="0.01" value="0.5" />
         </label>
         <div class="button-grid">
           <button id="rings" aria-pressed="true">Rings</button>
@@ -217,6 +236,10 @@
                 <option value="palette">Color</option>
                 <option value="paletteSaturation">GPU Sat</option>
                 <option value="paletteBrightness">GPU Bright</option>
+                <option value="gridDensity">Grid Density</option>
+                <option value="gridDiamond">Grid Diamond</option>
+                <option value="gridLineWidth">Grid Lines</option>
+                <option value="gridShapeMix">Grid Shape</option>
                 <option value="deckAMode">Deck A Mode</option>
                 <option value="deckBMode">Deck B Mode</option>
                 <option value="ringOpacity">Ring Opacity</option>
@@ -300,6 +323,10 @@
         palette: 0,
         paletteSaturation: 1,
         paletteBrightness: 1,
+        gridDensity: 0.5,
+        gridDiamond: 0.5,
+        gridLineWidth: 0.5,
+        gridShapeMix: 0.5,
         deckAMode: 0,
         deckBMode: 1,
         rings: true,
@@ -881,6 +908,8 @@
         crossfade: "Crossfade", bpm: "BPM", speed: "Speed",
         intensity: "Intensity", feedback: "Trails", depth: "3D Lines",
         palette: "Color", paletteSaturation: "GPU Sat", paletteBrightness: "GPU Bright",
+        gridDensity: "Grid Density", gridDiamond: "Grid Diamond",
+        gridLineWidth: "Grid Lines", gridShapeMix: "Grid Shape",
         deckAMode: "Deck A Mode", deckBMode: "Deck B Mode",
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
       };
@@ -1215,6 +1244,10 @@
           ["palette", "palette"],
           ["palette-saturation", "paletteSaturation"],
           ["palette-brightness", "paletteBrightness"],
+          ["grid-density", "gridDensity"],
+          ["grid-diamond", "gridDiamond"],
+          ["grid-line-width", "gridLineWidth"],
+          ["grid-shape-mix", "gridShapeMix"],
           ["max-brightness", "maxBrightness"],
           ["deck-a-mode", "deckAMode"],
           ["deck-b-mode", "deckBMode"],
@@ -1246,6 +1279,10 @@
         $("#palette-value").textContent = `${Math.round(state.palette * 360)} deg`;
         $("#palette-saturation-value").textContent = `${Math.round(state.paletteSaturation * 100)}%`;
         $("#palette-brightness-value").textContent = `${Math.round(state.paletteBrightness * 100)}%`;
+        $("#grid-density-value").textContent = `${Math.round(state.gridDensity * 100)}%`;
+        $("#grid-diamond-value").textContent = `${Math.round(state.gridDiamond * 100)}%`;
+        $("#grid-line-width-value").textContent = `${Math.round(state.gridLineWidth * 100)}%`;
+        $("#grid-shape-mix-value").textContent = `${Math.round(state.gridShapeMix * 100)}%`;
         $("#max-brightness-value").textContent = `${Math.round(state.maxBrightness * 100)}%`;
         $("#deck-a-mode").title = visualModes[state.deckAMode] || "Mode";
         $("#deck-b-mode").title = visualModes[state.deckBMode] || "Mode";
@@ -1309,6 +1346,10 @@
         ["palette", "palette"],
         ["palette-saturation", "paletteSaturation"],
         ["palette-brightness", "paletteBrightness"],
+        ["grid-density", "gridDensity"],
+        ["grid-diamond", "gridDiamond"],
+        ["grid-line-width", "gridLineWidth"],
+        ["grid-shape-mix", "gridShapeMix"],
         ["max-brightness", "maxBrightness"],
       ]) {
         $(`#${id}`).addEventListener("input", (event) => {
@@ -1329,7 +1370,7 @@
       }
 
       $("#active-shader").addEventListener("change", (event) => {
-        state.activeShader = Math.max(0, Math.min(1, Number(event.target.value)));
+        state.activeShader = Math.max(0, Math.min(4, Number(event.target.value)));
         publish();
       });
 

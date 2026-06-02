@@ -60,6 +60,10 @@
         palette: 0,
         paletteSaturation: 1,
         paletteBrightness: 1,
+        gridDensity: 0.5,
+        gridDiamond: 0.5,
+        gridLineWidth: 0.5,
+        gridShapeMix: 0.5,
         deckAMode: 0,
         deckBMode: 1,
         rings: true,
@@ -250,6 +254,10 @@
         controlState.palette = clamp01(next.palette);
         controlState.paletteSaturation = next.paletteSaturation === undefined ? controlState.paletteSaturation : clamp01(next.paletteSaturation);
         controlState.paletteBrightness = next.paletteBrightness === undefined ? controlState.paletteBrightness : clamp01(next.paletteBrightness);
+        controlState.gridDensity = next.gridDensity === undefined ? controlState.gridDensity : clamp01(next.gridDensity);
+        controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
+        controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
+        controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
         controlState.deckAMode = clampInt(next.deckAMode, 0, 4, controlState.deckAMode);
         controlState.deckBMode = clampInt(next.deckBMode, 0, 4, controlState.deckBMode);
         controlState.rings = next.rings !== false;
@@ -272,7 +280,7 @@
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
-        controlState.activeShader = clampInt(next.activeShader, 0, 1, controlState.activeShader);
+        controlState.activeShader = clampInt(next.activeShader, 0, 4, controlState.activeShader);
         if (next.trackMapping && typeof next.trackMapping === "object") {
           controlState.trackMapping = {
             deckAStart: clampInt(next.trackMapping.deckAStart, 0, 31, controlState.trackMapping.deckAStart),
@@ -366,6 +374,10 @@
       window.__bevyoscControlPalette = () => controlState.palette;
       window.__bevyoscControlPaletteSaturation = () => controlState.paletteSaturation;
       window.__bevyoscControlPaletteBrightness = () => controlState.paletteBrightness;
+      window.__bevyoscControlGridDensity = () => controlState.gridDensity;
+      window.__bevyoscControlGridDiamond = () => controlState.gridDiamond;
+      window.__bevyoscControlGridLineWidth = () => controlState.gridLineWidth;
+      window.__bevyoscControlGridShapeMix = () => controlState.gridShapeMix;
       window.__bevyoscControlDeckAMode = () => controlState.deckAMode;
       window.__bevyoscControlDeckBMode = () => controlState.deckBMode;
       window.__bevyoscControlRings = () => controlState.rings;
