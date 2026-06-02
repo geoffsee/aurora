@@ -14,6 +14,15 @@ bun run check:wasm   # fast cargo check against wasm32-unknown-unknown
 bun run typecheck    # tsc --noEmit (also runs as the pre-commit hook)
 ```
 
+Desktop app (launcher + compiled bridge sidecar):
+
+```bash
+bun run build:desktop   # build:web + bridge + launcher + platform archive
+bun run build:bridge    # bun build --compile index.ts → dist/desktop/bevyosc-bridge
+bun run build:launcher  # cargo build --release -p bevyosc-launcher (→ target-launcher/)
+bun run check:launcher  # fast cargo check for the wry + tao shell
+```
+
 Tests:
 
 ```bash
@@ -40,7 +49,7 @@ bun run install:vst:mac  # copies the bundle into ~/Library/Audio/Plug-Ins/VST3
 1. `bun install` — installs npm/Bun deps and wires up git hooks via `postinstall` (`.dev/setup-git-hooks.sh` points `core.hooksPath` at `.dev/hooks/`, giving pre-commit → typecheck and pre-push → full test).
 2. Verifies that the installed `wasm-bindgen-cli` version matches the pinned `0.2.122`. A mismatch produces opaque link errors — the script prints the exact `cargo install` command to fix it.
 
-The web target requires `wasm-bindgen-cli` **pinned to 0.2.122** (matches the `wasm-bindgen` crate version in `Cargo.toml` and the `WASM_BINDGEN_VERSION` env var in both GitHub workflows). Bump all three together if you ever change it: the `wasm-bindgen` crate in `Cargo.toml` and `WASM_BINDGEN_VERSION` in both GitHub workflows. `scripts/setup.sh` reads the version directly from `Cargo.toml` and requires no separate update.
+The web target requires `wasm-bindgen-cli` **pinned to 0.2.122** (matches the `wasm-bindgen` crate version in `Cargo.toml` and the `WASM_BINDGEN_VERSION` env var in the GitHub workflows). Bump all three together if you ever change it: the `wasm-bindgen` crate in `Cargo.toml` and `WASM_BINDGEN_VERSION` in `ci.yml`, `deploy.yml`, and `release.yml`. `scripts/setup.sh` reads the version directly from `Cargo.toml` and requires no separate update.
 
 ## Architecture
 
@@ -62,16 +71,20 @@ The bridge is the **single source of truth for `ControlState`**. `coerceControlS
 
 **5. VST plugin (`plugins/bevyosc-vst/`).** A `cdylib` nih-plug VST3 audio effect. Lives in the Cargo workspace alongside the root crate. Parameters mirror the `ControlState` fields. On change, the audio thread serializes the value into an OSC message and sends it to `127.0.0.1:12000` over a UDP socket. The momentary "cue"/"flash"/"reset" parameters are float params used as triggers — the bridge interprets them as edges. The `xtask` sibling crate is a pure-Rust bundler invoked by `bun run build:vst` to produce the `.vst3` artifact.
 
+**6. Desktop launcher (`crates/bevyosc-launcher/`).** A thin wry + tao binary (`bevyosc`) that spawns the compiled Bun bridge sidecar (`bevyosc-bridge`) with `BEVYOSC_ROOT` pointing at bundled HTML/WASM/assets, waits for `:3000`/`:3001`, then opens projector + controls webviews. Distributed via `.github/workflows/release.yml` (tag `v*` or manual dispatch). GitHub Pages deploy remains static-only; the full show rig requires the desktop bundle or local `bun run serve`.
+
 ### Cargo workspace and target dirs
 
-The root `Cargo.toml` declares a workspace with three members: the root `bevyosc` crate (wasm target), `plugins/bevyosc-vst` (host target, links audio libs), and `plugins/bevyosc-vst/xtask` (host target, plain Rust).
+The root `Cargo.toml` declares a workspace with four members: the root `bevyosc` crate (wasm target), `crates/bevyosc-launcher` (host target, wry + tao shell), `plugins/bevyosc-vst` (host target, links audio libs), and `plugins/bevyosc-vst/xtask` (host target, plain Rust).
 
 `bevy` is listed with **`default-features = false`**, which also turns off `bevy_winit`'s normal `winit` feature stack. The dependency therefore includes **`x11`** so bare host **`cargo check`** on Linux still enables **`winit`'s X11 path** (automation that types `cargo check` before push). The runtime build for the browser stays **`wasm32-unknown-unknown`** via `bun run build:web` / `bun run check:wasm`.
 
 **`.cargo/config.toml`** defines **`cargo check-wasm`** / **`cargo build-wasm`** / **`cargo clippy-wasm`** aliases. Don't set **`[build] target = "wasm32-unknown-unknown"`** globally: it tries to compile `xtask` as wasm and `nih_plug_xtask` does not support that triple.
 
-The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for the wasm build, `target-vst/` for VST builds — to keep their incompatible build graphs from invalidating each other's caches. Preserve this split when adding new build commands.
+The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for the wasm build, `target-vst/` for VST builds, `target-launcher/` for the desktop shell — to keep their incompatible build graphs from invalidating each other's caches. Preserve this split when adding new build commands.
 
 ### Deploy
 
 `.github/workflows/deploy.yml` publishes only the **static front-end** (HTML/CSS + the wasm bundle) to GitHub Pages. The OSC/WebSocket bridge in `index.ts` cannot run there — Pages is just for the visual page, no Ableton, no controls round-trip. The deploy step rewrites `./dist/pkg/` to `./pkg/` in `dist/index.html` to match the flattened Pages layout.
+
+`.github/workflows/release.yml` builds **desktop bundles** (launcher + compiled bridge + assets) for macOS (arm64/x64), Linux x64, and Windows x64. Push a `v*` tag to publish a GitHub Release, or run the workflow manually to build artifacts without publishing (release job runs only on tag pushes).

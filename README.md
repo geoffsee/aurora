@@ -53,6 +53,26 @@ The shipped projector build is **`wasm32-unknown-unknown`** — use **`bun run c
 
 Because `bevy` is **`default-features = false`**, the crate also opts into **`x11`** so a host **`cargo check`** on GitHub/Linux still compiles (`winit` gets `x11`; WASM builds still use `winit`'s web backend). Don't set **`[build] target = "wasm32-unknown-unknown"`** in Cargo config: **`xtask`** must stay a host build.
 
+## Desktop app
+
+For show operation without manually starting Bun and opening browser tabs, build or download the desktop bundle. It includes the OSC/WebSocket bridge and opens projector + controls windows automatically.
+
+**From source** (detects your platform):
+
+```bash
+bun run build:desktop
+```
+
+The archive lands in `dist/desktop/archives/`. On macOS, open `bevyosc.app`; on Linux/Windows, run `bevyosc/bevyosc` (or `bevyosc.exe` on Windows).
+
+**From GitHub Releases:** download the archive for your platform (`bevyosc-macos-aarch64.zip`, `bevyosc-macos-x64.zip`, `bevyosc-linux-x64.tar.gz`, or `bevyosc-windows-x64.zip`). Releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed.
+
+Notes:
+
+- AbletonOSC (UDP 11000/11001) and the optional VST plugin (UDP 12000) still need to be configured separately — same as the dev server flow.
+- **macOS:** bundles are unsigned; Gatekeeper may require right-click → Open on first launch.
+- **Linux:** the embedded WebKit webview may not support WebGPU on all distros; projector visuals may fail to boot. macOS and Windows use WKWebView/WebView2 and generally work.
+
 ## Performance Controls
 
 Use the controls app on port `3001` for show operation. The projector output on port `3000` has no visible HUD or help overlay.
@@ -137,6 +157,8 @@ The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, t
 
 - `src/main.rs` – Bevy app compiled to WebAssembly.
 - `index.ts` – Bun server hosting the projector page, the controls page, and the OSC/WebSocket bridge.
+- `crates/bevyosc-launcher/` – wry + tao desktop shell that spawns the compiled bridge and opens both webviews.
+- `scripts/build-bridge.sh`, `scripts/package-desktop.sh` – compile the bridge sidecar and stage platform archives.
 - `index.html` / `styles.css` – projector output (port `3000`).
 - `controls.html` / `controls.css` – controls app (port `3001`).
 - `plugins/bevyosc-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.

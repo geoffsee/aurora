@@ -6,6 +6,8 @@ out
 dist
 target
 target-vst
+target-launcher
+dist/desktop
 plugins/**/target
 *.tgz
 

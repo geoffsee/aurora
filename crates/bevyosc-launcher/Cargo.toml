@@ -1,0 +1,12 @@
+[package]
+name = "bevyosc-launcher"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "bevyosc"
+path = "src/main.rs"
+
+[dependencies]
+tao = "0.34"
+wry = "0.55"

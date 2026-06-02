@@ -111,7 +111,7 @@ const OSC_ADDRESSES = {
 
 const port = Number(Bun.env.PORT ?? 3000);
 const controlsPort = Number(Bun.env.CONTROLS_PORT ?? 3001);
-const root = import.meta.dir;
+const root = Bun.env.BEVYOSC_ROOT ?? import.meta.dir;
 const liveHost = Bun.env.LIVE_HOST ?? "127.0.0.1";
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);

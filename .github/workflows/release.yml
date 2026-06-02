@@ -1,0 +1,151 @@
+name: Release
+
+# Builds desktop bundles (launcher + compiled Bun bridge + WASM assets) for
+# macOS (arm64/x64), Linux x64, and Windows x64, then attaches them to a
+# GitHub Release when a version tag is pushed.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WASM_BINDGEN_VERSION: "0.2.122"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-aarch64
+            runs-on: macos-14
+            bun_target: bun-darwin-arm64
+            rust_target: aarch64-apple-darwin
+            archive_ext: zip
+          - platform: macos-x64
+            runs-on: macos-14
+            bun_target: bun-darwin-x64
+            rust_target: x86_64-apple-darwin
+            archive_ext: zip
+          - platform: linux-x64
+            runs-on: ubuntu-22.04
+            bun_target: bun-linux-x64
+            rust_target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+          - platform: windows-x64
+            runs-on: windows-latest
+            bun_target: bun-windows-x64
+            rust_target: x86_64-pc-windows-msvc
+            archive_ext: zip
+
+    runs-on: ${{ matrix.runs-on }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,${{ matrix.rust_target }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.platform }}
+
+      - name: Install wasm-bindgen-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@${{ env.WASM_BINDGEN_VERSION }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Linux webview dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install JS deps
+        run: bun install --frozen-lockfile
+
+      - name: Build WASM (web target)
+        run: bun run build:web
+
+      - name: Compile Bun bridge
+        shell: bash
+        env:
+          BUN_COMPILE_TARGET: ${{ matrix.bun_target }}
+        run: bash scripts/build-bridge.sh
+
+      - name: Build launcher
+        env:
+          CARGO_TARGET_DIR: target-launcher
+        run: cargo build --release -p bevyosc-launcher --target ${{ matrix.rust_target }}
+
+      - name: Package desktop bundle
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            export LAUNCHER_BIN="target-launcher/${{ matrix.rust_target }}/release/bevyosc.exe"
+          else
+            export LAUNCHER_BIN="target-launcher/${{ matrix.rust_target }}/release/bevyosc"
+          fi
+          bash scripts/package-desktop.sh ${{ matrix.platform }}
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bevyosc-${{ matrix.platform }}
+          path: dist/desktop/archives/bevyosc-${{ matrix.platform }}.${{ matrix.archive_ext }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/desktop/archives
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## Desktop bundles
+
+            Download the archive for your platform, extract it, and run `bevyosc` (or open `bevyosc.app` on macOS).
+
+            | Platform | Archive |
+            | --- | --- |
+            | macOS Apple Silicon | `bevyosc-macos-aarch64.zip` |
+            | macOS Intel | `bevyosc-macos-x64.zip` |
+            | Linux x64 | `bevyosc-linux-x64.tar.gz` |
+            | Windows x64 | `bevyosc-windows-x64.zip` |
+
+            ## Notes
+
+            - These builds include the OSC/WebSocket bridge and open projector + controls windows automatically.
+            - AbletonOSC (UDP 11000/11001) and the optional VST plugin (UDP 12000) still need to be configured separately.
+            - **Linux:** embedded WebKit may not support WebGPU; projector visuals may fail to boot on some distros.
+            - **macOS:** bundles are unsigned; Gatekeeper may require right-click → Open on first launch.
+          files: |
+            dist/desktop/archives/bevyosc-macos-aarch64.zip
+            dist/desktop/archives/bevyosc-macos-x64.zip
+            dist/desktop/archives/bevyosc-linux-x64.tar.gz
+            dist/desktop/archives/bevyosc-windows-x64.zip

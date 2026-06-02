@@ -21,6 +21,15 @@ log "cargo test -p xtask"
 cargo test -p xtask --verbose
 
 # ---------------------------------------------------------------------------
+# bevyosc-launcher (crates/bevyosc-launcher)
+#
+# Thin wry + tao desktop shell that spawns the compiled Bun bridge sidecar.
+# Requires Linux webkit/gtk dev packages on CI (installed in ci.yml).
+# ---------------------------------------------------------------------------
+log "cargo check -p bevyosc-launcher"
+CARGO_TARGET_DIR=target-launcher cargo check -p bevyosc-launcher
+
+# ---------------------------------------------------------------------------
 # bevyosc (root crate)
 #
 # Skipped: the crate targets `wasm32-unknown-unknown` and pulls in Bevy
