@@ -83,6 +83,11 @@
             <option value="2">Burst</option>
             <option value="3">Mirror</option>
             <option value="4">Wash</option>
+            <option value="5">Strobe</option>
+            <option value="6">Swarm</option>
+            <option value="7">Orbit</option>
+            <option value="8">Pulse</option>
+            <option value="9">Spiral</option>
           </select>
         </label>
         <label class="panel slot deck-slot" data-deck="b">
@@ -96,6 +101,11 @@
             <option value="2">Burst</option>
             <option value="3">Mirror</option>
             <option value="4">Wash</option>
+            <option value="5">Strobe</option>
+            <option value="6">Swarm</option>
+            <option value="7">Orbit</option>
+            <option value="8">Pulse</option>
+            <option value="9">Spiral</option>
           </select>
         </label>
         <label class="panel slot">
@@ -307,7 +317,7 @@
     <div id="error-banners" role="alert" aria-live="assertive" aria-atomic="false"></div>
 
     <script type="module">
-      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash"];
+      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral"];
       const cuePresets = {
         warmup: { crossfade: 0.5, intensity: 0.62, feedback: 0.22, depth: 0.15, palette: 0.58, deckAMode: 4, deckBMode: 4 },
         drop: { crossfade: 1, intensity: 1.25, feedback: 0.42, depth: 0.58, palette: 0.9, deckAMode: 2, deckBMode: 2 },
@@ -645,8 +655,8 @@
         state.cueIntensity = clamp01(cue.intensity ?? state.intensity);
         state.cuePalette = clamp01(cue.palette ?? state.palette);
         state.cueCrossfade = clamp01(cue.crossfade ?? state.crossfade);
-        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 4, state.deckAMode);
-        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 4, state.deckBMode);
+        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 9, state.deckAMode);
+        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 9, state.deckBMode);
         state.flashVersion += name === "panic" ? 0 : 1;
         syncInputs();
         publish();

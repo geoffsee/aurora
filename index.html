@@ -258,8 +258,8 @@
         controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
-        controlState.deckAMode = clampInt(next.deckAMode, 0, 4, controlState.deckAMode);
-        controlState.deckBMode = clampInt(next.deckBMode, 0, 4, controlState.deckBMode);
+        controlState.deckAMode = clampInt(next.deckAMode, 0, 9, controlState.deckAMode);
+        controlState.deckBMode = clampInt(next.deckBMode, 0, 9, controlState.deckBMode);
         controlState.rings = next.rings !== false;
         controlState.ringOpacity = next.ringOpacity === undefined ? controlState.ringOpacity : clamp01(next.ringOpacity);
         controlState.strobe = Boolean(next.strobe);
@@ -278,8 +278,8 @@
         controlState.cueIntensity = clamp01(next.cueIntensity);
         controlState.cuePalette = clamp01(next.cuePalette);
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
-        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
-        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
+        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 9, controlState.cueDeckAMode);
+        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 9, controlState.cueDeckBMode);
         controlState.activeShader = clampInt(next.activeShader, 0, 8, controlState.activeShader);
         if (next.trackMapping && typeof next.trackMapping === "object") {
           controlState.trackMapping = {

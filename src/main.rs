@@ -334,6 +334,11 @@ enum VisualMode {
     Burst,
     Mirror,
     Wash,
+    Strobe,
+    Swarm,
+    Orbit,
+    Pulse,
+    Spiral,
 }
 
 impl VisualMode {
@@ -343,6 +348,11 @@ impl VisualMode {
             2 => Self::Burst,
             3 => Self::Mirror,
             4 => Self::Wash,
+            5 => Self::Strobe,
+            6 => Self::Swarm,
+            7 => Self::Orbit,
+            8 => Self::Pulse,
+            9 => Self::Spiral,
             _ => Self::Beams,
         }
     }
@@ -877,6 +887,50 @@ fn update_visuals(
                         alpha *= 0.18 + state.feedback * 0.45 + osc_drive * 0.22;
                         hue += 30.0;
                     }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit * 1.4).clamp(0.0, 1.0);
+                        let on = if gate > 0.45 { 1.0 } else { 0.12 };
+                        alpha *= on;
+                        transform.scale.y *= 1.0 + bass * 0.7 + beat_hit * 0.6;
+                        hue += beat_hit * 120.0 + fraction * 60.0;
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.7 + element.seed * 11.0).sin() * 110.0;
+                        let dy = (t * 2.1 + element.seed * 7.0).cos() * 90.0;
+                        transform.translation.x += dx;
+                        transform.translation.y += dy;
+                        transform.rotation *= Quat::from_rotation_z(element.seed * 4.0 + t * 0.4);
+                        transform.scale.y *= 0.7 + (t * 3.0 + element.seed * 5.0).sin().abs() * 0.6;
+                        alpha *= 0.55 + osc_drive * 0.55;
+                        hue += element.seed * 220.0;
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_r = 140.0 + layer * 100.0;
+                        let orbit_a = t * (0.45 + element.seed * 0.4) + element.seed * TAU;
+                        transform.translation.x += orbit_a.cos() * orbit_r;
+                        transform.translation.y += orbit_a.sin() * orbit_r * 0.75;
+                        transform.rotation = Quat::from_rotation_z(orbit_a + TAU * 0.25);
+                        transform.scale.y *= 0.8 + layer * 0.6;
+                        alpha *= 0.7 + layer * 0.4;
+                        hue += orbit_a.to_degrees() * 0.08;
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        let s = 0.55 + pump * 1.6 + beat_hit * 0.5;
+                        transform.scale.x *= s;
+                        transform.scale.y *= 1.0 + pump * 0.8;
+                        alpha *= 0.35 + pump * 0.9;
+                        hue += pump * 80.0;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = fraction * TAU * 4.0 + t * 0.4;
+                        let spiral_r = 80.0 + fraction * 380.0 + bass * 80.0;
+                        transform.translation.x = spiral_a.cos() * spiral_r;
+                        transform.translation.y = spiral_a.sin() * spiral_r;
+                        transform.rotation = Quat::from_rotation_z(spiral_a + TAU * 0.25);
+                        transform.scale.y *= 1.1 + fraction * 0.5;
+                        hue += fraction * 360.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -929,6 +983,38 @@ fn update_visuals(
                     VisualMode::Wash => {
                         transform.scale *= 1.9 + state.feedback;
                         alpha *= 0.4 + state.feedback * 0.5;
+                    }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit * 1.2).clamp(0.0, 1.0);
+                        let on = if gate > 0.4 { 1.0 } else { 0.0 };
+                        alpha *= on;
+                        transform.scale *= 1.0 + bass * 1.4 + beat_hit * 0.9;
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.3 + fraction * 13.0).sin() * 180.0;
+                        let dy = (t * 1.6 + fraction * 9.0).cos() * 120.0;
+                        transform.translation.x = dx;
+                        transform.translation.y = dy;
+                        transform.scale *= 0.55 + fraction * 0.8;
+                        alpha *= 0.7;
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_a = t * (0.5 + fraction * 0.6) + fraction * TAU;
+                        transform.translation.x = orbit_a.cos() * 200.0 * fraction;
+                        transform.translation.y = orbit_a.sin() * 200.0 * fraction;
+                        transform.scale *= 0.6 + fraction * 0.7;
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        transform.scale *= 0.5 + pump * 1.7 + beat_hit * 0.6;
+                        alpha *= 0.4 + pump * 1.0;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = fraction * TAU * 2.0 + t * 0.6;
+                        transform.translation.x = spiral_a.cos() * 280.0 * fraction;
+                        transform.translation.y = spiral_a.sin() * 280.0 * fraction;
+                        transform.rotation = Quat::from_rotation_z(spiral_a);
+                        transform.scale *= 0.5 + fraction * 0.9;
                     }
                     VisualMode::Beams => {}
                 }
@@ -1002,6 +1088,41 @@ fn update_visuals(
                         alpha *= 0.22 + state.feedback * 0.52;
                         hue += 45.0;
                     }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit * 1.3).clamp(0.0, 1.0);
+                        let on = if gate > 0.4 { 1.0 } else { 0.1 };
+                        alpha *= on;
+                        transform.scale *= 1.0 + bass * 0.8;
+                        if (t * 4.0).sin() > 0.0 && (element.col + element.row) % 2 == 0 {
+                            hue += 180.0;
+                        }
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.8 + element.seed * 9.0).sin() * 32.0;
+                        let dy = (t * 2.2 + element.seed * 6.0).cos() * 28.0;
+                        transform.translation.x += dx;
+                        transform.translation.y += dy;
+                        transform.rotation *= Quat::from_rotation_z(element.seed * 6.0 + t * 0.5);
+                        alpha *= 0.65;
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_a = t * 0.9 + diagonal;
+                        let orbit_r = 14.0 + bass * 28.0;
+                        transform.translation.x += orbit_a.cos() * orbit_r;
+                        transform.translation.y += orbit_a.sin() * orbit_r;
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        transform.scale *= 0.5 + pump * 2.0;
+                        alpha *= 0.3 + pump * 1.0;
+                        hue += pump * 60.0;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = diagonal * 0.3 + t * 0.45;
+                        transform.translation.x = spiral_a.cos() * (60.0 + diagonal * 50.0);
+                        transform.translation.y = spiral_a.sin() * (60.0 + diagonal * 50.0);
+                        transform.rotation = Quat::from_rotation_z(spiral_a + diagonal * 0.5);
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1055,6 +1176,37 @@ fn update_visuals(
                         transform.scale.x *= 1.8;
                         transform.scale.y *= 2.2 + state.feedback;
                         alpha *= 1.35;
+                    }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit).clamp(0.0, 1.0);
+                        let on = if gate > 0.3 { 1.0 } else { 0.0 };
+                        alpha *= on;
+                        transform.scale.x *= 1.0 + bass * 0.6;
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.0 + fraction * 17.0).sin() * 240.0;
+                        let dy = (t * 1.4 + fraction * 11.0).cos() * 100.0;
+                        transform.translation.x = dx;
+                        transform.translation.y = dy;
+                        transform.rotation = Quat::from_rotation_z(t * 0.7 + fraction * TAU);
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_a = t * 0.6 + fraction * TAU;
+                        transform.translation.x = orbit_a.cos() * (180.0 + fraction * 80.0);
+                        transform.translation.y = orbit_a.sin() * (120.0 + fraction * 40.0);
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        transform.scale.x *= 0.6 + pump * 1.4;
+                        transform.scale.y *= 0.5 + pump * 2.2;
+                        alpha *= 0.4 + pump * 0.9;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = fraction * TAU * 3.0 + t * 0.5;
+                        transform.translation.x = spiral_a.cos() * (160.0 + fraction * 100.0);
+                        transform.translation.y = spiral_a.sin() * (160.0 + fraction * 100.0);
+                        transform.rotation = Quat::from_rotation_z(spiral_a);
+                        transform.scale.x *= 0.5;
                     }
                     VisualMode::Beams => {}
                 }
