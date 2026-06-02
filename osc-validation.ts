@@ -7,7 +7,8 @@ export type OscMsg = { address: string; args?: OscArg[] };
 // passing it to broadcastControl, and update defaultState() in controls.html
 // to emit the new version number.
 // v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
-export const CONTROL_STATE_SCHEMA_VERSION = 2;
+// v3: added per-band EMA decay alpha fields (emaAlphaBass/Energy/Mid/High/Pulse)
+export const CONTROL_STATE_SCHEMA_VERSION = 3;
 
 export const validateControlStateVersion = (
 	state: unknown,
@@ -63,6 +64,11 @@ export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
 	"bar_sync",
 	"demo_mode",
 	"active_shader",
+	"ema_alpha_bass",
+	"ema_alpha_energy",
+	"ema_alpha_mid",
+	"ema_alpha_high",
+	"ema_alpha_pulse",
 ]);
 
 export const VST_TRIGGER_NAMES: ReadonlySet<string> = new Set(["flash", "reset"]);

@@ -75,6 +75,11 @@ type ControlState = {
 	cueDeckBMode: number;
 	trackMapping: TrackMapping;
 	activeShader: number;
+	emaAlphaBass: number;
+	emaAlphaEnergy: number;
+	emaAlphaMid: number;
+	emaAlphaHigh: number;
+	emaAlphaPulse: number;
 };
 
 const require = createRequire(import.meta.url);
@@ -232,6 +237,11 @@ const defaultControlState = (): ControlState => ({
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
+	emaAlphaBass: audioEmaAlphas.bass,
+	emaAlphaEnergy: audioEmaAlphas.energy,
+	emaAlphaMid: audioEmaAlphas.mid,
+	emaAlphaHigh: audioEmaAlphas.high,
+	emaAlphaPulse: audioEmaAlphas.pulse,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -405,6 +415,11 @@ const coerceControlState = (state: unknown): ControlState => {
 			),
 		},
 		activeShader: clampInt(source.activeShader, 0, 1, defaults.activeShader),
+		emaAlphaBass: clamp(source.emaAlphaBass, 0.01, 1, defaults.emaAlphaBass),
+		emaAlphaEnergy: clamp(source.emaAlphaEnergy, 0.01, 1, defaults.emaAlphaEnergy),
+		emaAlphaMid: clamp(source.emaAlphaMid, 0.01, 1, defaults.emaAlphaMid),
+		emaAlphaHigh: clamp(source.emaAlphaHigh, 0.01, 1, defaults.emaAlphaHigh),
+		emaAlphaPulse: clamp(source.emaAlphaPulse, 0.01, 1, defaults.emaAlphaPulse),
 	};
 };
 
@@ -551,6 +566,21 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			case "active_shader":
 				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
 				break;
+			case "ema_alpha_bass":
+				mergeControlState({ emaAlphaBass: value });
+				break;
+			case "ema_alpha_energy":
+				mergeControlState({ emaAlphaEnergy: value });
+				break;
+			case "ema_alpha_mid":
+				mergeControlState({ emaAlphaMid: value });
+				break;
+			case "ema_alpha_high":
+				mergeControlState({ emaAlphaHigh: value });
+				break;
+			case "ema_alpha_pulse":
+				mergeControlState({ emaAlphaPulse: value });
+				break;
 		}
 
 		return;
@@ -666,6 +696,11 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"bar_sync",
 	"demo_mode",
 	"active_shader",
+	"ema_alpha_bass",
+	"ema_alpha_energy",
+	"ema_alpha_mid",
+	"ema_alpha_high",
+	"ema_alpha_pulse",
 ]);
 if (
 	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
@@ -917,7 +952,14 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, audioEmaAlphas);
+	const liveAlphas: AudioEmaAlphas = {
+		bass: state.emaAlphaBass,
+		energy: state.emaAlphaEnergy,
+		mid: state.emaAlphaMid,
+		high: state.emaAlphaHigh,
+		pulse: state.emaAlphaPulse,
+	};
+	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, liveAlphas);
 	const demo = {
 		tempo: state.bpm,
 		beat,

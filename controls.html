@@ -179,6 +179,35 @@
         </div>
       </section>
 
+      <section class="panel s-ema" aria-label="EMA Decay Constants">
+        <div class="section-title">
+          <h2>Audio EMA Decay</h2>
+          <span class="badge subtle">α — higher = faster response</span>
+        </div>
+        <div class="grid s-ema-grid">
+          <label class="slot">
+            <div class="slot-head"><span>Bass α</span><output id="ema-alpha-bass-value">0.08</output></div>
+            <input id="ema-alpha-bass" type="range" min="0.01" max="1" step="0.01" value="0.08" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Energy α</span><output id="ema-alpha-energy-value">0.12</output></div>
+            <input id="ema-alpha-energy" type="range" min="0.01" max="1" step="0.01" value="0.12" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Mid α</span><output id="ema-alpha-mid-value">0.15</output></div>
+            <input id="ema-alpha-mid" type="range" min="0.01" max="1" step="0.01" value="0.15" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>High α</span><output id="ema-alpha-high-value">0.22</output></div>
+            <input id="ema-alpha-high" type="range" min="0.01" max="1" step="0.01" value="0.22" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Pulse α</span><output id="ema-alpha-pulse-value">0.28</output></div>
+            <input id="ema-alpha-pulse" type="range" min="0.01" max="1" step="0.01" value="0.28" />
+          </label>
+        </div>
+      </section>
+
       <section class="panel s-rehearsal">
         <div class="section-title">
           <h2>Rehearsal</h2>
@@ -290,7 +319,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 2, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 3, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -332,6 +361,11 @@
           highTrack: 2,
         },
         activeShader: 0,
+        emaAlphaBass: 0.08,
+        emaAlphaEnergy: 0.12,
+        emaAlphaMid: 0.15,
+        emaAlphaHigh: 0.22,
+        emaAlphaPulse: 0.28,
       });
       const state = defaultState();
       const osc = {
@@ -1219,6 +1253,11 @@
           ["deck-a-mode", "deckAMode"],
           ["deck-b-mode", "deckBMode"],
           ["active-shader", "activeShader"],
+          ["ema-alpha-bass", "emaAlphaBass"],
+          ["ema-alpha-energy", "emaAlphaEnergy"],
+          ["ema-alpha-mid", "emaAlphaMid"],
+          ["ema-alpha-high", "emaAlphaHigh"],
+          ["ema-alpha-pulse", "emaAlphaPulse"],
         ]) {
           $(`#${id}`).value = String(state[key]);
         }
@@ -1247,6 +1286,11 @@
         $("#palette-saturation-value").textContent = `${Math.round(state.paletteSaturation * 100)}%`;
         $("#palette-brightness-value").textContent = `${Math.round(state.paletteBrightness * 100)}%`;
         $("#max-brightness-value").textContent = `${Math.round(state.maxBrightness * 100)}%`;
+        $("#ema-alpha-bass-value").textContent = state.emaAlphaBass.toFixed(2);
+        $("#ema-alpha-energy-value").textContent = state.emaAlphaEnergy.toFixed(2);
+        $("#ema-alpha-mid-value").textContent = state.emaAlphaMid.toFixed(2);
+        $("#ema-alpha-high-value").textContent = state.emaAlphaHigh.toFixed(2);
+        $("#ema-alpha-pulse-value").textContent = state.emaAlphaPulse.toFixed(2);
         $("#deck-a-mode").title = visualModes[state.deckAMode] || "Mode";
         $("#deck-b-mode").title = visualModes[state.deckBMode] || "Mode";
         $("#rings").setAttribute("aria-pressed", String(state.rings));
@@ -1310,6 +1354,11 @@
         ["palette-saturation", "paletteSaturation"],
         ["palette-brightness", "paletteBrightness"],
         ["max-brightness", "maxBrightness"],
+        ["ema-alpha-bass", "emaAlphaBass"],
+        ["ema-alpha-energy", "emaAlphaEnergy"],
+        ["ema-alpha-mid", "emaAlphaMid"],
+        ["ema-alpha-high", "emaAlphaHigh"],
+        ["ema-alpha-pulse", "emaAlphaPulse"],
       ]) {
         $(`#${id}`).addEventListener("input", (event) => {
           state[key] = Number(event.target.value);
