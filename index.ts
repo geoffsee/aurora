@@ -30,6 +30,10 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "./control-state-schema.ts";
+import {
+	makeAutomationBridge,
+	parseTriggerBindings,
+} from "./automation-bridge.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -436,6 +440,46 @@ const mergeControlState = (partial: Partial<ControlState>) => {
 	});
 };
 
+const automationBridge = makeAutomationBridge(
+	(diff) => mergeControlState(diff as Partial<ControlState>),
+	Bun.env.AUTOMATION_TRIGGER_BINDINGS
+		? parseTriggerBindings(Bun.env.AUTOMATION_TRIGGER_BINDINGS)
+		: [],
+	() => controlStateLog.toArray(),
+);
+
+// MIDI byte parser state for note-on and CC messages.
+// Real-time bytes (0xF8–0xFF) are single-byte and do not affect running status.
+const MIDI_NOTE_ON_STATUS = 0x90;
+const MIDI_CC_STATUS = 0xb0;
+let midiParseStatus = 0;
+let midiParseData1 = -1;
+
+function parseMidiByte(byte: number): void {
+	if (byte >= 0xf8) {
+		if (byte === MIDI_CLOCK_TICK) onMidiClock();
+		return;
+	}
+	if (byte & 0x80) {
+		midiParseStatus = byte;
+		midiParseData1 = -1;
+		return;
+	}
+	const msgType = midiParseStatus & 0xf0;
+	if (msgType !== MIDI_NOTE_ON_STATUS && msgType !== MIDI_CC_STATUS) return;
+	if (midiParseData1 === -1) {
+		midiParseData1 = byte;
+		return;
+	}
+	const channel = (midiParseStatus & 0x0f) + 1;
+	if (msgType === MIDI_NOTE_ON_STATUS && byte > 0) {
+		automationBridge.onMidiNote(midiParseData1, channel);
+	} else if (msgType === MIDI_CC_STATUS) {
+		automationBridge.onMidiCc(midiParseData1, channel, byte);
+	}
+	midiParseData1 = -1;
+}
+
 const sendOsc = (address: string, args: OscArg[] = []) => {
 	if (!oscReady) return;
 	udp.send({ address, args });
@@ -663,7 +707,7 @@ function openMidiClockDevice(devicePath: string): void {
 		const buf =
 			typeof chunk === "string" ? Buffer.from(chunk, "binary") : chunk;
 		for (const byte of buf) {
-			if (byte === MIDI_CLOCK_TICK) onMidiClock();
+			parseMidiByte(byte);
 		}
 	});
 	stream.on("error", (err: Error) => {
@@ -808,6 +852,8 @@ const visualServer = Bun.serve({
 								id: typeof parsed.id === "number" ? parsed.id : 0,
 							}),
 						);
+					} else if (parsed.address.startsWith("/bevyosc/automation/")) {
+						automationBridge.onOscAddress(parsed.address);
 					} else {
 						sendOsc(
 							parsed.address,
@@ -899,6 +945,10 @@ vstControlUdp.on("message", (msg: OscMsg) => {
 		if (validatePresetOscMsg(msg, `VST :${vstControlRecvPort}`)) {
 			broadcastPresetCommand(msg.address);
 		}
+		return;
+	}
+	if (msg.address.startsWith("/bevyosc/automation/")) {
+		automationBridge.onOscAddress(msg.address);
 		return;
 	}
 	if (!validateVstOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)) return;
