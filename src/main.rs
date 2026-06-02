@@ -622,7 +622,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.grid_diamond = browser_control_grid_diamond().clamp(0.0, 1.0);
         state.grid_line_width = browser_control_grid_line_width().clamp(0.0, 1.0);
         state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
-        state.active_shader = browser_control_active_shader().min(4);
+        state.active_shader = browser_control_active_shader().min(8);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.rings_enabled = browser_control_rings();
@@ -1152,8 +1152,11 @@ fn update_palette_material(
     let high = if active { state.osc_high.max(0.0) } else { 0.0 };
     let pulse = if active { state.osc_pulse.clamp(0.0, 1.0) } else { 0.0 };
 
-    // active_shader 0..=3 → palette quad with variant index; 4 → grid quad.
-    let (quad_index, palette_variant) = if state.active_shader >= 4 {
+    // active_shader routing:
+    //   0..=3 → palette quad with palette_variant set (Web/Spokes/Rings/Plasma)
+    //   4     → grid quad
+    //   5..=8 → palette quad with palette_variant set (Tunnel/Glitch/Fluid/Truchet)
+    let (quad_index, palette_variant) = if state.active_shader == 4 {
         (1u32, 0.0)
     } else {
         (0u32, state.active_shader as f32)

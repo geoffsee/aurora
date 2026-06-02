@@ -36,7 +36,8 @@ export const VST_OSC_CONTRACT = contract;
 // message handler in index.ts that transforms the old payload shape before
 // passing it to broadcastControl, and update defaultState() in controls.html
 // to emit the new version number.
-// v2: added activeShader field (0..3 = palette variants, 4 = grid)
+// v2: added activeShader field (0..3 = palette variants, 4 = grid,
+//      5..8 = tunnel/glitch/fluid/truchet — packed into vj_palette.wgsl)
 export const CONTROL_STATE_SCHEMA_VERSION = 2;
 
 export const validateControlStateVersion = (

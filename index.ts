@@ -437,7 +437,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 4, defaults.activeShader),
+		activeShader: clampInt(source.activeShader, 0, 8, defaults.activeShader),
 	};
 };
 
@@ -582,7 +582,7 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				mergeControlState({ demoMode: booleanArg(arg) });
 				break;
 			case "active_shader":
-				mergeControlState({ activeShader: Math.max(0, Math.min(4, Math.floor(value))) });
+				mergeControlState({ activeShader: Math.max(0, Math.min(8, Math.floor(value))) });
 				break;
 			case "palette_saturation":
 				mergeControlState({ paletteSaturation: value });

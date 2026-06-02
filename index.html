@@ -280,7 +280,7 @@
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
-        controlState.activeShader = clampInt(next.activeShader, 0, 4, controlState.activeShader);
+        controlState.activeShader = clampInt(next.activeShader, 0, 8, controlState.activeShader);
         if (next.trackMapping && typeof next.trackMapping === "object") {
           controlState.trackMapping = {
             deckAStart: clampInt(next.trackMapping.deckAStart, 0, 31, controlState.trackMapping.deckAStart),

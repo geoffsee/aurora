@@ -101,11 +101,15 @@
         <label class="panel slot">
           <div class="slot-head"><span>GPU Shader</span></div>
           <select id="active-shader">
-            <option value="0">Palette - Web</option>
+            <option value="0">Palette - Web (Kaleido)</option>
             <option value="1">Palette - Spokes</option>
             <option value="2">Palette - Rings</option>
-            <option value="3">Palette - Plasma</option>
+            <option value="3">Palette - Plasma (Warp)</option>
             <option value="4">Grid (Tiles)</option>
+            <option value="5">Tunnel (Cyberpunk)</option>
+            <option value="6">Glitch (Y2K)</option>
+            <option value="7">Fluid (Ambient)</option>
+            <option value="8">Truchet (Geometric)</option>
           </select>
         </label>
         <label class="panel slot">
@@ -1370,7 +1374,7 @@
       }
 
       $("#active-shader").addEventListener("change", (event) => {
-        state.activeShader = Math.max(0, Math.min(4, Number(event.target.value)));
+        state.activeShader = Math.max(0, Math.min(8, Number(event.target.value)));
         publish();
       });
 
