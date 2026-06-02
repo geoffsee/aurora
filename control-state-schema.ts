@@ -5,6 +5,14 @@ const defaultBandCurves = () => ({
 	high: "linear" as const,
 });
 
+const defaultEmaAlphas = () => ({
+	energy: 0.12,
+	bass: 0.08,
+	mid: 0.15,
+	high: 0.22,
+	pulse: 0.28,
+});
+
 // Migrate a control state payload from an older schema version to the current one.
 // Called before validateControlStateVersion so that old automation replays and
 // legacy clients can still connect after a schema bump.
@@ -17,7 +25,11 @@ export const migrateControlState = (state: unknown): unknown => {
 	}
 	// v2 → v3: add bandCurves field
 	if (s.schemaVersion === 2) {
-		return { ...s, schemaVersion: 3, bandCurves: defaultBandCurves() };
+		return migrateControlState({ ...s, schemaVersion: 3, bandCurves: defaultBandCurves() });
+	}
+	// v3 → v4: add emaAlphas field (per-band EMA decay constants)
+	if (s.schemaVersion === 3) {
+		return { ...s, schemaVersion: 4, emaAlphas: defaultEmaAlphas() };
 	}
 	return state;
 };
