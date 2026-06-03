@@ -1419,7 +1419,6 @@
       const VALID_CURVES = new Set(["linear", "exponential", "logarithmic"]);
       for (const band of ["energy", "bass", "mid", "high"]) {
         $(`#band-curve-${band}`).addEventListener("change", (event) => {
-          if (!state.bandCurves) state.bandCurves = { energy: "linear", bass: "linear", mid: "linear", high: "linear" };
           state.bandCurves[band] = VALID_CURVES.has(event.target.value) ? event.target.value : "linear";
           publish();
         });

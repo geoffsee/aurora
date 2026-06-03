@@ -124,6 +124,7 @@
         if (curve === "logarithmic") return Math.sqrt(Math.max(0, value));
         return value; // linear
       };
+      const VALID_CURVES = new Set(["linear", "exponential", "logarithmic"]);
 
       function trackDataValueStart(args) {
         const fieldIndex = args.findIndex(
@@ -283,13 +284,12 @@
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
         controlState.activeShader = clampInt(next.activeShader, 0, 1, controlState.activeShader);
         if (next.bandCurves && typeof next.bandCurves === "object") {
-          const validCurves = new Set(["linear", "exponential", "logarithmic"]);
           const bc = next.bandCurves;
           controlState.bandCurves = {
-            energy: validCurves.has(bc.energy) ? bc.energy : "linear",
-            bass: validCurves.has(bc.bass) ? bc.bass : "linear",
-            mid: validCurves.has(bc.mid) ? bc.mid : "linear",
-            high: validCurves.has(bc.high) ? bc.high : "linear",
+            energy: VALID_CURVES.has(bc.energy) ? bc.energy : "linear",
+            bass: VALID_CURVES.has(bc.bass) ? bc.bass : "linear",
+            mid: VALID_CURVES.has(bc.mid) ? bc.mid : "linear",
+            high: VALID_CURVES.has(bc.high) ? bc.high : "linear",
           };
         }
         if (next.trackMapping && typeof next.trackMapping === "object") {
