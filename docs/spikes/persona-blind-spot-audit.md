@@ -95,7 +95,7 @@ recording played at `timeScale: 0.1` unfolds over 40 seconds; at `timeScale:
 **Implementation surface (bridge-side only):** The `positionMs()` calculation
 in `AutomationPlayer` becomes `(Date.now() - playbackStartedAt) * timeScale`
 (equivalent to dividing each `frame.tMs` by `timeScale` before comparison).
-The `durationMs` used for loop wrap is similarly scaled. No recording format
+Under the `positionMs` scaling approach, the loop-wrap comparison `positionMs >= durationMs` requires no change; `durationMs` retains its recorded value. No recording format
 changes required — this is a playback parameter, not a storage parameter.
 
 **Why it matters for Cortini:** Time-stretch + loop produces the hypnotic,
