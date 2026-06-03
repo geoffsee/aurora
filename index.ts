@@ -855,6 +855,23 @@ const visualServer = Bun.serve({
 	},
 });
 
+// Shadertoy API key supplied at runtime via the controls UI. Held only in
+// memory on the bridge process: never persisted, never sent back to the
+// client, and never logged. Falls back to the SHADERTOY_API_KEY env var if
+// the runtime slot is empty so existing setups keep working.
+let runtimeShadertoyKey: string | null = null;
+const SHADERTOY_KEY_RE = /^[A-Za-z0-9]{8,128}$/;
+const getShadertoyKey = (): string =>
+	runtimeShadertoyKey ?? Bun.env.SHADERTOY_API_KEY ?? "";
+const getShadertoyKeyStatus = () => ({
+	configured: getShadertoyKey().length > 0,
+	source: runtimeShadertoyKey
+		? ("runtime" as const)
+		: Bun.env.SHADERTOY_API_KEY
+			? ("env" as const)
+			: null,
+});
+
 const controlsServer = Bun.serve({
 	port: controlsPort,
 	hostname: "127.0.0.1",
@@ -862,11 +879,56 @@ const controlsServer = Bun.serve({
 		const url = new URL(request.url);
 		const pathname = decodeURIComponent(url.pathname);
 
+		if (pathname === "/api/shadertoy/key") {
+			if (request.method === "GET") {
+				return Response.json(getShadertoyKeyStatus());
+			}
+			if (request.method === "DELETE") {
+				runtimeShadertoyKey = null;
+				return Response.json({ ok: true, ...getShadertoyKeyStatus() });
+			}
+			if (request.method === "POST") {
+				let payload: { key?: unknown };
+				try {
+					payload = (await request.json()) as { key?: unknown };
+				} catch {
+					return Response.json(
+						{ ok: false, error: "Body must be JSON { key: string }" },
+						{ status: 400 },
+					);
+				}
+				const key = typeof payload.key === "string" ? payload.key.trim() : "";
+				if (!key) {
+					return Response.json(
+						{ ok: false, error: "Missing `key` field" },
+						{ status: 400 },
+					);
+				}
+				if (!SHADERTOY_KEY_RE.test(key)) {
+					return Response.json(
+						{
+							ok: false,
+							error:
+								"Key must be 8–128 alphanumeric characters (Shadertoy API key format)",
+						},
+						{ status: 400 },
+					);
+				}
+				runtimeShadertoyKey = key;
+				return Response.json({ ok: true, ...getShadertoyKeyStatus() });
+			}
+			return new Response("Method not allowed", { status: 405 });
+		}
+
 		if (request.method === "POST" && pathname === "/api/shadertoy/import") {
-			const apiKey = Bun.env.SHADERTOY_API_KEY ?? "";
+			const apiKey = getShadertoyKey();
 			if (!apiKey) {
 				return Response.json(
-					{ ok: false, error: "SHADERTOY_API_KEY env var is not set on the bridge" },
+					{
+						ok: false,
+						error:
+							"Shadertoy API key not configured. Enter one in the controls UI or set SHADERTOY_API_KEY.",
+					},
 					{ status: 500 },
 				);
 			}

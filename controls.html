@@ -124,6 +124,16 @@
           </select>
         </label>
         <label class="panel slot">
+          <div class="slot-head"><span>Shadertoy API Key</span><output id="shadertoy-key-status">checking…</output></div>
+          <input id="shadertoy-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Shadertoy API key" style="width:100%;" />
+          <div style="display:flex;gap:4px;margin-top:4px;">
+            <button id="shadertoy-key-save" type="button">Save</button>
+            <button id="shadertoy-key-clear" type="button">Clear</button>
+            <button id="shadertoy-key-reveal" type="button" aria-pressed="false">Show</button>
+          </div>
+          <small style="opacity:0.7;display:block;margin-top:4px;">Stored in bridge memory only. Get a key at shadertoy.com → Account → Apps.</small>
+        </label>
+        <label class="panel slot">
           <div class="slot-head"><span>Shadertoy Import</span><output id="shadertoy-import-status">idle</output></div>
           <input id="shadertoy-import-url" type="text" placeholder="https://www.shadertoy.com/view/XXXXX" style="width:100%;" />
           <button id="shadertoy-import-btn" type="button" style="margin-top:4px;">Import</button>
@@ -1393,6 +1403,77 @@
         state.activeShader = Math.max(0, Math.min(9, Number(event.target.value)));
         publish();
       });
+
+      const renderKeyStatus = (body) => {
+        const status = $("#shadertoy-key-status");
+        if (!body || typeof body !== "object") {
+          status.textContent = "unknown";
+          return;
+        }
+        if (body.configured) {
+          status.textContent = body.source === "env" ? "set (env)" : "set";
+        } else {
+          status.textContent = "not set";
+        }
+      };
+
+      const refreshKeyStatus = async () => {
+        try {
+          const res = await fetch("/api/shadertoy/key");
+          renderKeyStatus(await res.json());
+        } catch {
+          $("#shadertoy-key-status").textContent = "offline";
+        }
+      };
+
+      $("#shadertoy-key-save").addEventListener("click", async () => {
+        const input = $("#shadertoy-key-input");
+        const status = $("#shadertoy-key-status");
+        const key = input.value.trim();
+        if (!key) {
+          status.textContent = "enter key";
+          return;
+        }
+        status.textContent = "saving…";
+        try {
+          const res = await fetch("/api/shadertoy/key", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ key }),
+          });
+          const body = await res.json();
+          if (!res.ok || body.ok === false) {
+            status.textContent = `err: ${String(body.error ?? res.statusText).slice(0, 60)}`;
+            return;
+          }
+          input.value = "";
+          renderKeyStatus(body);
+        } catch (err) {
+          status.textContent = `net err: ${(err && err.message) || String(err)}`;
+        }
+      });
+
+      $("#shadertoy-key-clear").addEventListener("click", async () => {
+        const status = $("#shadertoy-key-status");
+        status.textContent = "clearing…";
+        try {
+          const res = await fetch("/api/shadertoy/key", { method: "DELETE" });
+          renderKeyStatus(await res.json());
+        } catch (err) {
+          status.textContent = `net err: ${(err && err.message) || String(err)}`;
+        }
+      });
+
+      $("#shadertoy-key-reveal").addEventListener("click", (event) => {
+        const input = $("#shadertoy-key-input");
+        const btn = event.currentTarget;
+        const showing = input.type === "text";
+        input.type = showing ? "password" : "text";
+        btn.textContent = showing ? "Show" : "Hide";
+        btn.setAttribute("aria-pressed", String(!showing));
+      });
+
+      refreshKeyStatus();
 
       $("#shadertoy-import-btn").addEventListener("click", async () => {
         const input = $("#shadertoy-import-url");
