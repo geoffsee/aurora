@@ -101,14 +101,11 @@ multiply both sides of the unscaled comparison `positionMs_real >= durationMs / 
 scaled one: `positionMs_virtual >= durationMs`, which is the unchanged `positionMs >= durationMs` expression under the recommended formulation. Under the `positionMs` scaling approach recommended here, the
 *expression* `positionMs >= durationMs` is unchanged, but `positionMs` now
 returns virtual time (`real_elapsed * timeScale`). The comparison
-`positionMs >= durationMs` holds because `positionMs` (virtual ms)
-reaches the recorded `durationMs` (real ms, numerically unchanged)
-exactly when real elapsed time equals `durationMs / timeScale` — the
+`positionMs >= durationMs` holds because `positionMs` (virtual ms, `real_elapsed * timeScale`) reaches `durationMs` (the recorded real-ms duration, numerically identical to the virtual-ms loop target) exactly when real elapsed time equals `durationMs / timeScale` — the
 intended playback duration. The reset therefore advances `startedAt` by
-`durationMs / timeScale` (real ms). `durationMs` retains its recorded value.
+`durationMs / timeScale` (real ms); `durationMs` itself is left unchanged because `positionMs()` already incorporates `timeScale`, so `durationMs` serves unmodified as the virtual-time loop boundary.
 
-No recording format
-changes required — this is a playback parameter, not a storage parameter.
+No recording format changes required — this is a playback parameter, not a storage parameter.
 
 **Why it matters for Cortini:** Time-stretch + loop produces the hypnotic,
 slowly-evolving repetition that defines the aesthetic. A 2-second crossfader
