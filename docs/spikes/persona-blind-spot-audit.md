@@ -96,10 +96,14 @@ recording played at `timeScale: 0.1` unfolds over 40 seconds; at `timeScale:
 in `AutomationPlayer` becomes `(Date.now() - startedAt) * timeScale`
 (an alternative formulation compares unscaled `positionMs` against
 `frame.tMs / timeScale`, but this also requires adjusting the loop-wrap check
-to `positionMs >= durationMs / timeScale`). Under the `positionMs` scaling
-approach recommended here, the loop-wrap comparison `positionMs >= durationMs`
-requires no change; `durationMs` retains its recorded value. (Note: the loop
-reset must advance `startedAt` by `durationMs / timeScale`, not `durationMs`.)
+to `positionMs >= durationMs / timeScale`). Both formulations are equivalent —
+multiply both sides of the unscaled comparison by `timeScale` to obtain the
+scaled one. Under the `positionMs` scaling approach recommended here, the
+*expression* `positionMs >= durationMs` is unchanged, but `positionMs` now
+returns virtual time (`real_elapsed * timeScale`), so `durationMs` is compared
+in consistent virtual-ms units; the reset must advance `startedAt` by
+`durationMs / timeScale` (real ms) to match. `durationMs` retains its recorded
+value.
 No recording format
 changes required — this is a playback parameter, not a storage parameter.
 
