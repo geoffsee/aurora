@@ -97,13 +97,16 @@ in `AutomationPlayer` becomes `(Date.now() - startedAt) * timeScale`
 (an alternative formulation compares unscaled `positionMs` against
 `frame.tMs / timeScale`, but this also requires adjusting the loop-wrap check
 to `positionMs >= durationMs / timeScale`). Both formulations are equivalent —
-multiply both sides of the unscaled comparison by `timeScale` to obtain the
-scaled one. Under the `positionMs` scaling approach recommended here, the
+multiply both sides of the unscaled comparison `positionMs_real >= durationMs / timeScale` by `timeScale` to obtain the
+scaled one: `positionMs_virtual >= durationMs`, which is the unchanged `positionMs >= durationMs` expression under the recommended formulation. Under the `positionMs` scaling approach recommended here, the
 *expression* `positionMs >= durationMs` is unchanged, but `positionMs` now
-returns virtual time (`real_elapsed * timeScale`), so `durationMs` is compared
-in consistent virtual-ms units; the reset must advance `startedAt` by
-`durationMs / timeScale` (real ms) to match. `durationMs` retains its recorded
-value.
+returns virtual time (`real_elapsed * timeScale`). The comparison
+`positionMs >= durationMs` holds because `positionMs` (virtual ms)
+reaches the recorded `durationMs` (real ms, numerically unchanged)
+exactly when real elapsed time equals `durationMs / timeScale` — the
+intended playback duration. The reset therefore advances `startedAt` by
+`durationMs / timeScale` (real ms). `durationMs` retains its recorded value.
+
 No recording format
 changes required — this is a playback parameter, not a storage parameter.
 
