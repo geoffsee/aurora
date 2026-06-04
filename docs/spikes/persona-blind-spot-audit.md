@@ -97,12 +97,14 @@ in `AutomationPlayer` becomes `(Date.now() - startedAt) * timeScale`
 (an alternative formulation compares unscaled `positionMs` against
 `frame.tMs / timeScale`, but this also requires adjusting the loop-wrap check
 to `positionMs >= durationMs / timeScale`). Both formulations are equivalent —
-multiply both sides of the unscaled comparison `positionMs_real >= durationMs / timeScale` by `timeScale` to obtain the
-scaled one: `positionMs_virtual >= durationMs`, which is the unchanged `positionMs >= durationMs` expression under the recommended formulation. Under the `positionMs` scaling approach recommended here, the
-*expression* `positionMs >= durationMs` is unchanged, but `positionMs` now
-returns virtual time (`real_elapsed * timeScale`). The comparison
-`positionMs >= durationMs` holds because `positionMs` (virtual ms, `real_elapsed * timeScale`) reaches `durationMs` (the recorded real-ms duration, numerically identical to the virtual-ms loop target) exactly when real elapsed time equals `durationMs / timeScale` — the
-intended playback duration. The reset therefore advances `startedAt` by
+multiply both sides of the unscaled comparison `positionMs_real >= durationMs / timeScale`
+by `timeScale` to obtain `positionMs_virtual >= durationMs`. Under the recommended
+formulation `positionMs()` returns virtual time (`real_elapsed * timeScale`), so the
+loop-wrap expression stays `positionMs >= durationMs` — unchanged from a non-stretched
+player. The comparison holds because `positionMs` (virtual ms,
+`real_elapsed * timeScale`) reaches `durationMs` (the recording's real-ms
+duration, which is the virtual-time loop boundary) exactly when real elapsed
+time equals `durationMs / timeScale` — the intended playback duration. The reset therefore advances `startedAt` by
 `durationMs / timeScale` (real ms); `durationMs` itself is left unchanged because `positionMs()` already incorporates `timeScale`, so `durationMs` serves unmodified as the virtual-time loop boundary.
 
 No recording format changes required — this is a playback parameter, not a storage parameter.
