@@ -100,6 +100,7 @@ to call `positionMs()` directly instead of maintaining a separate local
 variable. A future implementor who updates only `positionMs()` will have a
 broken player: frames drain at real-time speed while `positionMs()` reports
 virtual time.
+
 (An alternative formulation compares unscaled `positionMs` against
 `frame.tMs / timeScale`, but this also requires adjusting the loop-wrap check
 to `positionMs >= durationMs / timeScale`). Both formulations are equivalent —
@@ -110,13 +111,17 @@ loop-wrap expression stays `positionMs >= durationMs` — unchanged from a non-s
 player. The comparison holds because `positionMs` (virtual ms,
 `real_elapsed * timeScale`) reaches `durationMs` (the recording's real-ms
 duration, which is the virtual-time loop boundary) exactly when real elapsed
-time equals `durationMs / timeScale` — the intended playback duration. The reset therefore must replace `startedAt = Date.now()` in the loop-wrap
+time equals `durationMs / timeScale` — the intended playback duration.
+
+The reset therefore must replace `startedAt = Date.now()` in the loop-wrap
 branch with `startedAt += recording.durationMs / timeScale` (real ms), not a
 fresh `Date.now()` snapshot. Using `Date.now()` absorbs tick-jitter overshoot
 into the next iteration; the phase-accurate increment keeps loop boundaries
 consistent across all iterations. Over a 45-minute Cortini set (~7 iterations
 at `timeScale: 0.1`) the drift compounds, so correctness here matters.
-`durationMs` itself is left unchanged because `positionMs()` already incorporates `timeScale`, so `durationMs` serves unmodified as the virtual-time loop boundary.
+`durationMs` itself is left unchanged because `positionMs()` already
+incorporates `timeScale`, so `durationMs` serves unmodified as the
+virtual-time loop boundary.
 
 No recording format changes required — this is a playback parameter, not a storage parameter.
 
