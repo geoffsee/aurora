@@ -101,11 +101,12 @@ variable. A future implementor who updates only `positionMs()` will have a
 broken player: frames drain at real-time speed while `positionMs()` reports
 virtual time.
 
-(An alternative formulation compares unscaled `positionMs` against
-`frame.tMs / timeScale`, but this also requires adjusting the loop-wrap check
-to `positionMs >= durationMs / timeScale`). Both formulations are equivalent —
-multiply both sides of the unscaled comparison `positionMs_real >= durationMs / timeScale`
-by `timeScale` to obtain `positionMs_virtual >= durationMs`. Under the recommended
+Both formulations are equivalent — multiply both sides of the unscaled comparison
+`positionMs_real >= durationMs / timeScale`
+by `timeScale` to obtain `positionMs_virtual >= durationMs`. (An alternative
+formulation compares unscaled `positionMs` against `frame.tMs / timeScale`,
+but also requires adjusting the loop-wrap check to
+`positionMs >= durationMs / timeScale`.) Under the recommended
 formulation `positionMs()` returns virtual time (`real_elapsed * timeScale`), so the
 loop-wrap expression stays `positionMs >= durationMs` — unchanged from a non-stretched
 player. The comparison holds because `positionMs` (virtual ms,
