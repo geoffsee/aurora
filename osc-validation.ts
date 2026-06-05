@@ -2,9 +2,8 @@ export type OscArg = { type: string; value: unknown } | unknown;
 export type OscMsg = { address: string; args?: OscArg[] };
 
 // CONTROL_STATE_SCHEMA_VERSION tracks the ControlState wire format.
-// To bump: increment this integer, add a migration branch in the WebSocket
-// message handler in index.ts that transforms the old payload shape before
-// passing it to broadcastControl, and update defaultState() in controls.html
+// To bump: increment this integer, add a migration branch in
+// control-state-schema.ts, and update defaultState() in controls.html
 // to emit the new version number.
 // v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
 // v3: added per-band EMA decay alpha fields (emaAlphaBass/Energy/Mid/High/Pulse)
