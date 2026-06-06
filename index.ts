@@ -4,7 +4,9 @@ import type { ServerWebSocket } from "bun";
 import {
 	type OscArg,
 	type OscMsg,
+	type AudioCurveShape,
 	CONTROL_STATE_SCHEMA_VERSION,
+	isAudioCurveShape,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
@@ -44,6 +46,12 @@ type TrackMapping = {
 	midTrack: number;
 	highTrack: number;
 };
+type BandCurves = {
+	energy: AudioCurveShape;
+	bass: AudioCurveShape;
+	mid: AudioCurveShape;
+	high: AudioCurveShape;
+};
 type ControlState = {
 	readonly schemaVersion: number;
 	crossfade: number;
@@ -79,11 +87,8 @@ type ControlState = {
 	cueDeckBMode: number;
 	trackMapping: TrackMapping;
 	activeShader: number;
-	emaAlphaBass: number;
-	emaAlphaEnergy: number;
-	emaAlphaMid: number;
-	emaAlphaHigh: number;
-	emaAlphaPulse: number;
+	bandCurves: BandCurves;
+	emaAlphas: AudioEmaAlphas;
 };
 
 const require = createRequire(import.meta.url);
@@ -241,11 +246,8 @@ const defaultControlState = (): ControlState => ({
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
-	emaAlphaBass: audioEmaAlphas.bass,
-	emaAlphaEnergy: audioEmaAlphas.energy,
-	emaAlphaMid: audioEmaAlphas.mid,
-	emaAlphaHigh: audioEmaAlphas.high,
-	emaAlphaPulse: audioEmaAlphas.pulse,
+	bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -419,11 +421,31 @@ const coerceControlState = (state: unknown): ControlState => {
 			),
 		},
 		activeShader: clampInt(source.activeShader, 0, 1, defaults.activeShader),
-		emaAlphaBass: clamp(source.emaAlphaBass, 0.01, 1, defaults.emaAlphaBass),
-		emaAlphaEnergy: clamp(source.emaAlphaEnergy, 0.01, 1, defaults.emaAlphaEnergy),
-		emaAlphaMid: clamp(source.emaAlphaMid, 0.01, 1, defaults.emaAlphaMid),
-		emaAlphaHigh: clamp(source.emaAlphaHigh, 0.01, 1, defaults.emaAlphaHigh),
-		emaAlphaPulse: clamp(source.emaAlphaPulse, 0.01, 1, defaults.emaAlphaPulse),
+		bandCurves: (() => {
+			const bc =
+				source.bandCurves && typeof source.bandCurves === "object"
+					? (source.bandCurves as Partial<BandCurves>)
+					: {};
+			return {
+				energy: isAudioCurveShape(bc.energy) ? bc.energy : "linear",
+				bass: isAudioCurveShape(bc.bass) ? bc.bass : "linear",
+				mid: isAudioCurveShape(bc.mid) ? bc.mid : "linear",
+				high: isAudioCurveShape(bc.high) ? bc.high : "linear",
+			};
+		})(),
+		emaAlphas: (() => {
+			const ea =
+				source.emaAlphas && typeof source.emaAlphas === "object"
+					? (source.emaAlphas as Partial<AudioEmaAlphas>)
+					: {};
+			return {
+				energy: clamp(ea.energy, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+				bass: clamp(ea.bass, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+				mid: clamp(ea.mid, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+				high: clamp(ea.high, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
+				pulse: clamp(ea.pulse, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+			};
+		})(),
 	};
 };
 
@@ -611,19 +633,19 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
 				break;
 			case "ema_alpha_bass":
-				mergeControlState({ emaAlphaBass: value });
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass) } });
 				break;
 			case "ema_alpha_energy":
-				mergeControlState({ emaAlphaEnergy: value });
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy) } });
 				break;
 			case "ema_alpha_mid":
-				mergeControlState({ emaAlphaMid: value });
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid) } });
 				break;
 			case "ema_alpha_high":
-				mergeControlState({ emaAlphaHigh: value });
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high) } });
 				break;
 			case "ema_alpha_pulse":
-				mergeControlState({ emaAlphaPulse: value });
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse) } });
 				break;
 		}
 
@@ -1002,14 +1024,7 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const liveAlphas: AudioEmaAlphas = {
-		bass: state.emaAlphaBass,
-		energy: state.emaAlphaEnergy,
-		mid: state.emaAlphaMid,
-		high: state.emaAlphaHigh,
-		pulse: state.emaAlphaPulse,
-	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, liveAlphas);
+	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
 	const demo = {
 		tempo: state.bpm,
 		beat,

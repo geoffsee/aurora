@@ -6,8 +6,18 @@ export type OscMsg = { address: string; args?: OscArg[] };
 // control-state-schema.ts, and update defaultState() in controls.html
 // to emit the new version number.
 // v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
-// v3: added per-band EMA decay alpha fields (emaAlphaBass/Energy/Mid/High/Pulse)
-export const CONTROL_STATE_SCHEMA_VERSION = 3;
+// v3: added bandCurves field (per-band audio-reactive curve shaping)
+// v4: added emaAlphas field (per-band EMA decay constants for preset bundling)
+export const CONTROL_STATE_SCHEMA_VERSION = 4;
+
+export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
+export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
+	"linear",
+	"exponential",
+	"logarithmic",
+] as const;
+export const isAudioCurveShape = (v: unknown): v is AudioCurveShape =>
+	v === "linear" || v === "exponential" || v === "logarithmic";
 
 export const validateControlStateVersion = (
 	state: unknown,

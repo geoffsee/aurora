@@ -92,6 +92,7 @@
           highTrack: 2,
         },
         activeShader: 0,
+        bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
       };
       const diagnostics = {
         sockets: 0,
@@ -115,6 +116,15 @@
         const blend = 1 - Math.exp(-dtMs / Math.max(1, timeMs));
         return current + (target - current) * blend;
       };
+      // Applies the selected curve shape to a [0,1] audio value.
+      // exponential (x²): punchy — suppresses quiet signals, amplifies loud ones.
+      // logarithmic (√x): ambient — lifts quiet signals, compresses loud ones.
+      const applyAudioCurve = (value, curve) => {
+        if (curve === "exponential") return value * value;
+        if (curve === "logarithmic") return Math.sqrt(Math.max(0, value));
+        return value; // linear
+      };
+      const VALID_CURVES = new Set(["linear", "exponential", "logarithmic"]);
 
       function trackDataValueStart(args) {
         const fieldIndex = args.findIndex(
@@ -273,6 +283,15 @@
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
         controlState.activeShader = clampInt(next.activeShader, 0, 1, controlState.activeShader);
+        if (next.bandCurves && typeof next.bandCurves === "object") {
+          const bc = next.bandCurves;
+          controlState.bandCurves = {
+            energy: VALID_CURVES.has(bc.energy) ? bc.energy : "linear",
+            bass: VALID_CURVES.has(bc.bass) ? bc.bass : "linear",
+            mid: VALID_CURVES.has(bc.mid) ? bc.mid : "linear",
+            high: VALID_CURVES.has(bc.high) ? bc.high : "linear",
+          };
+        }
         if (next.trackMapping && typeof next.trackMapping === "object") {
           controlState.trackMapping = {
             deckAStart: clampInt(next.trackMapping.deckAStart, 0, 31, controlState.trackMapping.deckAStart),
@@ -342,12 +361,12 @@
       };
       window.__bevyoscOscPlaying = () => Boolean(oscState.playing);
       window.__bevyoscOscTempo = () => oscState.tempo;
-      window.__bevyoscOscEnergy = () => (decayMeters(), oscState.energy);
+      window.__bevyoscOscEnergy = () => (decayMeters(), applyAudioCurve(oscState.energy, controlState.bandCurves.energy));
       window.__bevyoscOscDeckA = () => (decayMeters(), oscState.deckA);
       window.__bevyoscOscDeckB = () => (decayMeters(), oscState.deckB);
-      window.__bevyoscOscBass = () => (decayMeters(), oscState.bass);
-      window.__bevyoscOscMid = () => (decayMeters(), oscState.mid);
-      window.__bevyoscOscHigh = () => (decayMeters(), oscState.high);
+      window.__bevyoscOscBass = () => (decayMeters(), applyAudioCurve(oscState.bass, controlState.bandCurves.bass));
+      window.__bevyoscOscMid = () => (decayMeters(), applyAudioCurve(oscState.mid, controlState.bandCurves.mid));
+      window.__bevyoscOscHigh = () => (decayMeters(), applyAudioCurve(oscState.high, controlState.bandCurves.high));
       window.__bevyoscOscPulse = () => {
         decayMeters();
         if (oscState.energy < 0.02) return 0;
