@@ -632,6 +632,21 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			case "active_shader":
 				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
 				break;
+			case "ema_alpha_bass":
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass) } });
+				break;
+			case "ema_alpha_energy":
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy) } });
+				break;
+			case "ema_alpha_mid":
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid) } });
+				break;
+			case "ema_alpha_high":
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high) } });
+				break;
+			case "ema_alpha_pulse":
+				mergeControlState({ emaAlphas: { ...current.emaAlphas, pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse) } });
+				break;
 		}
 
 		return;
@@ -747,6 +762,11 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"bar_sync",
 	"demo_mode",
 	"active_shader",
+	"ema_alpha_bass",
+	"ema_alpha_energy",
+	"ema_alpha_mid",
+	"ema_alpha_high",
+	"ema_alpha_pulse",
 ]);
 if (
 	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
