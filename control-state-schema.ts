@@ -28,8 +28,19 @@ export const migrateControlState = (state: unknown): unknown => {
 		return migrateControlState({ ...s, schemaVersion: 3, bandCurves: defaultBandCurves() });
 	}
 	// v3 → v4: add emaAlphas field (per-band EMA decay constants)
+	// v3 states from PR #95 may carry flat emaAlpha* fields — preserve them.
 	if (s.schemaVersion === 3) {
-		return { ...s, schemaVersion: 4, emaAlphas: defaultEmaAlphas() };
+		const emaAlphas =
+			typeof s.emaAlphaBass === "number"
+				? {
+						energy: s.emaAlphaEnergy as number,
+						bass: s.emaAlphaBass as number,
+						mid: s.emaAlphaMid as number,
+						high: s.emaAlphaHigh as number,
+						pulse: s.emaAlphaPulse as number,
+				  }
+				: defaultEmaAlphas();
+		return { ...s, schemaVersion: 4, emaAlphas };
 	}
 	return state;
 };

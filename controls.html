@@ -1426,7 +1426,6 @@
 
       for (const band of ["energy", "bass", "mid", "high", "pulse"]) {
         $(`#ema-alpha-${band}`)?.addEventListener("input", (event) => {
-          if (!state.emaAlphas) state.emaAlphas = { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 };
           const v = Math.max(0.01, Math.min(1, Number(event.target.value)));
           state.emaAlphas[band] = v;
           const out = $(`#ema-${band}-value`);

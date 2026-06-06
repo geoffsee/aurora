@@ -33,6 +33,22 @@ test("v3 state is upgraded to v4 with emaAlphas added", () => {
 	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
 });
 
+test("v3 state with legacy flat emaAlpha* fields carries them forward into emaAlphas", () => {
+	const input = {
+		schemaVersion: 3,
+		activeShader: 1,
+		bandCurves: { energy: "exponential", bass: "linear", mid: "linear", high: "linear" },
+		emaAlphaBass: 0.1,
+		emaAlphaEnergy: 0.3,
+		emaAlphaMid: 0.2,
+		emaAlphaHigh: 0.4,
+		emaAlphaPulse: 0.5,
+	};
+	const result = migrateControlState(input) as Record<string, unknown>;
+	expect(result.schemaVersion).toBe(4);
+	expect(result.emaAlphas).toEqual({ energy: 0.3, bass: 0.1, mid: 0.2, high: 0.4, pulse: 0.5 });
+});
+
 test("v4 state passes through unchanged", () => {
 	const input = {
 		schemaVersion: 4,
