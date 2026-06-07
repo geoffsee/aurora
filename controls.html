@@ -695,14 +695,24 @@
       }
 
       const PRESETS_KEY = "bevyosc.presets";
+      const PRESET_BUNDLE_SCHEMA_VERSION = 1; // keep in sync with preset-bundle-schema.ts
       const loadPresets = () => {
         try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}"); } catch { return {}; }
       };
       const savePresetsToStorage = (p) => localStorage.setItem(PRESETS_KEY, JSON.stringify(p));
+      // Mirrors migratePresetBundle() in preset-bundle-schema.ts — keep in sync.
       const normalizePreset = (raw) => {
-        if (!raw) return null;
-        if (typeof raw === "object" && "state" in raw) return raw;
-        return { name: null, state: raw };
+        if (!raw || typeof raw !== "object") return null;
+        // Legacy: raw ControlState stored directly (no "state" wrapper key)
+        if (!("state" in raw)) return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: "", state: raw, curves: {} };
+        const state = raw.state && typeof raw.state === "object" ? raw.state : {};
+        const curves = raw.curves && typeof raw.curves === "object" ? raw.curves : {};
+        const name = typeof raw.name === "string" ? raw.name : "";
+        // v0 unversioned or v1 current — normalise to v1 shape
+        if (!("schemaVersion" in raw) || raw.schemaVersion === PRESET_BUNDLE_SCHEMA_VERSION) {
+          return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name, state, curves };
+        }
+        return null;
       };
 
       const INTERPOLATED_KEYS = ["crossfade", "speed", "intensity", "feedback", "depth", "palette", "ringOpacity", "maxBrightness"];
@@ -780,7 +790,7 @@
       function savePresetSilent(n) {
         const presets = loadPresets();
         const existing = normalizePreset(presets[`slot-${n}`]);
-        presets[`slot-${n}`] = { name: existing?.name || `Preset ${n}`, state: cloneState(), curves: { ...pendingCurves } };
+        presets[`slot-${n}`] = { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: existing?.name || `Preset ${n}`, state: cloneState(), curves: { ...pendingCurves } };
         savePresetsToStorage(presets);
         activePresetIndex = n;
         renderPresets();
@@ -792,7 +802,7 @@
         const defaultName = existing?.name || `Preset ${n}`;
         const name = prompt(`Name for slot ${n}:`, defaultName);
         if (name === null) return;
-        presets[`slot-${n}`] = { name: name.trim() || defaultName, state: cloneState(), curves: { ...pendingCurves } };
+        presets[`slot-${n}`] = { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: name.trim() || defaultName, state: cloneState(), curves: { ...pendingCurves } };
         savePresetsToStorage(presets);
         activePresetIndex = n;
         renderPresets();
