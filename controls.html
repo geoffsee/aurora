@@ -702,11 +702,14 @@
       const savePresetsToStorage = (p) => localStorage.setItem(PRESETS_KEY, JSON.stringify(p));
       // Mirrors migratePresetBundle() in preset-bundle-schema.ts — keep in sync.
       const normalizePreset = (raw) => {
-        if (!raw || typeof raw !== "object") return null;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
         // Legacy: raw ControlState stored directly (no "state" wrapper key)
         if (!("state" in raw)) return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: "", state: raw, curves: {} };
         const state = raw.state && typeof raw.state === "object" ? raw.state : {};
-        const curves = raw.curves && typeof raw.curves === "object" ? raw.curves : {};
+        const curvesRaw = raw.curves;
+        const curves = curvesRaw && typeof curvesRaw === "object" && !Array.isArray(curvesRaw)
+          ? Object.fromEntries(Object.entries(curvesRaw).filter(([, v]) => typeof v === "string"))
+          : {};
         const name = typeof raw.name === "string" ? raw.name : "";
         // v0 unversioned or v1 current — normalise to v1 shape
         if (!("schemaVersion" in raw) || raw.schemaVersion === PRESET_BUNDLE_SCHEMA_VERSION) {

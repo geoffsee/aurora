@@ -42,12 +42,12 @@ export function normalizeBandCurves(
 	raw: Record<string, unknown> | null | undefined,
 ): BandCurves {
 	const bc = raw ?? {};
-	const c = (v: unknown): AudioCurveShape => (isAudioCurveShape(v) ? v : "linear");
+	const toShape = (v: unknown): AudioCurveShape => (isAudioCurveShape(v) ? v : "linear");
 	return {
-		energy: c(bc.energy),
-		bass: c(bc.bass),
-		mid: c(bc.mid),
-		high: c(bc.high),
+		energy: toShape(bc.energy),
+		bass: toShape(bc.bass),
+		mid: toShape(bc.mid),
+		high: toShape(bc.high),
 	};
 }
 
