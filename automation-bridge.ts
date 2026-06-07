@@ -9,8 +9,14 @@ import {
 } from "./automation-trigger.ts";
 import type { StateLogEntry } from "./state-log.ts";
 import { CONTROL_STATE_SCHEMA_VERSION } from "./osc-validation.ts";
+import type { AudioFeatures } from "./audio-ema.ts";
+import {
+	makeAudioTransientDetector,
+	type AudioTransientConfig,
+} from "./audio-transient-trigger.ts";
 
 export type { AutomationTriggerBinding };
+export type { AudioTransientConfig };
 
 // Default OSC addresses wired unconditionally. Hardware/software controllers
 // can send to these without any per-deployment configuration.
@@ -66,29 +72,38 @@ export function parseTriggerBindings(json: string): AutomationTriggerBinding[] {
 }
 
 /**
- * Wire an automation player to trigger bindings. Exposes `onMidiNote`,
- * `onMidiCc`, and `onOscAddress` entry points that fire the player when a
- * matching binding is found.
+ * Wire an automation player to trigger bindings and an optional audio transient
+ * detector. Exposes entry points for MIDI note, MIDI CC, OSC address, and
+ * smoothed AudioFeatures — any of which can fire the player independently.
  *
  * When a play/play-loop action is dispatched, a new recording is built
  * on demand from `getEntries()` and loaded into the player before starting.
  * DEFAULT_OSC_BINDINGS are prepended so they are always active.
+ *
+ * Pass `transientConfig` to enable audio-driven triggering. Call
+ * `onAudioFeatures(features, nowMs)` each frame with smoothed audio data.
+ * Call `updateTransientConfig(patch)` to reconfigure the detector at runtime.
  */
 export function makeAutomationBridge(
 	mergeControlState: (diff: Record<string, unknown>) => void,
 	extraBindings: readonly AutomationTriggerBinding[],
 	getEntries: () => StateLogEntry[],
+	transientConfig?: Partial<AudioTransientConfig>,
 ): {
 	player: ReturnType<typeof makeAutomationPlayer>;
 	onMidiNote(note: number, channel: number): boolean;
 	onMidiCc(cc: number, channel: number, value: number): boolean;
 	onOscAddress(address: string): boolean;
+	onAudioFeatures(features: Readonly<AudioFeatures>, nowMs: number): boolean;
+	updateTransientConfig(patch: Partial<AudioTransientConfig>): void;
+	getTransientConfig(): Readonly<AudioTransientConfig>;
 } {
 	const player = makeAutomationPlayer(mergeControlState);
 	const bindings: readonly AutomationTriggerBinding[] = [
 		...DEFAULT_OSC_BINDINGS,
 		...extraBindings,
 	];
+	const detector = makeAudioTransientDetector(transientConfig ?? {});
 
 	function dispatch(action: TriggerAction): void {
 		const resolved = resolveAction(action, player.isActive());
@@ -120,6 +135,17 @@ export function makeAutomationBridge(
 			if (action === null) return false;
 			dispatch(action);
 			return true;
+		},
+		onAudioFeatures(features, nowMs) {
+			if (!detector.step(features, nowMs)) return false;
+			dispatch(detector.getConfig().action);
+			return true;
+		},
+		updateTransientConfig(patch) {
+			detector.updateConfig(patch);
+		},
+		getTransientConfig() {
+			return detector.getConfig();
 		},
 	};
 }
