@@ -63,7 +63,7 @@ describe("makeAudioTransientDetector — beat mode", () => {
 		expect(d.step(features({ bass: 0.001 }), 0)).toBe(true);
 	});
 
-	test("does not fire when all bands are zero and threshold is 0", () => {
+	test("fires when band equals threshold (threshold=0, band=0)", () => {
 		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0, debounceMs: 0 });
 		// 0 >= 0 is true, so this DOES fire — that is intentional for threshold=0
 		expect(d.step(features(), 0)).toBe(true);

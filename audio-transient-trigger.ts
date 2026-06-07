@@ -28,7 +28,7 @@ export const DEFAULT_TRANSIENT_CONFIG: Readonly<AudioTransientConfig> = {
 	mode: "beat",
 	threshold: 0.5,
 	debounceMs: 200,
-	band: "pulse",
+	band: "energy",
 	action: "toggle",
 };
 

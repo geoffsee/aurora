@@ -139,7 +139,6 @@ let lastMidiClockAt = 0;
 let lastMidiClockBpmUpdate = 0;
 const demoAudioEma = makeAudioEmaState();
 const liveAudioEma = makeAudioEmaState();
-let latestLiveMeters: number[] = [];
 
 const _raw = Number(Bun.env.STATE_LOG_CAPACITY);
 const stateLogCapacity =
@@ -544,7 +543,6 @@ function processLiveTrackData(args: unknown[]): void {
 		.map((v) => Math.max(0, Math.min(1, v)));
 
 	if (meters.length === 0) return;
-	latestLiveMeters = meters;
 
 	const mapping = latestControlState?.trackMapping ?? defaultTrackMapping();
 	const avg = meters.reduce((a, b) => a + b, 0) / meters.length;
