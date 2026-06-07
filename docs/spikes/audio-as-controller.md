@@ -137,7 +137,7 @@ export type AudioMapping = {
 
   // threshold: fires mergeControlState once per rising edge above level
   level: number;                   // 0..1
-  onRise: Partial<ControlState>;   // applied when source crosses level upward
+  onRise: (current: ControlState) => Partial<ControlState>;  // function form supports increment semantics (e.g. flashVersion + 1)
   offDelay: number;                // ms to wait before firing onRise again (debounce)
 };
 
@@ -163,7 +163,7 @@ the transient signal maps naturally to `threshold` mode:
   source: "pulse",    // pulse is the sharpest transient indicator in AudioFeatures
   mode: "threshold",
   level: 0.75,
-  onRise: { flashVersion: /* incremented */ },
+  onRise: (s) => ({ flashVersion: s.flashVersion + 1 }),
   offDelay: 200,
 }
 ```
@@ -174,24 +174,23 @@ value regardless of how `pulse` is computed.
 
 ### ControlState integration
 
-Two new fields added to `ControlState`:
+One new field added to `ControlState`:
 
 | Field | Type | Purpose |
 |---|---|---|
 | `audioControlMode` | `boolean` (default `false`) | Global enable/disable; existing behavior is fully preserved when `false` |
-| `audioMappings` | `AudioMapping[]` (default `[]`) | Per-operator routing configuration |
 
-`coerceControlState` must validate `audioMappings` as an array and deep-clamp each
-mapping. `audioControlMode` is a plain boolean, no clamping required.
+`audioControlMode` is a plain boolean, no clamping required.
 
 `CONTROL_STATE_SCHEMA_VERSION` bumps from current to current + 1. Migration: if
-incoming state lacks `audioControlMode`, default to `false`; if it lacks
-`audioMappings`, default to `[]`. Existing presets and recordings are unaffected
-(both fields default to inert values).
+incoming state lacks `audioControlMode`, default to `false`. Existing presets and
+recordings are unaffected.
 
-`audioMappings` is excluded from automation recordings — the diff recorder in
-`automation-bridge.ts` should treat it like `strobeLockout`: never captured, never
-replayed. It is a routing configuration, not a performance parameter.
+Routing configuration (`AudioMapping[]`) is **not** stored in `ControlState`. It lives
+in a separate `audio-mappings.json` bridge config file, loaded at bridge startup and
+reloaded via a new `/bevyosc/audio/config` WS address. This keeps routing config out
+of `coerceControlState` validation complexity and out of the WASM renderer's getter
+surface.
 
 ### Controls page changes
 
@@ -211,7 +210,7 @@ who do not use the feature.
 |---|---|
 | `index.ts` websocket.message handler | Add `case "/bevyosc/audio/features":` branch — validates payload as `AudioFeatures`, calls `router.onFeatures()` |
 | `index.ts` demo mode setInterval | After `stepAudioEma`, also call `router.onFeatures(smoothed)` — demo mode works automatically |
-| `index.ts` module-level setup | Instantiate `AudioControlRouter`; pass `mergeControlState` as callback; call `router.setMappings(currentControlState().audioMappings)` on every `broadcastControl` that changes the mappings field |
+| `index.ts` module-level setup | Instantiate `AudioControlRouter`; pass `mergeControlState` as callback; load initial mappings from `audio-mappings.json`; reload via `/bevyosc/audio/config` WS message |
 | `osc-validation.ts` | Add `"audio_control_mode"` to `VST_CONTROL_NAMES` and matching case in `applyVstControlMessage` so the VST can toggle the mode |
 
 ### Files touched (Phase 1)
@@ -219,9 +218,10 @@ who do not use the feature.
 | File | Change |
 |---|---|
 | `audio-control-router.ts` | New module — `AudioMapping` type, `AudioControlRouter` implementation |
-| `index.ts` | New WS message handler for `/bevyosc/audio/features`; router instantiation and wiring; demo-mode router feed |
-| `osc-validation.ts` | Schema version bump; add `audio_control_mode` to `VST_CONTROL_NAMES`; `AudioMapping` validator |
-| `control-state-schema.ts` | Migration for new fields |
+| `audio-mappings.json` | New config file — default empty array; loaded at bridge startup; mutated via `/bevyosc/audio/config` |
+| `index.ts` | New WS message handlers for `/bevyosc/audio/features` and `/bevyosc/audio/config`; router instantiation and wiring; demo-mode router feed |
+| `osc-validation.ts` | Schema version bump; add `audio_control_mode` to `VST_CONTROL_NAMES` |
+| `control-state-schema.ts` | Migration for `audioControlMode` field only |
 | `index.html` | New `setInterval` to send `/bevyosc/audio/features` from `oscState` to bridge WS |
 | `controls.html` | Audio Control panel UI |
 | `tests/` | Unit tests for `AudioControlRouter`: threshold rising-edge, debounce, continuous mapping, empty mappings no-op |
@@ -275,6 +275,12 @@ WebSocket bus.
 This is a UX design decision, not a technical blocker. The API is available in all
 supported browsers (Chrome, Firefox, Safari ≥ 14.1).
 
+**Deployment constraint:** `getUserMedia` requires a **secure context** — either
+`localhost` or an HTTPS origin. Serving the controls page from a LAN IP without TLS
+(e.g. rehearsal setup at `192.168.x.x:3001`) will fail silently with `NotAllowedError`.
+The follow-on implementer must document that any non-localhost deployment of the
+controls page requires HTTPS or a localhost tunnel.
+
 ### Files touched (Phase 2 only)
 
 | File | Change |
@@ -291,9 +297,9 @@ Phase 2 **does not require any bridge changes** beyond what Phase 1 already deli
 | Blocker | Phase | Severity | Resolution |
 |---|---|---|---|
 | Bridge does not receive audio features in live mode | Phase 1 | **Required** | Add `/bevyosc/audio/features` WS message from `index.html` → bridge |
-| `ControlState` schema lacks `audioControlMode` + `audioMappings` | Phase 1 | **Required** | Schema bump + migration (standard pattern) |
-| `audioMappings` validation is complex (nested array of objects) | Phase 1 | Medium | `coerceControlState` must deep-validate; `zod` or explicit guard function |
-| `flashVersion` is an edge-trigger counter, not a value — threshold `onRise` must increment it, not set it | Phase 1 | Medium | Router must read current `ControlState.flashVersion` and add 1 for flash triggers |
+| `ControlState` schema lacks `audioControlMode` | Phase 1 | **Required** | Schema bump + migration (standard pattern) |
+| Routing config file (`audio-mappings.json`) needs schema and reload endpoint | Phase 1 | Medium | New `/bevyosc/audio/config` WS address; JSON validation in bridge |
+| `flashVersion` is an edge-trigger counter — `onRise` must return an increment, not a static set | Phase 1 | Medium | Resolved by `onRise: (current) => Partial<ControlState>` function signature |
 | Web Audio capture requires user permission and a UX flow | Phase 2 | Gating | Controls-page toggle; outside Phase 1 scope |
 | No native audio analysis in bridge process (no `@types/node` audio API) | Phase 2 | Phase 2 only | Resolved by browser-side capture in `controls.html` |
 
@@ -307,10 +313,10 @@ If #107 adds a dedicated `transient: number` field to `AudioFeatures`, the route
 a cleaner onset source without changes to the routing module itself.
 
 **#108 Shader + Audio Preset Bundles**: preset bundles set `ControlState` values
-including `audioMappings`. A bundle could encode a full routing config alongside
-shader/audio parameters — "Eno ambient install" bundle activates `audioControlMode`
-with continuous bass→crossfade and onset→cue-advance mappings. No conflict; bundles
-are just preset values.
+including `audioControlMode`. A bundle that sets `audioControlMode: true` activates
+the routing layer; the specific mapping graph is loaded separately from
+`audio-mappings.json` and is not encoded in the bundle. No conflict; bundles use the
+standard ControlState preset path.
 
 **C-2 Automation time-stretch** (from audit #91): time-stretch is on the playback
 path; audio routing is on the live-input path. They do not interact unless a performer
@@ -344,7 +350,7 @@ in complexity but more volatile.
 
 ## Proposed Acceptance Criteria for Follow-On Implementation Issue
 
-- [ ] New `audio-control-router.ts` module with `AudioControlBinding` type and
+- [ ] New `audio-control-router.ts` module with `AudioMapping` type and
       `AudioControlRouter` interface
 - [ ] Bridge feeds audio features to router from demo-mode timer and from new
       `/bevyosc/audio/features` WebSocket message
