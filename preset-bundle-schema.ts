@@ -59,7 +59,7 @@ export function normalizeBandCurves(
 //   v1 (current)                                        → identity (normalised shape)
 //   unknown future version                              → null (never downgrade)
 export function migratePresetBundle(raw: unknown): PresetBundle | null {
-	if (raw === null || typeof raw !== "object") return null;
+	if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
 	const r = raw as Record<string, unknown>;
 
 	// Legacy: raw ControlState stored directly, no "state" wrapper key
@@ -76,10 +76,12 @@ export function migratePresetBundle(raw: unknown): PresetBundle | null {
 		r.state !== null && typeof r.state === "object"
 			? (r.state as Record<string, unknown>)
 			: {};
-	const curves =
-		r.curves !== null && typeof r.curves === "object"
-			? (r.curves as Record<string, string>)
-			: {};
+	const curves: Record<string, string> = {};
+	if (r.curves !== null && typeof r.curves === "object" && !Array.isArray(r.curves)) {
+		for (const [k, v] of Object.entries(r.curves as Record<string, unknown>)) {
+			if (typeof v === "string") curves[k] = v;
+		}
+	}
 	const name = typeof r.name === "string" ? r.name : "";
 
 	// v0 unversioned: has "state" key but no schemaVersion
