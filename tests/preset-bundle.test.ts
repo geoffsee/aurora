@@ -49,6 +49,11 @@ function recallPreset(
 // ── PRESET_BUNDLE_SCHEMA_VERSION ──────────────────────────────────────────────
 
 describe("PRESET_BUNDLE_SCHEMA_VERSION", () => {
+	// If this assertion fails, also bump the constant in controls.html.
+	test("equals 1 (pin to catch controls.html drift)", () => {
+		expect(PRESET_BUNDLE_SCHEMA_VERSION).toBe(1);
+	});
+
 	test("is a positive integer", () => {
 		expect(Number.isInteger(PRESET_BUNDLE_SCHEMA_VERSION)).toBe(true);
 		expect(PRESET_BUNDLE_SCHEMA_VERSION).toBeGreaterThan(0);

@@ -25,16 +25,16 @@ export function normalizeEmaAlphas(
 	raw: Record<string, unknown> | null | undefined,
 ): AudioEmaAlphas {
 	const ea = raw ?? {};
-	const clamp = (v: unknown, def: number): number => {
+	const coerce = (v: unknown, def: number): number => {
 		const n = Number(v);
 		return Number.isFinite(n) && n >= 0.01 && n <= 1 ? n : def;
 	};
 	return {
-		energy: clamp(ea.energy, DEFAULT_AUDIO_EMA_ALPHAS.energy),
-		bass: clamp(ea.bass, DEFAULT_AUDIO_EMA_ALPHAS.bass),
-		mid: clamp(ea.mid, DEFAULT_AUDIO_EMA_ALPHAS.mid),
-		high: clamp(ea.high, DEFAULT_AUDIO_EMA_ALPHAS.high),
-		pulse: clamp(ea.pulse, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+		energy: coerce(ea.energy, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+		bass: coerce(ea.bass, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+		mid: coerce(ea.mid, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+		high: coerce(ea.high, DEFAULT_AUDIO_EMA_ALPHAS.high),
+		pulse: coerce(ea.pulse, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
 	};
 }
 
