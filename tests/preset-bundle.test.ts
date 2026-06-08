@@ -436,6 +436,7 @@ describe("normalizePreset (controls.html) parity with migratePresetBundle", () =
 	}
 
 	test("null → null", () => expect(normalizePreset(null)).toEqual(migratePresetBundle(null)));
+	test("undefined → null", () => expect(normalizePreset(undefined)).toEqual(migratePresetBundle(undefined)));
 	test("string → null", () => expect(normalizePreset("preset")).toEqual(migratePresetBundle("preset")));
 	test("legacy raw state (no state key)", () => {
 		const raw = { activeShader: 1, crossfade: 0.75 };
