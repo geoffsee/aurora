@@ -361,6 +361,11 @@ describe("schema migration preserves bundling intent", () => {
 // ── normalizeBandCurves ───────────────────────────────────────────────────────
 
 describe("normalizeBandCurves", () => {
+	test("defaults all bands to linear when given null", () => {
+		const bc = normalizeBandCurves(null);
+		expect(bc).toEqual({ energy: "linear", bass: "linear", mid: "linear", high: "linear" });
+	});
+
 	test("defaults all bands to linear when given undefined", () => {
 		const bc = normalizeBandCurves(undefined);
 		expect(bc).toEqual({ energy: "linear", bass: "linear", mid: "linear", high: "linear" });
@@ -381,6 +386,11 @@ describe("normalizeBandCurves", () => {
 // ── normalizeEmaAlphas ────────────────────────────────────────────────────────
 
 describe("normalizeEmaAlphas", () => {
+	test("defaults all bands when given null", () => {
+		const ea = normalizeEmaAlphas(null);
+		expect(ea).toEqual(DEFAULT_AUDIO_EMA_ALPHAS);
+	});
+
 	test("defaults all bands when given undefined", () => {
 		const ea = normalizeEmaAlphas(undefined);
 		expect(ea).toEqual(DEFAULT_AUDIO_EMA_ALPHAS);
@@ -393,11 +403,58 @@ describe("normalizeEmaAlphas", () => {
 		expect(ea.pulse).toBeCloseTo(0.7);
 	});
 
-	test("clamps values outside 0.01–1 to defaults", () => {
+	test("replaces out-of-range alpha with band default", () => {
 		const ea = normalizeEmaAlphas({ energy: 0, bass: 1.5, mid: -0.1, high: 0.22, pulse: 0.28 });
 		expect(ea.energy).toBe(DEFAULT_AUDIO_EMA_ALPHAS.energy);
 		expect(ea.bass).toBe(DEFAULT_AUDIO_EMA_ALPHAS.bass);
 		expect(ea.mid).toBe(DEFAULT_AUDIO_EMA_ALPHAS.mid);
 		expect(ea.high).toBeCloseTo(0.22);
+	});
+});
+
+// ── normalizePreset (controls.html) / migratePresetBundle parity ──────────────
+// If this suite fails after a schema bump, update normalizePreset in controls.html too.
+
+describe("normalizePreset (controls.html) parity with migratePresetBundle", () => {
+	// Inline replica of normalizePreset from controls.html.
+	function normalizePreset(raw: unknown): PresetBundle | null {
+		if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+		const r = raw as Record<string, unknown>;
+		if (!("state" in r)) return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: "", state: r, curves: {} };
+		const state = r.state && typeof r.state === "object" ? (r.state as Record<string, unknown>) : {};
+		const curvesRaw = r.curves;
+		const curves: Record<string, string> = curvesRaw && typeof curvesRaw === "object" && !Array.isArray(curvesRaw)
+			? Object.fromEntries(
+				(Object.entries(curvesRaw as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as [string, string][],
+			)
+			: {};
+		const name = typeof r.name === "string" ? r.name : "";
+		if (!("schemaVersion" in r) || r.schemaVersion === PRESET_BUNDLE_SCHEMA_VERSION) {
+			return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name, state, curves };
+		}
+		return null;
+	}
+
+	test("null → null", () => expect(normalizePreset(null)).toEqual(migratePresetBundle(null)));
+	test("string → null", () => expect(normalizePreset("preset")).toEqual(migratePresetBundle("preset")));
+	test("legacy raw state (no state key)", () => {
+		const raw = { activeShader: 1, crossfade: 0.75 };
+		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
+	});
+	test("v0 unversioned bundle", () => {
+		const raw = { name: "Drop", state: { activeShader: 1 }, curves: { crossfade: "ease" } };
+		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
+	});
+	test("v0 with null curves", () => {
+		const raw = { name: "Test", state: { crossfade: 0.5 }, curves: null };
+		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
+	});
+	test("v1 current bundle", () => {
+		const raw: PresetBundle = { schemaVersion: 1, name: "Warmup", state: { crossfade: 0.5 }, curves: { intensity: "ease" } };
+		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
+	});
+	test("unknown future version → null", () => {
+		const raw = { schemaVersion: 999, name: "Future", state: {}, curves: {} };
+		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
 	});
 });
