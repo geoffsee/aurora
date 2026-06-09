@@ -51,13 +51,7 @@ export function normalizeBandCurves(
 	};
 }
 
-// Migrate a raw localStorage preset value to the current PresetBundle schema.
-// Handles:
-//   null / non-object                                    → null
-//   legacy raw state (no "state" key, no schemaVersion) → v1
-//   v0 unversioned { name?, state, curves? }             → v1
-//   v1 (current)                                        → identity (normalised shape)
-//   unknown future version                              → null (never downgrade)
+// Returns null for any schemaVersion above the current one — never downgrades.
 export function migratePresetBundle(raw: unknown): PresetBundle | null {
 	if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
 	const r = raw as Record<string, unknown>;
