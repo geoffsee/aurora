@@ -8,3 +8,6 @@ format_command = ["bun", "run", "format"]
 #paths = [
 ## todo
 #]
+
+[agent_models]
+claude  = "claude-fable-5"
