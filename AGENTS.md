@@ -79,7 +79,7 @@ The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for 
 1. `preset-bundle-schema.ts` — canonical TypeScript source; `migratePresetBundle` is the reference migration path.
 2. `controls.html` — inline JavaScript mirror (`normalizePreset`); update the constant and the migration logic whenever `preset-bundle-schema.ts` changes.
 
-When bumping to v2 or beyond, update both files and add a new migration branch in `migratePresetBundle`. The parity test suite in `tests/preset-bundle.test.ts` ("normalizePreset parity with migratePresetBundle") will catch drift between the two implementations.
+When bumping to v2 or beyond, update both files and add a new migration branch in `migratePresetBundle`. The parity test suite in `tests/preset-bundle.test.ts` tests an inline replica of `normalizePreset` against `migratePresetBundle`. When editing `controls.html`'s `normalizePreset`, update the inline replica in that test suite too.
 
 ### Deploy
 
