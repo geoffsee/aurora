@@ -72,8 +72,6 @@ The root `Cargo.toml` declares a workspace with three members: the root `bevyosc
 
 The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for the wasm build, `target-vst/` for VST builds — to keep their incompatible build graphs from invalidating each other's caches. Preserve this split when adding new build commands.
 
-### Deploy
-
 ### Preset bundle schema versioning
 
 `PRESET_BUNDLE_SCHEMA_VERSION` is declared in two places that must stay in sync:
@@ -82,5 +80,7 @@ The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for 
 2. `controls.html` — inline JavaScript mirror (`normalizePreset`); update the constant and the migration logic whenever `preset-bundle-schema.ts` changes.
 
 When bumping to v2 or beyond, update both files and add a new migration branch in `migratePresetBundle`. The parity test suite in `tests/preset-bundle.test.ts` ("normalizePreset parity with migratePresetBundle") will catch drift between the two implementations.
+
+### Deploy
 
 `.github/workflows/deploy.yml` publishes only the **static front-end** (HTML/CSS + the wasm bundle) to GitHub Pages. The OSC/WebSocket bridge in `index.ts` cannot run there — Pages is just for the visual page, no Ableton, no controls round-trip. The deploy step rewrites `./dist/pkg/` to `./pkg/` in `dist/index.html` to match the flattened Pages layout.
