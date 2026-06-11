@@ -110,7 +110,14 @@ describe("threshold mode", () => {
 	test("non-counter threshold targets are set to the configured value", () => {
 		const h = makeHarness();
 		h.router.setMappings([
-			{ mode: "threshold", source: "bass", target: "crossfade", level: 0.5, offDelay: 0, value: 1 },
+			{
+				mode: "threshold",
+				source: "bass",
+				target: "crossfade",
+				level: 0.5,
+				offDelay: 0,
+				value: 1,
+			},
 		]);
 		h.router.onFeatures(features({ bass: 0.1 }), 1000);
 		h.router.onFeatures(features({ bass: 0.8 }), 1100);
@@ -140,7 +147,10 @@ describe("continuous mode", () => {
 		h.router.setMappings([energyIntensityMapping]);
 		h.router.onFeatures(features({ energy: 0.5 }), 1000);
 		h.router.onFeatures(features({ energy: 0.5 }), 1050);
-		h.router.onFeatures(features({ energy: 0.5 + CONTINUOUS_EPSILON / 2 }), 1100);
+		h.router.onFeatures(
+			features({ energy: 0.5 + CONTINUOUS_EPSILON / 2 }),
+			1100,
+		);
 		expect(h.merges).toHaveLength(1);
 		h.router.onFeatures(features({ energy: 0.6 }), 1150);
 		expect(h.merges).toHaveLength(2);
@@ -185,18 +195,59 @@ describe("config parsing", () => {
 	test("keeps valid entries and drops invalid ones", () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const parsed = parseAudioMappings([
-			{ mode: "continuous", source: "energy", target: "intensity", targetMin: 0.4, targetMax: 1.2 },
-			{ mode: "continuous", source: "energy", target: "schemaVersion", targetMin: 0, targetMax: 9 }, // bad target
-			{ mode: "continuous", source: "loudness", target: "intensity", targetMin: 0, targetMax: 1 }, // bad source
-			{ mode: "continuous", source: "energy", target: "intensity", targetMin: "0" }, // bad bounds
-			{ mode: "threshold", source: "pulse", target: "flashVersion", level: 0.75, offDelay: 200 },
+			{
+				mode: "continuous",
+				source: "energy",
+				target: "intensity",
+				targetMin: 0.4,
+				targetMax: 1.2,
+			},
+			{
+				mode: "continuous",
+				source: "energy",
+				target: "schemaVersion",
+				targetMin: 0,
+				targetMax: 9,
+			}, // bad target
+			{
+				mode: "continuous",
+				source: "loudness",
+				target: "intensity",
+				targetMin: 0,
+				targetMax: 1,
+			}, // bad source
+			{
+				mode: "continuous",
+				source: "energy",
+				target: "intensity",
+				targetMin: "0",
+			}, // bad bounds
+			{
+				mode: "threshold",
+				source: "pulse",
+				target: "flashVersion",
+				level: 0.75,
+				offDelay: 200,
+			},
 			{ mode: "threshold", source: "pulse", target: "intensity", level: 0.75 }, // non-counter without value
 			{ mode: "wiggle", source: "pulse", target: "flashVersion" }, // bad mode
 			"nope",
 		]);
 		expect(parsed).toEqual([
-			{ mode: "continuous", source: "energy", target: "intensity", targetMin: 0.4, targetMax: 1.2 },
-			{ mode: "threshold", source: "pulse", target: "flashVersion", level: 0.75, offDelay: 200 },
+			{
+				mode: "continuous",
+				source: "energy",
+				target: "intensity",
+				targetMin: 0.4,
+				targetMax: 1.2,
+			},
+			{
+				mode: "threshold",
+				source: "pulse",
+				target: "flashVersion",
+				level: 0.75,
+				offDelay: 200,
+			},
 		]);
 		expect(warn).toHaveBeenCalled();
 		warn.mockRestore();
@@ -207,7 +258,13 @@ describe("config parsing", () => {
 			{ mode: "threshold", source: "pulse", target: "flashVersion", level: 7 },
 		]);
 		expect(parsed).toEqual([
-			{ mode: "threshold", source: "pulse", target: "flashVersion", level: 1, offDelay: DEFAULT_OFF_DELAY_MS },
+			{
+				mode: "threshold",
+				source: "pulse",
+				target: "flashVersion",
+				level: 1,
+				offDelay: DEFAULT_OFF_DELAY_MS,
+			},
 		]);
 	});
 });
@@ -217,8 +274,20 @@ describe("demo-mode end-to-end", () => {
 		// Sample config mirroring the audio-control-router.ts header example.
 		const mappings = parseAudioMappingsJson(
 			JSON.stringify([
-				{ mode: "threshold", source: "pulse", target: "flashVersion", level: 0.75, offDelay: 200 },
-				{ mode: "continuous", source: "energy", target: "intensity", targetMin: 0.4, targetMax: 1.2 },
+				{
+					mode: "threshold",
+					source: "pulse",
+					target: "flashVersion",
+					level: 0.75,
+					offDelay: 200,
+				},
+				{
+					mode: "continuous",
+					source: "energy",
+					target: "intensity",
+					targetMin: 0.4,
+					targetMax: 1.2,
+				},
 			]),
 		);
 		expect(mappings).toHaveLength(2);

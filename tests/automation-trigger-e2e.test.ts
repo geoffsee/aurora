@@ -15,18 +15,33 @@ import {
 describe("parseTriggerBindings", () => {
 	test("parses valid midi-note binding", () => {
 		const bindings = parseTriggerBindings(
-			JSON.stringify([{ type: "midi-note", note: 60, channel: 1, action: "toggle" }]),
+			JSON.stringify([
+				{ type: "midi-note", note: 60, channel: 1, action: "toggle" },
+			]),
 		);
 		expect(bindings).toHaveLength(1);
-		expect(bindings[0]).toMatchObject({ type: "midi-note", note: 60, channel: 1, action: "toggle" });
+		expect(bindings[0]).toMatchObject({
+			type: "midi-note",
+			note: 60,
+			channel: 1,
+			action: "toggle",
+		});
 	});
 
 	test("parses valid midi-cc binding", () => {
 		const bindings = parseTriggerBindings(
-			JSON.stringify([{ type: "midi-cc", cc: 64, channel: 0, threshold: 64, action: "play" }]),
+			JSON.stringify([
+				{ type: "midi-cc", cc: 64, channel: 0, threshold: 64, action: "play" },
+			]),
 		);
 		expect(bindings).toHaveLength(1);
-		expect(bindings[0]).toMatchObject({ type: "midi-cc", cc: 64, channel: 0, threshold: 64, action: "play" });
+		expect(bindings[0]).toMatchObject({
+			type: "midi-cc",
+			cc: 64,
+			channel: 0,
+			threshold: 64,
+			action: "play",
+		});
 	});
 
 	test("parses valid osc binding", () => {
@@ -34,7 +49,11 @@ describe("parseTriggerBindings", () => {
 			JSON.stringify([{ type: "osc", address: "/my/trigger", action: "stop" }]),
 		);
 		expect(bindings).toHaveLength(1);
-		expect(bindings[0]).toMatchObject({ type: "osc", address: "/my/trigger", action: "stop" });
+		expect(bindings[0]).toMatchObject({
+			type: "osc",
+			address: "/my/trigger",
+			action: "stop",
+		});
 	});
 
 	test("parses all action types", () => {
@@ -96,9 +115,9 @@ describe("parseTriggerBindings", () => {
 describe("DEFAULT_OSC_BINDINGS", () => {
 	test("covers the five canonical automation addresses", () => {
 		const addresses = new Set(
-			DEFAULT_OSC_BINDINGS
-				.filter((b) => b.type === "osc")
-				.map((b) => (b as { address: string }).address),
+			DEFAULT_OSC_BINDINGS.filter((b) => b.type === "osc").map(
+				(b) => (b as { address: string }).address,
+			),
 		);
 		for (const addr of [
 			"/bevyosc/automation/play",
@@ -238,7 +257,11 @@ describe("makeAutomationBridge", () => {
 	});
 
 	test("onOscAddress returns false for unrecognised address", () => {
-		const bridge = makeAutomationBridge(() => {}, [], () => []);
+		const bridge = makeAutomationBridge(
+			() => {},
+			[],
+			() => [],
+		);
 		expect(bridge.onOscAddress("/unrelated/address")).toBe(false);
 	});
 
@@ -280,7 +303,10 @@ describe("automation trigger E2E via MIDI note", () => {
 		log.record(s1 as Record<string, unknown>, s2 as Record<string, unknown>);
 
 		// Verify the recording will have the expected frames
-		const previewRecording = buildRecording(log.toArray(), CONTROL_STATE_SCHEMA_VERSION);
+		const previewRecording = buildRecording(
+			log.toArray(),
+			CONTROL_STATE_SCHEMA_VERSION,
+		);
 		expect(previewRecording.durationMs).toBe(800);
 		expect(previewRecording.frames).toHaveLength(3);
 
@@ -323,12 +349,23 @@ describe("automation trigger E2E via MIDI note", () => {
 		const log = makeStateLog(20);
 		log.record(null, { palette: 0.5 } as Record<string, unknown>);
 		vi.setSystemTime(300);
-		log.record({ palette: 0.5 } as Record<string, unknown>, { palette: 0.8 } as Record<string, unknown>);
+		log.record(
+			{ palette: 0.5 } as Record<string, unknown>,
+			{ palette: 0.8 } as Record<string, unknown>,
+		);
 
 		const applied: Record<string, unknown>[] = [];
 		const bridge = makeAutomationBridge(
 			(diff) => applied.push({ ...diff }),
-			[{ type: "midi-cc", cc: 80, channel: 0, threshold: 64, action: "toggle-loop" }],
+			[
+				{
+					type: "midi-cc",
+					cc: 80,
+					channel: 0,
+					threshold: 64,
+					action: "toggle-loop",
+				},
+			],
 			() => log.toArray(),
 		);
 
@@ -373,7 +410,10 @@ describe("automation trigger E2E via MIDI note", () => {
 		bridge.onOscAddress("/bevyosc/automation/play");
 		expect(bridge.player.isActive()).toBe(true);
 
-		const recording = buildRecording(log.toArray(), CONTROL_STATE_SCHEMA_VERSION);
+		const recording = buildRecording(
+			log.toArray(),
+			CONTROL_STATE_SCHEMA_VERSION,
+		);
 		vi.advanceTimersByTime(recording.durationMs + 16 * 3);
 
 		const dataFrames = applied.filter((d) =>

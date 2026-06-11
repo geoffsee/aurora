@@ -6,6 +6,7 @@ import {
 	type OscMsg,
 	type AudioCurveShape,
 	CONTROL_STATE_SCHEMA_VERSION,
+	PRESET_MORPH_ADDRESS,
 	isAudioCurveShape,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
@@ -194,21 +195,56 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
 const audioEmaAlphas: AudioEmaAlphas = {
-	energy: clamp(Bun.env.AUDIO_EMA_ALPHA_ENERGY, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
-	bass: clamp(Bun.env.AUDIO_EMA_ALPHA_BASS, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
-	mid: clamp(Bun.env.AUDIO_EMA_ALPHA_MID, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
-	high: clamp(Bun.env.AUDIO_EMA_ALPHA_HIGH, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
-	pulse: clamp(Bun.env.AUDIO_EMA_ALPHA_PULSE, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+	energy: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_ENERGY,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.energy,
+	),
+	bass: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_BASS,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.bass,
+	),
+	mid: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_MID,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.mid,
+	),
+	high: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_HIGH,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.high,
+	),
+	pulse: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_PULSE,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.pulse,
+	),
 };
 // Legacy AUDIO_EMA_ALPHA env var: if set, overrides all bands that were not individually configured.
 {
-	const legacyAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+	const legacyAlpha = clamp(
+		Bun.env.AUDIO_EMA_ALPHA,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHA,
+	);
 	if (Bun.env.AUDIO_EMA_ALPHA !== undefined) {
-		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined) audioEmaAlphas.energy = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined) audioEmaAlphas.bass = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined) audioEmaAlphas.mid = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined) audioEmaAlphas.high = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined) audioEmaAlphas.pulse = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined)
+			audioEmaAlphas.energy = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined)
+			audioEmaAlphas.bass = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined)
+			audioEmaAlphas.mid = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined)
+			audioEmaAlphas.high = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined)
+			audioEmaAlphas.pulse = legacyAlpha;
 	}
 }
 const defaultTrackMapping = (): TrackMapping => ({
@@ -255,7 +291,12 @@ const defaultControlState = (): ControlState => ({
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
-	bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+	bandCurves: {
+		energy: "linear",
+		bass: "linear",
+		mid: "linear",
+		high: "linear",
+	},
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 	audioControlMode: false,
 });
@@ -508,17 +549,42 @@ const coerceAudioFeatures = (raw: unknown): AudioFeatures | null => {
 const initialTransientConfig: Partial<AudioTransientConfig> = (() => {
 	const cfg: Partial<AudioTransientConfig> = {};
 	const _mode = Bun.env.AUDIO_TRANSIENT_MODE;
-	if (_mode === "onset" || _mode === "beat" || _mode === "band-energy") cfg.mode = _mode;
+	if (_mode === "onset" || _mode === "beat" || _mode === "band-energy")
+		cfg.mode = _mode;
 	if (Bun.env.AUDIO_TRANSIENT_THRESHOLD !== undefined) {
-		cfg.threshold = clamp(Bun.env.AUDIO_TRANSIENT_THRESHOLD, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold);
+		cfg.threshold = clamp(
+			Bun.env.AUDIO_TRANSIENT_THRESHOLD,
+			0,
+			1,
+			DEFAULT_TRANSIENT_CONFIG.threshold,
+		);
 	}
 	if (Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS !== undefined) {
-		cfg.debounceMs = clamp(Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS, 0, 60000, DEFAULT_TRANSIENT_CONFIG.debounceMs);
+		cfg.debounceMs = clamp(
+			Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS,
+			0,
+			60000,
+			DEFAULT_TRANSIENT_CONFIG.debounceMs,
+		);
 	}
 	const _band = Bun.env.AUDIO_TRANSIENT_BAND;
-	if (_band === "energy" || _band === "bass" || _band === "mid" || _band === "high" || _band === "pulse") cfg.band = _band;
+	if (
+		_band === "energy" ||
+		_band === "bass" ||
+		_band === "mid" ||
+		_band === "high" ||
+		_band === "pulse"
+	)
+		cfg.band = _band;
 	const _action = Bun.env.AUDIO_TRANSIENT_ACTION;
-	if (_action === "play" || _action === "play-loop" || _action === "stop" || _action === "toggle" || _action === "toggle-loop") cfg.action = _action;
+	if (
+		_action === "play" ||
+		_action === "play-loop" ||
+		_action === "stop" ||
+		_action === "toggle" ||
+		_action === "toggle-loop"
+	)
+		cfg.action = _action;
 	return cfg;
 })();
 
@@ -572,7 +638,9 @@ const sendOsc = (address: string, args: OscArg[] = []) => {
 // transient detector. The response carries meter floats, optionally preceded by
 // a "track.output_meter_level" string field marker.
 function processLiveTrackData(args: unknown[]): void {
-	const markerIdx = args.findIndex((a) => typeof a === "string" && (a as string).startsWith("track."));
+	const markerIdx = args.findIndex(
+		(a) => typeof a === "string" && (a as string).startsWith("track."),
+	);
 	const meterStart = markerIdx >= 0 ? markerIdx + 1 : 0;
 	const meters = args
 		.slice(meterStart)
@@ -596,7 +664,11 @@ function processLiveTrackData(args: unknown[]): void {
 		pulse: energyTarget,
 	};
 
-	const smoothed = stepAudioEma(liveAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
+	const smoothed = stepAudioEma(
+		liveAudioEma,
+		rawFeatures,
+		latestControlState?.emaAlphas ?? audioEmaAlphas,
+	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 }
 
@@ -605,10 +677,19 @@ function applyTransientConfigMsg(address: string, firstArg: unknown): void {
 	const key = address.slice("/bevyosc/automation/transient/".length);
 	switch (key) {
 		case "threshold":
-			automationBridge.updateTransientConfig({ threshold: clamp(firstArg, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold) });
+			automationBridge.updateTransientConfig({
+				threshold: clamp(firstArg, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold),
+			});
 			break;
 		case "debounce":
-			automationBridge.updateTransientConfig({ debounceMs: clamp(firstArg, 0, 60000, DEFAULT_TRANSIENT_CONFIG.debounceMs) });
+			automationBridge.updateTransientConfig({
+				debounceMs: clamp(
+					firstArg,
+					0,
+					60000,
+					DEFAULT_TRANSIENT_CONFIG.debounceMs,
+				),
+			});
 			break;
 		case "mode": {
 			const m = String(firstArg);
@@ -619,15 +700,31 @@ function applyTransientConfigMsg(address: string, firstArg: unknown): void {
 		}
 		case "band": {
 			const b = String(firstArg);
-			if (b === "energy" || b === "bass" || b === "mid" || b === "high" || b === "pulse") {
-				automationBridge.updateTransientConfig({ band: b as keyof AudioFeatures });
+			if (
+				b === "energy" ||
+				b === "bass" ||
+				b === "mid" ||
+				b === "high" ||
+				b === "pulse"
+			) {
+				automationBridge.updateTransientConfig({
+					band: b as keyof AudioFeatures,
+				});
 			}
 			break;
 		}
 		case "action": {
 			const a = String(firstArg);
-			if (a === "play" || a === "play-loop" || a === "stop" || a === "toggle" || a === "toggle-loop") {
-				automationBridge.updateTransientConfig({ action: a as "play" | "play-loop" | "stop" | "toggle" | "toggle-loop" });
+			if (
+				a === "play" ||
+				a === "play-loop" ||
+				a === "stop" ||
+				a === "toggle" ||
+				a === "toggle-loop"
+			) {
+				automationBridge.updateTransientConfig({
+					action: a as "play" | "play-loop" | "stop" | "toggle" | "toggle-loop",
+				});
 			}
 			break;
 		}
@@ -676,8 +773,8 @@ const broadcastError = (description: string) => {
 	});
 	sockets.forEach((ws) => ws.send(data));
 };
-const broadcastPresetCommand = (address: string) => {
-	const data = JSON.stringify({ address, args: [] });
+const broadcastPresetCommand = (address: string, args: unknown[] = []) => {
+	const data = JSON.stringify({ address, args });
 	sockets.forEach((ws) => ws.send(data));
 };
 const booleanArg = (arg: OscArg | undefined) => {
@@ -761,22 +858,49 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				mergeControlState({ demoMode: booleanArg(arg) });
 				break;
 			case "active_shader":
-				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
+				mergeControlState({
+					activeShader: Math.max(0, Math.min(1, Math.floor(value))),
+				});
 				break;
 			case "ema_alpha_bass":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+					},
+				});
 				break;
 			case "ema_alpha_energy":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+					},
+				});
 				break;
 			case "ema_alpha_mid":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+					},
+				});
 				break;
 			case "ema_alpha_high":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
+					},
+				});
 				break;
 			case "ema_alpha_pulse":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+					},
+				});
 				break;
 			case "audio_control_mode":
 				mergeControlState({ audioControlMode: booleanArg(arg) });
@@ -981,13 +1105,13 @@ const visualServer = Bun.serve({
 						const rawState = migrateControlState(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
-						if (
-							!validateControlStateVersion(rawState, "WebSocket client")
-						) {
-							ws.send(JSON.stringify({
-								address: "/bevyosc/error",
-								error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
-							}));
+						if (!validateControlStateVersion(rawState, "WebSocket client")) {
+							ws.send(
+								JSON.stringify({
+									address: "/bevyosc/error",
+									error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
+								}),
+							);
 							return;
 						}
 						broadcastControl(rawState);
@@ -997,10 +1121,19 @@ const visualServer = Bun.serve({
 					) {
 						broadcastError(parsed.error);
 					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
+						const presetArgs = Array.isArray(parsed.args) ? parsed.args : [];
 						if (
-							validatePresetOscMsg({ address: parsed.address }, "WS client")
+							validatePresetOscMsg(
+								{ address: parsed.address, args: presetArgs },
+								"WS client",
+							)
 						) {
-							broadcastPresetCommand(parsed.address);
+							broadcastPresetCommand(
+								parsed.address,
+								parsed.address === PRESET_MORPH_ADDRESS
+									? [Number(valueOf(presetArgs[0]))]
+									: [],
+							);
 						}
 					} else if (parsed.address === "/bevyosc/ping") {
 						ws.send(
@@ -1031,7 +1164,9 @@ const visualServer = Bun.serve({
 						console.log(
 							`[audio-router] reloaded ${mappings.length} mapping(s) from audio-mappings.json`,
 						);
-					} else if (parsed.address.startsWith("/bevyosc/automation/transient/")) {
+					} else if (
+						parsed.address.startsWith("/bevyosc/automation/transient/")
+					) {
 						applyTransientConfigMsg(
 							parsed.address,
 							Array.isArray(parsed.args) ? parsed.args[0] : undefined,
@@ -1127,7 +1262,12 @@ vstControlUdp.on("ready", () => {
 vstControlUdp.on("message", (msg: OscMsg) => {
 	if (msg.address.startsWith("/bevyosc/preset/")) {
 		if (validatePresetOscMsg(msg, `VST :${vstControlRecvPort}`)) {
-			broadcastPresetCommand(msg.address);
+			broadcastPresetCommand(
+				msg.address,
+				msg.address === PRESET_MORPH_ADDRESS
+					? [Number(valueOf(msg.args?.[0]))]
+					: [],
+			);
 		}
 		return;
 	}
@@ -1190,7 +1330,11 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
+	const smoothed = stepAudioEma(
+		demoAudioEma,
+		rawFeatures,
+		latestControlState?.emaAlphas ?? audioEmaAlphas,
+	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 	audioControlRouter.onFeatures(smoothed, Date.now());
 	const demo = {
