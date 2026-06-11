@@ -34,7 +34,9 @@ describe("DEFAULT_TRANSIENT_CONFIG", () => {
 		expect(c.threshold).toBeLessThanOrEqual(1);
 		expect(c.debounceMs).toBeGreaterThan(0);
 		expect(["energy", "bass", "mid", "high", "pulse"]).toContain(c.band);
-		expect(["play", "play-loop", "stop", "toggle", "toggle-loop"]).toContain(c.action);
+		expect(["play", "play-loop", "stop", "toggle", "toggle-loop"]).toContain(
+			c.action,
+		);
 	});
 });
 
@@ -44,27 +46,52 @@ describe("DEFAULT_TRANSIENT_CONFIG", () => {
 
 describe("makeAudioTransientDetector — beat mode", () => {
 	test("fires when band meets threshold", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0.5, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ pulse: 0.5 }), 0)).toBe(true);
 	});
 
 	test("does not fire when band is below threshold", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0.5, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ pulse: 0.49 }), 0)).toBe(false);
 	});
 
 	test("fires at exact threshold boundary", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "energy", threshold: 0.3, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "energy",
+			threshold: 0.3,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ energy: 0.3 }), 0)).toBe(true);
 	});
 
 	test("threshold 0 fires on any non-zero signal", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "bass", threshold: 0, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "bass",
+			threshold: 0,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ bass: 0.001 }), 0)).toBe(true);
 	});
 
 	test("fires when band equals threshold (threshold=0, band=0)", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0,
+			debounceMs: 0,
+		});
 		// 0 >= 0 is true, so this DOES fire — that is intentional for threshold=0
 		expect(d.step(features(), 0)).toBe(true);
 	});
@@ -76,19 +103,39 @@ describe("makeAudioTransientDetector — beat mode", () => {
 
 describe("makeAudioTransientDetector — band-energy mode", () => {
 	test("fires when the configured band meets the threshold", () => {
-		const d = makeAudioTransientDetector({ mode: "band-energy", band: "bass", threshold: 0.6, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "band-energy",
+			band: "bass",
+			threshold: 0.6,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ bass: 0.7 }), 0)).toBe(true);
 	});
 
 	test("does not fire when the band is below the threshold", () => {
-		const d = makeAudioTransientDetector({ mode: "band-energy", band: "bass", threshold: 0.6, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "band-energy",
+			band: "bass",
+			threshold: 0.6,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ bass: 0.59 }), 0)).toBe(false);
 	});
 
 	test("band-energy and beat use the same direct threshold logic", () => {
 		// Both modes should fire under identical conditions.
-		const beat = makeAudioTransientDetector({ mode: "beat", band: "high", threshold: 0.4, debounceMs: 0 });
-		const be = makeAudioTransientDetector({ mode: "band-energy", band: "high", threshold: 0.4, debounceMs: 0 });
+		const beat = makeAudioTransientDetector({
+			mode: "beat",
+			band: "high",
+			threshold: 0.4,
+			debounceMs: 0,
+		});
+		const be = makeAudioTransientDetector({
+			mode: "band-energy",
+			band: "high",
+			threshold: 0.4,
+			debounceMs: 0,
+		});
 		const f = features({ high: 0.45 });
 		expect(beat.step(f, 0)).toBe(true);
 		expect(be.step(f, 0)).toBe(true);
@@ -102,12 +149,22 @@ describe("makeAudioTransientDetector — band-energy mode", () => {
 describe("makeAudioTransientDetector — onset mode", () => {
 	test("does not fire before baseline warms up", () => {
 		// First frame: baseline is 0, so warmup check suppresses the trigger.
-		const d = makeAudioTransientDetector({ mode: "onset", band: "energy", threshold: 0.5, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "onset",
+			band: "energy",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ energy: 0.9 }), 0)).toBe(false);
 	});
 
 	test("fires when energy rises sharply above background after warmup", () => {
-		const d = makeAudioTransientDetector({ mode: "onset", band: "energy", threshold: 0.5, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "onset",
+			band: "energy",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
 		// Feed several quiet frames to warm up the baseline (~0.01 is MIN_ONSET_BASELINE)
 		for (let i = 0; i < 80; i++) {
 			d.step(features({ energy: 0.05 }), i);
@@ -117,7 +174,12 @@ describe("makeAudioTransientDetector — onset mode", () => {
 	});
 
 	test("does not fire on a gradual rise that stays below the rise factor", () => {
-		const d = makeAudioTransientDetector({ mode: "onset", band: "energy", threshold: 0.5, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "onset",
+			band: "energy",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
 		// Warm up with signal = 0.5
 		for (let i = 0; i < 100; i++) {
 			d.step(features({ energy: 0.5 }), i);
@@ -130,7 +192,12 @@ describe("makeAudioTransientDetector — onset mode", () => {
 		// With debounce=0, the detector can fire on every qualifying frame.
 		// After the background EMA catches up to the sustained loud level, the
 		// relative-rise condition becomes false and triggers cease.
-		const d = makeAudioTransientDetector({ mode: "onset", band: "energy", threshold: 0.3, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "onset",
+			band: "energy",
+			threshold: 0.3,
+			debounceMs: 0,
+		});
 		// Warm up at quiet level
 		for (let i = 0; i < 80; i++) d.step(features({ energy: 0.05 }), i);
 		// Onset fires
@@ -151,20 +218,35 @@ describe("makeAudioTransientDetector — onset mode", () => {
 
 describe("makeAudioTransientDetector — debounce", () => {
 	test("does not re-fire within the debounce window", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0.5, debounceMs: 200 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0.5,
+			debounceMs: 200,
+		});
 		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(true);
 		expect(d.step(features({ pulse: 0.8 }), 100)).toBe(false);
 		expect(d.step(features({ pulse: 0.8 }), 199)).toBe(false);
 	});
 
 	test("re-fires after the debounce window expires", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0.5, debounceMs: 200 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0.5,
+			debounceMs: 200,
+		});
 		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(true);
 		expect(d.step(features({ pulse: 0.8 }), 200)).toBe(true);
 	});
 
 	test("debounce 0 fires every qualifying frame", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0.5, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
 		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(true);
 		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(true);
 	});
@@ -184,7 +266,12 @@ describe("makeAudioTransientDetector — updateConfig / getConfig", () => {
 	});
 
 	test("updateConfig changes threshold at runtime", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0.9, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0.9,
+			debounceMs: 0,
+		});
 		// Below original threshold — no fire
 		expect(d.step(features({ pulse: 0.6 }), 0)).toBe(false);
 		// Lower the threshold
@@ -194,7 +281,12 @@ describe("makeAudioTransientDetector — updateConfig / getConfig", () => {
 	});
 
 	test("updateConfig changes debounce at runtime", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "pulse", threshold: 0.5, debounceMs: 500 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "pulse",
+			threshold: 0.5,
+			debounceMs: 500,
+		});
 		d.step(features({ pulse: 0.8 }), 0);
 		// Still in old debounce window
 		expect(d.step(features({ pulse: 0.8 }), 300)).toBe(false);
@@ -204,7 +296,12 @@ describe("makeAudioTransientDetector — updateConfig / getConfig", () => {
 	});
 
 	test("updateConfig can switch modes", () => {
-		const d = makeAudioTransientDetector({ mode: "beat", band: "energy", threshold: 0.5, debounceMs: 0 });
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "energy",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
 		// Fires in beat mode
 		expect(d.step(features({ energy: 0.6 }), 0)).toBe(true);
 		// Switch to band-energy (identical logic, still fires)
@@ -232,7 +329,13 @@ describe("audio transient trigger E2E via synthetic audio buffer", () => {
 			(d) => applied.push({ ...d }),
 			[],
 			() => log.toArray(),
-			{ mode: "beat", band: "pulse", threshold: 0.6, debounceMs: 200, action: "play" },
+			{
+				mode: "beat",
+				band: "pulse",
+				threshold: 0.6,
+				debounceMs: 200,
+				action: "play",
+			},
 		);
 
 		// Quiet frames — should not trigger
@@ -255,7 +358,13 @@ describe("audio transient trigger E2E via synthetic audio buffer", () => {
 			(d) => applied.push({ ...d }),
 			[],
 			() => log.toArray(),
-			{ mode: "onset", band: "energy", threshold: 0.5, debounceMs: 300, action: "play" },
+			{
+				mode: "onset",
+				band: "energy",
+				threshold: 0.5,
+				debounceMs: 300,
+				action: "play",
+			},
 		);
 
 		// Warm up baseline with quiet signal
@@ -277,7 +386,13 @@ describe("audio transient trigger E2E via synthetic audio buffer", () => {
 			(d) => applied.push({ ...d }),
 			[],
 			() => log.toArray(),
-			{ mode: "band-energy", band: "bass", threshold: 0.7, debounceMs: 0, action: "toggle" },
+			{
+				mode: "band-energy",
+				band: "bass",
+				threshold: 0.7,
+				debounceMs: 0,
+				action: "toggle",
+			},
 		);
 
 		expect(bridge.onAudioFeatures(features({ bass: 0.69 }), 0)).toBe(false);
@@ -290,7 +405,13 @@ describe("audio transient trigger E2E via synthetic audio buffer", () => {
 			() => {},
 			[],
 			() => log.toArray(),
-			{ mode: "beat", band: "pulse", threshold: 0.5, debounceMs: 300, action: "play" },
+			{
+				mode: "beat",
+				band: "pulse",
+				threshold: 0.5,
+				debounceMs: 300,
+				action: "play",
+			},
 		);
 
 		expect(bridge.onAudioFeatures(features({ pulse: 0.8 }), 0)).toBe(true);
@@ -305,7 +426,13 @@ describe("audio transient trigger E2E via synthetic audio buffer", () => {
 			() => {},
 			[],
 			() => log.toArray(),
-			{ mode: "beat", band: "pulse", threshold: 0.9, debounceMs: 0, action: "play" },
+			{
+				mode: "beat",
+				band: "pulse",
+				threshold: 0.9,
+				debounceMs: 0,
+				action: "play",
+			},
 		);
 
 		// High threshold — quiet signal does not trigger
@@ -326,7 +453,13 @@ describe("audio transient trigger E2E via synthetic audio buffer", () => {
 			(d) => applied.push({ ...d }),
 			[{ type: "midi-note", note: 60, channel: 0, action: "play" }],
 			() => log.toArray(),
-			{ mode: "beat", band: "pulse", threshold: 0.6, debounceMs: 200, action: "stop" },
+			{
+				mode: "beat",
+				band: "pulse",
+				threshold: 0.6,
+				debounceMs: 200,
+				action: "stop",
+			},
 		);
 
 		// MIDI note starts playback

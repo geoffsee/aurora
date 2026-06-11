@@ -225,7 +225,6 @@ describe("automation recorder E2E round-trip", () => {
 				expect(key in d).toBe(false);
 			}
 		}
-
 	});
 
 	test("playback output matches input within one tick interval (timing tolerance)", () => {
@@ -308,8 +307,14 @@ describe("automation recorder E2E round-trip", () => {
 		const state = { crossfade: 0.5, bpm: 124 };
 		log.record(null, state as Record<string, unknown>);
 		// Identical re-record must not produce a new entry
-		log.record(state as Record<string, unknown>, { ...state } as Record<string, unknown>);
-		log.record(state as Record<string, unknown>, { ...state } as Record<string, unknown>);
+		log.record(
+			state as Record<string, unknown>,
+			{ ...state } as Record<string, unknown>,
+		);
+		log.record(
+			state as Record<string, unknown>,
+			{ ...state } as Record<string, unknown>,
+		);
 		expect(log.size).toBe(1);
 
 		const recording = buildRecording(
