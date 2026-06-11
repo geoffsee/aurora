@@ -40,7 +40,11 @@ export const migrateControlState = (state: unknown): unknown => {
 						pulse: s.emaAlphaPulse as number,
 				  }
 				: defaultEmaAlphas();
-		return { ...s, schemaVersion: 4, emaAlphas };
+		return migrateControlState({ ...s, schemaVersion: 4, emaAlphas });
+	}
+	// v4 → v5: add audioControlMode field (audio-control router enable flag)
+	if (s.schemaVersion === 4) {
+		return migrateControlState({ ...s, schemaVersion: 5, audioControlMode: false });
 	}
 	return state;
 };
