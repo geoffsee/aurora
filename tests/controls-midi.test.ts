@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 
 // Mirrors the inline controls.html MIDI CC load/save logic for unit testing.
 const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
@@ -29,6 +29,30 @@ function migrateMidiBindings(raw: unknown): MidiCcStore {
 
 let _cachedBindings: MidiCcBinding[] | null = null;
 
+function createLocalStorage(): Storage {
+	const values = new Map<string, string>();
+	return {
+		get length() {
+			return values.size;
+		},
+		clear() {
+			values.clear();
+		},
+		getItem(key: string) {
+			return values.get(key) ?? null;
+		},
+		key(index: number) {
+			return Array.from(values.keys())[index] ?? null;
+		},
+		removeItem(key: string) {
+			values.delete(key);
+		},
+		setItem(key: string, value: string) {
+			values.set(key, String(value));
+		},
+	} as Storage;
+}
+
 function loadMidiBindings(): MidiCcBinding[] {
 	if (_cachedBindings) return _cachedBindings;
 	try {
@@ -56,7 +80,7 @@ const sample: MidiCcBinding = {
 
 beforeEach(() => {
 	_cachedBindings = null;
-	localStorage.clear();
+	vi.stubGlobal("localStorage", createLocalStorage());
 });
 
 test("missing key returns empty bindings", () => {
