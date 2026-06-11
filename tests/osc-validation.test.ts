@@ -260,6 +260,74 @@ describe("validatePresetOscMsg", () => {
 	});
 });
 
+describe("validatePresetOscMsg — morph", () => {
+	test("accepts morph address with one plain numeric arg", () => {
+		expect(
+			validatePresetOscMsg(
+				{ address: "/bevyosc/preset/morph", args: [0.5] },
+				"test",
+			),
+		).toBe(true);
+	});
+
+	test("accepts morph address with a typed float arg", () => {
+		expect(
+			validatePresetOscMsg(
+				{
+					address: "/bevyosc/preset/morph",
+					args: [{ type: "f", value: 0.25 }],
+				},
+				"test",
+			),
+		).toBe(true);
+	});
+
+	test("rejects morph with no args", () => {
+		expect(
+			validatePresetOscMsg(
+				{ address: "/bevyosc/preset/morph", args: [] },
+				"test",
+			),
+		).toBe(false);
+	});
+
+	test("rejects morph with missing args array", () => {
+		expect(
+			validatePresetOscMsg({ address: "/bevyosc/preset/morph" }, "test"),
+		).toBe(false);
+	});
+
+	test("rejects morph with two args", () => {
+		expect(
+			validatePresetOscMsg(
+				{ address: "/bevyosc/preset/morph", args: [0.2, 0.8] },
+				"test",
+			),
+		).toBe(false);
+	});
+
+	test("rejects morph with a string arg", () => {
+		expect(
+			validatePresetOscMsg(
+				{
+					address: "/bevyosc/preset/morph",
+					args: [{ type: "s", value: "fade" }],
+				},
+				"test",
+			),
+		).toBe(false);
+	});
+
+	test("rejects morph sub-addresses", () => {
+		expect(
+			validatePresetOscMsg(
+				{ address: "/bevyosc/preset/morph/extra", args: [0.5] },
+				"test",
+			),
+		).toBe(false);
+	});
+});
+
 // ── validateControlStateVersion ──────────────────────────────────────────────
 
 describe("validateControlStateVersion", () => {

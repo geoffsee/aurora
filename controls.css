@@ -704,6 +704,24 @@ button.rec:hover {
   margin-top: 0;
 }
 
+.morph-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.1rem 0;
+}
+
+.morph-controls select {
+  min-width: 0;
+  max-width: 7rem;
+  font-size: 0.72rem;
+}
+
+.morph-controls input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
 .preset-grid button {
   min-height: 2.7rem;
   font-family: var(--mono);
