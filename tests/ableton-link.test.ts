@@ -42,6 +42,20 @@ const aliveFrom = (
 		timeline,
 	});
 
+// Appends a well-formed entry with a key this parser does not recognize
+// ('mep4', the measurement endpoint) — the shape of real Live announcements.
+const withUnknownEntry = (msg: Uint8Array): Uint8Array => {
+	const entry = new Uint8Array(8 + 6);
+	const dv = new DataView(entry.buffer);
+	dv.setUint32(0, 0x6d657034); // 'mep4'
+	dv.setUint32(4, 6);
+	entry.set([0xc0, 0xa8, 0x01, 0x42, 0x4e, 0x21], 8); // 192.168.1.66:20001
+	const out = new Uint8Array(msg.length + entry.length);
+	out.set(msg, 0);
+	out.set(entry, msg.length);
+	return out;
+};
+
 describe("tempo conversions", () => {
 	test("120 bpm round-trips through micros-per-beat", () => {
 		expect(microsPerBeatFromBpm(120)).toBe(500_000);
@@ -145,6 +159,80 @@ describe("message codec", () => {
 		const parsed = parseLinkMessage(legacy);
 		expect(parsed).not.toBeNull();
 		expect(parsed!.nodeId).toBe(bytesToHex(nodeId(5)));
+		expect(parsed!.timeline).toEqual(timeline120);
+	});
+
+	test("hand-assembled wire fixture parses independently of the encoder", () => {
+		// Byte-for-byte from the reference layout (Messages.hpp), NOT built with
+		// encodeLinkMessage, so a mutual encoder/parser misunderstanding of the
+		// wire format fails here. Includes an unrecognized measurement-endpoint
+		// entry the way real Live announcements do.
+		const fixture = hexToBytes(
+			[
+				"5f617364705f7601", // "_asdp_v" + version 1
+				"01", // message type: ALIVE
+				"05", // ttl: 5 s
+				"0000", // session group id: 0
+				"e6b72b4d1e8e0a61", // node id
+				"746d6c6e", // 'tmln'
+				"00000018", // size 24
+				"000000000007a120", // microsPerBeat 500000 (120 BPM)
+				"0000000000f42400", // beatOrigin 16e6 µbeats (16 beats)
+				"00000000000f4240", // timeOrigin 1e6 µs
+				"73657373", // 'sess'
+				"00000008", // size 8
+				"a1b2c3d4e5f60718", // session id
+				"6d657034", // 'mep4' — measurement endpoint, unknown to this parser
+				"00000006", // size 6
+				"c0a801424e21", // 192.168.1.66:20001
+			].join(""),
+		);
+		const parsed = parseLinkMessage(fixture);
+		expect(parsed).not.toBeNull();
+		expect(parsed!.messageType).toBe(LINK_MESSAGE_ALIVE);
+		expect(parsed!.ttl).toBe(5);
+		expect(parsed!.groupId).toBe(0);
+		expect(parsed!.nodeId).toBe("e6b72b4d1e8e0a61");
+		expect(parsed!.sessionId).toBe("a1b2c3d4e5f60718");
+		expect(parsed!.timeline).toEqual({
+			microsPerBeat: 500_000,
+			beatOriginMicroBeats: 16_000_000,
+			timeOriginMicros: 1_000_000,
+		});
+		expect(bpmFromMicrosPerBeat(parsed!.timeline!.microsPerBeat)).toBeCloseTo(
+			120,
+			9,
+		);
+	});
+
+	test("modern message with only unknown entries parses as modern", () => {
+		// Regression for the modern/legacy fallback: a well-formed modern packet
+		// whose payload carries no recognized keys must NOT be re-parsed at the
+		// legacy offset (which would register a phantom peer under a garbage id).
+		const peer = nodeId(6);
+		const msg = withUnknownEntry(
+			encodeLinkMessage({
+				messageType: LINK_MESSAGE_RESPONSE,
+				ttl: 5,
+				groupId: 0,
+				nodeId: peer,
+			}),
+		);
+		const parsed = parseLinkMessage(msg);
+		expect(parsed).not.toBeNull();
+		expect(parsed!.nodeId).toBe(bytesToHex(peer));
+		expect(parsed!.groupId).toBe(0);
+		expect(parsed!.timeline).toBeNull();
+		expect(parsed!.sessionId).toBeNull();
+	});
+
+	test("unknown entry alongside the timeline is skipped, timeline kept", () => {
+		const peer = nodeId(7);
+		const parsed = parseLinkMessage(
+			withUnknownEntry(aliveFrom(peer, timeline120)),
+		);
+		expect(parsed).not.toBeNull();
+		expect(parsed!.nodeId).toBe(bytesToHex(peer));
 		expect(parsed!.timeline).toEqual(timeline120);
 	});
 

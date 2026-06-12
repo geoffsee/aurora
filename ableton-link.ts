@@ -96,7 +96,6 @@ type ParsedPayload = {
 	sessionId: string | null;
 	timeline: LinkTimeline | null;
 	isPlaying: boolean | null;
-	knownEntries: number;
 };
 
 const hexAt = (dv: DataView, offset: number, length: number): string => {
@@ -112,7 +111,6 @@ const parsePayload = (dv: DataView, start: number): ParsedPayload | null => {
 		sessionId: null,
 		timeline: null,
 		isPlaying: null,
-		knownEntries: 0,
 	};
 	let offset = start;
 	const end = dv.byteLength;
@@ -128,13 +126,10 @@ const parsePayload = (dv: DataView, start: number): ParsedPayload | null => {
 				beatOriginMicroBeats: Number(dv.getBigInt64(offset + 8)),
 				timeOriginMicros: Number(dv.getBigInt64(offset + 16)),
 			};
-			payload.knownEntries++;
 		} else if (key === KEY_SESSION && size === 8) {
 			payload.sessionId = hexAt(dv, offset, 8);
-			payload.knownEntries++;
 		} else if (key === KEY_START_STOP && size === 17) {
 			payload.isPlaying = dv.getUint8(offset) !== 0;
-			payload.knownEntries++;
 		}
 		offset += size;
 	}
@@ -142,8 +137,12 @@ const parsePayload = (dv: DataView, start: number): ParsedPayload | null => {
 };
 
 // Returns null for anything that is not a parseable Link discovery message.
-// Falls back to the pre-session-groups header layout (no groupId field) when
-// the modern layout yields no recognizable payload entries.
+// A structurally well-formed entry stream at the modern offset (every
+// [key|size] pair consumed within bounds) is accepted as modern even if no
+// entry key is recognized — real Link traffic carries entries beyond
+// tmln/sess/stst (e.g. the measurement endpoint). Only when the modern-offset
+// parse fails structurally do we fall back to the pre-session-groups header
+// layout (no groupId field).
 export function parseLinkMessage(data: Uint8Array): LinkMessage | null {
 	if (data.byteLength < LEGACY_HEADER_SIZE) return null;
 	for (let i = 0; i < PROTOCOL_HEADER.length; i++) {
@@ -162,10 +161,7 @@ export function parseLinkMessage(data: Uint8Array): LinkMessage | null {
 
 	if (data.byteLength >= MODERN_HEADER_SIZE) {
 		const payload = parsePayload(dv, MODERN_HEADER_SIZE);
-		if (
-			payload &&
-			(payload.knownEntries > 0 || data.byteLength === MODERN_HEADER_SIZE)
-		) {
+		if (payload) {
 			return {
 				messageType,
 				ttl,
@@ -179,10 +175,7 @@ export function parseLinkMessage(data: Uint8Array): LinkMessage | null {
 	}
 
 	const legacy = parsePayload(dv, LEGACY_HEADER_SIZE);
-	if (
-		legacy &&
-		(legacy.knownEntries > 0 || data.byteLength === LEGACY_HEADER_SIZE)
-	) {
+	if (legacy) {
 		return {
 			messageType,
 			ttl,

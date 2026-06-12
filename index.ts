@@ -144,6 +144,11 @@ const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
 const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
 const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? "";
 const abletonLinkEnabled = Bun.env.ABLETON_LINK !== "0";
+// Listen-only by default: announcing injects an unmeasurable session (no
+// ghost-time measurement endpoint) into the Link group, which real peers may
+// try to merge toward. Opt in with ABLETON_LINK=announce after validating
+// against real Link peers on the target network.
+const abletonLinkAnnounce = Bun.env.ABLETON_LINK === "announce";
 const hotReload = Bun.env.HOT_RELOAD === "1";
 const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
@@ -974,8 +979,9 @@ function openMidiClockDevice(devicePath: string): void {
 }
 
 // --- Ableton Link ---------------------------------------------------------
-// Discovery-plane participant: announces this bridge as a peer and follows
-// the session timeline. Tempo precedence is MIDI clock > Link > AbletonOSC;
+// Discovery-plane participant: follows the session timeline; listen-only by
+// default, announcing as a peer only with ABLETON_LINK=announce.
+// Tempo precedence is MIDI clock > Link > AbletonOSC;
 // beat phase from Link is only mirrored while AbletonOSC frames are absent,
 // because Link phase here is unmeasured (constant unknown offset) while
 // AbletonOSC beat events are sample-accurate from Live itself.
@@ -988,7 +994,9 @@ const linkLocalMicros = () => Math.round(performance.now() * 1000);
 const linkEpochMicros = linkLocalMicros();
 let linkSocket: Socket | null = null;
 let lastLinkBpmUpdate = 0;
+let linkBpmFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let lastLinkBeat: number | null = null;
+let linkBeatBase: number | null = null;
 
 const isAbletonLinkActive = (): boolean =>
 	abletonLinkEnabled && linkSession.isActive(Date.now());
@@ -998,7 +1006,18 @@ const isAbletonOscActive = (): boolean => Date.now() - latestOscFrameAt < 3000;
 function onLinkTimelineChanged(): void {
 	if (isMidiClockActive()) return;
 	const now = Date.now();
-	if (now - lastLinkBpmUpdate < LINK_BPM_UPDATE_INTERVAL_MS) return;
+	const wait = LINK_BPM_UPDATE_INTERVAL_MS - (now - lastLinkBpmUpdate);
+	if (wait > 0) {
+		// Trailing-edge flush: re-run after the throttle window so the last
+		// tempo of a rapid ramp still reaches ControlState/WS promptly.
+		if (linkBpmFlushTimer === null) {
+			linkBpmFlushTimer = setTimeout(() => {
+				linkBpmFlushTimer = null;
+				onLinkTimelineChanged();
+			}, wait);
+		}
+		return;
+	}
 	const bpm = linkSession.tempo(now);
 	if (bpm === null) return;
 	lastLinkBpmUpdate = now;
@@ -1036,6 +1055,7 @@ function startAbletonLink(): void {
 		if (!msg) return;
 		const event = linkSession.onMessage(msg, Date.now());
 		if (
+			abletonLinkAnnounce &&
 			event.isNewPeer &&
 			msg.messageType === LINK_MESSAGE_ALIVE &&
 			linkSocket
@@ -1062,7 +1082,7 @@ function startAbletonLink(): void {
 		}
 		linkSocket = socket;
 		console.log(
-			`Ableton Link: joined ${LINK_MULTICAST_ADDR}:${LINK_PORT} as ${bytesToHex(linkNodeId)}`,
+			`Ableton Link: joined ${LINK_MULTICAST_ADDR}:${LINK_PORT} as ${bytesToHex(linkNodeId)} (${abletonLinkAnnounce ? "announce" : "listen-only"})`,
 		);
 	});
 }
@@ -1070,24 +1090,31 @@ function startAbletonLink(): void {
 if (abletonLinkEnabled) {
 	startAbletonLink();
 
-	setInterval(() => {
-		if (!linkSocket) return;
-		linkSocket.send(
-			makeLinkStateBuffer(LINK_MESSAGE_ALIVE),
-			LINK_PORT,
-			LINK_MULTICAST_ADDR,
-		);
-	}, LINK_ALIVE_INTERVAL_MS);
+	if (abletonLinkAnnounce) {
+		setInterval(() => {
+			if (!linkSocket) return;
+			linkSocket.send(
+				makeLinkStateBuffer(LINK_MESSAGE_ALIVE),
+				LINK_PORT,
+				LINK_MULTICAST_ADDR,
+			);
+		}, LINK_ALIVE_INTERVAL_MS);
+	}
 
 	setInterval(() => {
 		const now = Date.now();
 		if (!linkSession.isActive(now)) {
 			lastLinkBeat = null;
+			linkBeatBase = null;
 			return;
 		}
 		const beat = linkSession.beatAt(linkLocalMicros(), now);
 		if (beat === null) return;
-		const beatNumber = Math.floor(beat);
+		// linkLocalMicros() and the peer's timeOriginMicros are different clock
+		// domains, so raw beats can be enormous. Rebase on adoption so mirrored
+		// beat numbers start near 0, like AbletonOSC song-position beats.
+		if (linkBeatBase === null) linkBeatBase = Math.floor(beat);
+		const beatNumber = Math.floor(beat - linkBeatBase);
 		if (beatNumber === lastLinkBeat) return;
 		lastLinkBeat = beatNumber;
 		const bpm = linkSession.tempo(now);
