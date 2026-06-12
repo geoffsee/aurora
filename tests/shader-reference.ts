@@ -172,18 +172,9 @@ function geometryField(
 	const fillT = 0.38 + 0.35 * energy;
 	const layerGain = clamp(0.32 + layer, 0, 1);
 	const coreGlow = core * 0.45;
-	const r =
-		mix(base[0], accent[0], fillT) * layerGain +
-		lineGlow * accent[0] +
-		coreGlow;
-	const g =
-		mix(base[1], accent[1], fillT) * layerGain +
-		lineGlow * accent[1] +
-		coreGlow;
-	const b =
-		mix(base[2], accent[2], fillT) * layerGain +
-		lineGlow * accent[2] +
-		coreGlow;
+	const r = mix(base[0], accent[0], fillT) * layerGain + lineGlow * accent[0] + coreGlow;
+	const g = mix(base[1], accent[1], fillT) * layerGain + lineGlow * accent[1] + coreGlow;
+	const b = mix(base[2], accent[2], fillT) * layerGain + lineGlow * accent[2] + coreGlow;
 	const alpha = clamp(
 		(layer + core + pulse * 0.4 + 0.5 * lineGlow) *
 			(0.35 + 0.65 * layer) *
@@ -196,7 +187,11 @@ function geometryField(
 	return [r * enabled, g * enabled, b * enabled, alpha];
 }
 
-function vjPaletteFragment(u: ShaderUniforms, uvX: number, uvY: number): Rgba {
+function vjPaletteFragment(
+	u: ShaderUniforms,
+	uvX: number,
+	uvY: number,
+): Rgba {
 	const ux = (uvX - 0.5) * 2;
 	const uy = (uvY - 0.5) * 2;
 
@@ -271,7 +266,9 @@ function vjGridFragment(u: ShaderUniforms, uvX: number, uvY: number): Rgba {
 	);
 
 	const huePhase =
-		((cellIdX + cellIdY) / (cols + rows)) * 0.5 + time * 0.04 + tilePhase * 0.1;
+		((cellIdX + cellIdY) / (cols + rows)) * 0.5 +
+		time * 0.04 +
+		tilePhase * 0.1;
 	const sat = clamp(u.paletteExtra[0], 0, 1);
 	const bri = clamp(u.paletteExtra[1], 0, 1);
 	const [r, g, b] = vjPalette(hueShift, huePhase, 0.72 * sat, bri);

@@ -531,6 +531,7 @@ const audioControlRouter = makeAudioControlRouter(
 	(diff) => mergeControlState(diff as Partial<ControlState>),
 );
 audioControlRouter.setMappings(loadAudioMappings());
+let audioConfigReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
 const coerceAudioFeatures = (raw: unknown): AudioFeatures | null => {
 	if (!raw || typeof raw !== "object") return null;
@@ -1143,27 +1144,43 @@ const visualServer = Bun.serve({
 							}),
 						);
 					} else if (parsed.address === "/bevyosc/audio/features") {
-						const features = coerceAudioFeatures(
-							Array.isArray(parsed.args) ? parsed.args[0] : null,
-						);
-						if (features) {
-							audioControlRouter.onFeatures(features, Date.now());
-							// Fan out to the other clients so the controls page can
-							// show the feature meters the router actually sees.
-							const data = JSON.stringify({
-								address: "/bevyosc/audio/features",
-								args: [features],
-							});
-							sockets.forEach((client) => {
-								if (client !== ws) client.send(data);
-							});
+						// Single-source policy: in demo mode the bridge demo timer
+						// feeds the router directly; accepting browser echoes here
+						// would interleave a second, divergent feature stream into
+						// the router's per-mapping state.
+						if (latestControlState?.demoMode !== true) {
+							const features = coerceAudioFeatures(
+								Array.isArray(parsed.args) ? parsed.args[0] : null,
+							);
+							if (features) {
+								audioControlRouter.onFeatures(features, Date.now());
+								// Fan out to the other clients so the controls page can
+								// show the feature meters the router actually sees —
+								// only while routing is enabled, to keep idle WS
+								// traffic down (the meters are hidden otherwise).
+								if (latestControlState?.audioControlMode === true) {
+									const data = JSON.stringify({
+										address: "/bevyosc/audio/features",
+										args: [features],
+									});
+									sockets.forEach((client) => {
+										if (client !== ws) client.send(data);
+									});
+								}
+							}
 						}
 					} else if (parsed.address === "/bevyosc/audio/config") {
-						const mappings = loadAudioMappings();
-						audioControlRouter.setMappings(mappings);
-						console.log(
-							`[audio-router] reloaded ${mappings.length} mapping(s) from audio-mappings.json`,
-						);
+						// Debounced like the hot-reload watchers so WS clients cannot
+						// spam synchronous readFileSync calls on the event loop.
+						if (audioConfigReloadTimer) clearTimeout(audioConfigReloadTimer);
+						audioConfigReloadTimer = setTimeout(() => {
+							audioConfigReloadTimer = null;
+							const mappings = loadAudioMappings();
+							audioControlRouter.setMappings(mappings);
+							console.log(
+								`[audio-router] reloaded ${mappings.length} mapping(s) from audio-mappings.json`,
+							);
+						}, 300);
 					} else if (
 						parsed.address.startsWith("/bevyosc/automation/transient/")
 					) {
@@ -1337,6 +1354,16 @@ setInterval(() => {
 	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 	audioControlRouter.onFeatures(smoothed, Date.now());
+	// In demo mode the bridge owns the feature feed (browser echoes are
+	// dropped by the WS handler), so fan the routed features out here for
+	// the controls-page meters — only while routing is enabled.
+	if (state.audioControlMode) {
+		const featureData = JSON.stringify({
+			address: "/bevyosc/audio/features",
+			args: [smoothed],
+		});
+		sockets.forEach((ws) => ws.send(featureData));
+	}
 	const demo = {
 		tempo: state.bpm,
 		beat,
