@@ -848,12 +848,25 @@
         applyMorph();
       }
 
-      function applyMorph() {
+      // applyMorph() is a hot path (slider input events, MIDI CC streams, OSC
+      // messages), so the normalized A/B bundles are cached here instead of
+      // re-reading/parsing localStorage on every tick. Refreshed when a morph
+      // slot changes or the preset store mutates (every mutation ends in
+      // renderPresets()).
+      let morphBundles = null;
+
+      function refreshMorphBundles() {
+        morphBundles = null;
         if (!morphSlotA || !morphSlotB) return;
         const presets = loadPresets();
         const a = normalizePreset(presets[`slot-${morphSlotA}`]);
         const b = normalizePreset(presets[`slot-${morphSlotB}`]);
-        if (!a || !b) return;
+        if (a && b) morphBundles = { a, b };
+      }
+
+      function applyMorph() {
+        if (!morphBundles) return;
+        const { a, b } = morphBundles;
         if (activeTransitionRaf !== null) {
           cancelAnimationFrame(activeTransitionRaf);
           activeTransitionRaf = null;
@@ -954,6 +967,7 @@
           root.append(btn);
         }
         updateMorphSelects();
+        refreshMorphBundles();
         const activePill = $("#preset-status");
         if (activePill) {
           const activePreset = activePresetIndex !== null
@@ -1632,10 +1646,12 @@
 
       $("#morph-a").addEventListener("change", (event) => {
         morphSlotA = clampInt(event.target.value, 0, 6, 0);
+        refreshMorphBundles();
         applyMorph();
       });
       $("#morph-b").addEventListener("change", (event) => {
         morphSlotB = clampInt(event.target.value, 0, 6, 0);
+        refreshMorphBundles();
         applyMorph();
       });
       $("#morph-weight").addEventListener("input", (event) => {

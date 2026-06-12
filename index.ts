@@ -33,6 +33,7 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "./control-state-schema.ts";
+import { clampMorphWeight } from "./preset-morph.ts";
 import {
 	makeAutomationBridge,
 	parseTriggerBindings,
@@ -1089,7 +1090,7 @@ const visualServer = Bun.serve({
 							broadcastPresetCommand(
 								parsed.address,
 								parsed.address === PRESET_MORPH_ADDRESS
-									? [Number(valueOf(presetArgs[0]))]
+									? [clampMorphWeight(valueOf(presetArgs[0])) ?? 0]
 									: [],
 							);
 						}
@@ -1201,7 +1202,7 @@ vstControlUdp.on("message", (msg: OscMsg) => {
 			broadcastPresetCommand(
 				msg.address,
 				msg.address === PRESET_MORPH_ADDRESS
-					? [Number(valueOf(msg.args?.[0]))]
+					? [clampMorphWeight(valueOf(msg.args?.[0])) ?? 0]
 					: [],
 			);
 		}
