@@ -7,6 +7,7 @@ import {
 	type OscMsg,
 	type AudioCurveShape,
 	CONTROL_STATE_SCHEMA_VERSION,
+	PRESET_MORPH_ADDRESS,
 	isAudioCurveShape,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
@@ -33,6 +34,7 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "./control-state-schema.ts";
+import { clampMorphWeight } from "./preset-morph.ts";
 import {
 	makeAutomationBridge,
 	parseTriggerBindings,
@@ -749,8 +751,8 @@ const broadcastError = (description: string) => {
 	});
 	sockets.forEach((ws) => ws.send(data));
 };
-const broadcastPresetCommand = (address: string) => {
-	const data = JSON.stringify({ address, args: [] });
+const broadcastPresetCommand = (address: string, args: unknown[] = []) => {
+	const data = JSON.stringify({ address, args });
 	sockets.forEach((ws) => ws.send(data));
 };
 const booleanArg = (arg: OscArg | undefined) => {
@@ -1232,10 +1234,19 @@ const visualServer = Bun.serve({
 					) {
 						broadcastError(parsed.error);
 					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
+						const presetArgs = Array.isArray(parsed.args) ? parsed.args : [];
 						if (
-							validatePresetOscMsg({ address: parsed.address }, "WS client")
+							validatePresetOscMsg(
+								{ address: parsed.address, args: presetArgs },
+								"WS client",
+							)
 						) {
-							broadcastPresetCommand(parsed.address);
+							broadcastPresetCommand(
+								parsed.address,
+								parsed.address === PRESET_MORPH_ADDRESS
+									? [clampMorphWeight(valueOf(presetArgs[0])) ?? 0]
+									: [],
+							);
 						}
 					} else if (parsed.address === "/bevyosc/ping") {
 						ws.send(
@@ -1347,7 +1358,12 @@ vstControlUdp.on("ready", () => {
 vstControlUdp.on("message", (msg: OscMsg) => {
 	if (msg.address.startsWith("/bevyosc/preset/")) {
 		if (validatePresetOscMsg(msg, `VST :${vstControlRecvPort}`)) {
-			broadcastPresetCommand(msg.address);
+			broadcastPresetCommand(
+				msg.address,
+				msg.address === PRESET_MORPH_ADDRESS
+					? [clampMorphWeight(valueOf(msg.args?.[0])) ?? 0]
+					: [],
+			);
 		}
 		return;
 	}

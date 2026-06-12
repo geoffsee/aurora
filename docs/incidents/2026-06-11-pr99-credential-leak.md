@@ -40,6 +40,10 @@ Token values are deliberately not reproduced here.
 
 ## Outstanding actions (human operator required)
 
+Tracked in **issue #135** ("Rotate the nine leaked third-party API keys from
+the PR #99 credential leak"), so the pending rotations stay open after #123
+auto-closes when PR #131 merges.
+
 - Rotate all nine third-party keys above in their respective dashboards
   (Anthropic, OpenAI, xAI, Hugging Face, Replicate, Kaggle, npm, Deno Deploy).
   Agent has no access to these accounts.

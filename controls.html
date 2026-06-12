@@ -69,6 +69,13 @@
           <div id="curves-grid" class="curves-grid" aria-label="Per-parameter transition curves"></div>
         </details>
         <div id="preset-grid" class="preset-grid" aria-label="Saved presets"></div>
+        <div class="morph-controls" aria-label="Preset morph">
+          <span class="preset-label">Morph</span>
+          <select id="morph-a" aria-label="Morph preset A"></select>
+          <input id="morph-weight" type="range" min="0" max="1" step="0.001" value="0" aria-label="Preset morph blend weight" />
+          <select id="morph-b" aria-label="Morph preset B"></select>
+          <output id="morph-value" class="preset-label">0%</output>
+        </div>
       </section>
 
       <section class="grid s-sliders">
@@ -221,6 +228,7 @@
                 <option value="deckBMode">Deck B Mode</option>
                 <option value="ringOpacity">Ring Opacity</option>
                 <option value="maxBrightness">Max Brightness</option>
+                <option value="presetMorph">Preset Morph</option>
               </select>
             </label>
             <label><span>CC Min</span><input id="midi-cc-cc-min" type="number" min="0" max="127" step="1" value="0" /></label>
@@ -598,6 +606,10 @@
           // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
           if (Number.isInteger(n) && n >= 1 && n <= 6) savePresetSilent(n);
         }
+        if (frame?.address === "/bevyosc/preset/morph") {
+          // address must match PRESET_MORPH_ADDRESS in osc-validation.ts
+          setMorphWeight(args[0]);
+        }
         if (frame?.address === "/bevyosc/pong" && typeof frame.id === "number") {
           const sentAt = pendingPings[frame.id];
           if (sentAt !== undefined) {
@@ -799,6 +811,99 @@
         renderPresets();
       }
 
+      // ── Preset morphing ──────────────────────────────────────────────────
+      // Blend weight 0 = preset A, 1 = preset B; reachable via the slider,
+      // OSC /bevyosc/preset/morph (float) and the "presetMorph" MIDI CC param.
+      // Mirrors morphCurveValue()/computeMorphState() in preset-morph.ts — keep in sync.
+      let morphSlotA = 0; // 0 = unset
+      let morphSlotB = 0;
+      let morphWeight = 0;
+      let morphSide = 0;
+
+      // snap = cut at the midpoint; linear = direct fade; ease = smoothstep fade.
+      function morphCurveValue(weight, curve) {
+        if (curve === "snap") return weight < 0.5 ? 0 : 1;
+        if (curve === "ease") return weight * weight * (3 - 2 * weight);
+        return weight;
+      }
+
+      function computeMorphState(from, to, curves, weight) {
+        const { cueVersion, flashVersion, resetVersion, ...result } = { ...(weight < 0.5 ? from : to) };
+        for (const key of INTERPOLATED_KEYS) {
+          const a = typeof from[key] === "number" ? from[key] : (typeof to[key] === "number" ? to[key] : 0);
+          const b = typeof to[key] === "number" ? to[key] : a;
+          // Morph defaults to "linear" (unlike recall's "snap") — the fader's point is the fade.
+          const curve = CURVE_MODES.includes(curves?.[key]) ? curves[key] : "linear";
+          result[key] = a + (b - a) * morphCurveValue(weight, curve);
+        }
+        return result;
+      }
+
+      function setMorphWeight(raw) {
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return;
+        morphWeight = Math.max(0, Math.min(1, n));
+        $("#morph-weight").value = String(morphWeight);
+        $("#morph-value").textContent = `${Math.round(morphWeight * 100)}%`;
+        applyMorph();
+      }
+
+      // applyMorph() is a hot path (slider input events, MIDI CC streams, OSC
+      // messages), so the normalized A/B bundles are cached here instead of
+      // re-reading/parsing localStorage on every tick. Refreshed when a morph
+      // slot changes or the preset store mutates (every mutation ends in
+      // renderPresets()).
+      let morphBundles = null;
+
+      function refreshMorphBundles() {
+        morphBundles = null;
+        if (!morphSlotA || !morphSlotB) return;
+        const presets = loadPresets();
+        const a = normalizePreset(presets[`slot-${morphSlotA}`]);
+        const b = normalizePreset(presets[`slot-${morphSlotB}`]);
+        if (a && b) morphBundles = { a, b };
+      }
+
+      function applyMorph() {
+        if (!morphBundles) return;
+        const { a, b } = morphBundles;
+        if (activeTransitionRaf !== null) {
+          cancelAnimationFrame(activeTransitionRaf);
+          activeTransitionRaf = null;
+        }
+        const merged = computeMorphState(a.state, b.state, b.curves, morphWeight);
+        Object.assign(state, merged, { replaying: false });
+        const side = morphWeight < 0.5 ? 0 : 1;
+        if (side !== morphSide) {
+          morphSide = side;
+          state.cueVersion += 1;
+        }
+        syncInputs();
+        publish({ record: false });
+      }
+
+      function updateMorphSelects() {
+        const presets = loadPresets();
+        for (const [id, current] of [["morph-a", morphSlotA], ["morph-b", morphSlotB]]) {
+          const sel = $(`#${id}`);
+          if (!sel) continue;
+          sel.innerHTML = "";
+          const none = document.createElement("option");
+          none.value = "0";
+          none.textContent = "—";
+          sel.appendChild(none);
+          for (let i = 1; i <= 6; i++) {
+            const preset = normalizePreset(presets[`slot-${i}`]);
+            const opt = document.createElement("option");
+            opt.value = String(i);
+            opt.textContent = preset ? (preset.name || `Preset ${i}`) : `— ${i} —`;
+            opt.disabled = !preset;
+            sel.appendChild(opt);
+          }
+          sel.value = String(current);
+        }
+      }
+
       function savePresetToSlot(n) {
         const presets = loadPresets();
         const existing = normalizePreset(presets[`slot-${n}`]);
@@ -861,6 +966,8 @@
           });
           root.append(btn);
         }
+        updateMorphSelects();
+        refreshMorphBundles();
         const activePill = $("#preset-status");
         if (activePill) {
           const activePreset = activePresetIndex !== null
@@ -969,6 +1076,7 @@
         palette: "Color", paletteSaturation: "GPU Sat", paletteBrightness: "GPU Bright",
         deckAMode: "Deck A Mode", deckBMode: "Deck B Mode",
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
+        presetMorph: "Preset Morph",
       };
 
       // Mirrors migrateMidiBindings() in midi-cc-schema.ts — keep in sync.
@@ -1023,6 +1131,10 @@
           if (binding.cc !== ccNumber) continue;
           if (binding.channel !== 0 && binding.channel !== ccChannel) continue;
           const raw = scaleCcToParam(ccValue, binding);
+          if (binding.param === "presetMorph") {
+            setMorphWeight(raw); // publishes via applyMorph
+            continue;
+          }
           state[binding.param] = MIDI_CC_INTEGER_PARAMS.has(binding.param) ? Math.round(raw) : raw;
           if (binding.param === "deckAMode" || binding.param === "deckBMode") {
             state.cueVersion += 1;
@@ -1532,6 +1644,19 @@
         publish();
       });
 
+      $("#morph-a").addEventListener("change", (event) => {
+        morphSlotA = clampInt(event.target.value, 0, 6, 0);
+        refreshMorphBundles();
+        applyMorph();
+      });
+      $("#morph-b").addEventListener("change", (event) => {
+        morphSlotB = clampInt(event.target.value, 0, 6, 0);
+        refreshMorphBundles();
+        applyMorph();
+      });
+      $("#morph-weight").addEventListener("input", (event) => {
+        setMorphWeight(event.target.value);
+      });
       $("#preset-transition").addEventListener("input", (event) => {
         transitionDurationMs = Math.max(0, Math.min(10000, Number(event.target.value) || 0));
       });

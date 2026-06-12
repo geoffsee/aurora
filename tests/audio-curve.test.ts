@@ -32,16 +32,20 @@ describe("isAudioCurveShape", () => {
 
 describe("applyAudioCurve linear", () => {
 	test("returns 0 at 0", () => expect(applyAudioCurve(0, "linear")).toBe(0));
-	test("returns 0.5 at 0.5", () => expect(applyAudioCurve(0.5, "linear")).toBe(0.5));
+	test("returns 0.5 at 0.5", () =>
+		expect(applyAudioCurve(0.5, "linear")).toBe(0.5));
 	test("returns 1 at 1", () => expect(applyAudioCurve(1, "linear")).toBe(1));
 });
 
 // ── applyAudioCurve exponential ───────────────────────────────────────────────
 
 describe("applyAudioCurve exponential (x²)", () => {
-	test("returns 0 at 0", () => expect(applyAudioCurve(0, "exponential")).toBe(0));
-	test("returns 1 at 1", () => expect(applyAudioCurve(1, "exponential")).toBe(1));
-	test("compresses low values (0.5 → 0.25)", () => expect(applyAudioCurve(0.5, "exponential")).toBe(0.25));
+	test("returns 0 at 0", () =>
+		expect(applyAudioCurve(0, "exponential")).toBe(0));
+	test("returns 1 at 1", () =>
+		expect(applyAudioCurve(1, "exponential")).toBe(1));
+	test("compresses low values (0.5 → 0.25)", () =>
+		expect(applyAudioCurve(0.5, "exponential")).toBe(0.25));
 	test("is less than linear for mid-range inputs", () => {
 		for (const v of [0.1, 0.3, 0.7, 0.9]) {
 			expect(applyAudioCurve(v, "exponential")).toBeLessThan(v);
@@ -59,9 +63,12 @@ describe("applyAudioCurve exponential (x²)", () => {
 // ── applyAudioCurve logarithmic ───────────────────────────────────────────────
 
 describe("applyAudioCurve logarithmic (√x)", () => {
-	test("returns 0 at 0", () => expect(applyAudioCurve(0, "logarithmic")).toBe(0));
-	test("returns 1 at 1", () => expect(applyAudioCurve(1, "logarithmic")).toBe(1));
-	test("boosts low values (0.25 → 0.5)", () => expect(applyAudioCurve(0.25, "logarithmic")).toBeCloseTo(0.5));
+	test("returns 0 at 0", () =>
+		expect(applyAudioCurve(0, "logarithmic")).toBe(0));
+	test("returns 1 at 1", () =>
+		expect(applyAudioCurve(1, "logarithmic")).toBe(1));
+	test("boosts low values (0.25 → 0.5)", () =>
+		expect(applyAudioCurve(0.25, "logarithmic")).toBeCloseTo(0.5));
 	test("is greater than linear for mid-range inputs", () => {
 		for (const v of [0.1, 0.3, 0.7, 0.9]) {
 			expect(applyAudioCurve(v, "logarithmic")).toBeGreaterThan(v);
@@ -84,7 +91,10 @@ describe("applyAudioCurve logarithmic (√x)", () => {
 describe("exponential and logarithmic are inverses of each other", () => {
 	test("exp(log(x)) ≈ x", () => {
 		for (const v of [0.1, 0.25, 0.5, 0.75, 0.9]) {
-			const roundtrip = applyAudioCurve(applyAudioCurve(v, "logarithmic"), "exponential");
+			const roundtrip = applyAudioCurve(
+				applyAudioCurve(v, "logarithmic"),
+				"exponential",
+			);
 			expect(roundtrip).toBeCloseTo(v, 10);
 		}
 	});

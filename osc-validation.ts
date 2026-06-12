@@ -48,6 +48,7 @@ export const VST_CUE_PREFIX = "/bevyosc/vst/cue/";
 
 export const PRESET_SAVE_PREFIX = "/bevyosc/preset/save/";
 export const PRESET_RECALL_PREFIX = "/bevyosc/preset/recall/";
+export const PRESET_MORPH_ADDRESS = "/bevyosc/preset/morph";
 export const PRESET_SLOT_MIN = 1;
 export const PRESET_SLOT_MAX = 6;
 
@@ -109,6 +110,16 @@ export const validateLiveOscMsg = (msg: OscMsg, origin: string): boolean => {
 
 export const validatePresetOscMsg = (msg: OscMsg, origin: string): boolean => {
 	const { address } = msg;
+	if (address === PRESET_MORPH_ADDRESS) {
+		const args = msg.args ?? [];
+		if (args.length !== 1 || !isNumericOscArg(args[0])) {
+			console.error(
+				`[OSC] dropping malformed payload for "${address}" from ${origin} — expected 1 numeric blend-weight arg`,
+			);
+			return false;
+		}
+		return true;
+	}
 	const isSave = address.startsWith(PRESET_SAVE_PREFIX);
 	const isRecall = address.startsWith(PRESET_RECALL_PREFIX);
 	if (!isSave && !isRecall) return false;
