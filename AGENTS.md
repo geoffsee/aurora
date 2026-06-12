@@ -48,11 +48,12 @@ This is a Bevy app compiled to WebAssembly, served and orchestrated by a Bun pro
 
 **1. Bevy/WASM renderer (`src/main.rs`, single 1000-line file).** Runs in the browser tab on port 3000. Generates all visuals procedurally on the CPU and feeds material parameters to Bevy — no GPU shader pass is wired up yet (`assets/shaders/vj_palette.wgsl` is reserved). It does not open any sockets itself. Instead it reads its inputs by calling a fixed set of `window.__bevyosc*` getter functions every frame, declared as `wasm_bindgen` externs at the top of `main.rs`. Two families: `__bevyoscOsc*` (live audio data — tempo, beat, energy, deck/bass/mid/high meters, pulse) and `__bevyoscControl*` (VJ control surface state — crossfade, BPM, intensity, deck modes, cue versions, etc.). Adding a new control means adding the param to all three: the JS state object in `index.html`, the `window.__bevyosc*` getter, and the Rust extern declaration.
 
-**2. Bun bridge (`index.ts`).** Single process, two HTTP servers, two UDP sockets, one shared WebSocket fan-out:
+**2. Bun bridge (`index.ts`).** Single process, two HTTP servers, three UDP sockets, one shared WebSocket fan-out:
 - `:3000` serves the projector page (`index.html` + `dist/pkg/`) and accepts a `/ws` upgrade.
 - `:3001` serves the controls page (`controls.html`). The controls page connects back to the WS on `:3000` — there is one WebSocket bus, not two.
 - UDP `:11001` receives AbletonOSC replies; sends polls/subscriptions to `127.0.0.1:11000`. Every UDP message is JSON-encoded and broadcast to all WS clients.
 - UDP `:12000` receives parameter changes from the VST plugin. Messages with `/bevyosc/vst/control/*`, `/bevyosc/vst/trigger/*`, `/bevyosc/vst/cue/*` are translated into mutations on the shared `ControlState` and re-broadcast as `/bevyosc/control/state`.
+- UDP `:20808` (multicast `224.76.78.75`) is a minimal Ableton Link participant (`ableton-link.ts`, discovery plane only — no ghost-time measurement, so beat phase has a constant unknown offset). Session tempo and beat numbers are re-broadcast on the same `/live/song/get/tempo` / `/live/song/get/beat` addresses the mirrors already consume. Tempo precedence is MIDI clock > Link > AbletonOSC; disable with `ABLETON_LINK=0`.
 
 The bridge is the **single source of truth for `ControlState`**. `coerceControlState` in `index.ts` clamps every field on every update — if you add a control, add a clamp here too or the value will pass through unchecked. Browser, VST, and controls page are all clients of this state; they never own it.
 
