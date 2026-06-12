@@ -66,9 +66,10 @@ and renderer. Neither requires beta software.
 ### Path A — AbletonOSC track meters (works today, zero new code)
 
 The bridge already polls `track.output_meter_level` for **every track** in the set
-every 50 ms (`index.ts:1032`), and `deriveAudioFeaturesFromTrackData`
-(`index.ts:537`) maps individual track meters into `AudioFeatures.bass/mid/high`
-via `ControlState.trackMapping.{bassTrack,midTrack,highTrack}`.
+every 50 ms (the `setInterval` meter poll in `index.ts`), and
+`processLiveTrackData` (`index.ts`) maps individual track meters into
+`AudioFeatures.bass/mid/high` via
+`ControlState.trackMapping.{bassTrack,midTrack,highTrack}`.
 
 In Live, group tracks (buses) appear in the track list and report
 `output_meter_level` like any other track. A Rezz-style set with a **kick bus**
@@ -81,7 +82,7 @@ Limitations, measured against the codebase:
 | Limitation | Impact |
 |---|---|
 | 20 Hz poll rate (50 ms interval) | Fine for level-following (intensity, depth); marginal for sharp kick onsets — worst-case ~50–100 ms visual lag |
-| `output_meter_level` has meter ballistics (smoothed, not raw RMS) | Transient detector (`audio-transient-trigger.ts`) sees softened edges; `pulse` is already approximated from energy for this reason (`index.ts:557`) |
+| `output_meter_level` has meter ballistics (smoothed, not raw RMS) | Transient detector (`audio-transient-trigger.ts`) sees softened edges; `pulse` is already approximated from energy for this reason (see the "pulse is not available from track meters" comment in `processLiveTrackData`, `index.ts`) |
 | Track indices shift when tracks are added/removed | Existing `trackMapping` limitation, not new |
 | Only three mapped slots (`bass`/`mid`/`high`) | Enough for kick + vocal + one more; more stems would need an `AudioFeatures`/mapping extension |
 
