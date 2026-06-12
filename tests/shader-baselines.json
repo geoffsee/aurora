@@ -1,0 +1,14 @@
+{
+	"wgsl": {
+		"vj_palette.wgsl": "6b3abb74b143cc693554b54d5eaf3370b54344674d53c1177e30cc2ac65e7110",
+		"vj_grid.wgsl": "517de7883f892cd66e592a492debdf295c9c5d06d2e0c80655b816bb3e156dc3"
+	},
+	"frames": {
+		"vj_palette/audio-active": "d85b9211174164d6e12918edfcfe6e723f37ed26c3d6dcf3741b49c4e70cc999",
+		"vj_palette/audio-quiet": "d7e784e75f4f390f24e948cd3501dd2033ecf82b701f3bbdd1d640e04bac6288",
+		"vj_palette/osc-inactive": "f3cc103136423a57975750907ebc1d367e2985ac6338976d4d5a439f50323f4a",
+		"vj_grid/audio-active": "312cca50fee87eedba200958e2ab49d859a03bc75820f7cf5caec86d57f99184",
+		"vj_grid/audio-quiet": "7c90920106593fa91b271b627a0c90f1f82faff89c184060d54739799bab04a6",
+		"vj_grid/osc-inactive": "c1fd848ee393a8232cb72cf44aaa7903e960651b26c36643dfe05a8b932b822e"
+	}
+}
