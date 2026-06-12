@@ -39,7 +39,11 @@ describe("stepAudioEma", () => {
 		const state = makeAudioEmaState();
 		state.energy = 0.5;
 		state.bass = 0.3;
-		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0));
+		stepAudioEma(
+			state,
+			{ energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 },
+			uniform(0),
+		);
 		expect(state.energy).toBeCloseTo(0.5);
 		expect(state.bass).toBeCloseTo(0.3);
 		expect(state.mid).toBeCloseTo(0);
@@ -47,10 +51,18 @@ describe("stepAudioEma", () => {
 
 	test("single step with alpha=0.5 averages previous and raw", () => {
 		const state = makeAudioEmaState();
-		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0.5));
+		stepAudioEma(
+			state,
+			{ energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 },
+			uniform(0.5),
+		);
 		// 0.5 * 1 + 0.5 * 0 = 0.5
 		expect(state.energy).toBeCloseTo(0.5);
-		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0.5));
+		stepAudioEma(
+			state,
+			{ energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 },
+			uniform(0.5),
+		);
 		// 0.5 * 1 + 0.5 * 0.5 = 0.75
 		expect(state.energy).toBeCloseTo(0.75);
 	});
@@ -80,14 +92,24 @@ describe("stepAudioEma", () => {
 
 	test("mutates and returns the same state object", () => {
 		const state = makeAudioEmaState();
-		const returned = stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, uniform(0.5));
+		const returned = stepAudioEma(
+			state,
+			{ energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 },
+			uniform(0.5),
+		);
 		expect(returned).toBe(state);
 	});
 
 	test("per-band alphas apply independently", () => {
 		const state = makeAudioEmaState();
 		const raw = { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 };
-		const alphas: AudioEmaAlphas = { energy: 0.1, bass: 0.5, mid: 0.3, high: 0.8, pulse: 1.0 };
+		const alphas: AudioEmaAlphas = {
+			energy: 0.1,
+			bass: 0.5,
+			mid: 0.3,
+			high: 0.8,
+			pulse: 1.0,
+		};
 		stepAudioEma(state, raw, alphas);
 		expect(state.energy).toBeCloseTo(0.1);
 		expect(state.bass).toBeCloseTo(0.5);
@@ -127,10 +149,14 @@ describe("DEFAULT_AUDIO_EMA_ALPHAS", () => {
 	});
 
 	test("bass alpha is smaller than high alpha (longer bass decay)", () => {
-		expect(DEFAULT_AUDIO_EMA_ALPHAS.bass).toBeLessThan(DEFAULT_AUDIO_EMA_ALPHAS.high);
+		expect(DEFAULT_AUDIO_EMA_ALPHAS.bass).toBeLessThan(
+			DEFAULT_AUDIO_EMA_ALPHAS.high,
+		);
 	});
 
 	test("bass alpha is smaller than mid alpha", () => {
-		expect(DEFAULT_AUDIO_EMA_ALPHAS.bass).toBeLessThan(DEFAULT_AUDIO_EMA_ALPHAS.mid);
+		expect(DEFAULT_AUDIO_EMA_ALPHAS.bass).toBeLessThan(
+			DEFAULT_AUDIO_EMA_ALPHAS.mid,
+		);
 	});
 });

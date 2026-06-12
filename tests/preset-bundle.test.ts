@@ -31,18 +31,20 @@ function savePreset(state: PresetState): PresetBundle {
 }
 
 // Mirror of controls.html recallPreset atomic apply logic.
-function recallPreset(
-	bundle: PresetBundle,
-	current: PresetState,
-): PresetState {
+function recallPreset(bundle: PresetBundle, current: PresetState): PresetState {
 	const to = bundle.state;
 	return {
 		...current,
-		activeShader: typeof to.activeShader === "number" ? to.activeShader : current.activeShader,
+		activeShader:
+			typeof to.activeShader === "number"
+				? to.activeShader
+				: current.activeShader,
 		bandCurves: normalizeBandCurves(to.bandCurves as Record<string, unknown>),
 		emaAlphas: normalizeEmaAlphas(to.emaAlphas as Record<string, unknown>),
-		crossfade: typeof to.crossfade === "number" ? to.crossfade : current.crossfade,
-		intensity: typeof to.intensity === "number" ? to.intensity : current.intensity,
+		crossfade:
+			typeof to.crossfade === "number" ? to.crossfade : current.crossfade,
+		intensity:
+			typeof to.intensity === "number" ? to.intensity : current.intensity,
 	};
 }
 
@@ -62,7 +64,12 @@ describe("PRESET_BUNDLE_SCHEMA_VERSION", () => {
 	test("saved preset carries the current schema version", () => {
 		const state: PresetState = {
 			activeShader: 0,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 			crossfade: 0.5,
 			intensity: 0.8,
@@ -105,7 +112,17 @@ describe("migratePresetBundle — v0 unversioned bundle", () => {
 	test("promotes to v1 preserving state, name, and curves", () => {
 		const raw = {
 			name: "Drop",
-			state: { activeShader: 1, bandCurves: { energy: "exponential", bass: "linear", mid: "linear", high: "linear" }, emaAlphas: { energy: 0.4, bass: 0.2, mid: 0.3, high: 0.5, pulse: 0.6 }, crossfade: 0.9 },
+			state: {
+				activeShader: 1,
+				bandCurves: {
+					energy: "exponential",
+					bass: "linear",
+					mid: "linear",
+					high: "linear",
+				},
+				emaAlphas: { energy: 0.4, bass: 0.2, mid: 0.3, high: 0.5, pulse: 0.6 },
+				crossfade: 0.9,
+			},
 			curves: { crossfade: "ease", intensity: "linear" },
 		};
 		const result = migratePresetBundle(raw);
@@ -162,7 +179,12 @@ describe("preset save and load round-trip (integration)", () => {
 	test("serialising through JSON (localStorage sim) and migrating preserves all three bundle fields", () => {
 		const state: PresetState = {
 			activeShader: 1,
-			bandCurves: { energy: "exponential", bass: "logarithmic", mid: "linear", high: "exponential" },
+			bandCurves: {
+				energy: "exponential",
+				bass: "logarithmic",
+				mid: "linear",
+				high: "exponential",
+			},
 			emaAlphas: { energy: 0.4, bass: 0.2, mid: 0.35, high: 0.6, pulse: 0.5 },
 			crossfade: 0.75,
 			intensity: 1.1,
@@ -182,7 +204,12 @@ describe("preset save and load round-trip (integration)", () => {
 		// Recall
 		const current: PresetState = {
 			activeShader: 0,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 			crossfade: 0.5,
 			intensity: 0.8,
@@ -204,8 +231,19 @@ describe("preset save and load round-trip (integration)", () => {
 			name: "Legacy preset",
 			state: {
 				activeShader: 1,
-				bandCurves: { energy: "exponential", bass: "linear", mid: "linear", high: "linear" },
-				emaAlphas: { energy: 0.3, bass: 0.1, mid: 0.25, high: 0.45, pulse: 0.55 },
+				bandCurves: {
+					energy: "exponential",
+					bass: "linear",
+					mid: "linear",
+					high: "linear",
+				},
+				emaAlphas: {
+					energy: 0.3,
+					bass: 0.1,
+					mid: 0.25,
+					high: 0.45,
+					pulse: 0.55,
+				},
 				crossfade: 0.6,
 				intensity: 1.0,
 			},
@@ -218,7 +256,12 @@ describe("preset save and load round-trip (integration)", () => {
 
 		const current: PresetState = {
 			activeShader: 0,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 			crossfade: 0.5,
 			intensity: 0.8,
@@ -236,7 +279,12 @@ describe("preset bundles activeShader", () => {
 	test("saved shader index is restored on recall", () => {
 		const state: PresetState = {
 			activeShader: 1,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 			crossfade: 0.5,
 			intensity: 0.8,
@@ -254,7 +302,12 @@ describe("preset bundles bandCurves", () => {
 	test("saved band curves are restored on recall", () => {
 		const state: PresetState = {
 			activeShader: 0,
-			bandCurves: { energy: "exponential", bass: "logarithmic", mid: "linear", high: "exponential" },
+			bandCurves: {
+				energy: "exponential",
+				bass: "logarithmic",
+				mid: "linear",
+				high: "exponential",
+			},
 			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 			crossfade: 0.5,
 			intensity: 0.8,
@@ -262,7 +315,12 @@ describe("preset bundles bandCurves", () => {
 		const bundle = savePreset(state);
 		const current: PresetState = {
 			...state,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 		};
 		const after = recallPreset(bundle, current);
 		expect(after.bandCurves.energy).toBe("exponential");
@@ -275,16 +333,30 @@ describe("preset bundles bandCurves", () => {
 
 describe("preset bundles emaAlphas", () => {
 	test("saved EMA alphas are restored on recall", () => {
-		const customAlphas: AudioEmaAlphas = { energy: 0.4, bass: 0.2, mid: 0.35, high: 0.6, pulse: 0.5 };
+		const customAlphas: AudioEmaAlphas = {
+			energy: 0.4,
+			bass: 0.2,
+			mid: 0.35,
+			high: 0.6,
+			pulse: 0.5,
+		};
 		const state: PresetState = {
 			activeShader: 0,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 			emaAlphas: customAlphas,
 			crossfade: 0.5,
 			intensity: 0.8,
 		};
 		const bundle = savePreset(state);
-		const current: PresetState = { ...state, emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS } };
+		const current: PresetState = {
+			...state,
+			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
+		};
 		const after = recallPreset(bundle, current);
 		expect(after.emaAlphas.energy).toBeCloseTo(0.4);
 		expect(after.emaAlphas.bass).toBeCloseTo(0.2);
@@ -297,12 +369,27 @@ describe("preset bundles emaAlphas", () => {
 		const bundle: PresetBundle = {
 			schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION,
 			name: "old",
-			state: { activeShader: 0, bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" }, crossfade: 0.5, intensity: 0.8 },
+			state: {
+				activeShader: 0,
+				bandCurves: {
+					energy: "linear",
+					bass: "linear",
+					mid: "linear",
+					high: "linear",
+				},
+				crossfade: 0.5,
+				intensity: 0.8,
+			},
 			curves: {},
 		};
 		const current: PresetState = {
 			activeShader: 0,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 			crossfade: 0.5,
 			intensity: 0.8,
@@ -318,14 +405,24 @@ describe("recalling a preset applies all three fields atomically", () => {
 	test("activeShader, bandCurves, and emaAlphas all change together", () => {
 		const saved: PresetState = {
 			activeShader: 1,
-			bandCurves: { energy: "exponential", bass: "logarithmic", mid: "exponential", high: "logarithmic" },
+			bandCurves: {
+				energy: "exponential",
+				bass: "logarithmic",
+				mid: "exponential",
+				high: "logarithmic",
+			},
 			emaAlphas: { energy: 0.5, bass: 0.3, mid: 0.4, high: 0.7, pulse: 0.6 },
 			crossfade: 0.75,
 			intensity: 1.2,
 		};
 		const current: PresetState = {
 			activeShader: 0,
-			bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "linear",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 			emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 			crossfade: 0.5,
 			intensity: 0.8,
@@ -348,7 +445,12 @@ describe("schema migration preserves bundling intent", () => {
 		const v3State = {
 			schemaVersion: 3,
 			activeShader: 1,
-			bandCurves: { energy: "exponential", bass: "linear", mid: "linear", high: "linear" },
+			bandCurves: {
+				energy: "exponential",
+				bass: "linear",
+				mid: "linear",
+				high: "linear",
+			},
 		};
 		const migrated = migrateControlState(v3State) as Record<string, unknown>;
 		expect(migrated.schemaVersion).toBe(4);
@@ -363,22 +465,42 @@ describe("schema migration preserves bundling intent", () => {
 describe("normalizeBandCurves", () => {
 	test("defaults all bands to linear when given null", () => {
 		const bc = normalizeBandCurves(null);
-		expect(bc).toEqual({ energy: "linear", bass: "linear", mid: "linear", high: "linear" });
+		expect(bc).toEqual({
+			energy: "linear",
+			bass: "linear",
+			mid: "linear",
+			high: "linear",
+		});
 	});
 
 	test("defaults all bands to linear when given undefined", () => {
 		const bc = normalizeBandCurves(undefined);
-		expect(bc).toEqual({ energy: "linear", bass: "linear", mid: "linear", high: "linear" });
+		expect(bc).toEqual({
+			energy: "linear",
+			bass: "linear",
+			mid: "linear",
+			high: "linear",
+		});
 	});
 
 	test("passes through valid curve shapes", () => {
-		const bc = normalizeBandCurves({ energy: "exponential", bass: "logarithmic", mid: "linear", high: "exponential" });
+		const bc = normalizeBandCurves({
+			energy: "exponential",
+			bass: "logarithmic",
+			mid: "linear",
+			high: "exponential",
+		});
 		expect(bc.energy).toBe("exponential");
 		expect(bc.bass).toBe("logarithmic");
 	});
 
 	test("replaces invalid curve shape with linear", () => {
-		const bc = normalizeBandCurves({ energy: "invalid" as AudioCurveShape, bass: "linear", mid: "linear", high: "linear" });
+		const bc = normalizeBandCurves({
+			energy: "invalid" as AudioCurveShape,
+			bass: "linear",
+			mid: "linear",
+			high: "linear",
+		});
 		expect(bc.energy).toBe("linear");
 	});
 });
@@ -397,14 +519,26 @@ describe("normalizeEmaAlphas", () => {
 	});
 
 	test("passes through valid alphas", () => {
-		const ea = normalizeEmaAlphas({ energy: 0.5, bass: 0.3, mid: 0.4, high: 0.6, pulse: 0.7 });
+		const ea = normalizeEmaAlphas({
+			energy: 0.5,
+			bass: 0.3,
+			mid: 0.4,
+			high: 0.6,
+			pulse: 0.7,
+		});
 		expect(ea.energy).toBeCloseTo(0.5);
 		expect(ea.bass).toBeCloseTo(0.3);
 		expect(ea.pulse).toBeCloseTo(0.7);
 	});
 
 	test("replaces out-of-range alpha with band default", () => {
-		const ea = normalizeEmaAlphas({ energy: 0, bass: 1.5, mid: -0.1, high: 0.22, pulse: 0.28 });
+		const ea = normalizeEmaAlphas({
+			energy: 0,
+			bass: 1.5,
+			mid: -0.1,
+			high: 0.22,
+			pulse: 0.28,
+		});
 		expect(ea.energy).toBe(DEFAULT_AUDIO_EMA_ALPHAS.energy);
 		expect(ea.bass).toBe(DEFAULT_AUDIO_EMA_ALPHAS.bass);
 		expect(ea.mid).toBe(DEFAULT_AUDIO_EMA_ALPHAS.mid);
@@ -420,30 +554,57 @@ describe("normalizePreset (controls.html) parity with migratePresetBundle", () =
 	function normalizePreset(raw: unknown): PresetBundle | null {
 		if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
 		const r = raw as Record<string, unknown>;
-		if (!("state" in r)) return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: "", state: r, curves: {} };
-		const state = r.state && typeof r.state === "object" ? (r.state as Record<string, unknown>) : {};
+		if (!("state" in r))
+			return {
+				schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION,
+				name: "",
+				state: r,
+				curves: {},
+			};
+		const state =
+			r.state && typeof r.state === "object"
+				? (r.state as Record<string, unknown>)
+				: {};
 		const curvesRaw = r.curves;
-		const curves: Record<string, string> = curvesRaw && typeof curvesRaw === "object" && !Array.isArray(curvesRaw)
-			? Object.fromEntries(
-				(Object.entries(curvesRaw as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as [string, string][],
-			)
-			: {};
+		const curves: Record<string, string> =
+			curvesRaw && typeof curvesRaw === "object" && !Array.isArray(curvesRaw)
+				? Object.fromEntries(
+						Object.entries(curvesRaw as Record<string, unknown>).filter(
+							([, v]) => typeof v === "string",
+						) as [string, string][],
+					)
+				: {};
 		const name = typeof r.name === "string" ? r.name : "";
-		if (!("schemaVersion" in r) || r.schemaVersion === PRESET_BUNDLE_SCHEMA_VERSION) {
-			return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name, state, curves };
+		if (
+			!("schemaVersion" in r) ||
+			r.schemaVersion === PRESET_BUNDLE_SCHEMA_VERSION
+		) {
+			return {
+				schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION,
+				name,
+				state,
+				curves,
+			};
 		}
 		return null;
 	}
 
-	test("null → null", () => expect(normalizePreset(null)).toEqual(migratePresetBundle(null)));
-	test("undefined → null", () => expect(normalizePreset(undefined)).toEqual(migratePresetBundle(undefined)));
-	test("string → null", () => expect(normalizePreset("preset")).toEqual(migratePresetBundle("preset")));
+	test("null → null", () =>
+		expect(normalizePreset(null)).toEqual(migratePresetBundle(null)));
+	test("undefined → null", () =>
+		expect(normalizePreset(undefined)).toEqual(migratePresetBundle(undefined)));
+	test("string → null", () =>
+		expect(normalizePreset("preset")).toEqual(migratePresetBundle("preset")));
 	test("legacy raw state (no state key)", () => {
 		const raw = { activeShader: 1, crossfade: 0.75 };
 		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
 	});
 	test("v0 unversioned bundle", () => {
-		const raw = { name: "Drop", state: { activeShader: 1 }, curves: { crossfade: "ease" } };
+		const raw = {
+			name: "Drop",
+			state: { activeShader: 1 },
+			curves: { crossfade: "ease" },
+		};
 		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
 	});
 	test("v0 with null curves", () => {
@@ -451,7 +612,12 @@ describe("normalizePreset (controls.html) parity with migratePresetBundle", () =
 		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
 	});
 	test("v1 current bundle", () => {
-		const raw: PresetBundle = { schemaVersion: 1, name: "Warmup", state: { crossfade: 0.5 }, curves: { intensity: "ease" } };
+		const raw: PresetBundle = {
+			schemaVersion: 1,
+			name: "Warmup",
+			state: { crossfade: 0.5 },
+			curves: { intensity: "ease" },
+		};
 		expect(normalizePreset(raw)).toEqual(migratePresetBundle(raw));
 	});
 	test("unknown future version → null", () => {
