@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { createReadStream, watch } from "node:fs";
+import { createSocket, type Socket } from "node:dgram";
 import type { ServerWebSocket } from "bun";
 import {
 	type OscArg,
@@ -40,6 +41,19 @@ import {
 	type AudioTransientConfig,
 } from "./automation-bridge.ts";
 import { DEFAULT_TRANSIENT_CONFIG } from "./audio-transient-trigger.ts";
+import {
+	LINK_DEFAULT_TTL_SECONDS,
+	LINK_MESSAGE_ALIVE,
+	LINK_MESSAGE_RESPONSE,
+	LINK_MULTICAST_ADDR,
+	LINK_PORT,
+	bytesToHex,
+	encodeLinkMessage,
+	hexToBytes,
+	makeLinkSession,
+	microsPerBeatFromBpm,
+	parseLinkMessage,
+} from "./ableton-link.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -129,6 +143,12 @@ const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
 const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
 const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? "";
+const abletonLinkEnabled = Bun.env.ABLETON_LINK !== "0";
+// Listen-only by default: announcing injects an unmeasurable session (no
+// ghost-time measurement endpoint) into the Link group, which real peers may
+// try to merge toward. Opt in with ABLETON_LINK=announce after validating
+// against real Link peers on the target network.
+const abletonLinkAnnounce = Bun.env.ABLETON_LINK === "announce";
 const hotReload = Bun.env.HOT_RELOAD === "1";
 const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
@@ -958,6 +978,167 @@ function openMidiClockDevice(devicePath: string): void {
 	});
 }
 
+// --- Ableton Link ---------------------------------------------------------
+// Discovery-plane participant: follows the session timeline; listen-only by
+// default, announcing as a peer only with ABLETON_LINK=announce.
+// Tempo precedence is MIDI clock > Link > AbletonOSC;
+// beat phase from Link is only mirrored while AbletonOSC frames are absent,
+// because Link phase here is unmeasured (constant unknown offset) while
+// AbletonOSC beat events are sample-accurate from Live itself.
+
+const LINK_BPM_UPDATE_INTERVAL_MS = 50;
+const LINK_ALIVE_INTERVAL_MS = 2000;
+const linkNodeId = crypto.getRandomValues(new Uint8Array(8));
+const linkSession = makeLinkSession(bytesToHex(linkNodeId));
+const linkLocalMicros = () => Math.round(performance.now() * 1000);
+const linkEpochMicros = linkLocalMicros();
+let linkSocket: Socket | null = null;
+let lastLinkBpmUpdate = 0;
+let linkBpmFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let lastLinkBeat: number | null = null;
+let linkBeatBase: number | null = null;
+
+const isAbletonLinkActive = (): boolean =>
+	abletonLinkEnabled && linkSession.isActive(Date.now());
+
+const isAbletonOscActive = (): boolean => Date.now() - latestOscFrameAt < 3000;
+
+function onLinkTimelineChanged(): void {
+	if (isMidiClockActive()) return;
+	const now = Date.now();
+	const wait = LINK_BPM_UPDATE_INTERVAL_MS - (now - lastLinkBpmUpdate);
+	if (wait > 0) {
+		// Trailing-edge flush: re-run after the throttle window so the last
+		// tempo of a rapid ramp still reaches ControlState/WS promptly.
+		if (linkBpmFlushTimer === null) {
+			linkBpmFlushTimer = setTimeout(() => {
+				linkBpmFlushTimer = null;
+				onLinkTimelineChanged();
+			}, wait);
+		}
+		return;
+	}
+	const bpm = linkSession.tempo(now);
+	if (bpm === null) return;
+	lastLinkBpmUpdate = now;
+	mergeControlState({ bpm });
+	const tempoData = JSON.stringify({
+		address: OSC_ADDRESSES.TEMPO,
+		args: [bpm],
+	});
+	sockets.forEach((ws) => ws.send(tempoData));
+}
+
+function makeLinkStateBuffer(messageType: number): Uint8Array {
+	const sessionIdHex = linkSession.sessionIdHex();
+	return encodeLinkMessage({
+		messageType,
+		ttl: LINK_DEFAULT_TTL_SECONDS,
+		groupId: 0,
+		nodeId: linkNodeId,
+		sessionId: sessionIdHex ? hexToBytes(sessionIdHex) : linkNodeId,
+		timeline: linkSession.adoptedTimeline() ?? {
+			microsPerBeat: microsPerBeatFromBpm(currentControlState().bpm),
+			beatOriginMicroBeats: 0,
+			timeOriginMicros: linkEpochMicros,
+		},
+	});
+}
+
+function startAbletonLink(): void {
+	const socket = createSocket({ type: "udp4", reuseAddr: true });
+	socket.on("error", (error: Error) => {
+		console.error("Ableton Link socket error:", error.message);
+	});
+	socket.on("message", (data, rinfo) => {
+		const msg = parseLinkMessage(data);
+		if (!msg) return;
+		const event = linkSession.onMessage(msg, Date.now());
+		if (
+			abletonLinkAnnounce &&
+			event.isNewPeer &&
+			msg.messageType === LINK_MESSAGE_ALIVE &&
+			linkSocket
+		) {
+			// Unicast our state back so the new peer discovers us promptly.
+			linkSocket.send(
+				makeLinkStateBuffer(LINK_MESSAGE_RESPONSE),
+				rinfo.port,
+				rinfo.address,
+			);
+		}
+		if (event.timelineChanged) onLinkTimelineChanged();
+	});
+	socket.bind(LINK_PORT, () => {
+		try {
+			socket.addMembership(LINK_MULTICAST_ADDR);
+		} catch (error) {
+			console.warn(
+				"Ableton Link disabled: multicast join failed:",
+				error instanceof Error ? error.message : error,
+			);
+			socket.close();
+			return;
+		}
+		linkSocket = socket;
+		console.log(
+			`Ableton Link: joined ${LINK_MULTICAST_ADDR}:${LINK_PORT} as ${bytesToHex(linkNodeId)} (${abletonLinkAnnounce ? "announce" : "listen-only"})`,
+		);
+	});
+}
+
+if (abletonLinkEnabled) {
+	startAbletonLink();
+
+	if (abletonLinkAnnounce) {
+		setInterval(() => {
+			if (!linkSocket) return;
+			linkSocket.send(
+				makeLinkStateBuffer(LINK_MESSAGE_ALIVE),
+				LINK_PORT,
+				LINK_MULTICAST_ADDR,
+			);
+		}, LINK_ALIVE_INTERVAL_MS);
+	}
+
+	setInterval(() => {
+		const now = Date.now();
+		if (!linkSession.isActive(now)) {
+			lastLinkBeat = null;
+			linkBeatBase = null;
+			return;
+		}
+		const beat = linkSession.beatAt(linkLocalMicros(), now);
+		if (beat === null) return;
+		// linkLocalMicros() and the peer's timeOriginMicros are different clock
+		// domains, so raw beats can be enormous. Rebase on adoption so mirrored
+		// beat numbers start near 0, like AbletonOSC song-position beats.
+		if (linkBeatBase === null) linkBeatBase = Math.floor(beat);
+		const beatNumber = Math.floor(beat - linkBeatBase);
+		if (beatNumber === lastLinkBeat) return;
+		lastLinkBeat = beatNumber;
+		const bpm = linkSession.tempo(now);
+		if (bpm !== null && !isMidiClockActive()) {
+			// Re-announce tempo once per beat so late-connecting mirrors converge.
+			const clampedBpm = Math.max(40, Math.min(240, bpm));
+			if (Math.abs(clampedBpm - currentControlState().bpm) > 0.005) {
+				mergeControlState({ bpm: clampedBpm });
+			}
+			const tempoData = JSON.stringify({
+				address: OSC_ADDRESSES.TEMPO,
+				args: [bpm],
+			});
+			sockets.forEach((ws) => ws.send(tempoData));
+		}
+		if (isAbletonOscActive()) return;
+		const data = JSON.stringify({
+			address: OSC_ADDRESSES.BEAT,
+			args: [beatNumber],
+		});
+		sockets.forEach((ws) => ws.send(data));
+	}, 25);
+}
+
 const _switchCaseNames: ReadonlySet<string> = new Set([
 	"crossfade",
 	"bpm",
@@ -1183,8 +1364,13 @@ udp.on("ready", () => {
 
 udp.on("message", (msg: OscMsg) => {
 	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
-	// MIDI clock is authoritative for tempo; suppress AbletonOSC tempo while active
-	if (msg.address === OSC_ADDRESSES.TEMPO && isMidiClockActive()) return;
+	// Tempo precedence: MIDI clock > Ableton Link > AbletonOSC. Suppress
+	// AbletonOSC tempo while a higher-priority source is active.
+	if (
+		msg.address === OSC_ADDRESSES.TEMPO &&
+		(isMidiClockActive() || isAbletonLinkActive())
+	)
+		return;
 	broadcast(msg);
 });
 udp.on("error", (error: Error) => {
@@ -1237,6 +1423,10 @@ setInterval(() => {
 		vstControlRecvPort,
 		midiClockDevice: midiClockDevice || null,
 		midiClockActive: isMidiClockActive(),
+		linkEnabled: abletonLinkEnabled,
+		linkActive: isAbletonLinkActive(),
+		linkPeers: abletonLinkEnabled ? linkSession.peerCount(now) : 0,
+		linkTempo: abletonLinkEnabled ? linkSession.tempo(now) : null,
 		visualPort: port,
 		controlsPort,
 		numTracks,
