@@ -226,7 +226,10 @@ export function makeAudioControlRouter(
 				if (nowMs - st.lastFiredAt < mapping.offDelay) continue;
 				st.lastFiredAt = nowMs;
 				if (COUNTER_AUDIO_TARGETS.has(mapping.target)) {
-					const current = Number(state[mapping.target]);
+					// Prefer an increment already staged this tick so two mappings
+					// onto the same counter both land, then fall back to state.
+					const pending = diff?.[mapping.target];
+					const current = Number(pending ?? state[mapping.target]);
 					(diff ??= {})[mapping.target] = (Number.isFinite(current) ? current : 0) + 1;
 				} else {
 					(diff ??= {})[mapping.target] = mapping.value;

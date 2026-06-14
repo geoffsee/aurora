@@ -93,6 +93,7 @@
         },
         activeShader: 0,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+        audioControlMode: false,
       };
       const diagnostics = {
         sockets: 0,
@@ -283,6 +284,7 @@
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
         controlState.activeShader = clampInt(next.activeShader, 0, 1, controlState.activeShader);
+        controlState.audioControlMode = Boolean(next.audioControlMode);
         if (next.bandCurves && typeof next.bandCurves === "object") {
           const bc = next.bandCurves;
           controlState.bandCurves = {
@@ -419,6 +421,7 @@
       };
       setInterval(() => {
         if (oscWs?.readyState !== WebSocket.OPEN) return;
+        if (!controlState.audioControlMode) return;
         decayMeters();
         oscWs.send(
           JSON.stringify({
