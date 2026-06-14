@@ -65,6 +65,7 @@ main {
     "midi midi midi midi midi midi midi midi midi midi midi midi"
     "trig trig trig trig trig trig trig trig trig trig trig trig"
     "curv curv curv curv curv curv curv curv curv curv curv curv"
+    "actl actl actl actl actl actl actl actl actl actl actl actl"
     "mete mete mete mete mete mete mete mete mete mete mete mete";
   gap: 0.75rem;
 }
@@ -79,6 +80,7 @@ header { grid-area: head; }
 .s-midi-cc { grid-area: midi; }
 .s-triggers { grid-area: trig; }
 .s-audio-curves { grid-area: curv; }
+.s-audio-control { grid-area: actl; }
 .s-meters { grid-area: mete; }
 
 /* ============== Header ============== */
@@ -866,6 +868,12 @@ button.rec:hover {
   padding: 1rem 1.2rem;
 }
 
+/* display: grid above would otherwise override the hidden attribute (used by
+   the Audio Control feature meters, which render only while routing is on) */
+.meters[hidden] {
+  display: none;
+}
+
 .meters > div {
   display: grid;
   grid-template-columns: 4.5rem 1fr;
@@ -1042,6 +1050,7 @@ meter::-moz-meter-bar {
       "midi midi midi midi midi midi midi midi midi midi midi midi"
       "trig trig trig trig trig trig trig trig trig trig trig trig"
       "curv curv curv curv curv curv curv curv curv curv curv curv"
+      "actl actl actl actl actl actl actl actl actl actl actl actl"
       "mete mete mete mete mete mete mete mete mete mete mete mete";
   }
   .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1073,6 +1082,7 @@ meter::-moz-meter-bar {
       "midi midi midi midi midi midi midi midi midi midi midi midi"
       "trig trig trig trig trig trig trig trig trig trig trig trig"
       "curv curv curv curv curv curv curv curv curv curv curv curv"
+      "actl actl actl actl actl actl actl actl actl actl actl actl"
       "mete mete mete mete mete mete mete mete mete mete mete mete";
   }
   header {

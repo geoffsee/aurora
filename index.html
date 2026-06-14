@@ -93,6 +93,7 @@
         },
         activeShader: 0,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+        audioControlMode: false,
       };
       const diagnostics = {
         sockets: 0,
@@ -283,6 +284,7 @@
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
         controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
         controlState.activeShader = clampInt(next.activeShader, 0, 1, controlState.activeShader);
+        controlState.audioControlMode = Boolean(next.audioControlMode);
         if (next.bandCurves && typeof next.bandCurves === "object") {
           const bc = next.bandCurves;
           controlState.bandCurves = {
@@ -410,6 +412,32 @@
       window.__bevyoscDiagnostics = () => diagnostics;
 
       connectOscSocket();
+
+      // Report computed audio features back to the bridge so the
+      // audio-control router can route them onto ControlState (issue #124).
+      const computePulse = () => {
+        if (oscState.energy < 0.02) return 0;
+        return Math.max(0, 1 - (performance.now() - oscState.lastBeatAt) / 180);
+      };
+      setInterval(() => {
+        if (oscWs?.readyState !== WebSocket.OPEN) return;
+        if (!controlState.audioControlMode) return;
+        decayMeters();
+        oscWs.send(
+          JSON.stringify({
+            address: "/bevyosc/audio/features",
+            args: [
+              {
+                energy: clamp01(oscState.energy),
+                bass: clamp01(oscState.bass),
+                mid: clamp01(oscState.mid),
+                high: clamp01(oscState.high),
+                pulse: computePulse(),
+              },
+            ],
+          }),
+        );
+      }, 50);
 
       try {
         const { default: init } = await import("./dist/pkg/bevyosc.js");

@@ -342,6 +342,30 @@
         </div>
       </section>
 
+      <!-- Audio Control (Phase 1, issue #124): routes audio features onto ControlState
+           via bridge-side mappings in audio-mappings.json. Phase 2 (browser-native
+           getUserMedia capture) belongs in this panel as a "Web Audio Input" toggle —
+           note for the Phase 2 implementer: getUserMedia requires a secure context
+           (localhost or HTTPS). A LAN rehearsal rig serving this page from a bare IP
+           (e.g. 192.168.x.x:3001) fails silently with NotAllowedError; non-localhost
+           deployments need HTTPS or a localhost tunnel. -->
+      <section class="panel s-audio-control" aria-label="Audio Control">
+        <div class="section-title">
+          <h2>Audio Control</h2>
+          <span id="audio-control-status" class="badge">Off</span>
+        </div>
+        <div class="button-grid compact">
+          <button id="audio-control-mode" aria-pressed="false">Audio → Controls</button>
+        </div>
+        <div id="audio-feature-meters" class="meters" hidden aria-label="Router audio feature meters">
+          <div data-channel="energy"><span>Energy</span><meter id="audio-feat-energy" min="0" max="1" value="0"></meter></div>
+          <div data-channel="bass"><span>Bass</span><meter id="audio-feat-bass" min="0" max="1" value="0"></meter></div>
+          <div data-channel="mid"><span>Mid</span><meter id="audio-feat-mid" min="0" max="1" value="0"></meter></div>
+          <div data-channel="high"><span>High</span><meter id="audio-feat-high" min="0" max="1" value="0"></meter></div>
+          <div data-channel="pulse"><span>Pulse</span><meter id="audio-feat-pulse" min="0" max="1" value="0"></meter></div>
+        </div>
+      </section>
+
       <section class="panel meters s-meters">
         <div data-channel="energy"><span>Energy</span><meter id="energy" min="0" max="1" value="0"></meter></div>
         <div data-channel="bass"><span>Bass</span><meter id="bass" min="0" max="1" value="0"></meter></div>
@@ -365,7 +389,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 4, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 5, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -409,6 +433,7 @@
         activeShader: 0,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
         emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 },
+        audioControlMode: false,
       });
       const state = defaultState();
       const osc = {
@@ -425,6 +450,7 @@
         lastEnvelopeAt: 0,
       };
       const diagnostics = { sockets: 0, oscReady: false, oscActive: false, demoMode: false, replaying: false };
+      const audioFeatures = { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0, lastAt: 0 };
 
       const $ = (selector) => document.querySelector(selector);
       const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -579,6 +605,14 @@
         }
         if (frame?.address === "/bevyosc/demo/audio" && state.demoMode && args[0]) {
           applyDemo(args[0]);
+        }
+        if (frame?.address === "/bevyosc/audio/features" && args[0] && typeof args[0] === "object") {
+          audioFeatures.energy = clamp01(args[0].energy);
+          audioFeatures.bass = clamp01(args[0].bass);
+          audioFeatures.mid = clamp01(args[0].mid);
+          audioFeatures.high = clamp01(args[0].high);
+          audioFeatures.pulse = clamp01(args[0].pulse);
+          audioFeatures.lastAt = performance.now();
         }
         if (frame?.address === "/live/song/get/tempo" && Number.isFinite(Number(args[0]))) {
           state.bpm = Number(args[0]);
@@ -1466,6 +1500,25 @@
         $("#beat-sync").setAttribute("aria-pressed", String(state.beatSync));
         $("#bar-sync").setAttribute("aria-pressed", String(state.barSync));
         $("#demo-mode").setAttribute("aria-pressed", String(state.demoMode));
+        $("#audio-control-mode").setAttribute("aria-pressed", String(state.audioControlMode));
+        const audioFeaturesLive = performance.now() - audioFeatures.lastAt < 3000;
+        const audioControlStatus = $("#audio-control-status");
+        audioControlStatus.textContent = state.audioControlMode
+          ? audioFeaturesLive ? "Routing live" : "On — no features"
+          : "Off";
+        audioControlStatus.dataset.state = state.audioControlMode
+          ? audioFeaturesLive ? "live" : "warn"
+          : "idle";
+        // Feature meters render only while routing is enabled (spike: reduce
+        // noise for operators who do not use the feature).
+        $("#audio-feature-meters").hidden = !state.audioControlMode;
+        if (state.audioControlMode) {
+          $("#audio-feat-energy").value = audioFeatures.energy;
+          $("#audio-feat-bass").value = audioFeatures.bass;
+          $("#audio-feat-mid").value = audioFeatures.mid;
+          $("#audio-feat-high").value = audioFeatures.high;
+          $("#audio-feat-pulse").value = audioFeatures.pulse;
+        }
         $("#energy").value = osc.energy;
         $("#bass").value = osc.bass;
         $("#mid").value = osc.mid;
@@ -1628,6 +1681,10 @@
       });
       $("#demo-mode").addEventListener("click", () => {
         state.demoMode = !state.demoMode;
+        publish();
+      });
+      $("#audio-control-mode").addEventListener("click", () => {
+        state.audioControlMode = !state.audioControlMode;
         publish();
       });
       $("#save-preset").addEventListener("click", savePreset);

@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { createReadStream, watch } from "node:fs";
+import { createReadStream, readFileSync, watch } from "node:fs";
 import { createSocket, type Socket } from "node:dgram";
 import type { ServerWebSocket } from "bun";
 import {
@@ -41,6 +41,11 @@ import {
 	type AudioTransientConfig,
 } from "./automation-bridge.ts";
 import { DEFAULT_TRANSIENT_CONFIG } from "./audio-transient-trigger.ts";
+import {
+	makeAudioControlRouter,
+	parseAudioMappingsJson,
+	type AudioMapping,
+} from "./audio-control-router.ts";
 import {
 	LINK_DEFAULT_TTL_SECONDS,
 	LINK_MESSAGE_ALIVE,
@@ -107,6 +112,7 @@ type ControlState = {
 	activeShader: number;
 	bandCurves: BandCurves;
 	emaAlphas: AudioEmaAlphas;
+	audioControlMode: boolean;
 };
 
 const require = createRequire(import.meta.url);
@@ -313,6 +319,7 @@ const defaultControlState = (): ControlState => ({
 		high: "linear",
 	},
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
+	audioControlMode: false,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -511,6 +518,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				pulse: clamp(ea.pulse, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
 			};
 		})(),
+		audioControlMode: source.audioControlMode === true,
 	};
 };
 
@@ -525,6 +533,37 @@ const mergeControlState = (partial: Partial<ControlState>) => {
 			...(partial.trackMapping ?? {}),
 		},
 	});
+};
+
+const audioMappingsPath = `${root}/audio-mappings.json`;
+const loadAudioMappings = (): AudioMapping[] => {
+	try {
+		return parseAudioMappingsJson(readFileSync(audioMappingsPath, "utf8"));
+	} catch (error) {
+		console.warn(
+			"[audio-router] could not read audio-mappings.json:",
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+};
+const audioControlRouter = makeAudioControlRouter(
+	() => currentControlState(),
+	(diff) => mergeControlState(diff as Partial<ControlState>),
+);
+audioControlRouter.setMappings(loadAudioMappings());
+let audioConfigReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+const coerceAudioFeatures = (raw: unknown): AudioFeatures | null => {
+	if (!raw || typeof raw !== "object") return null;
+	const f = raw as Partial<Record<keyof AudioFeatures, unknown>>;
+	return {
+		energy: clamp(f.energy, 0, 1, 0),
+		bass: clamp(f.bass, 0, 1, 0),
+		mid: clamp(f.mid, 0, 1, 0),
+		high: clamp(f.high, 0, 1, 0),
+		pulse: clamp(f.pulse, 0, 1, 0),
+	};
 };
 
 // Parse initial transient config from env vars; undefined fields fall back
@@ -885,6 +924,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 					},
 				});
 				break;
+			case "audio_control_mode":
+				mergeControlState({ audioControlMode: booleanArg(arg) });
+				break;
 		}
 
 		return;
@@ -1166,6 +1208,7 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"ema_alpha_mid",
 	"ema_alpha_high",
 	"ema_alpha_pulse",
+	"audio_control_mode",
 ]);
 if (
 	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
@@ -1282,6 +1325,44 @@ const visualServer = Bun.serve({
 								id: typeof parsed.id === "number" ? parsed.id : 0,
 							}),
 						);
+					} else if (parsed.address === "/bevyosc/audio/features") {
+						// Single-source policy: in demo mode the bridge demo timer
+						// feeds the router directly; accepting browser echoes here
+						// would interleave a second, divergent feature stream into
+						// the router's per-mapping state.
+						if (latestControlState?.demoMode !== true) {
+							const features = coerceAudioFeatures(
+								Array.isArray(parsed.args) ? parsed.args[0] : null,
+							);
+							if (features) {
+								audioControlRouter.onFeatures(features, Date.now());
+								// Fan out to the other clients so the controls page can
+								// show the feature meters the router actually sees —
+								// only while routing is enabled, to keep idle WS
+								// traffic down (the meters are hidden otherwise).
+								if (latestControlState?.audioControlMode === true) {
+									const data = JSON.stringify({
+										address: "/bevyosc/audio/features",
+										args: [features],
+									});
+									sockets.forEach((client) => {
+										if (client !== ws) client.send(data);
+									});
+								}
+							}
+						}
+					} else if (parsed.address === "/bevyosc/audio/config") {
+						// Debounced like the hot-reload watchers so WS clients cannot
+						// spam synchronous readFileSync calls on the event loop.
+						if (audioConfigReloadTimer) clearTimeout(audioConfigReloadTimer);
+						audioConfigReloadTimer = setTimeout(() => {
+							audioConfigReloadTimer = null;
+							const mappings = loadAudioMappings();
+							audioControlRouter.setMappings(mappings);
+							console.log(
+								`[audio-router] reloaded ${mappings.length} mapping(s) from audio-mappings.json`,
+							);
+						}, 300);
 					} else if (
 						parsed.address.startsWith("/bevyosc/automation/transient/")
 					) {
@@ -1463,6 +1544,17 @@ setInterval(() => {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
+	audioControlRouter.onFeatures(smoothed, Date.now());
+	// In demo mode the bridge owns the feature feed (browser echoes are
+	// dropped by the WS handler), so fan the routed features out here for
+	// the controls-page meters — only while routing is enabled.
+	if (state.audioControlMode) {
+		const featureData = JSON.stringify({
+			address: "/bevyosc/audio/features",
+			args: [smoothed],
+		});
+		sockets.forEach((ws) => ws.send(featureData));
+	}
 	const demo = {
 		tempo: state.bpm,
 		beat,
