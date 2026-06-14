@@ -10,4 +10,4 @@ format_command = ["sh", "-c", "bun install && bun run format"]
 #]
 
 [agent_models]
-claude  = "claude-fable-5"
+claude  = "claude-opus-4-8"
