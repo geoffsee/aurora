@@ -22,6 +22,12 @@ import {
 	MIDI_CLOCK_TIMEOUT_MS,
 	deriveBpmFromTimestamps,
 } from "./midi-clock.ts";
+import {
+	LINK_DEFAULT_QUANTUM,
+	LINK_UPDATE_INTERVAL_MS,
+	deriveLinkFrame,
+	isLinkActive,
+} from "./ableton-link.ts";
 import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
@@ -127,6 +133,7 @@ const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
 const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
 const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? "";
+const abletonLinkEnabled = Bun.env.ABLETON_LINK_ENABLED === "1";
 const hotReload = Bun.env.HOT_RELOAD === "1";
 const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
@@ -137,6 +144,8 @@ let latestVstControlAt = 0;
 let midiClockTimestamps: number[] = [];
 let lastMidiClockAt = 0;
 let lastMidiClockBpmUpdate = 0;
+let lastLinkUpdateAt = 0;
+let linkNumPeers = 0;
 const demoAudioEma = makeAudioEmaState();
 const liveAudioEma = makeAudioEmaState();
 
@@ -188,21 +197,56 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
 const audioEmaAlphas: AudioEmaAlphas = {
-	energy: clamp(Bun.env.AUDIO_EMA_ALPHA_ENERGY, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
-	bass: clamp(Bun.env.AUDIO_EMA_ALPHA_BASS, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
-	mid: clamp(Bun.env.AUDIO_EMA_ALPHA_MID, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
-	high: clamp(Bun.env.AUDIO_EMA_ALPHA_HIGH, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
-	pulse: clamp(Bun.env.AUDIO_EMA_ALPHA_PULSE, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+	energy: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_ENERGY,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.energy,
+	),
+	bass: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_BASS,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.bass,
+	),
+	mid: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_MID,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.mid,
+	),
+	high: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_HIGH,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.high,
+	),
+	pulse: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_PULSE,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.pulse,
+	),
 };
 // Legacy AUDIO_EMA_ALPHA env var: if set, overrides all bands that were not individually configured.
 {
-	const legacyAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+	const legacyAlpha = clamp(
+		Bun.env.AUDIO_EMA_ALPHA,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHA,
+	);
 	if (Bun.env.AUDIO_EMA_ALPHA !== undefined) {
-		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined) audioEmaAlphas.energy = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined) audioEmaAlphas.bass = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined) audioEmaAlphas.mid = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined) audioEmaAlphas.high = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined) audioEmaAlphas.pulse = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined)
+			audioEmaAlphas.energy = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined)
+			audioEmaAlphas.bass = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined)
+			audioEmaAlphas.mid = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined)
+			audioEmaAlphas.high = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined)
+			audioEmaAlphas.pulse = legacyAlpha;
 	}
 }
 const defaultTrackMapping = (): TrackMapping => ({
@@ -249,7 +293,12 @@ const defaultControlState = (): ControlState => ({
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
-	bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+	bandCurves: {
+		energy: "linear",
+		bass: "linear",
+		mid: "linear",
+		high: "linear",
+	},
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
@@ -470,17 +519,42 @@ const mergeControlState = (partial: Partial<ControlState>) => {
 const initialTransientConfig: Partial<AudioTransientConfig> = (() => {
 	const cfg: Partial<AudioTransientConfig> = {};
 	const _mode = Bun.env.AUDIO_TRANSIENT_MODE;
-	if (_mode === "onset" || _mode === "beat" || _mode === "band-energy") cfg.mode = _mode;
+	if (_mode === "onset" || _mode === "beat" || _mode === "band-energy")
+		cfg.mode = _mode;
 	if (Bun.env.AUDIO_TRANSIENT_THRESHOLD !== undefined) {
-		cfg.threshold = clamp(Bun.env.AUDIO_TRANSIENT_THRESHOLD, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold);
+		cfg.threshold = clamp(
+			Bun.env.AUDIO_TRANSIENT_THRESHOLD,
+			0,
+			1,
+			DEFAULT_TRANSIENT_CONFIG.threshold,
+		);
 	}
 	if (Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS !== undefined) {
-		cfg.debounceMs = clamp(Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS, 0, 60000, DEFAULT_TRANSIENT_CONFIG.debounceMs);
+		cfg.debounceMs = clamp(
+			Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS,
+			0,
+			60000,
+			DEFAULT_TRANSIENT_CONFIG.debounceMs,
+		);
 	}
 	const _band = Bun.env.AUDIO_TRANSIENT_BAND;
-	if (_band === "energy" || _band === "bass" || _band === "mid" || _band === "high" || _band === "pulse") cfg.band = _band;
+	if (
+		_band === "energy" ||
+		_band === "bass" ||
+		_band === "mid" ||
+		_band === "high" ||
+		_band === "pulse"
+	)
+		cfg.band = _band;
 	const _action = Bun.env.AUDIO_TRANSIENT_ACTION;
-	if (_action === "play" || _action === "play-loop" || _action === "stop" || _action === "toggle" || _action === "toggle-loop") cfg.action = _action;
+	if (
+		_action === "play" ||
+		_action === "play-loop" ||
+		_action === "stop" ||
+		_action === "toggle" ||
+		_action === "toggle-loop"
+	)
+		cfg.action = _action;
 	return cfg;
 })();
 
@@ -534,7 +608,9 @@ const sendOsc = (address: string, args: OscArg[] = []) => {
 // transient detector. The response carries meter floats, optionally preceded by
 // a "track.output_meter_level" string field marker.
 function processLiveTrackData(args: unknown[]): void {
-	const markerIdx = args.findIndex((a) => typeof a === "string" && (a as string).startsWith("track."));
+	const markerIdx = args.findIndex(
+		(a) => typeof a === "string" && (a as string).startsWith("track."),
+	);
 	const meterStart = markerIdx >= 0 ? markerIdx + 1 : 0;
 	const meters = args
 		.slice(meterStart)
@@ -558,7 +634,11 @@ function processLiveTrackData(args: unknown[]): void {
 		pulse: energyTarget,
 	};
 
-	const smoothed = stepAudioEma(liveAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
+	const smoothed = stepAudioEma(
+		liveAudioEma,
+		rawFeatures,
+		latestControlState?.emaAlphas ?? audioEmaAlphas,
+	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 }
 
@@ -567,10 +647,19 @@ function applyTransientConfigMsg(address: string, firstArg: unknown): void {
 	const key = address.slice("/bevyosc/automation/transient/".length);
 	switch (key) {
 		case "threshold":
-			automationBridge.updateTransientConfig({ threshold: clamp(firstArg, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold) });
+			automationBridge.updateTransientConfig({
+				threshold: clamp(firstArg, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold),
+			});
 			break;
 		case "debounce":
-			automationBridge.updateTransientConfig({ debounceMs: clamp(firstArg, 0, 60000, DEFAULT_TRANSIENT_CONFIG.debounceMs) });
+			automationBridge.updateTransientConfig({
+				debounceMs: clamp(
+					firstArg,
+					0,
+					60000,
+					DEFAULT_TRANSIENT_CONFIG.debounceMs,
+				),
+			});
 			break;
 		case "mode": {
 			const m = String(firstArg);
@@ -581,15 +670,31 @@ function applyTransientConfigMsg(address: string, firstArg: unknown): void {
 		}
 		case "band": {
 			const b = String(firstArg);
-			if (b === "energy" || b === "bass" || b === "mid" || b === "high" || b === "pulse") {
-				automationBridge.updateTransientConfig({ band: b as keyof AudioFeatures });
+			if (
+				b === "energy" ||
+				b === "bass" ||
+				b === "mid" ||
+				b === "high" ||
+				b === "pulse"
+			) {
+				automationBridge.updateTransientConfig({
+					band: b as keyof AudioFeatures,
+				});
 			}
 			break;
 		}
 		case "action": {
 			const a = String(firstArg);
-			if (a === "play" || a === "play-loop" || a === "stop" || a === "toggle" || a === "toggle-loop") {
-				automationBridge.updateTransientConfig({ action: a as "play" | "play-loop" | "stop" | "toggle" | "toggle-loop" });
+			if (
+				a === "play" ||
+				a === "play-loop" ||
+				a === "stop" ||
+				a === "toggle" ||
+				a === "toggle-loop"
+			) {
+				automationBridge.updateTransientConfig({
+					action: a as "play" | "play-loop" | "stop" | "toggle" | "toggle-loop",
+				});
 			}
 			break;
 		}
@@ -723,22 +828,49 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				mergeControlState({ demoMode: booleanArg(arg) });
 				break;
 			case "active_shader":
-				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
+				mergeControlState({
+					activeShader: Math.max(0, Math.min(1, Math.floor(value))),
+				});
 				break;
 			case "ema_alpha_bass":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+					},
+				});
 				break;
 			case "ema_alpha_energy":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+					},
+				});
 				break;
 			case "ema_alpha_mid":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+					},
+				});
 				break;
 			case "ema_alpha_high":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
+					},
+				});
 				break;
 			case "ema_alpha_pulse":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+					},
+				});
 				break;
 		}
 
@@ -831,6 +963,82 @@ function openMidiClockDevice(devicePath: string): void {
 	stream.once("open", () => {
 		console.log(`MIDI clock: listening on ${devicePath}`);
 	});
+}
+
+const isAbletonLinkActive = (): boolean =>
+	isLinkActive(lastLinkUpdateAt, Date.now());
+
+// Minimal surface of the optional native `abletonlink` module we depend on.
+type AbletonLinkSession = {
+	enable?: () => void;
+	quantum?: number;
+	numPeers?: number;
+	startUpdate: (
+		intervalMs: number,
+		cb: (beat: number, phase: number, bpm: number) => void,
+	) => void;
+};
+
+function broadcastLinkFrame(tempo: number, beat: number): void {
+	const tempoData = JSON.stringify({
+		address: OSC_ADDRESSES.TEMPO,
+		args: [tempo],
+	});
+	const beatData = JSON.stringify({
+		address: OSC_ADDRESSES.BEAT,
+		args: [beat],
+	});
+	sockets.forEach((ws) => {
+		ws.send(tempoData);
+		ws.send(beatData);
+	});
+}
+
+// Join an Ableton Link session and stream its shared tempo/beat-phase onto the
+// AbletonOSC mirror addresses. Opt-in via ABLETON_LINK_ENABLED=1; the native
+// `abletonlink` module is loaded lazily so the default build needs no native
+// deps and idle memory stays untouched when the feature is off.
+function startAbletonLink(): void {
+	let LinkCtor: new (...args: unknown[]) => AbletonLinkSession;
+	try {
+		LinkCtor = require("abletonlink");
+	} catch (error) {
+		console.warn(
+			`Ableton Link: native 'abletonlink' module unavailable (${error instanceof Error ? error.message : error}); install it to enable Link sync. Skipping.`,
+		);
+		return;
+	}
+
+	let link: AbletonLinkSession;
+	try {
+		link = new LinkCtor();
+		link.enable?.();
+	} catch (error) {
+		console.warn(
+			`Ableton Link: failed to start session (${error instanceof Error ? error.message : error}). Skipping.`,
+		);
+		return;
+	}
+
+	const quantum =
+		typeof link.quantum === "number" && link.quantum > 0
+			? link.quantum
+			: LINK_DEFAULT_QUANTUM;
+
+	link.startUpdate(LINK_UPDATE_INTERVAL_MS, (beat, phase, bpm) => {
+		lastLinkUpdateAt = Date.now();
+		linkNumPeers = typeof link.numPeers === "number" ? link.numPeers : 0;
+		// MIDI clock stays authoritative for tempo when both are present.
+		if (isMidiClockActive()) return;
+		const frame = deriveLinkFrame(
+			{ beat, phase, bpm, numPeers: linkNumPeers },
+			quantum,
+		);
+		if (!frame) return;
+		broadcastLinkFrame(frame.tempo, frame.beat);
+	});
+
+	console.log(`Ableton Link: session active (quantum ${quantum})`);
 }
 
 const _switchCaseNames: ReadonlySet<string> = new Set([
@@ -939,13 +1147,13 @@ const visualServer = Bun.serve({
 						const rawState = migrateControlState(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
-						if (
-							!validateControlStateVersion(rawState, "WebSocket client")
-						) {
-							ws.send(JSON.stringify({
-								address: "/bevyosc/error",
-								error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
-							}));
+						if (!validateControlStateVersion(rawState, "WebSocket client")) {
+							ws.send(
+								JSON.stringify({
+									address: "/bevyosc/error",
+									error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
+								}),
+							);
 							return;
 						}
 						broadcastControl(rawState);
@@ -967,7 +1175,9 @@ const visualServer = Bun.serve({
 								id: typeof parsed.id === "number" ? parsed.id : 0,
 							}),
 						);
-					} else if (parsed.address.startsWith("/bevyosc/automation/transient/")) {
+					} else if (
+						parsed.address.startsWith("/bevyosc/automation/transient/")
+					) {
 						applyTransientConfigMsg(
 							parsed.address,
 							Array.isArray(parsed.args) ? parsed.args[0] : undefined,
@@ -1047,8 +1257,14 @@ udp.on("ready", () => {
 
 udp.on("message", (msg: OscMsg) => {
 	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
-	// MIDI clock is authoritative for tempo; suppress AbletonOSC tempo while active
-	if (msg.address === OSC_ADDRESSES.TEMPO && isMidiClockActive()) return;
+	// External clocks are authoritative: MIDI clock and Ableton Link both override
+	// AbletonOSC tempo, and Link additionally owns beat phase while active.
+	if (
+		msg.address === OSC_ADDRESSES.TEMPO &&
+		(isMidiClockActive() || isAbletonLinkActive())
+	)
+		return;
+	if (msg.address === OSC_ADDRESSES.BEAT && isAbletonLinkActive()) return;
 	broadcast(msg);
 });
 udp.on("error", (error: Error) => {
@@ -1096,6 +1312,9 @@ setInterval(() => {
 		vstControlRecvPort,
 		midiClockDevice: midiClockDevice || null,
 		midiClockActive: isMidiClockActive(),
+		abletonLinkEnabled,
+		abletonLinkActive: isAbletonLinkActive(),
+		abletonLinkPeers: linkNumPeers,
 		visualPort: port,
 		controlsPort,
 		numTracks,
@@ -1126,7 +1345,11 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
+	const smoothed = stepAudioEma(
+		demoAudioEma,
+		rawFeatures,
+		latestControlState?.emaAlphas ?? audioEmaAlphas,
+	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 	const demo = {
 		tempo: state.bpm,
@@ -1148,6 +1371,10 @@ console.log(`bevyosc controls listening on ${controlsServer.url}`);
 
 if (midiClockDevice) {
 	openMidiClockDevice(midiClockDevice);
+}
+
+if (abletonLinkEnabled) {
+	startAbletonLink();
 }
 
 if (hotReload) {

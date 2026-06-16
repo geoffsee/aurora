@@ -45,7 +45,15 @@ test("legacy array preserves all binding fields without data loss", () => {
 });
 
 test("legacy array with multiple bindings preserves all", () => {
-	const second: MidiCcBinding = { cc: 1, channel: 1, param: "crossfade", ccMin: 0, ccMax: 127, paramMin: 0, paramMax: 1 };
+	const second: MidiCcBinding = {
+		cc: 1,
+		channel: 1,
+		param: "crossfade",
+		ccMin: 0,
+		ccMax: 127,
+		paramMin: 0,
+		paramMax: 1,
+	};
 	const result = migrateMidiBindings([sample, second]);
 	expect(result.bindings).toHaveLength(2);
 	expect(result.bindings[0]).toEqual(sample);
