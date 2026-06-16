@@ -1,0 +1,1 @@
+- [Format command churns whole repo](format_command_churn.md) — `bun run format` reformats every tracked source file, not just your edits

@@ -78,6 +78,7 @@ export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
 	"ema_alpha_mid",
 	"ema_alpha_high",
 	"ema_alpha_pulse",
+	"audio_control_mode",
 ]);
 
 export const VST_TRIGGER_NAMES: ReadonlySet<string> = new Set(["flash", "reset"]);

@@ -1,0 +1,17 @@
+[
+	{
+		"source": "energy",
+		"target": "intensity",
+		"mode": "continuous",
+		"targetMin": 0.4,
+		"targetMax": 1.2
+	},
+	{
+		"source": "pulse",
+		"target": "flashVersion",
+		"mode": "threshold",
+		"level": 0.75,
+		"offDelay": 200,
+		"increment": true
+	}
+]

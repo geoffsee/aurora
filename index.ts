@@ -33,6 +33,11 @@ import {
 } from "./audio-ema.ts";
 import { migrateControlState } from "./control-state-schema.ts";
 import {
+	type AudioMapping,
+	makeAudioControlRouter,
+	parseAudioMappings,
+} from "./audio-control-router.ts";
+import {
 	makeAutomationBridge,
 	parseTriggerBindings,
 	type AudioTransientConfig,
@@ -91,6 +96,7 @@ type ControlState = {
 	activeShader: number;
 	bandCurves: BandCurves;
 	emaAlphas: AudioEmaAlphas;
+	audioControlMode: boolean;
 };
 
 const require = createRequire(import.meta.url);
@@ -251,6 +257,7 @@ const defaultControlState = (): ControlState => ({
 	activeShader: 0,
 	bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
+	audioControlMode: false,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -449,6 +456,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				pulse: clamp(ea.pulse, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
 			};
 		})(),
+		audioControlMode: source.audioControlMode === true,
 	};
 };
 
@@ -463,6 +471,44 @@ const mergeControlState = (partial: Partial<ControlState>) => {
 			...(partial.trackMapping ?? {}),
 		},
 	});
+};
+
+// Audio-Control Router (spike docs/spikes/audio-as-controller.md, Phase 1).
+// Routing config lives in audio-mappings.json (bridge-only concern, not ControlState);
+// the global enable lives in ControlState.audioControlMode so the controls page and VST
+// can toggle it. The router only ever writes through mergeControlState, so every value
+// it produces is re-clamped by coerceControlState.
+const loadAudioMappings = (): AudioMapping[] => {
+	try {
+		const raw = require("./audio-mappings.json");
+		return parseAudioMappings(raw);
+	} catch (error) {
+		console.warn(
+			"[audio-router] could not load audio-mappings.json:",
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+};
+const audioControlRouter = makeAudioControlRouter({
+	getControlState: () =>
+		currentControlState() as unknown as Record<string, number | boolean>,
+	merge: (diff) => mergeControlState(diff as Partial<ControlState>),
+});
+audioControlRouter.setMappings(loadAudioMappings());
+
+// Validate an inbound /bevyosc/audio/features payload into a clean AudioFeatures
+// (all five bands present, clamped to [0,1]). Returns null for malformed payloads.
+const coerceAudioFeatures = (value: unknown): AudioFeatures | null => {
+	if (!value || typeof value !== "object") return null;
+	const v = value as Record<string, unknown>;
+	return {
+		energy: clamp(v.energy, 0, 1, 0),
+		bass: clamp(v.bass, 0, 1, 0),
+		mid: clamp(v.mid, 0, 1, 0),
+		high: clamp(v.high, 0, 1, 0),
+		pulse: clamp(v.pulse, 0, 1, 0),
+	};
 };
 
 // Parse initial transient config from env vars; undefined fields fall back
@@ -560,6 +606,7 @@ function processLiveTrackData(args: unknown[]): void {
 
 	const smoothed = stepAudioEma(liveAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
+	audioControlRouter.onFeatures(smoothed);
 }
 
 // Apply a single transient-config OSC message. firstArg is the raw payload value.
@@ -620,6 +667,7 @@ const broadcast = (msg: OscMsg) => {
 const broadcastControl = (state: unknown) => {
 	const prev = latestControlState;
 	latestControlState = coerceControlState(state);
+	audioControlRouter.setActive(latestControlState.audioControlMode);
 	controlStateLog.record(
 		prev as Record<string, unknown> | null,
 		latestControlState as unknown as Record<string, unknown>,
@@ -739,6 +787,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				break;
 			case "ema_alpha_pulse":
 				mergeControlState({ emaAlphas: { ...current.emaAlphas, pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse) } });
+				break;
+			case "audio_control_mode":
+				mergeControlState({ audioControlMode: booleanArg(arg) });
 				break;
 		}
 
@@ -860,6 +911,7 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"ema_alpha_mid",
 	"ema_alpha_high",
 	"ema_alpha_pulse",
+	"audio_control_mode",
 ]);
 if (
 	![...VST_CONTROL_NAMES].every((n) => _switchCaseNames.has(n)) ||
@@ -967,6 +1019,16 @@ const visualServer = Bun.serve({
 								id: typeof parsed.id === "number" ? parsed.id : 0,
 							}),
 						);
+					} else if (parsed.address === "/bevyosc/audio/features") {
+						const features = coerceAudioFeatures(
+							Array.isArray(parsed.args) ? parsed.args[0] : null,
+						);
+						if (features) audioControlRouter.onFeatures(features);
+					} else if (parsed.address === "/bevyosc/audio/config") {
+						const mappings = parseAudioMappings(
+							Array.isArray(parsed.args) ? parsed.args[0] : null,
+						);
+						audioControlRouter.setMappings(mappings);
 					} else if (parsed.address.startsWith("/bevyosc/automation/transient/")) {
 						applyTransientConfigMsg(
 							parsed.address,
@@ -1128,6 +1190,7 @@ setInterval(() => {
 	};
 	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
+	audioControlRouter.onFeatures(smoothed);
 	const demo = {
 		tempo: state.bpm,
 		beat,
