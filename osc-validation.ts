@@ -8,7 +8,8 @@ export type OscMsg = { address: string; args?: OscArg[] };
 // v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
 // v3: added bandCurves field (per-band audio-reactive curve shaping)
 // v4: added emaAlphas field (per-band EMA decay constants for preset bundling)
-export const CONTROL_STATE_SCHEMA_VERSION = 4;
+// v5: added morphWeight field (OSC/MIDI-CC blend weight between two presets)
+export const CONTROL_STATE_SCHEMA_VERSION = 5;
 
 export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
@@ -78,6 +79,7 @@ export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
 	"ema_alpha_mid",
 	"ema_alpha_high",
 	"ema_alpha_pulse",
+	"morph_weight",
 ]);
 
 export const VST_TRIGGER_NAMES: ReadonlySet<string> = new Set(["flash", "reset"]);

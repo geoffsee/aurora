@@ -40,7 +40,11 @@ export const migrateControlState = (state: unknown): unknown => {
 						pulse: s.emaAlphaPulse as number,
 				  }
 				: defaultEmaAlphas();
-		return { ...s, schemaVersion: 4, emaAlphas };
+		return migrateControlState({ ...s, schemaVersion: 4, emaAlphas });
+	}
+	// v4 → v5: add morphWeight field (OSC/MIDI-CC preset blend weight)
+	if (s.schemaVersion === 4) {
+		return { ...s, schemaVersion: 5, morphWeight: 0 };
 	}
 	return state;
 };

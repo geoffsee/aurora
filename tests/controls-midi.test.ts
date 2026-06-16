@@ -17,11 +17,16 @@ type MidiCcStore = { schemaVersion: number; bindings: MidiCcBinding[] };
 
 function migrateMidiBindings(raw: unknown): MidiCcStore {
 	if (Array.isArray(raw)) {
-		return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: raw as MidiCcBinding[] };
+		return {
+			schemaVersion: MIDI_CC_SCHEMA_VERSION,
+			bindings: raw as MidiCcBinding[],
+		};
 	}
 	if (raw !== null && typeof raw === "object") {
 		const r = raw as Partial<MidiCcStore>;
-		const bindings = Array.isArray(r.bindings) ? (r.bindings as MidiCcBinding[]) : [];
+		const bindings = Array.isArray(r.bindings)
+			? (r.bindings as MidiCcBinding[])
+			: [];
 		return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings };
 	}
 	return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: [] };
@@ -57,25 +62,43 @@ function loadMidiBindings(): MidiCcBinding[] {
 	if (_cachedBindings) return _cachedBindings;
 	try {
 		const stored = localStorage.getItem(MIDI_CC_BINDINGS_KEY);
-		if (!stored) { _cachedBindings = []; return _cachedBindings; }
+		if (!stored) {
+			_cachedBindings = [];
+			return _cachedBindings;
+		}
 		const parsed = JSON.parse(stored);
 		const store = migrateMidiBindings(parsed);
 		_cachedBindings = store.bindings;
-		if (typeof parsed !== "object" || Array.isArray(parsed) || (parsed as Record<string, unknown>)?.schemaVersion !== MIDI_CC_SCHEMA_VERSION) {
+		if (
+			typeof parsed !== "object" ||
+			Array.isArray(parsed) ||
+			(parsed as Record<string, unknown>)?.schemaVersion !==
+				MIDI_CC_SCHEMA_VERSION
+		) {
 			localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(store));
 		}
-	} catch { _cachedBindings = []; }
+	} catch {
+		_cachedBindings = [];
+	}
 	return _cachedBindings;
 }
 
 function saveMidiBindings(bindings: MidiCcBinding[]): void {
 	_cachedBindings = bindings;
-	localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify({ schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings }));
+	localStorage.setItem(
+		MIDI_CC_BINDINGS_KEY,
+		JSON.stringify({ schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings }),
+	);
 }
 
 const sample: MidiCcBinding = {
-	cc: 74, channel: 0, param: "intensity",
-	ccMin: 0, ccMax: 127, paramMin: 0, paramMax: 1,
+	cc: 74,
+	channel: 0,
+	param: "intensity",
+	ccMin: 0,
+	ccMax: 127,
+	paramMin: 0,
+	paramMax: 1,
 };
 
 beforeEach(() => {
@@ -118,6 +141,9 @@ test("invalid JSON falls back to empty bindings", () => {
 });
 
 test("versioned object with missing bindings field loads as empty", () => {
-	localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify({ schemaVersion: MIDI_CC_SCHEMA_VERSION }));
+	localStorage.setItem(
+		MIDI_CC_BINDINGS_KEY,
+		JSON.stringify({ schemaVersion: MIDI_CC_SCHEMA_VERSION }),
+	);
 	expect(loadMidiBindings()).toEqual([]);
 });

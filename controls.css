@@ -1137,6 +1137,22 @@ meter::-moz-meter-bar {
   border-radius: 0.4rem;
 }
 
+.morph-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.morph-row .morph-slot {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.morph-row input[type="range"] {
+  flex: 1 1 auto;
+}
+
 /* ============== MIDI CC Mapping ============== */
 .s-midi-cc {
   display: grid;

@@ -69,6 +69,19 @@
           <div id="curves-grid" class="curves-grid" aria-label="Per-parameter transition curves"></div>
         </details>
         <div id="preset-grid" class="preset-grid" aria-label="Saved presets"></div>
+        <details class="curves-config" id="morph-config">
+          <summary class="preset-label">Morph</summary>
+          <div class="morph-row">
+            <select id="morph-slot-a" class="morph-slot" aria-label="Morph preset A"></select>
+            <select id="morph-slot-b" class="morph-slot" aria-label="Morph preset B"></select>
+          </div>
+          <div class="morph-row">
+            <span class="preset-label">A</span>
+            <input id="morph-weight" type="range" min="0" max="1" step="0.001" value="0" aria-label="Morph blend weight" />
+            <span class="preset-label">B</span>
+            <output id="morph-weight-value" class="badge">0%</output>
+          </div>
+        </details>
       </section>
 
       <section class="grid s-sliders">
@@ -221,6 +234,7 @@
                 <option value="deckBMode">Deck B Mode</option>
                 <option value="ringOpacity">Ring Opacity</option>
                 <option value="maxBrightness">Max Brightness</option>
+                <option value="morphWeight">Morph</option>
               </select>
             </label>
             <label><span>CC Min</span><input id="midi-cc-cc-min" type="number" min="0" max="127" step="1" value="0" /></label>
@@ -357,7 +371,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 4, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 5, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -401,6 +415,7 @@
         activeShader: 0,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
         emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 },
+        morphWeight: 0,
       });
       const state = defaultState();
       const osc = {
@@ -613,6 +628,10 @@
       function syncFromRemote(next) {
         if (next.replaying && !state.replaying) return;
         Object.assign(state, { ...state, ...next, trackMapping: { ...state.trackMapping, ...(next.trackMapping || {}) } });
+        // OSC/MIDI CC may have moved the morph weight; re-blend the selected presets.
+        if (morphActive() && state.morphWeight !== lastMorphApplied && applyMorph()) {
+          publish({ record: false });
+        }
         syncInputs();
         // If a transition is running, state is already the live 'from'; no extra action needed.
       }
@@ -870,6 +889,7 @@
           activePill.textContent = label;
           activePill.dataset.state = activePreset ? "info" : "idle";
         }
+        renderMorphSlots();
       }
 
       function syncCurveRow(row, key) {
@@ -907,6 +927,61 @@
         }
         for (const row of grid.children) {
           syncCurveRow(row, row.dataset.key);
+        }
+      }
+
+      // ── Preset morphing ─────────────────────────────────────────────────────
+      // A continuous blend weight (state.morphWeight, driven over OSC/MIDI CC)
+      // interpolates two saved presets across INTERPOLATED_KEYS.
+      // Mirrors morphPresets() in preset-morph.ts — keep in sync.
+      let morphSlotA = null;
+      let morphSlotB = null;
+      let lastMorphApplied = null;
+      const morphActive = () => morphSlotA !== null && morphSlotB !== null;
+
+      function morphPresets(a, b, weight) {
+        const w = clamp01(weight);
+        const out = {};
+        for (const key of INTERPOLATED_KEYS) {
+          const av = Number(a[key]);
+          const bv = Number(b[key]);
+          const from = Number.isFinite(av) ? av : bv;
+          const to = Number.isFinite(bv) ? bv : av;
+          if (!Number.isFinite(from)) continue;
+          out[key] = from + (to - from) * w;
+        }
+        return out;
+      }
+
+      function applyMorph() {
+        if (!morphActive()) return false;
+        const presets = loadPresets();
+        const a = normalizePreset(presets[`slot-${morphSlotA}`]);
+        const b = normalizePreset(presets[`slot-${morphSlotB}`]);
+        if (!a || !b) return false;
+        Object.assign(state, morphPresets(a.state, b.state, state.morphWeight));
+        lastMorphApplied = state.morphWeight;
+        return true;
+      }
+
+      function renderMorphSlots() {
+        const presets = loadPresets();
+        for (const [el, selected] of [[$("#morph-slot-a"), morphSlotA], [$("#morph-slot-b"), morphSlotB]]) {
+          if (!el) continue;
+          el.innerHTML = "";
+          const none = document.createElement("option");
+          none.value = "";
+          none.textContent = "—";
+          el.appendChild(none);
+          for (let i = 1; i <= 6; i++) {
+            const preset = normalizePreset(presets[`slot-${i}`]);
+            if (!preset) continue;
+            const opt = document.createElement("option");
+            opt.value = String(i);
+            opt.textContent = preset.name || `Preset ${i}`;
+            el.appendChild(opt);
+          }
+          el.value = selected === null ? "" : String(selected);
         }
       }
 
@@ -969,6 +1044,7 @@
         palette: "Color", paletteSaturation: "GPU Sat", paletteBrightness: "GPU Bright",
         deckAMode: "Deck A Mode", deckBMode: "Deck B Mode",
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
+        morphWeight: "Morph",
       };
 
       // Mirrors migrateMidiBindings() in midi-cc-schema.ts — keep in sync.
@@ -1019,6 +1095,7 @@
       function applyMidiCc(ccNumber, ccChannel, ccValue) {
         const bindings = loadMidiBindings();
         let changed = false;
+        let morphChanged = false;
         for (const binding of bindings) {
           if (binding.cc !== ccNumber) continue;
           if (binding.channel !== 0 && binding.channel !== ccChannel) continue;
@@ -1027,9 +1104,11 @@
           if (binding.param === "deckAMode" || binding.param === "deckBMode") {
             state.cueVersion += 1;
           }
+          if (binding.param === "morphWeight") morphChanged = true;
           changed = true;
         }
         if (changed) {
+          if (morphChanged) applyMorph();
           syncInputs();
           publish();
         }
@@ -1329,6 +1408,10 @@
           const out = $(`#ema-${band}-value`);
           if (out) out.textContent = (state.emaAlphas?.[band] ?? 0.15).toFixed(2);
         }
+        const morphSlider = $("#morph-weight");
+        if (morphSlider) morphSlider.value = String(state.morphWeight ?? 0);
+        const morphOut = $("#morph-weight-value");
+        if (morphOut) morphOut.textContent = `${Math.round((state.morphWeight ?? 0) * 100)}%`;
       }
 
       function render() {
@@ -1534,6 +1617,23 @@
 
       $("#preset-transition").addEventListener("input", (event) => {
         transitionDurationMs = Math.max(0, Math.min(10000, Number(event.target.value) || 0));
+      });
+
+      $("#morph-slot-a").addEventListener("change", (event) => {
+        const v = event.target.value;
+        morphSlotA = v === "" ? null : Number(v);
+        if (applyMorph()) { syncInputs(); publish({ record: false }); }
+      });
+      $("#morph-slot-b").addEventListener("change", (event) => {
+        const v = event.target.value;
+        morphSlotB = v === "" ? null : Number(v);
+        if (applyMorph()) { syncInputs(); publish({ record: false }); }
+      });
+      $("#morph-weight").addEventListener("input", (event) => {
+        state.morphWeight = clamp01(Number(event.target.value));
+        $("#morph-weight-value").textContent = `${Math.round(state.morphWeight * 100)}%`;
+        if (applyMorph()) syncInputs();
+        publish({ record: false });
       });
 
       renderPresets();
