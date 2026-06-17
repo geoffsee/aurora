@@ -137,7 +137,13 @@ describe("matchMidiCc", () => {
 	test("skips non-midi-cc bindings", () => {
 		const bindings: AutomationTriggerBinding[] = [
 			{ type: "midi-note", note: 64, channel: 0, action: "play" },
-			{ type: "midi-cc", cc: 64, channel: 0, threshold: 0, action: "play-loop" },
+			{
+				type: "midi-cc",
+				cc: 64,
+				channel: 0,
+				threshold: 0,
+				action: "play-loop",
+			},
 		];
 		expect(matchMidiCc(64, 1, 64, bindings)).toBe("play-loop");
 	});

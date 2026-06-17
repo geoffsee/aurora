@@ -23,6 +23,12 @@ import {
 	MIDI_CLOCK_TIMEOUT_MS,
 	deriveBpmFromTimestamps,
 } from "./midi-clock.ts";
+import {
+	LINK_DEFAULT_QUANTUM,
+	LINK_UPDATE_INTERVAL_MS,
+	deriveLinkFrame,
+	isLinkActive,
+} from "./ableton-link.ts";
 import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
@@ -133,6 +139,7 @@ const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
 const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
 const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? "";
+const abletonLinkEnabled = Bun.env.ABLETON_LINK_ENABLED === "1";
 const hotReload = Bun.env.HOT_RELOAD === "1";
 const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
@@ -143,6 +150,8 @@ let latestVstControlAt = 0;
 let midiClockTimestamps: number[] = [];
 let lastMidiClockAt = 0;
 let lastMidiClockBpmUpdate = 0;
+let lastLinkUpdateAt = 0;
+let linkNumPeers = 0;
 const demoAudioEma = makeAudioEmaState();
 const liveAudioEma = makeAudioEmaState();
 
@@ -1015,6 +1024,89 @@ function openMidiClockDevice(devicePath: string): void {
 	});
 }
 
+const isAbletonLinkActive = (): boolean =>
+	isLinkActive(lastLinkUpdateAt, Date.now());
+
+// Minimal surface of the optional native `abletonlink` module we depend on.
+type AbletonLinkSession = {
+	enable?: () => void;
+	quantum?: number;
+	numPeers?: number;
+	startUpdate: (
+		intervalMs: number,
+		cb: (beat: number, phase: number, bpm: number) => void,
+	) => void;
+};
+
+function broadcastLinkTempo(tempo: number): void {
+	const tempoData = JSON.stringify({
+		address: OSC_ADDRESSES.TEMPO,
+		args: [tempo],
+	});
+	sockets.forEach((ws) => {
+		ws.send(tempoData);
+	});
+}
+
+function broadcastLinkBeat(beat: number): void {
+	const beatData = JSON.stringify({
+		address: OSC_ADDRESSES.BEAT,
+		args: [beat],
+	});
+	sockets.forEach((ws) => {
+		ws.send(beatData);
+	});
+}
+
+// Join an Ableton Link session and stream its shared tempo/beat-phase onto the
+// AbletonOSC mirror addresses. Opt-in via ABLETON_LINK_ENABLED=1; the native
+// `abletonlink` module is loaded lazily so the default build needs no native
+// deps and idle memory stays untouched when the feature is off.
+function startAbletonLink(): void {
+	let LinkCtor: new (...args: unknown[]) => AbletonLinkSession;
+	try {
+		LinkCtor = require("abletonlink");
+	} catch (error) {
+		console.warn(
+			`Ableton Link: native 'abletonlink' module unavailable (${error instanceof Error ? error.message : error}); install it to enable Link sync. Skipping.`,
+		);
+		return;
+	}
+
+	let link: AbletonLinkSession;
+	try {
+		link = new LinkCtor();
+		link.enable?.();
+	} catch (error) {
+		console.warn(
+			`Ableton Link: failed to start session (${error instanceof Error ? error.message : error}). Skipping.`,
+		);
+		return;
+	}
+
+	const quantum =
+		typeof link.quantum === "number" && link.quantum > 0
+			? link.quantum
+			: LINK_DEFAULT_QUANTUM;
+
+	link.startUpdate(LINK_UPDATE_INTERVAL_MS, (beat, phase, bpm) => {
+		lastLinkUpdateAt = Date.now();
+		linkNumPeers = typeof link.numPeers === "number" ? link.numPeers : 0;
+		const frame = deriveLinkFrame(
+			{ beat, phase, bpm, numPeers: linkNumPeers },
+			quantum,
+		);
+		if (!frame) return;
+		// Link owns beat phase whenever it is active, even alongside MIDI clock.
+		broadcastLinkBeat(frame.beat);
+		// MIDI clock stays authoritative for tempo when both are present.
+		if (isMidiClockActive()) return;
+		broadcastLinkTempo(frame.tempo);
+	});
+
+	console.log(`Ableton Link: session active (quantum ${quantum})`);
+}
+
 const _switchCaseNames: ReadonlySet<string> = new Set([
 	"crossfade",
 	"bpm",
@@ -1341,8 +1433,14 @@ udp.on("ready", () => {
 
 udp.on("message", (msg: OscMsg) => {
 	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
-	// MIDI clock is authoritative for tempo; suppress AbletonOSC tempo while active
-	if (msg.address === OSC_ADDRESSES.TEMPO && isMidiClockActive()) return;
+	// External clocks are authoritative: MIDI clock and Ableton Link both override
+	// AbletonOSC tempo, and Link additionally owns beat phase while active.
+	if (
+		msg.address === OSC_ADDRESSES.TEMPO &&
+		(isMidiClockActive() || isAbletonLinkActive())
+	)
+		return;
+	if (msg.address === OSC_ADDRESSES.BEAT && isAbletonLinkActive()) return;
 	broadcast(msg);
 });
 udp.on("error", (error: Error) => {
@@ -1390,6 +1488,9 @@ setInterval(() => {
 		vstControlRecvPort,
 		midiClockDevice: midiClockDevice || null,
 		midiClockActive: isMidiClockActive(),
+		abletonLinkEnabled,
+		abletonLinkActive: isAbletonLinkActive(),
+		abletonLinkPeers: linkNumPeers,
 		visualPort: port,
 		controlsPort,
 		numTracks,
@@ -1446,6 +1547,10 @@ console.log(`bevyosc controls listening on ${controlsServer.url}`);
 
 if (midiClockDevice) {
 	openMidiClockDevice(midiClockDevice);
+}
+
+if (abletonLinkEnabled) {
+	startAbletonLink();
 }
 
 if (hotReload) {
