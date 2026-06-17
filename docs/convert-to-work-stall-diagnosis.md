@@ -3,15 +3,17 @@
 **Issue:** #153 — Strategic Review #152, *Recommended Path Forward*, item 1
 **Tracker:** #160
 **Date:** 2026-06-16
-**Type:** Process / meta (no feature code)
+**Type:** Process / meta diagnosis, plus one functional config fix
+(`caretta.toml` command invocation — see "A second, technical cause" below)
 
 ---
 
 ## What happened
 
 The complete endorsed roadmap from the prior cycle was filed and then closed
-`NOT_PLANNED` the same day, with **zero implementing commits**. `HEAD` is
-unchanged at `bbf92d5`.
+`NOT_PLANNED` the same day: the #141–#148 batch produced **zero implementing
+commits** of its own — no `implement #N …` commit, branch, or PR for any item
+in the batch.
 
 | Issue | Title | Created | Closed (`NOT_PLANNED`) |
 |---|---|---|---|
@@ -56,7 +58,43 @@ themselves.
 - **Bad dependencies / blocking graph?** No — six of seven children are Layer 0
   with no dependencies. They could have started immediately and did not.
 
-The only stage with no artifacts on either side is dispatch. That is the stall.
+The only stage with no artifacts on either side is dispatch. That is the
+primary stall.
+
+### A second, technical cause: a broken verification command
+
+Dispatch is necessary but not sufficient. This PR also ships a real functional
+fix in `caretta.toml`: the test and format commands were declared as a single
+argv token —
+
+```toml
+command = ["bun install && bun run test"]
+```
+
+— which is handed to `exec` verbatim as one program literally named
+`bun install && bun run test`. No shell ever interprets the `&&`, so the command
+cannot run at all. The fix wraps it in a shell:
+
+```toml
+command = ["sh", "-c", "bun install && bun run test"]
+```
+
+This matters even though the #141–#148 batch left no branch behind: **any**
+executor that *was* dispatched would hit this broken verification/format step,
+error out before it could land, and produce no merged PR. So the two causes are
+complementary, not competing:
+
+- The **missing-dispatch** thesis best explains *this specific batch*, because
+  the batch produced zero artifacts on either side (no branch, no failed CI run,
+  no abandoned PR) — the signature of work that was never queued.
+- The **broken-command** misconfiguration is a standing hazard that would have
+  blocked landing for *any* dispatched executor regardless. Even once dispatch
+  is fixed, leaving this in place would surface as a new failure mode (executor
+  runs, verification errors, no PR), so it is fixed here rather than deferred.
+
+It is therefore inaccurate to describe this PR as "no feature code": it contains
+one behavior-changing fix, called out explicitly above so the diff and the
+diagnosis agree.
 
 ## The fix: every re-issued item carries a named execution path before scheduling
 
