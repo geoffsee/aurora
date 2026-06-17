@@ -984,10 +984,12 @@ const applyVstControlMessage = (msg: OscMsg) => {
 
 // Drive a continuous morph between two named cue presets. Validation has
 // already confirmed from/to are real cues and position is numeric. The two
-// endpoints are resolved against the defaults so a cue that omits a morph field
-// blends from a sane value rather than 0. The result — plus the clamped fader
-// position itself — is routed through mergeControlState, so coerceControlState
-// clamps every field before broadcast.
+// endpoints are seeded from the current live state so morph keys that neither
+// cue defines (e.g. speed/ringOpacity/maxBrightness — only panic sets the
+// latter) stay put rather than snapping to defaults; this keeps position 0 a
+// no-op on the "from" end and matches normal partial-cue-apply semantics. The
+// result — plus the clamped fader position itself — is routed through
+// mergeControlState, so coerceControlState clamps every field before broadcast.
 const applyPresetMorph = (msg: OscMsg) => {
 	const args = msg.args ?? [];
 	const fromName = String(valueOf(args[0]));
@@ -996,9 +998,9 @@ const applyPresetMorph = (msg: OscMsg) => {
 	const curveArg = args.length > 3 ? valueOf(args[3]) : undefined;
 	const curve: MorphCurve = isMorphCurve(curveArg) ? curveArg : "linear";
 
-	const defaults = defaultControlState();
-	const from = { ...defaults, ...cuePresets[fromName] };
-	const to = { ...defaults, ...cuePresets[toName] };
+	const base = currentControlState();
+	const from = { ...base, ...cuePresets[fromName] };
+	const to = { ...base, ...cuePresets[toName] };
 	const morphed = morphPresetStates(from, to, position, curve);
 	mergeControlState({ ...morphed, morph: position });
 };

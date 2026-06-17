@@ -10,7 +10,10 @@ export const isMorphCurve = (v: unknown): v is MorphCurve =>
 	v === "snap" || v === "linear" || v === "ease";
 
 // Numeric ControlState fields the morph interpolates. Mirrors INTERPOLATED_KEYS
-// in controls.html's preset-transition logic.
+// in controls.html's preset-transition logic. Discrete fields (e.g. deckAMode/
+// deckBMode) are intentionally excluded — they're modes, not continuous values,
+// so a 0→1 sweep never carries them toward the target and the live deck modes
+// are left untouched. A full sweep to a preset therefore does not fully reach it.
 export const MORPH_KEYS = [
 	"crossfade",
 	"speed",
