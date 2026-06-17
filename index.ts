@@ -979,17 +979,22 @@ type AbletonLinkSession = {
 	) => void;
 };
 
-function broadcastLinkFrame(tempo: number, beat: number): void {
+function broadcastLinkTempo(tempo: number): void {
 	const tempoData = JSON.stringify({
 		address: OSC_ADDRESSES.TEMPO,
 		args: [tempo],
 	});
+	sockets.forEach((ws) => {
+		ws.send(tempoData);
+	});
+}
+
+function broadcastLinkBeat(beat: number): void {
 	const beatData = JSON.stringify({
 		address: OSC_ADDRESSES.BEAT,
 		args: [beat],
 	});
 	sockets.forEach((ws) => {
-		ws.send(tempoData);
 		ws.send(beatData);
 	});
 }
@@ -1028,14 +1033,16 @@ function startAbletonLink(): void {
 	link.startUpdate(LINK_UPDATE_INTERVAL_MS, (beat, phase, bpm) => {
 		lastLinkUpdateAt = Date.now();
 		linkNumPeers = typeof link.numPeers === "number" ? link.numPeers : 0;
-		// MIDI clock stays authoritative for tempo when both are present.
-		if (isMidiClockActive()) return;
 		const frame = deriveLinkFrame(
 			{ beat, phase, bpm, numPeers: linkNumPeers },
 			quantum,
 		);
 		if (!frame) return;
-		broadcastLinkFrame(frame.tempo, frame.beat);
+		// Link owns beat phase whenever it is active, even alongside MIDI clock.
+		broadcastLinkBeat(frame.beat);
+		// MIDI clock stays authoritative for tempo when both are present.
+		if (isMidiClockActive()) return;
+		broadcastLinkTempo(frame.tempo);
 	});
 
 	console.log(`Ableton Link: session active (quantum ${quantum})`);
