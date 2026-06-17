@@ -4,7 +4,7 @@ use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
     render::render_resource::AsBindGroup,
-    shader::ShaderRef,
+    shader::{Shader, ShaderRef},
     sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
     window::{PresentMode, WindowResolution},
     winit::WinitSettings,
@@ -91,8 +91,23 @@ unsafe extern "C" {
     fn browser_control_palette_saturation() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteBrightness)]
     fn browser_control_palette_brightness() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridDensity)]
+    fn browser_control_grid_density() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridDiamond)]
+    fn browser_control_grid_diamond() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridLineWidth)]
+    fn browser_control_grid_line_width() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridShapeMix)]
+    fn browser_control_grid_shape_mix() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlActiveShader)]
     fn browser_control_active_shader() -> u32;
+    /// Returns and consumes the pending imported-shader WGSL string, if any.
+    /// JS-side global `window.__bevyoscTakePendingImportedShader()` returns the
+    /// WGSL source from the most recent /api/shadertoy/import response, or null.
+    /// Calling it clears the JS-side slot so the same shader is not re-applied
+    /// on subsequent frames.
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscTakePendingImportedShader)]
+    fn browser_take_pending_imported_shader() -> Option<String>;
 }
 
 /// GPU material driven by the `palette` controls.
@@ -107,6 +122,11 @@ struct VjPaletteMaterial {
     palette_extra: Vec4,
     #[uniform(2)]
     audio_uniforms: Vec4,
+    /// Unused by the palette shader, but keeps the bind-group layout structurally
+    /// identical to `VjGridMaterial` so Bevy's Material2d pipeline cache doesn't
+    /// reuse the wrong layout for the grid pipeline.
+    #[uniform(3)]
+    _reserved: Vec4,
 }
 
 impl Material2d for VjPaletteMaterial {
@@ -119,7 +139,8 @@ impl Material2d for VjPaletteMaterial {
     }
 }
 
-/// Second GPU shader variant — shares the same uniform layout as `VjPaletteMaterial`.
+/// Second GPU shader variant — shares the palette layout plus a grid-specific `grid_extra` slot.
+/// `grid_extra`: x=density (0..1), y=diamond size (0..1), z=line width (0..1), w=shape mix (0..1, 0=diamond, 1=cross).
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
 struct VjGridMaterial {
     #[uniform(0)]
@@ -128,6 +149,8 @@ struct VjGridMaterial {
     palette_extra: Vec4,
     #[uniform(2)]
     audio_uniforms: Vec4,
+    #[uniform(3)]
+    grid_extra: Vec4,
 }
 
 impl Material2d for VjGridMaterial {
@@ -140,7 +163,35 @@ impl Material2d for VjGridMaterial {
     }
 }
 
-/// Marks the fullscreen GPU-shader quads. `index` matches `VjState::active_shader`.
+/// Slot for Shadertoy-imported shaders. Same bind-group layout as the palette
+/// material so the asset-driven hot-swap keeps the existing uniforms bound.
+/// The WGSL at `shaders/imported.wgsl` starts as a transparent placeholder and
+/// is replaced in-place via `Assets<Shader>::insert` when a new shader arrives
+/// from the bridge — Bevy's `AssetEvent::Modified` then triggers a pipeline
+/// rebuild without a page reload.
+#[derive(AsBindGroup, Asset, TypePath, Clone)]
+struct VjImportedMaterial {
+    #[uniform(0)]
+    params: Vec4,
+    #[uniform(1)]
+    palette_extra: Vec4,
+    #[uniform(2)]
+    audio_uniforms: Vec4,
+    #[uniform(3)]
+    _reserved: Vec4,
+}
+
+impl Material2d for VjImportedMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/imported.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
+    }
+}
+
+/// Marks the fullscreen GPU-shader quads. `index` 0 = palette material, 1 = grid material, 2 = imported.
 #[derive(Component)]
 struct GpuShaderQuad {
     index: u32,
@@ -151,6 +202,12 @@ struct VjPaletteHandle(Handle<VjPaletteMaterial>);
 
 #[derive(Resource)]
 struct VjGridHandle(Handle<VjGridMaterial>);
+
+#[derive(Resource)]
+struct VjImportedHandle(Handle<VjImportedMaterial>);
+
+#[derive(Resource)]
+struct VjImportedShaderHandle(Handle<Shader>);
 
 const STAGE_WIDTH: f32 = 1280.0;
 const STAGE_HEIGHT: f32 = 720.0;
@@ -188,6 +245,7 @@ fn main() {
         }))
         .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
         .add_plugins(Material2dPlugin::<VjGridMaterial>::default())
+        .add_plugins(Material2dPlugin::<VjImportedMaterial>::default())
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -198,6 +256,8 @@ fn main() {
                 update_visuals,
                 update_tunnel_rings,
                 update_palette_material,
+                consume_pending_imported_shader,
+                debug_inject_imported_shader,
             )
                 .chain(),
         )
@@ -215,6 +275,10 @@ struct VjState {
     palette: f32,
     palette_saturation: f32,
     palette_brightness: f32,
+    grid_density: f32,
+    grid_diamond: f32,
+    grid_line_width: f32,
+    grid_shape_mix: f32,
     deck_a_mode: VisualMode,
     deck_b_mode: VisualMode,
     rings_enabled: bool,
@@ -257,6 +321,10 @@ impl Default for VjState {
             palette: 0.0,
             palette_saturation: 1.0,
             palette_brightness: 1.0,
+            grid_density: 0.5,
+            grid_diamond: 0.5,
+            grid_line_width: 0.5,
+            grid_shape_mix: 0.5,
             deck_a_mode: VisualMode::Beams,
             deck_b_mode: VisualMode::Tunnel,
             rings_enabled: true,
@@ -310,6 +378,11 @@ enum VisualMode {
     Burst,
     Mirror,
     Wash,
+    Strobe,
+    Swarm,
+    Orbit,
+    Pulse,
+    Spiral,
 }
 
 impl VisualMode {
@@ -319,6 +392,11 @@ impl VisualMode {
             2 => Self::Burst,
             3 => Self::Mirror,
             4 => Self::Wash,
+            5 => Self::Strobe,
+            6 => Self::Swarm,
+            7 => Self::Orbit,
+            8 => Self::Pulse,
+            9 => Self::Spiral,
             _ => Self::Beams,
         }
     }
@@ -339,13 +417,16 @@ struct TunnelRing {
     lane: usize,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn setup(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
     mut grid_materials: ResMut<Assets<VjGridMaterial>>,
+    mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
 ) {
     commands.spawn(Camera2d);
 
@@ -461,6 +542,7 @@ fn setup(
         params: Vec4::ZERO,
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        _reserved: Vec4::ZERO,
     });
     commands.insert_resource(VjPaletteHandle(gpu_mat.clone()));
     commands.spawn((
@@ -475,6 +557,7 @@ fn setup(
         params: Vec4::ZERO,
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        grid_extra: Vec4::new(0.5, 0.5, 0.5, 0.5),
     });
     commands.insert_resource(VjGridHandle(grid_mat.clone()));
     commands.spawn((
@@ -483,6 +566,25 @@ fn setup(
         Transform::from_xyz(0.0, 0.0, -15.0).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
         Visibility::Hidden,
         GpuShaderQuad { index: 1 },
+    ));
+
+    // Imported (Shadertoy) shader slot — placeholder asset; mutated in place at
+    // runtime via Assets<Shader>::insert when the bridge delivers a new WGSL.
+    let imported_mat = imported_materials.add(VjImportedMaterial {
+        params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        _reserved: Vec4::ZERO,
+    });
+    commands.insert_resource(VjImportedHandle(imported_mat.clone()));
+    let imported_shader: Handle<Shader> = asset_server.load("shaders/imported.wgsl");
+    commands.insert_resource(VjImportedShaderHandle(imported_shader));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(imported_mat),
+        Transform::from_xyz(0.0, 0.0, -15.0).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Hidden,
+        GpuShaderQuad { index: 2 },
     ));
 
     // The control surface now lives on port 3001, so the projector output has no HUD.
@@ -592,7 +694,11 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.palette = browser_control_palette().clamp(0.0, 1.0);
         state.palette_saturation = browser_control_palette_saturation().clamp(0.0, 1.0);
         state.palette_brightness = browser_control_palette_brightness().clamp(0.0, 1.0);
-        state.active_shader = browser_control_active_shader().min(1);
+        state.grid_density = browser_control_grid_density().clamp(0.0, 1.0);
+        state.grid_diamond = browser_control_grid_diamond().clamp(0.0, 1.0);
+        state.grid_line_width = browser_control_grid_line_width().clamp(0.0, 1.0);
+        state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
+        state.active_shader = browser_control_active_shader().min(9);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.rings_enabled = browser_control_rings();
@@ -623,6 +729,76 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn read_osc_inputs(_state: ResMut<VjState>) {}
+
+/// Replaces the imported shader's asset bytes in place when JS has a new WGSL
+/// pending. Bevy fires `AssetEvent::Modified` on the shader's `Handle<Shader>`,
+/// which triggers a pipeline rebuild — no page reload required.
+#[cfg(target_arch = "wasm32")]
+fn consume_pending_imported_shader(
+    handle: Res<VjImportedShaderHandle>,
+    mut shaders: ResMut<Assets<Shader>>,
+) {
+    if let Some(wgsl) = browser_take_pending_imported_shader() {
+        let shader = Shader::from_wgsl(wgsl, "shaders/imported.wgsl".to_string());
+        let _ = shaders.insert(&handle.0, shader);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn consume_pending_imported_shader(
+    _handle: Res<VjImportedShaderHandle>,
+    _shaders: ResMut<Assets<Shader>>,
+) {
+}
+
+/// Dev sanity check: press F10 to inject a known-good WGSL into the imported
+/// shader slot without going through the bridge. Useful when verifying that
+/// the asset hot-swap path is alive (e.g. after Bevy upgrades) even when the
+/// Shadertoy API is unreachable. Also forces `active_shader = 9` so the
+/// imported quad is visible.
+///
+/// Gated to debug builds so neither the keybind nor the embedded WGSL ship in
+/// release/wasm projector builds.
+#[cfg(debug_assertions)]
+const DEBUG_IMPORTED_WGSL: &str = r#"#import bevy_sprite::mesh2d_vertex_output::VertexOutput
+
+@group(2) @binding(0) var<uniform> params: vec4<f32>;
+@group(2) @binding(1) var<uniform> palette_extra: vec4<f32>;
+@group(2) @binding(2) var<uniform> audio_uniforms: vec4<f32>;
+@group(2) @binding(3) var<uniform> _reserved: vec4<f32>;
+
+@fragment
+fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
+  let uv = frag.uv;
+  let t = params.y;
+  let stripe = step(0.5, fract(uv.x * 8.0 + t * 0.5));
+  let r = 0.85 + 0.15 * sin(t * 3.0);
+  let g = 0.10 + 0.10 * stripe;
+  let b = 0.65 + 0.30 * cos(t * 2.1 + uv.y * 6.28);
+  return vec4<f32>(r, g, b, 0.95);
+}
+"#;
+
+#[cfg(debug_assertions)]
+fn debug_inject_imported_shader(
+    keys: Res<ButtonInput<KeyCode>>,
+    handle: Res<VjImportedShaderHandle>,
+    mut shaders: ResMut<Assets<Shader>>,
+    mut state: ResMut<VjState>,
+) {
+    if keys.just_pressed(KeyCode::F10) {
+        let shader = Shader::from_wgsl(
+            DEBUG_IMPORTED_WGSL.to_string(),
+            "shaders/imported.wgsl".to_string(),
+        );
+        let _ = shaders.insert(&handle.0, shader);
+        state.active_shader = 9;
+        state.show_gpu_palette = true;
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn debug_inject_imported_shader() {}
 
 fn keyboard_controls(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut state: ResMut<VjState>) {
     let dt = time.delta_secs();
@@ -847,6 +1023,50 @@ fn update_visuals(
                         alpha *= 0.18 + state.feedback * 0.45 + osc_drive * 0.22;
                         hue += 30.0;
                     }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit * 1.4).clamp(0.0, 1.0);
+                        let on = if gate > 0.45 { 1.0 } else { 0.12 };
+                        alpha *= on;
+                        transform.scale.y *= 1.0 + bass * 0.7 + beat_hit * 0.6;
+                        hue += beat_hit * 120.0 + fraction * 60.0;
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.7 + element.seed * 11.0).sin() * 110.0;
+                        let dy = (t * 2.1 + element.seed * 7.0).cos() * 90.0;
+                        transform.translation.x += dx;
+                        transform.translation.y += dy;
+                        transform.rotation *= Quat::from_rotation_z(element.seed * 4.0 + t * 0.4);
+                        transform.scale.y *= 0.7 + (t * 3.0 + element.seed * 5.0).sin().abs() * 0.6;
+                        alpha *= 0.55 + osc_drive * 0.55;
+                        hue += element.seed * 220.0;
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_r = 140.0 + layer * 100.0;
+                        let orbit_a = t * (0.45 + element.seed * 0.4) + element.seed * TAU;
+                        transform.translation.x += orbit_a.cos() * orbit_r;
+                        transform.translation.y += orbit_a.sin() * orbit_r * 0.75;
+                        transform.rotation = Quat::from_rotation_z(orbit_a + TAU * 0.25);
+                        transform.scale.y *= 0.8 + layer * 0.6;
+                        alpha *= 0.7 + layer * 0.4;
+                        hue += orbit_a.to_degrees() * 0.08;
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        let s = 0.55 + pump * 1.6 + beat_hit * 0.5;
+                        transform.scale.x *= s;
+                        transform.scale.y *= 1.0 + pump * 0.8;
+                        alpha *= 0.35 + pump * 0.9;
+                        hue += pump * 80.0;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = fraction * TAU * 4.0 + t * 0.4;
+                        let spiral_r = 80.0 + fraction * 380.0 + bass * 80.0;
+                        transform.translation.x = spiral_a.cos() * spiral_r;
+                        transform.translation.y = spiral_a.sin() * spiral_r;
+                        transform.rotation = Quat::from_rotation_z(spiral_a + TAU * 0.25);
+                        transform.scale.y *= 1.1 + fraction * 0.5;
+                        hue += fraction * 360.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -899,6 +1119,38 @@ fn update_visuals(
                     VisualMode::Wash => {
                         transform.scale *= 1.9 + state.feedback;
                         alpha *= 0.4 + state.feedback * 0.5;
+                    }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit * 1.2).clamp(0.0, 1.0);
+                        let on = if gate > 0.4 { 1.0 } else { 0.0 };
+                        alpha *= on;
+                        transform.scale *= 1.0 + bass * 1.4 + beat_hit * 0.9;
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.3 + fraction * 13.0).sin() * 180.0;
+                        let dy = (t * 1.6 + fraction * 9.0).cos() * 120.0;
+                        transform.translation.x = dx;
+                        transform.translation.y = dy;
+                        transform.scale *= 0.55 + fraction * 0.8;
+                        alpha *= 0.7;
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_a = t * (0.5 + fraction * 0.6) + fraction * TAU;
+                        transform.translation.x = orbit_a.cos() * 200.0 * fraction;
+                        transform.translation.y = orbit_a.sin() * 200.0 * fraction;
+                        transform.scale *= 0.6 + fraction * 0.7;
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        transform.scale *= 0.5 + pump * 1.7 + beat_hit * 0.6;
+                        alpha *= 0.4 + pump * 1.0;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = fraction * TAU * 2.0 + t * 0.6;
+                        transform.translation.x = spiral_a.cos() * 280.0 * fraction;
+                        transform.translation.y = spiral_a.sin() * 280.0 * fraction;
+                        transform.rotation = Quat::from_rotation_z(spiral_a);
+                        transform.scale *= 0.5 + fraction * 0.9;
                     }
                     VisualMode::Beams => {}
                 }
@@ -972,6 +1224,41 @@ fn update_visuals(
                         alpha *= 0.22 + state.feedback * 0.52;
                         hue += 45.0;
                     }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit * 1.3).clamp(0.0, 1.0);
+                        let on = if gate > 0.4 { 1.0 } else { 0.1 };
+                        alpha *= on;
+                        transform.scale *= 1.0 + bass * 0.8;
+                        if (t * 4.0).sin() > 0.0 && (element.col + element.row) % 2 == 0 {
+                            hue += 180.0;
+                        }
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.8 + element.seed * 9.0).sin() * 32.0;
+                        let dy = (t * 2.2 + element.seed * 6.0).cos() * 28.0;
+                        transform.translation.x += dx;
+                        transform.translation.y += dy;
+                        transform.rotation *= Quat::from_rotation_z(element.seed * 6.0 + t * 0.5);
+                        alpha *= 0.65;
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_a = t * 0.9 + diagonal;
+                        let orbit_r = 14.0 + bass * 28.0;
+                        transform.translation.x += orbit_a.cos() * orbit_r;
+                        transform.translation.y += orbit_a.sin() * orbit_r;
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        transform.scale *= 0.5 + pump * 2.0;
+                        alpha *= 0.3 + pump * 1.0;
+                        hue += pump * 60.0;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = diagonal * 0.3 + t * 0.45;
+                        transform.translation.x = spiral_a.cos() * (60.0 + diagonal * 50.0);
+                        transform.translation.y = spiral_a.sin() * (60.0 + diagonal * 50.0);
+                        transform.rotation = Quat::from_rotation_z(spiral_a + diagonal * 0.5);
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1025,6 +1312,37 @@ fn update_visuals(
                         transform.scale.x *= 1.8;
                         transform.scale.y *= 2.2 + state.feedback;
                         alpha *= 1.35;
+                    }
+                    VisualMode::Strobe => {
+                        let gate = (bass + beat_hit).clamp(0.0, 1.0);
+                        let on = if gate > 0.3 { 1.0 } else { 0.0 };
+                        alpha *= on;
+                        transform.scale.x *= 1.0 + bass * 0.6;
+                    }
+                    VisualMode::Swarm => {
+                        let dx = (t * 1.0 + fraction * 17.0).sin() * 240.0;
+                        let dy = (t * 1.4 + fraction * 11.0).cos() * 100.0;
+                        transform.translation.x = dx;
+                        transform.translation.y = dy;
+                        transform.rotation = Quat::from_rotation_z(t * 0.7 + fraction * TAU);
+                    }
+                    VisualMode::Orbit => {
+                        let orbit_a = t * 0.6 + fraction * TAU;
+                        transform.translation.x = orbit_a.cos() * (180.0 + fraction * 80.0);
+                        transform.translation.y = orbit_a.sin() * (120.0 + fraction * 40.0);
+                    }
+                    VisualMode::Pulse => {
+                        let pump = (beat * TAU).sin().abs();
+                        transform.scale.x *= 0.6 + pump * 1.4;
+                        transform.scale.y *= 0.5 + pump * 2.2;
+                        alpha *= 0.4 + pump * 0.9;
+                    }
+                    VisualMode::Spiral => {
+                        let spiral_a = fraction * TAU * 3.0 + t * 0.5;
+                        transform.translation.x = spiral_a.cos() * (160.0 + fraction * 100.0);
+                        transform.translation.y = spiral_a.sin() * (160.0 + fraction * 100.0);
+                        transform.rotation = Quat::from_rotation_z(spiral_a);
+                        transform.scale.x *= 0.5;
                     }
                     VisualMode::Beams => {}
                 }
@@ -1106,12 +1424,15 @@ fn update_tunnel_rings(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_palette_material(
     state: Res<VjState>,
     palette_handle: Res<VjPaletteHandle>,
     grid_handle: Res<VjGridHandle>,
+    imported_handle: Res<VjImportedHandle>,
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
     mut grid_materials: ResMut<Assets<VjGridMaterial>>,
+    mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
     mut gpu_quads: Query<(&GpuShaderQuad, &mut Visibility)>,
 ) {
     // Active whenever OSC is delivering audio; show_gpu_palette forces it on without OSC.
@@ -1130,7 +1451,20 @@ fn update_palette_material(
         0.0
     };
 
-    let params = Vec4::new(state.palette, state.show_time, 0.0, 0.0);
+    // active_shader routing:
+    //   0..=3 → palette quad with palette_variant set (Web/Spokes/Rings/Plasma)
+    //   4     → grid quad
+    //   5..=8 → palette quad with palette_variant set (Tunnel/Glitch/Fluid/Truchet)
+    //   9     → imported quad (Shadertoy hot-swap slot)
+    let (quad_index, palette_variant) = if state.active_shader == 4 {
+        (1u32, 0.0)
+    } else if state.active_shader == 9 {
+        (2u32, 0.0)
+    } else {
+        (0u32, state.active_shader as f32)
+    };
+
+    let params = Vec4::new(state.palette, state.show_time, palette_variant, 0.0);
     let palette_extra = Vec4::new(
         state.palette_saturation,
         state.palette_brightness,
@@ -1148,10 +1482,21 @@ fn update_palette_material(
         mat.params = params;
         mat.palette_extra = palette_extra;
         mat.audio_uniforms = audio_uniforms;
+        mat.grid_extra = Vec4::new(
+            state.grid_density,
+            state.grid_diamond,
+            state.grid_line_width,
+            state.grid_shape_mix,
+        );
+    }
+    if let Some(mat) = imported_materials.get_mut(&imported_handle.0) {
+        mat.params = params;
+        mat.palette_extra = palette_extra;
+        mat.audio_uniforms = audio_uniforms;
     }
 
     for (quad, mut vis) in &mut gpu_quads {
-        *vis = if quad.index == state.active_shader {
+        *vis = if quad.index == quad_index {
             Visibility::Inherited
         } else {
             Visibility::Hidden

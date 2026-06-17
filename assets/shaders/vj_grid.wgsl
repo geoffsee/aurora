@@ -7,6 +7,8 @@ const TAU: f32 = 6.283185307179586;
 @group(2) @binding(1) var<uniform> palette_extra: vec4<f32>;
 // audio_uniforms.x = energy (-1.0 = inactive), y = bass, z = mid, w = high (0..1 when active)
 @group(2) @binding(2) var<uniform> audio_uniforms: vec4<f32>;
+// grid_extra.x = density (0..1), y = diamond size (0..1), z = line width (0..1), w = shape mix (0=diamond, 1=cross)
+@group(2) @binding(3) var<uniform> grid_extra: vec4<f32>;
 
 fn hue_to_rgb(hue: f32) -> vec3<f32> {
   let h = fract(hue);
@@ -38,9 +40,10 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   // Inactive when OSC is not delivering audio (energy sentinel -1.0)
   let enabled = select(1.0, 0.0, energy < 0.0);
 
-  // Grid density scales with audio
-  let cols = 8.0 + floor(bass * 8.0);
-  let rows = 6.0 + floor(mid * 6.0);
+  // Density knob (0..1) → cols 4..20, rows 3..15. Audio still adds on top.
+  let density = grid_extra.x;
+  let cols = (4.0 + floor(density * 16.0)) + floor(bass * 8.0);
+  let rows = (3.0 + floor(density * 12.0)) + floor(mid * 6.0);
 
   let cell = vec2<f32>(uv.x * cols * 0.5 + cols * 0.5, uv.y * rows * 0.5 + rows * 0.5);
   let cell_id = floor(cell);
@@ -51,19 +54,25 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let tile_phase = sin(tile_seed + time * 1.1 + pulse * 4.0);
   let tile_beat = sin(tile_seed * 0.5 + time * 2.6 + bass * 5.0);
 
-  // Diamond shape inside each cell
-  let diamond_r = 0.28 + high * 0.14 + pulse * 0.08;
+  // Diamond size knob (0..1) → radius 0.10..0.46. Audio still nudges it.
+  let diamond_r = mix(0.10, 0.46, grid_extra.y) + high * 0.14 + pulse * 0.08;
   let diamond = 1.0 - smoothstep(diamond_r - 0.03, diamond_r + 0.03, abs(cell_uv.x) + abs(cell_uv.y));
 
-  // Cross / grid lines
-  let line_w = 0.04 + mid * 0.04;
+  // Line width knob (0..1) → 0.005..0.12.
+  let line_w = mix(0.005, 0.12, grid_extra.z) + mid * 0.04;
   let cross_h = 1.0 - smoothstep(line_w, line_w + 0.03, abs(cell_uv.y));
   let cross_v = 1.0 - smoothstep(line_w, line_w + 0.03, abs(cell_uv.x));
   let cross = max(cross_h, cross_v);
 
-  let shape = max(
-    diamond * clamp(0.5 + 0.5 * tile_phase, 0.0, 1.0),
-    cross   * clamp(0.25 + 0.35 * tile_beat, 0.0, 1.0)
+  // Shape mix (0 = diamond-only, 0.5 = original max() blend, 1 = cross-only).
+  let mix_t = grid_extra.w;
+  let diamond_only = diamond * clamp(0.5 + 0.5 * tile_phase, 0.0, 1.0);
+  let cross_only   = cross   * clamp(0.25 + 0.35 * tile_beat, 0.0, 1.0);
+  let balanced = max(diamond_only, cross_only);
+  let shape = mix(
+    mix(diamond_only, balanced, clamp(mix_t * 2.0, 0.0, 1.0)),
+    cross_only,
+    clamp(mix_t * 2.0 - 1.0, 0.0, 1.0)
   );
 
   // Color: hue cycles across grid + time
