@@ -62,6 +62,17 @@ layout(set = 2, binding = 3) uniform Reserved { vec4 _reserved; };
 #define iChannelResolution2 (vec3(512.0, 2.0, 1.0))
 #define iChannelResolution3 (vec3(512.0, 2.0, 1.0))
 
+// Array forms — Shadertoy's canonical uniforms are iChannelResolution[i] /
+// iChannelTime[i], which the scalar-suffixed #defines above don't cover. These
+// const arrays let shaders that index by channel compile too.
+const vec3 iChannelResolution[4] = vec3[4](
+  vec3(512.0, 2.0, 1.0),
+  vec3(512.0, 2.0, 1.0),
+  vec3(512.0, 2.0, 1.0),
+  vec3(512.0, 2.0, 1.0)
+);
+const float iChannelTime[4] = float[4](0.0, 0.0, 0.0, 0.0);
+
 const int iChannel0 = 0;
 const int iChannel1 = 1;
 const int iChannel2 = 2;
@@ -90,7 +101,7 @@ void main() {
 }
 `;
 
-const wrapGlsl = (userGlsl: string): string =>
+export const wrapGlsl = (userGlsl: string): string =>
 	`${WRAPPER_PREAMBLE}// === SHADERTOY USER CODE ===\n${userGlsl}\n// === END USER CODE ===\n${WRAPPER_EPILOGUE}`;
 
 type NagaRun = {
@@ -135,7 +146,7 @@ const runNaga = async (args: string[]): Promise<NagaRun> => {
  * spelling), we return null so the caller can surface a clear error rather
  * than emit a broken file.
  */
-const adaptNagaWgslForBevy = (raw: string): string | null => {
+export const adaptNagaWgslForBevy = (raw: string): string | null => {
 	const importLine = "#import bevy_sprite::mesh2d_vertex_output::VertexOutput";
 	if (raw.includes(importLine)) return raw;
 
@@ -153,8 +164,13 @@ const adaptNagaWgslForBevy = (raw: string): string | null => {
 
 const ICHANNEL_USAGE_RE = /\b(iChannel[0-3]|texture\s*\(|texelFetch\s*\(|textureLod\s*\(|texture2D\s*\(|textureGrad\s*\()/;
 
-const checkIChannelUsage = (userGlsl: string): boolean =>
-	ICHANNEL_USAGE_RE.test(userGlsl);
+// Remove // line comments and /* */ block comments so a mention like
+// `// blurs the texture (slow)` doesn't trip the usage check below.
+const stripGlslComments = (src: string): string =>
+	src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+
+export const checkIChannelUsage = (userGlsl: string): boolean =>
+	ICHANNEL_USAGE_RE.test(stripGlslComments(userGlsl));
 
 const fetchShader = async (id: string, apiKey: string) => {
 	const apiUrl = `https://www.shadertoy.com/api/v1/shaders/${id}?key=${encodeURIComponent(apiKey)}`;

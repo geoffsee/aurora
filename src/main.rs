@@ -102,10 +102,10 @@ unsafe extern "C" {
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlActiveShader)]
     fn browser_control_active_shader() -> u32;
     /// Returns and consumes the pending imported-shader WGSL string, if any.
-    /// JS-side global `window.__bevyoscPendingImportedShader` holds either the
+    /// JS-side global `window.__bevyoscTakePendingImportedShader()` returns the
     /// WGSL source from the most recent /api/shadertoy/import response, or null.
-    /// Each successful call must clear the JS-side slot so the same shader is
-    /// not re-applied on subsequent frames.
+    /// Calling it clears the JS-side slot so the same shader is not re-applied
+    /// on subsequent frames.
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscTakePendingImportedShader)]
     fn browser_take_pending_imported_shader() -> Option<String>;
 }
@@ -756,6 +756,10 @@ fn consume_pending_imported_shader(
 /// the asset hot-swap path is alive (e.g. after Bevy upgrades) even when the
 /// Shadertoy API is unreachable. Also forces `active_shader = 9` so the
 /// imported quad is visible.
+///
+/// Gated to debug builds so neither the keybind nor the embedded WGSL ship in
+/// release/wasm projector builds.
+#[cfg(debug_assertions)]
 const DEBUG_IMPORTED_WGSL: &str = r#"#import bevy_sprite::mesh2d_vertex_output::VertexOutput
 
 @group(2) @binding(0) var<uniform> params: vec4<f32>;
@@ -775,6 +779,7 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
 }
 "#;
 
+#[cfg(debug_assertions)]
 fn debug_inject_imported_shader(
     keys: Res<ButtonInput<KeyCode>>,
     handle: Res<VjImportedShaderHandle>,
@@ -791,6 +796,9 @@ fn debug_inject_imported_shader(
         state.show_gpu_palette = true;
     }
 }
+
+#[cfg(not(debug_assertions))]
+fn debug_inject_imported_shader() {}
 
 fn keyboard_controls(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut state: ResMut<VjState>) {
     let dt = time.delta_secs();
