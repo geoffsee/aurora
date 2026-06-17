@@ -1,11 +1,42 @@
+import contract from "./vst-osc-contract.json" with { type: "json" };
+
 export type OscArg = { type: string; value: unknown } | unknown;
 export type OscMsg = { address: string; args?: OscArg[] };
+
+const assertSubset = (
+	kind: string,
+	emitted: readonly string[],
+	accepted: readonly string[],
+): void => {
+	const acceptSet = new Set(accepted);
+	for (const name of emitted) {
+		if (!acceptSet.has(name)) {
+			throw new Error(
+				`VST contract divergence: ${kind} "${name}" is emitted by the VST but not in bridgeAccepts`,
+			);
+		}
+	}
+};
+assertSubset(
+	"control",
+	contract.controls.vstEmitted,
+	contract.controls.bridgeAccepts,
+);
+assertSubset(
+	"trigger",
+	contract.triggers.vstEmitted,
+	contract.triggers.bridgeAccepts,
+);
+assertSubset("cue", contract.cues.vstEmitted, contract.cues.bridgeAccepts);
+
+export const VST_OSC_CONTRACT = contract;
 
 // CONTROL_STATE_SCHEMA_VERSION tracks the ControlState wire format.
 // To bump: increment this integer, add a migration branch in
 // control-state-schema.ts, and update defaultState() in controls.html
 // to emit the new version number.
-// v2: added activeShader field (0 = vj_palette, 1 = vj_grid)
+// v2: added activeShader field (0..3 = palette variants, 4 = grid,
+//      5..8 = tunnel/glitch/fluid/truchet — packed into vj_palette.wgsl)
 // v3: added bandCurves field (per-band audio-reactive curve shaping)
 // v4: added emaAlphas field (per-band EMA decay constants for preset bundling)
 // v5: added audioControlMode field (global enable for the audio-control router)
@@ -52,37 +83,13 @@ export const PRESET_RECALL_PREFIX = "/bevyosc/preset/recall/";
 export const PRESET_SLOT_MIN = 1;
 export const PRESET_SLOT_MAX = 6;
 
-export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set([
-	"crossfade",
-	"bpm",
-	"speed",
-	"intensity",
-	"feedback",
-	"depth",
-	"palette",
-	"deck_a_mode",
-	"deck_b_mode",
-	"rings",
-	"ring_opacity",
-	"strobe",
-	"strobe_lockout",
-	"blackout",
-	"freeze",
-	"show_gpu_palette",
-	"max_brightness",
-	"beat_sync",
-	"bar_sync",
-	"demo_mode",
-	"active_shader",
-	"ema_alpha_bass",
-	"ema_alpha_energy",
-	"ema_alpha_mid",
-	"ema_alpha_high",
-	"ema_alpha_pulse",
-	"audio_control_mode",
-]);
+export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set(
+	contract.controls.bridgeAccepts,
+);
 
-export const VST_TRIGGER_NAMES: ReadonlySet<string> = new Set(["flash", "reset"]);
+export const VST_TRIGGER_NAMES: ReadonlySet<string> = new Set(
+	contract.triggers.bridgeAccepts,
+);
 
 const isNumericOscArg = (arg: OscArg): boolean => {
 	if (arg && typeof arg === "object" && "type" in arg) {

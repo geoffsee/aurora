@@ -10,6 +10,7 @@ import {
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
+	VST_OSC_CONTRACT,
 	VST_TRIGGER_PREFIX,
 	validateControlStateVersion,
 	validateLiveOscMsg,
@@ -43,6 +44,7 @@ import {
 	type AudioTransientConfig,
 } from "./automation-bridge.ts";
 import { DEFAULT_TRANSIENT_CONFIG } from "./audio-transient-trigger.ts";
+import { importShadertoyUrl } from "./shadertoy-import.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -70,6 +72,10 @@ type ControlState = {
 	palette: number;
 	paletteSaturation: number;
 	paletteBrightness: number;
+	gridDensity: number;
+	gridDiamond: number;
+	gridLineWidth: number;
+	gridShapeMix: number;
 	deckAMode: number;
 	deckBMode: number;
 	rings: boolean;
@@ -194,21 +200,56 @@ const clamp = (value: unknown, min: number, max: number, fallback: number) =>
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
 	Math.max(min, Math.min(max, Math.floor(finiteNumber(value, fallback))));
 const audioEmaAlphas: AudioEmaAlphas = {
-	energy: clamp(Bun.env.AUDIO_EMA_ALPHA_ENERGY, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
-	bass: clamp(Bun.env.AUDIO_EMA_ALPHA_BASS, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
-	mid: clamp(Bun.env.AUDIO_EMA_ALPHA_MID, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
-	high: clamp(Bun.env.AUDIO_EMA_ALPHA_HIGH, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
-	pulse: clamp(Bun.env.AUDIO_EMA_ALPHA_PULSE, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+	energy: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_ENERGY,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.energy,
+	),
+	bass: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_BASS,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.bass,
+	),
+	mid: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_MID,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.mid,
+	),
+	high: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_HIGH,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.high,
+	),
+	pulse: clamp(
+		Bun.env.AUDIO_EMA_ALPHA_PULSE,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHAS.pulse,
+	),
 };
 // Legacy AUDIO_EMA_ALPHA env var: if set, overrides all bands that were not individually configured.
 {
-	const legacyAlpha = clamp(Bun.env.AUDIO_EMA_ALPHA, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHA);
+	const legacyAlpha = clamp(
+		Bun.env.AUDIO_EMA_ALPHA,
+		0.01,
+		1,
+		DEFAULT_AUDIO_EMA_ALPHA,
+	);
 	if (Bun.env.AUDIO_EMA_ALPHA !== undefined) {
-		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined) audioEmaAlphas.energy = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined) audioEmaAlphas.bass = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined) audioEmaAlphas.mid = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined) audioEmaAlphas.high = legacyAlpha;
-		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined) audioEmaAlphas.pulse = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_ENERGY === undefined)
+			audioEmaAlphas.energy = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_BASS === undefined)
+			audioEmaAlphas.bass = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_MID === undefined)
+			audioEmaAlphas.mid = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_HIGH === undefined)
+			audioEmaAlphas.high = legacyAlpha;
+		if (Bun.env.AUDIO_EMA_ALPHA_PULSE === undefined)
+			audioEmaAlphas.pulse = legacyAlpha;
 	}
 }
 const defaultTrackMapping = (): TrackMapping => ({
@@ -231,6 +272,10 @@ const defaultControlState = (): ControlState => ({
 	palette: 0,
 	paletteSaturation: 1,
 	paletteBrightness: 1,
+	gridDensity: 0.5,
+	gridDiamond: 0.5,
+	gridLineWidth: 0.5,
+	gridShapeMix: 0.5,
 	deckAMode: 0,
 	deckBMode: 1,
 	rings: true,
@@ -255,7 +300,12 @@ const defaultControlState = (): ControlState => ({
 	cueDeckBMode: 1,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
-	bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+	bandCurves: {
+		energy: "linear",
+		bass: "linear",
+		mid: "linear",
+		high: "linear",
+	},
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 	audioControlMode: false,
 });
@@ -319,6 +369,26 @@ const cuePresets: Record<string, Partial<ControlState>> = {
 	},
 };
 const cueNames: ReadonlySet<string> = new Set(Object.keys(cuePresets));
+// cuePresets defines what cue addresses the bridge will actually act on. Keep it
+// locked to the contract so an OSC msg the contract accepts can't slip through
+// without a preset behind it, and vice versa.
+{
+	const expected = new Set(VST_OSC_CONTRACT.cues.bridgeAccepts);
+	for (const name of expected) {
+		if (!cueNames.has(name)) {
+			throw new Error(
+				`cuePresets missing cue "${name}" required by vst-osc-contract.json`,
+			);
+		}
+	}
+	for (const name of cueNames) {
+		if (!expected.has(name)) {
+			throw new Error(
+				`cuePresets has cue "${name}" not declared in vst-osc-contract.json`,
+			);
+		}
+	}
+}
 const coerceControlState = (state: unknown): ControlState => {
 	const source =
 		state && typeof state === "object" ? (state as Partial<ControlState>) : {};
@@ -349,8 +419,12 @@ const coerceControlState = (state: unknown): ControlState => {
 			1,
 			defaults.paletteBrightness,
 		),
-		deckAMode: clampInt(source.deckAMode, 0, 4, defaults.deckAMode),
-		deckBMode: clampInt(source.deckBMode, 0, 4, defaults.deckBMode),
+		gridDensity: clamp(source.gridDensity, 0, 1, defaults.gridDensity),
+		gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
+		gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
+		gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
+		deckAMode: clampInt(source.deckAMode, 0, 9, defaults.deckAMode),
+		deckBMode: clampInt(source.deckBMode, 0, 9, defaults.deckBMode),
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
@@ -430,7 +504,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 1, defaults.activeShader),
+		activeShader: clampInt(source.activeShader, 0, 9, defaults.activeShader),
 		bandCurves: (() => {
 			const bc =
 				source.bandCurves && typeof source.bandCurves === "object"
@@ -526,17 +600,42 @@ const coerceAudioFeatures = (value: unknown): AudioFeatures | null => {
 const initialTransientConfig: Partial<AudioTransientConfig> = (() => {
 	const cfg: Partial<AudioTransientConfig> = {};
 	const _mode = Bun.env.AUDIO_TRANSIENT_MODE;
-	if (_mode === "onset" || _mode === "beat" || _mode === "band-energy") cfg.mode = _mode;
+	if (_mode === "onset" || _mode === "beat" || _mode === "band-energy")
+		cfg.mode = _mode;
 	if (Bun.env.AUDIO_TRANSIENT_THRESHOLD !== undefined) {
-		cfg.threshold = clamp(Bun.env.AUDIO_TRANSIENT_THRESHOLD, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold);
+		cfg.threshold = clamp(
+			Bun.env.AUDIO_TRANSIENT_THRESHOLD,
+			0,
+			1,
+			DEFAULT_TRANSIENT_CONFIG.threshold,
+		);
 	}
 	if (Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS !== undefined) {
-		cfg.debounceMs = clamp(Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS, 0, 60000, DEFAULT_TRANSIENT_CONFIG.debounceMs);
+		cfg.debounceMs = clamp(
+			Bun.env.AUDIO_TRANSIENT_DEBOUNCE_MS,
+			0,
+			60000,
+			DEFAULT_TRANSIENT_CONFIG.debounceMs,
+		);
 	}
 	const _band = Bun.env.AUDIO_TRANSIENT_BAND;
-	if (_band === "energy" || _band === "bass" || _band === "mid" || _band === "high" || _band === "pulse") cfg.band = _band;
+	if (
+		_band === "energy" ||
+		_band === "bass" ||
+		_band === "mid" ||
+		_band === "high" ||
+		_band === "pulse"
+	)
+		cfg.band = _band;
 	const _action = Bun.env.AUDIO_TRANSIENT_ACTION;
-	if (_action === "play" || _action === "play-loop" || _action === "stop" || _action === "toggle" || _action === "toggle-loop") cfg.action = _action;
+	if (
+		_action === "play" ||
+		_action === "play-loop" ||
+		_action === "stop" ||
+		_action === "toggle" ||
+		_action === "toggle-loop"
+	)
+		cfg.action = _action;
 	return cfg;
 })();
 
@@ -590,7 +689,9 @@ const sendOsc = (address: string, args: OscArg[] = []) => {
 // transient detector. The response carries meter floats, optionally preceded by
 // a "track.output_meter_level" string field marker.
 function processLiveTrackData(args: unknown[]): void {
-	const markerIdx = args.findIndex((a) => typeof a === "string" && (a as string).startsWith("track."));
+	const markerIdx = args.findIndex(
+		(a) => typeof a === "string" && (a as string).startsWith("track."),
+	);
 	const meterStart = markerIdx >= 0 ? markerIdx + 1 : 0;
 	const meters = args
 		.slice(meterStart)
@@ -614,7 +715,11 @@ function processLiveTrackData(args: unknown[]): void {
 		pulse: energyTarget,
 	};
 
-	const smoothed = stepAudioEma(liveAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
+	const smoothed = stepAudioEma(
+		liveAudioEma,
+		rawFeatures,
+		latestControlState?.emaAlphas ?? audioEmaAlphas,
+	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 	if (!browserFeaturesActive()) audioControlRouter.onFeatures(smoothed);
 }
@@ -624,10 +729,19 @@ function applyTransientConfigMsg(address: string, firstArg: unknown): void {
 	const key = address.slice("/bevyosc/automation/transient/".length);
 	switch (key) {
 		case "threshold":
-			automationBridge.updateTransientConfig({ threshold: clamp(firstArg, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold) });
+			automationBridge.updateTransientConfig({
+				threshold: clamp(firstArg, 0, 1, DEFAULT_TRANSIENT_CONFIG.threshold),
+			});
 			break;
 		case "debounce":
-			automationBridge.updateTransientConfig({ debounceMs: clamp(firstArg, 0, 60000, DEFAULT_TRANSIENT_CONFIG.debounceMs) });
+			automationBridge.updateTransientConfig({
+				debounceMs: clamp(
+					firstArg,
+					0,
+					60000,
+					DEFAULT_TRANSIENT_CONFIG.debounceMs,
+				),
+			});
 			break;
 		case "mode": {
 			const m = String(firstArg);
@@ -638,15 +752,31 @@ function applyTransientConfigMsg(address: string, firstArg: unknown): void {
 		}
 		case "band": {
 			const b = String(firstArg);
-			if (b === "energy" || b === "bass" || b === "mid" || b === "high" || b === "pulse") {
-				automationBridge.updateTransientConfig({ band: b as keyof AudioFeatures });
+			if (
+				b === "energy" ||
+				b === "bass" ||
+				b === "mid" ||
+				b === "high" ||
+				b === "pulse"
+			) {
+				automationBridge.updateTransientConfig({
+					band: b as keyof AudioFeatures,
+				});
 			}
 			break;
 		}
 		case "action": {
 			const a = String(firstArg);
-			if (a === "play" || a === "play-loop" || a === "stop" || a === "toggle" || a === "toggle-loop") {
-				automationBridge.updateTransientConfig({ action: a as "play" | "play-loop" | "stop" | "toggle" | "toggle-loop" });
+			if (
+				a === "play" ||
+				a === "play-loop" ||
+				a === "stop" ||
+				a === "toggle" ||
+				a === "toggle-loop"
+			) {
+				automationBridge.updateTransientConfig({
+					action: a as "play" | "play-loop" | "stop" | "toggle" | "toggle-loop",
+				});
 			}
 			break;
 		}
@@ -698,6 +828,13 @@ const broadcastError = (description: string) => {
 };
 const broadcastPresetCommand = (address: string) => {
 	const data = JSON.stringify({ address, args: [] });
+	sockets.forEach((ws) => ws.send(data));
+};
+const broadcastImportedShader = (wgsl: string, meta: unknown) => {
+	const data = JSON.stringify({
+		address: "/bevyosc/shader/imported",
+		args: [{ wgsl, meta }],
+	});
 	sockets.forEach((ws) => ws.send(data));
 };
 const booleanArg = (arg: OscArg | undefined) => {
@@ -781,22 +918,67 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				mergeControlState({ demoMode: booleanArg(arg) });
 				break;
 			case "active_shader":
-				mergeControlState({ activeShader: Math.max(0, Math.min(1, Math.floor(value))) });
+				mergeControlState({
+					activeShader: Math.max(0, Math.min(9, Math.floor(value))),
+				});
+				break;
+			case "palette_saturation":
+				mergeControlState({ paletteSaturation: value });
+				break;
+			case "palette_brightness":
+				mergeControlState({ paletteBrightness: value });
+				break;
+			case "grid_density":
+				mergeControlState({ gridDensity: value });
+				break;
+			case "grid_diamond":
+				mergeControlState({ gridDiamond: value });
+				break;
+			case "grid_line_width":
+				mergeControlState({ gridLineWidth: value });
+				break;
+			case "grid_shape_mix":
+				mergeControlState({ gridShapeMix: value });
 				break;
 			case "ema_alpha_bass":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						bass: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.bass),
+					},
+				});
 				break;
 			case "ema_alpha_energy":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						energy: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.energy),
+					},
+				});
 				break;
 			case "ema_alpha_mid":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						mid: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.mid),
+					},
+				});
 				break;
 			case "ema_alpha_high":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						high: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.high),
+					},
+				});
 				break;
 			case "ema_alpha_pulse":
-				mergeControlState({ emaAlphas: { ...current.emaAlphas, pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse) } });
+				mergeControlState({
+					emaAlphas: {
+						...current.emaAlphas,
+						pulse: clamp(value, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
+					},
+				});
 				break;
 			case "audio_control_mode":
 				mergeControlState({ audioControlMode: booleanArg(arg) });
@@ -916,6 +1098,12 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"bar_sync",
 	"demo_mode",
 	"active_shader",
+	"palette_saturation",
+	"palette_brightness",
+	"grid_density",
+	"grid_diamond",
+	"grid_line_width",
+	"grid_shape_mix",
 	"ema_alpha_bass",
 	"ema_alpha_energy",
 	"ema_alpha_mid",
@@ -1001,13 +1189,13 @@ const visualServer = Bun.serve({
 						const rawState = migrateControlState(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
-						if (
-							!validateControlStateVersion(rawState, "WebSocket client")
-						) {
-							ws.send(JSON.stringify({
-								address: "/bevyosc/error",
-								error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
-							}));
+						if (!validateControlStateVersion(rawState, "WebSocket client")) {
+							ws.send(
+								JSON.stringify({
+									address: "/bevyosc/error",
+									error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
+								}),
+							);
 							return;
 						}
 						broadcastControl(rawState);
@@ -1042,7 +1230,9 @@ const visualServer = Bun.serve({
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
 						audioControlRouter.setMappings(mappings);
-					} else if (parsed.address.startsWith("/bevyosc/automation/transient/")) {
+					} else if (
+						parsed.address.startsWith("/bevyosc/automation/transient/")
+					) {
 						applyTransientConfigMsg(
 							parsed.address,
 							Array.isArray(parsed.args) ? parsed.args[0] : undefined,
@@ -1066,11 +1256,115 @@ const visualServer = Bun.serve({
 	},
 });
 
+// Shadertoy API key supplied at runtime via the controls UI. Held only in
+// memory on the bridge process: never persisted, never sent back to the
+// client, and never logged. Falls back to the SHADERTOY_API_KEY env var if
+// the runtime slot is empty so existing setups keep working.
+let runtimeShadertoyKey: string | null = null;
+const SHADERTOY_KEY_RE = /^[A-Za-z0-9]{8,128}$/;
+const getShadertoyKey = (): string =>
+	runtimeShadertoyKey ?? Bun.env.SHADERTOY_API_KEY ?? "";
+const getShadertoyKeyStatus = () => ({
+	configured: getShadertoyKey().length > 0,
+	source: runtimeShadertoyKey
+		? ("runtime" as const)
+		: Bun.env.SHADERTOY_API_KEY
+			? ("env" as const)
+			: null,
+});
+
 const controlsServer = Bun.serve({
 	port: controlsPort,
+	hostname: "127.0.0.1",
 	async fetch(request) {
 		const url = new URL(request.url);
 		const pathname = decodeURIComponent(url.pathname);
+
+		if (pathname === "/api/shadertoy/key") {
+			if (request.method === "GET") {
+				return Response.json(getShadertoyKeyStatus());
+			}
+			if (request.method === "DELETE") {
+				runtimeShadertoyKey = null;
+				return Response.json({ ok: true, ...getShadertoyKeyStatus() });
+			}
+			if (request.method === "POST") {
+				let payload: { key?: unknown };
+				try {
+					payload = (await request.json()) as { key?: unknown };
+				} catch {
+					return Response.json(
+						{ ok: false, error: "Body must be JSON { key: string }" },
+						{ status: 400 },
+					);
+				}
+				const key = typeof payload.key === "string" ? payload.key.trim() : "";
+				if (!key) {
+					return Response.json(
+						{ ok: false, error: "Missing `key` field" },
+						{ status: 400 },
+					);
+				}
+				if (!SHADERTOY_KEY_RE.test(key)) {
+					return Response.json(
+						{
+							ok: false,
+							error:
+								"Key must be 8–128 alphanumeric characters (Shadertoy API key format)",
+						},
+						{ status: 400 },
+					);
+				}
+				runtimeShadertoyKey = key;
+				return Response.json({ ok: true, ...getShadertoyKeyStatus() });
+			}
+			return new Response("Method not allowed", { status: 405 });
+		}
+
+		if (request.method === "POST" && pathname === "/api/shadertoy/import") {
+			const apiKey = getShadertoyKey();
+			if (!apiKey) {
+				return Response.json(
+					{
+						ok: false,
+						error:
+							"Shadertoy API key not configured. Enter one in the controls UI or set SHADERTOY_API_KEY.",
+					},
+					{ status: 500 },
+				);
+			}
+			let payload: { url?: string; id?: string };
+			try {
+				payload = (await request.json()) as { url?: string; id?: string };
+			} catch {
+				return Response.json(
+					{
+						ok: false,
+						error: "Body must be JSON { url: string } or { id: string }",
+					},
+					{ status: 400 },
+				);
+			}
+			const target = payload.url ?? payload.id ?? "";
+			if (typeof target !== "string" || target.length === 0) {
+				return Response.json(
+					{ ok: false, error: "Missing `url` or `id` field" },
+					{ status: 400 },
+				);
+			}
+			const result = await importShadertoyUrl(target, apiKey);
+			if (!result.ok) {
+				return Response.json(result, { status: 400 });
+			}
+			broadcastImportedShader(result.wgsl, result.meta);
+			return Response.json({
+				ok: true,
+				meta: result.meta,
+				usedIChannel: result.usedIChannel,
+				wgslLength: result.wgsl.length,
+			});
+		}
+
 		const relativePath = pathname === "/" ? "controls.html" : pathname.slice(1);
 
 		if (relativePath.includes("..")) {
@@ -1201,7 +1495,11 @@ setInterval(() => {
 		high: clamp(Math.max(0, Math.sin(now * 12.0)) * 0.9, 0, 1, 0.2),
 		pulse: beat < 0.18 ? 1 : Math.max(0, 1 - beat / 0.42),
 	};
-	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
+	const smoothed = stepAudioEma(
+		demoAudioEma,
+		rawFeatures,
+		latestControlState?.emaAlphas ?? audioEmaAlphas,
+	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 	if (!browserFeaturesActive()) audioControlRouter.onFeatures(smoothed);
 	const demo = {
