@@ -45,7 +45,12 @@ import {
 	type AudioTransientConfig,
 } from "./automation-bridge.ts";
 import { DEFAULT_TRANSIENT_CONFIG } from "./audio-transient-trigger.ts";
+import {
+	makeAudioControlRouter,
+	parseAudioMappings,
+} from "./audio-control-router.ts";
 import { importShadertoyUrl } from "./shadertoy-import.ts";
+import audioMappingsRaw from "./audio-mappings.json" with { type: "json" };
 
 type TrackMapping = {
 	deckAStart: number;
@@ -103,6 +108,7 @@ type ControlState = {
 	activeShader: number;
 	bandCurves: BandCurves;
 	emaAlphas: AudioEmaAlphas;
+	audioControlMode: boolean;
 };
 
 const require = createRequire(import.meta.url);
@@ -310,6 +316,7 @@ const defaultControlState = (): ControlState => ({
 		high: "linear",
 	},
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
+	audioControlMode: false,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -532,6 +539,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				pulse: clamp(ea.pulse, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
 			};
 		})(),
+		audioControlMode: Boolean(source.audioControlMode),
 	};
 };
 
@@ -601,6 +609,16 @@ const automationBridge = makeAutomationBridge(
 	initialTransientConfig,
 );
 
+// Audio-control router: maps live audio features onto ControlState mutations.
+// Inert until ControlState.audioControlMode is enabled (synced in
+// broadcastControl) and at least one mapping is loaded. coerceControlState
+// remains the clamp on whatever diffs the router emits.
+const audioControlRouter = makeAudioControlRouter(
+	(diff) => mergeControlState(diff as Partial<ControlState>),
+	() => currentControlState() as unknown as Record<string, unknown>,
+);
+audioControlRouter.setMappings(parseAudioMappings(audioMappingsRaw));
+
 // MIDI byte parser state for note-on and CC messages.
 // Real-time bytes (0xF8–0xFF) are single-byte and do not affect running status.
 const MIDI_NOTE_ON_STATUS = 0x90;
@@ -636,6 +654,20 @@ function parseMidiByte(byte: number): void {
 const sendOsc = (address: string, args: OscArg[] = []) => {
 	if (!oscReady) return;
 	udp.send({ address, args });
+};
+
+// Coerce an untrusted /bevyosc/audio/features payload into AudioFeatures.
+// Each band clamps to 0..1; missing/non-finite bands fall back to 0.
+const coerceAudioFeatures = (raw: unknown): AudioFeatures => {
+	const f =
+		raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+	return {
+		energy: clamp(f.energy, 0, 1, 0),
+		bass: clamp(f.bass, 0, 1, 0),
+		mid: clamp(f.mid, 0, 1, 0),
+		high: clamp(f.high, 0, 1, 0),
+		pulse: clamp(f.pulse, 0, 1, 0),
+	};
 };
 
 // Derive AudioFeatures from a raw AbletonOSC track_data response and feed the
@@ -759,6 +791,7 @@ const broadcast = (msg: OscMsg) => {
 const broadcastControl = (state: unknown) => {
 	const prev = latestControlState;
 	latestControlState = coerceControlState(state);
+	audioControlRouter.setEnabled(latestControlState.audioControlMode);
 	controlStateLog.record(
 		prev as Record<string, unknown> | null,
 		latestControlState as unknown as Record<string, unknown>,
@@ -1247,6 +1280,15 @@ const visualServer = Bun.serve({
 								id: typeof parsed.id === "number" ? parsed.id : 0,
 							}),
 						);
+					} else if (parsed.address === "/bevyosc/audio/features") {
+						// Browser/demo audio features fed back to the bridge. The router
+						// ignores these unless ControlState.audioControlMode is enabled.
+						audioControlRouter.onFeatures(
+							coerceAudioFeatures(
+								Array.isArray(parsed.args) ? parsed.args[0] : undefined,
+							),
+							Date.now(),
+						);
 					} else if (
 						parsed.address.startsWith("/bevyosc/automation/transient/")
 					) {
@@ -1527,6 +1569,7 @@ setInterval(() => {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
+	audioControlRouter.onFeatures(smoothed, Date.now());
 	const demo = {
 		tempo: state.bpm,
 		beat,

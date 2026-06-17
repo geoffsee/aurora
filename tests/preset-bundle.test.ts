@@ -441,7 +441,7 @@ describe("recalling a preset applies all three fields atomically", () => {
 // ── Schema migration includes emaAlphas ────────────────────────────────────────
 
 describe("schema migration preserves bundling intent", () => {
-	test("v3 control state migrates to v4 with default emaAlphas", () => {
+	test("v3 control state migrates to current with default emaAlphas", () => {
 		const v3State = {
 			schemaVersion: 3,
 			activeShader: 1,
@@ -453,10 +453,11 @@ describe("schema migration preserves bundling intent", () => {
 			},
 		};
 		const migrated = migrateControlState(v3State) as Record<string, unknown>;
-		expect(migrated.schemaVersion).toBe(4);
+		expect(migrated.schemaVersion).toBe(5);
 		expect(migrated.emaAlphas).toEqual(DEFAULT_AUDIO_EMA_ALPHAS);
 		expect(migrated.bandCurves).toEqual(v3State.bandCurves);
 		expect(migrated.activeShader).toBe(1);
+		expect(migrated.audioControlMode).toBe(false);
 	});
 });
 

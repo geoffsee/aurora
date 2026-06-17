@@ -410,7 +410,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 4, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 5, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -458,6 +458,7 @@
         activeShader: 0,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
         emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 },
+        audioControlMode: false,
       });
       const state = defaultState();
       const osc = {

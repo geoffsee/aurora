@@ -25,7 +25,11 @@ export const migrateControlState = (state: unknown): unknown => {
 	}
 	// v2 → v3: add bandCurves field
 	if (s.schemaVersion === 2) {
-		return migrateControlState({ ...s, schemaVersion: 3, bandCurves: defaultBandCurves() });
+		return migrateControlState({
+			...s,
+			schemaVersion: 3,
+			bandCurves: defaultBandCurves(),
+		});
 	}
 	// v3 → v4: add emaAlphas field (per-band EMA decay constants)
 	// v3 states from PR #95 may carry flat emaAlpha* fields — preserve them.
@@ -38,9 +42,13 @@ export const migrateControlState = (state: unknown): unknown => {
 						mid: s.emaAlphaMid as number,
 						high: s.emaAlphaHigh as number,
 						pulse: s.emaAlphaPulse as number,
-				  }
+					}
 				: defaultEmaAlphas();
-		return { ...s, schemaVersion: 4, emaAlphas };
+		return migrateControlState({ ...s, schemaVersion: 4, emaAlphas });
+	}
+	// v4 → v5: add audioControlMode field (audio-control router global enable)
+	if (s.schemaVersion === 4) {
+		return { ...s, schemaVersion: 5, audioControlMode: false };
 	}
 	return state;
 };
