@@ -45,7 +45,7 @@ Ableton Live
   ▼
 Bridge (index.ts)  processLiveTrackData(args)        ← index.ts:536
   meters[] = per-track output_meter_level (0..1)
-  mapping  = ControlState.trackMapping               ← index.ts:42
+  mapping  = ControlState.trackMapping               ← index.ts:90
   bass = meters[mapping.bassTrack]
   mid  = meters[mapping.midTrack]
   high = meters[mapping.highTrack]
