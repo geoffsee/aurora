@@ -51,6 +51,22 @@ struct BevyoscParams {
     bar_sync: BoolParam,
     #[id = "demo_mode"]
     demo_mode: BoolParam,
+    #[id = "show_gpu_palette"]
+    show_gpu_palette: BoolParam,
+    #[id = "active_shader"]
+    active_shader: IntParam,
+    #[id = "palette_saturation"]
+    palette_saturation: FloatParam,
+    #[id = "palette_brightness"]
+    palette_brightness: FloatParam,
+    #[id = "grid_density"]
+    grid_density: FloatParam,
+    #[id = "grid_diamond"]
+    grid_diamond: FloatParam,
+    #[id = "grid_line_width"]
+    grid_line_width: FloatParam,
+    #[id = "grid_shape_mix"]
+    grid_shape_mix: FloatParam,
     #[id = "flash"]
     flash: FloatParam,
     #[id = "reset"]
@@ -90,6 +106,14 @@ struct ParameterCache {
     beat_sync: bool,
     bar_sync: bool,
     demo_mode: bool,
+    show_gpu_palette: bool,
+    active_shader: i32,
+    palette_saturation: f32,
+    palette_brightness: f32,
+    grid_density: f32,
+    grid_diamond: f32,
+    grid_line_width: f32,
+    grid_shape_mix: f32,
     flash: f32,
     reset: f32,
     cue_warmup: f32,
@@ -128,8 +152,8 @@ impl Default for BevyoscParams {
             feedback: float_param("Trails", 0.35, 0.0, 1.0),
             depth: float_param("Depth", 0.0, 0.0, 1.0),
             palette: float_param("Palette", 0.0, 0.0, 1.0),
-            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: 4 }),
-            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: 4 }),
+            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: 9 }),
+            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: 9 }),
             rings: BoolParam::new("Rings", true),
             ring_opacity: float_param("Ring Opacity", 1.0, 0.0, 1.0),
             strobe: BoolParam::new("Strobe", false),
@@ -140,6 +164,14 @@ impl Default for BevyoscParams {
             beat_sync: BoolParam::new("Beat Sync", true),
             bar_sync: BoolParam::new("Bar Sync", false),
             demo_mode: BoolParam::new("Demo Mode", false),
+            show_gpu_palette: BoolParam::new("Show GPU Palette", false),
+            active_shader: IntParam::new("Active Shader", 0, IntRange::Linear { min: 0, max: 9 }),
+            palette_saturation: float_param("Palette Saturation", 1.0, 0.0, 1.0),
+            palette_brightness: float_param("Palette Brightness", 1.0, 0.0, 1.0),
+            grid_density: float_param("Grid Density", 0.5, 0.0, 1.0),
+            grid_diamond: float_param("Grid Diamond", 0.5, 0.0, 1.0),
+            grid_line_width: float_param("Grid Line Width", 0.5, 0.0, 1.0),
+            grid_shape_mix: float_param("Grid Shape Mix", 0.5, 0.0, 1.0),
             flash: trigger_param("Flash"),
             reset: trigger_param("Reset"),
             cue_warmup: trigger_param("Cue Warmup"),
@@ -225,6 +257,18 @@ impl BevyoscVst {
         self.sender.send_bool("beat_sync", next.beat_sync);
         self.sender.send_bool("bar_sync", next.bar_sync);
         self.sender.send_bool("demo_mode", next.demo_mode);
+        self.sender
+            .send_bool("show_gpu_palette", next.show_gpu_palette);
+        self.sender.send_i32("active_shader", next.active_shader);
+        self.sender
+            .send_f32("palette_saturation", next.palette_saturation);
+        self.sender
+            .send_f32("palette_brightness", next.palette_brightness);
+        self.sender.send_f32("grid_density", next.grid_density);
+        self.sender.send_f32("grid_diamond", next.grid_diamond);
+        self.sender
+            .send_f32("grid_line_width", next.grid_line_width);
+        self.sender.send_f32("grid_shape_mix", next.grid_shape_mix);
     }
 
     fn send_changed_controls(&self, previous: ParameterCache, next: ParameterCache) {
@@ -285,6 +329,34 @@ impl BevyoscVst {
         if previous.demo_mode != next.demo_mode {
             self.sender.send_bool("demo_mode", next.demo_mode);
         }
+        if previous.show_gpu_palette != next.show_gpu_palette {
+            self.sender
+                .send_bool("show_gpu_palette", next.show_gpu_palette);
+        }
+        if previous.active_shader != next.active_shader {
+            self.sender.send_i32("active_shader", next.active_shader);
+        }
+        if changed(previous.palette_saturation, next.palette_saturation) {
+            self.sender
+                .send_f32("palette_saturation", next.palette_saturation);
+        }
+        if changed(previous.palette_brightness, next.palette_brightness) {
+            self.sender
+                .send_f32("palette_brightness", next.palette_brightness);
+        }
+        if changed(previous.grid_density, next.grid_density) {
+            self.sender.send_f32("grid_density", next.grid_density);
+        }
+        if changed(previous.grid_diamond, next.grid_diamond) {
+            self.sender.send_f32("grid_diamond", next.grid_diamond);
+        }
+        if changed(previous.grid_line_width, next.grid_line_width) {
+            self.sender
+                .send_f32("grid_line_width", next.grid_line_width);
+        }
+        if changed(previous.grid_shape_mix, next.grid_shape_mix) {
+            self.sender.send_f32("grid_shape_mix", next.grid_shape_mix);
+        }
     }
 
     fn send_trigger_edges(&self, previous: ParameterCache, next: ParameterCache) {
@@ -337,6 +409,14 @@ impl ParameterCache {
             beat_sync: params.beat_sync.value(),
             bar_sync: params.bar_sync.value(),
             demo_mode: params.demo_mode.value(),
+            show_gpu_palette: params.show_gpu_palette.value(),
+            active_shader: params.active_shader.value(),
+            palette_saturation: params.palette_saturation.value(),
+            palette_brightness: params.palette_brightness.value(),
+            grid_density: params.grid_density.value(),
+            grid_diamond: params.grid_diamond.value(),
+            grid_line_width: params.grid_line_width.value(),
+            grid_shape_mix: params.grid_shape_mix.value(),
             flash: params.flash.value(),
             reset: params.reset.value(),
             cue_warmup: params.cue_warmup.value(),
