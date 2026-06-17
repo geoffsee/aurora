@@ -46,9 +46,10 @@ export const migrateControlState = (state: unknown): unknown => {
 				: defaultEmaAlphas();
 		return migrateControlState({ ...s, schemaVersion: 4, emaAlphas });
 	}
-	// v4 → v5: add audioControlMode field (audio-control router global enable)
-	if (s.schemaVersion === 4) {
-		return { ...s, schemaVersion: 5, audioControlMode: false };
+	// v5 → v6: add audioControlMode field (audio-control router global enable)
+	// (the v4 → v5 morph branch is inherited from main; see PR #181)
+	if (s.schemaVersion === 5) {
+		return { ...s, schemaVersion: 6, audioControlMode: false };
 	}
 	return state;
 };

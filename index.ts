@@ -619,6 +619,15 @@ const audioControlRouter = makeAudioControlRouter(
 );
 audioControlRouter.setMappings(parseAudioMappings(audioMappingsRaw));
 
+// The router has a single shared edge/continuous state, so only one audio
+// source may drive it at a time. A browser source (Phase 2) sending
+// /bevyosc/audio/features is authoritative while live; the synthetic demo-loop
+// feed is suppressed for this window so the two streams never interleave (which
+// would thrash rising-edge detection and no-op suppression). The demo feed
+// resumes once the browser source goes quiet.
+const BROWSER_AUDIO_FEATURE_TTL_MS = 1000;
+let lastBrowserAudioFeaturesMs = Number.NEGATIVE_INFINITY;
+
 // MIDI byte parser state for note-on and CC messages.
 // Real-time bytes (0xF8–0xFF) are single-byte and do not affect running status.
 const MIDI_NOTE_ON_STATUS = 0x90;
@@ -1281,8 +1290,11 @@ const visualServer = Bun.serve({
 							}),
 						);
 					} else if (parsed.address === "/bevyosc/audio/features") {
-						// Browser/demo audio features fed back to the bridge. The router
-						// ignores these unless ControlState.audioControlMode is enabled.
+						// Browser audio features fed back to the bridge. The router ignores
+						// these unless ControlState.audioControlMode is enabled. While this
+						// feed is live it is the authoritative router source and suppresses
+						// the demo loop (see the demo-loop guard).
+						lastBrowserAudioFeaturesMs = Date.now();
 						audioControlRouter.onFeatures(
 							coerceAudioFeatures(
 								Array.isArray(parsed.args) ? parsed.args[0] : undefined,
@@ -1569,7 +1581,12 @@ setInterval(() => {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
-	audioControlRouter.onFeatures(smoothed, Date.now());
+	// Drive the router from the demo feed only when no browser source is active;
+	// otherwise both streams would share the router's edge state and thrash.
+	const routerNowMs = Date.now();
+	if (routerNowMs - lastBrowserAudioFeaturesMs >= BROWSER_AUDIO_FEATURE_TTL_MS) {
+		audioControlRouter.onFeatures(smoothed, routerNowMs);
+	}
 	const demo = {
 		tempo: state.bpm,
 		beat,

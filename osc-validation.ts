@@ -39,8 +39,9 @@ export const VST_OSC_CONTRACT = contract;
 //      5..8 = tunnel/glitch/fluid/truchet — packed into vj_palette.wgsl)
 // v3: added bandCurves field (per-band audio-reactive curve shaping)
 // v4: added emaAlphas field (per-band EMA decay constants for preset bundling)
-// v5: added audioControlMode field (global enable for the audio-control router)
-export const CONTROL_STATE_SCHEMA_VERSION = 5;
+// v5: added morph field (OSC-controlled preset-morph fader position — PR #181)
+// v6: added audioControlMode field (global enable for the audio-control router)
+export const CONTROL_STATE_SCHEMA_VERSION = 6;
 
 export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
