@@ -9,6 +9,16 @@ Phase 1 (issue #155) shipped the bridge-side routing layer:
   `audio_control_mode` control.
 - `audio-mappings.json` default routing config.
 
+## Deferred from Phase 1: the controls-page Audio Control panel
+
+Phase 1 intentionally ships `audioControlMode` as state plumbing only. The
+operator-facing panel in `controls.html` from the spike — the toggle, the live audio
+feature meters, and the per-mapping editor — is **deferred to Phase 2**. Today the mode
+is reachable via the VST `audio_control_mode` param or a saved preset, and a VST-set
+value round-trips through `syncFromRemote` without being clobbered. Phase 2 should add
+the panel alongside the browser `getUserMedia` capture work below, since both touch the
+same controls surface.
+
 Phase 2 decouples the audio source from Ableton entirely by capturing audio in the
 browser with `getUserMedia` + an `AnalyserNode`, then feeding the same
 `/bevyosc/audio/features` path Phase 1 already consumes. No further bridge changes are

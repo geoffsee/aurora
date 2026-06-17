@@ -497,6 +497,16 @@ const audioControlRouter = makeAudioControlRouter({
 });
 audioControlRouter.setMappings(loadAudioMappings());
 
+// When a browser/controls page reports audio features over the WS
+// (/bevyosc/audio/features) it is the single authoritative feed for the router.
+// The bridge-side live/demo feeds only drive the router as a headless fallback —
+// i.e. when no WS client has reported features recently — so the two
+// independently-smoothed streams never race on the shared per-mapping edge state.
+const BROWSER_FEATURES_STALE_MS = 500;
+let lastBrowserFeaturesAt = Number.NEGATIVE_INFINITY;
+const browserFeaturesActive = (): boolean =>
+	Date.now() - lastBrowserFeaturesAt < BROWSER_FEATURES_STALE_MS;
+
 // Validate an inbound /bevyosc/audio/features payload into a clean AudioFeatures
 // (all five bands present, clamped to [0,1]). Returns null for malformed payloads.
 const coerceAudioFeatures = (value: unknown): AudioFeatures | null => {
@@ -606,7 +616,7 @@ function processLiveTrackData(args: unknown[]): void {
 
 	const smoothed = stepAudioEma(liveAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
-	audioControlRouter.onFeatures(smoothed);
+	if (!browserFeaturesActive()) audioControlRouter.onFeatures(smoothed);
 }
 
 // Apply a single transient-config OSC message. firstArg is the raw payload value.
@@ -1023,7 +1033,10 @@ const visualServer = Bun.serve({
 						const features = coerceAudioFeatures(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
-						if (features) audioControlRouter.onFeatures(features);
+						if (features) {
+							lastBrowserFeaturesAt = Date.now();
+							audioControlRouter.onFeatures(features);
+						}
 					} else if (parsed.address === "/bevyosc/audio/config") {
 						const mappings = parseAudioMappings(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
@@ -1190,7 +1203,7 @@ setInterval(() => {
 	};
 	const smoothed = stepAudioEma(demoAudioEma, rawFeatures, latestControlState?.emaAlphas ?? audioEmaAlphas);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
-	audioControlRouter.onFeatures(smoothed);
+	if (!browserFeaturesActive()) audioControlRouter.onFeatures(smoothed);
 	const demo = {
 		tempo: state.bpm,
 		beat,

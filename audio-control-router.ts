@@ -121,7 +121,7 @@ export const makeAudioControlRouter = (
 			resetEdges();
 		},
 		getMappings() {
-			return mappings;
+			return mappings.slice();
 		},
 		setActive(next) {
 			active = next;
