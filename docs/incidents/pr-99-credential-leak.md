@@ -26,6 +26,17 @@ the loop has an owner and stays open until closed by confirmation.
 
 ## Affected secrets
 
+**Provenance of this list:** the names below were transcribed from the enumerated
+secrets in Strategic Review #152 (Recommended Path Forward, item 2). The original
+PR #99 comment now returns **HTTP 404**, so the list **cannot be re-verified from
+anything in the repository** and may be incomplete or reconstructed from memory.
+None of these names appear in the repo's workflows — `.github/workflows/autopilot.yml`
+uses `CLAUDE_CODE_OAUTH_TOKEN`, `DEV_BOT_APP_ID`, `DEV_BOT_INSTALLATION_ID`, and
+`DEV_BOT_PRIVATE_KEY_B64`, which are **not** on this list. Before rotating, a
+maintainer must treat this list as a starting point and **cross-check it against
+the actual repo/org Actions secrets in GitHub settings** to confirm nothing (e.g.
+`DEV_BOT_PRIVATE_KEY_B64`) was missed.
+
 `CR_PAT` is listed first and **must be audited first**: assume it carries
 repo-write scope until proven otherwise, and prefer reducing its scope to the
 minimum required (or replacing it with a fine-grained token) when it is rotated.
