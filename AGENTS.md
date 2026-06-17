@@ -32,9 +32,12 @@ bunx vitest run -t "happy-dom"        # single test by name
 the output against committed PNG baselines in
 `tests/__screenshots__/shader-regression.test.ts/`. The live Bevy/WASM GPU
 renderer cannot run under vitest's happy-dom, so this CPU harness is the
-safety-net that catches silent drift in shader output (including imported
-Shadertoy shaders). It fails when more than 0.5% of pixels move beyond a small
-per-channel tolerance.
+safety-net that catches silent drift in the *rendered output* of these CPU
+shader reimplementations (one of which is a Shadertoy-style archetype). Note it
+does NOT exercise the real Shadertoy import/transform pipeline
+(`shadertoy-import.ts`) or the GPU WGSL — those share no code with these
+stand-ins, so a regression there will not move these baselines. It fails when
+more than 0.5% of pixels move beyond a small per-channel tolerance.
 
 To intentionally update the baselines after a deliberate shader/renderer change:
 
@@ -42,8 +45,9 @@ To intentionally update the baselines after a deliberate shader/renderer change:
 UPDATE_SHADER_BASELINES=1 bun run test:web tests/shader-regression.test.ts
 ```
 
-Review the regenerated PNGs, then commit them. A missing baseline is written and
-passes on first run; an unexpected diff fails the build.
+Review the regenerated PNGs, then commit them. Locally, a missing baseline is
+written and passes on first run; in CI a missing baseline fails the build (so an
+uncommitted or deleted baseline can't go green). An unexpected diff fails the build.
 
 Note: `test:rust` intentionally skips the root `bevyosc` crate (wasm-only, links the desktop windowing/renderer stack natively) and the `bevyosc-vst` crate (links host audio/MIDI libs not present on CI runners). The justification lives at the top of `scripts/test-rust.sh` — if you add cargo invocations there, follow the existing format: one explicit line per crate with a comment block explaining why it is enabled or skipped.
 

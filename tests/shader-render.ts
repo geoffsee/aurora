@@ -3,8 +3,10 @@
 // The live visuals run in Bevy/WASM on the GPU and cannot execute under vitest's
 // happy-dom environment, so this module reimplements a small set of representative
 // shaders on the CPU. Each shader follows Shadertoy's `mainImage` convention
-// (fragColor out, fragCoord in pixels, bottom-up Y) so an imported Shadertoy
-// shader can be dropped in alongside the procedural archetypes the app ships.
+// (fragColor out, fragCoord in pixels, bottom-up Y) so a Shadertoy-style archetype
+// can sit alongside the procedural archetypes the app ships. This snapshots the
+// rendered output only; it does not run the real import/transform pipeline
+// (shadertoy-import.ts) or the GPU WGSL, which share no code with these CPU stand-ins.
 //
 // The renderer is fully deterministic: fixed iTime, fixed resolution, pure math.
 // That determinism is what lets us snapshot the output to PNG baselines and fail
@@ -26,9 +28,12 @@ export type Rgb = [number, number, number];
 // A shader maps a pixel (Shadertoy fragCoord, bottom-up) to an RGB color in 0..1.
 export type Shader = {
 	name: string;
-	// True for shaders sourced from a Shadertoy import rather than an app-native
-	// archetype; the harness asserts at least one of these is covered.
-	imported: boolean;
+	// True for shaders modelled on a Shadertoy-style `mainImage` body rather than
+	// an app-native archetype. This is a CPU reimplementation of the output shape
+	// only — it is NOT produced by the real import pipeline (shadertoy-import.ts),
+	// so a regression in that pipeline won't move this shader's baseline. The
+	// harness merely asserts such an archetype's rendered output is snapshotted.
+	shadertoyStyle: boolean;
 	mainImage: (fragX: number, fragY: number, ctx: ShaderCtx) => Rgb;
 };
 
@@ -57,7 +62,7 @@ const palette = (t: number): Rgb => {
 // Horizontal cosine-palette sweep — the baseline procedural background.
 const paletteGradient: Shader = {
 	name: "palette-gradient",
-	imported: false,
+	shadertoyStyle: false,
 	mainImage: (fragX, _fragY, ctx) => {
 		const u = fragX / ctx.iResolutionX;
 		return palette(u + ctx.iTime * 0.05);
@@ -67,7 +72,7 @@ const paletteGradient: Shader = {
 // Radial rays around the centre — the "central beam burst" the projector shows.
 const beamBurst: Shader = {
 	name: "beam-burst",
-	imported: false,
+	shadertoyStyle: false,
 	mainImage: (fragX, fragY, ctx) => {
 		const cx = ctx.iResolutionX * 0.5;
 		const cy = ctx.iResolutionY * 0.5;
@@ -86,7 +91,7 @@ const beamBurst: Shader = {
 // Grid of tiles, each tinted by its cell — the procedural tile field.
 const tileGrid: Shader = {
 	name: "tile-grid",
-	imported: false,
+	shadertoyStyle: false,
 	mainImage: (fragX, fragY, ctx) => {
 		const cols = 8;
 		const rows = Math.max(
@@ -109,12 +114,13 @@ const tileGrid: Shader = {
 	},
 };
 
-// Imported Shadertoy archetype: a classic additive-sine plasma. Stands in for a
-// one-click Shadertoy import so the harness exercises that code path's output
-// shape. Math mirrors the GLSL `mainImage` body verbatim.
+// Shadertoy-style archetype: a classic additive-sine plasma whose math mirrors a
+// GLSL `mainImage` body verbatim. It models the *output* of a typical Shadertoy
+// import; it does not run through the real import/transform pipeline, so it only
+// guards the rendered look of this archetype, not that pipeline's correctness.
 const shadertoyPlasma: Shader = {
 	name: "shadertoy-plasma",
-	imported: true,
+	shadertoyStyle: true,
 	mainImage: (fragX, fragY, ctx) => {
 		// vec2 uv = fragCoord / iResolution.xy;
 		const uvx = fragX / ctx.iResolutionX;

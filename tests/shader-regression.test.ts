@@ -25,8 +25,12 @@ const UPDATE = process.env.UPDATE_SHADER_BASELINES === "1";
 // harness survives cross-platform float jitter but still trips on real changes.
 const MAX_DRIFT_FRACTION = 0.005;
 
-test("the imported Shadertoy shader is covered by the harness", () => {
-	expect(SHADERS.some((s) => s.imported)).toBe(true);
+// Note: this only asserts a Shadertoy-*style* archetype's output is snapshotted.
+// It does NOT exercise the real import/transform pipeline (shadertoy-import.ts:
+// wrapGlsl / adaptNagaWgslForBevy) or the GPU WGSL — those share no code with the
+// CPU reimplementation here, so a regression in them won't move these baselines.
+test("a Shadertoy-style shader archetype is covered by the harness", () => {
+	expect(SHADERS.some((s) => s.shadertoyStyle)).toBe(true);
 });
 
 describe("shader visual regression", () => {
@@ -35,14 +39,25 @@ describe("shader visual regression", () => {
 			const fb = renderShader(shader);
 			const baselinePath = join(BASELINE_DIR, `${shader.name}.png`);
 
-			if (UPDATE || !existsSync(baselinePath)) {
+			if (UPDATE) {
 				mkdirSync(BASELINE_DIR, { recursive: true });
 				writeFileSync(baselinePath, encodePng(fb));
-				if (!UPDATE) {
-					// First run with no committed baseline: record it and pass, matching
-					// the create-on-missing behaviour of snapshot tooling.
-					return;
+				return;
+			}
+
+			if (!existsSync(baselinePath)) {
+				if (process.env.CI) {
+					// A missing baseline in CI means a regression guard with nothing to
+					// guard against — fail loudly instead of silently recording one.
+					throw new Error(
+						`Missing baseline for "${shader.name}"; run ` +
+							`UPDATE_SHADER_BASELINES=1 bun run test:web and commit the PNG.`,
+					);
 				}
+				// First local run with no committed baseline: record it and pass,
+				// matching the create-on-missing behaviour of snapshot tooling.
+				mkdirSync(BASELINE_DIR, { recursive: true });
+				writeFileSync(baselinePath, encodePng(fb));
 				return;
 			}
 
