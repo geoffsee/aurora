@@ -1,8 +1,8 @@
 project_name = "bevy-osc-app"
 
 [test]
-command = ["bash", "-c", "bun install && bun run test"]
-format_command = ["bash", "-c", "bun install && bun run format"]
+command = ["sh", "-c", "bun install && bun run test"]
+format_command = ["sh", "-c", "bun install && bun run format"]
 
 #[security_scan]
 #paths = [

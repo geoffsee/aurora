@@ -10,6 +10,7 @@ import {
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
+	VST_OSC_CONTRACT,
 	VST_TRIGGER_PREFIX,
 	validateControlStateVersion,
 	validateLiveOscMsg,
@@ -44,6 +45,7 @@ import {
 	type AudioTransientConfig,
 } from "./automation-bridge.ts";
 import { DEFAULT_TRANSIENT_CONFIG } from "./audio-transient-trigger.ts";
+import { importShadertoyUrl } from "./shadertoy-import.ts";
 
 type TrackMapping = {
 	deckAStart: number;
@@ -71,6 +73,10 @@ type ControlState = {
 	palette: number;
 	paletteSaturation: number;
 	paletteBrightness: number;
+	gridDensity: number;
+	gridDiamond: number;
+	gridLineWidth: number;
+	gridShapeMix: number;
 	deckAMode: number;
 	deckBMode: number;
 	rings: boolean;
@@ -269,6 +275,10 @@ const defaultControlState = (): ControlState => ({
 	palette: 0,
 	paletteSaturation: 1,
 	paletteBrightness: 1,
+	gridDensity: 0.5,
+	gridDiamond: 0.5,
+	gridLineWidth: 0.5,
+	gridShapeMix: 0.5,
 	deckAMode: 0,
 	deckBMode: 1,
 	rings: true,
@@ -361,6 +371,26 @@ const cuePresets: Record<string, Partial<ControlState>> = {
 	},
 };
 const cueNames: ReadonlySet<string> = new Set(Object.keys(cuePresets));
+// cuePresets defines what cue addresses the bridge will actually act on. Keep it
+// locked to the contract so an OSC msg the contract accepts can't slip through
+// without a preset behind it, and vice versa.
+{
+	const expected = new Set(VST_OSC_CONTRACT.cues.bridgeAccepts);
+	for (const name of expected) {
+		if (!cueNames.has(name)) {
+			throw new Error(
+				`cuePresets missing cue "${name}" required by vst-osc-contract.json`,
+			);
+		}
+	}
+	for (const name of cueNames) {
+		if (!expected.has(name)) {
+			throw new Error(
+				`cuePresets has cue "${name}" not declared in vst-osc-contract.json`,
+			);
+		}
+	}
+}
 const coerceControlState = (state: unknown): ControlState => {
 	const source =
 		state && typeof state === "object" ? (state as Partial<ControlState>) : {};
@@ -391,8 +421,12 @@ const coerceControlState = (state: unknown): ControlState => {
 			1,
 			defaults.paletteBrightness,
 		),
-		deckAMode: clampInt(source.deckAMode, 0, 4, defaults.deckAMode),
-		deckBMode: clampInt(source.deckBMode, 0, 4, defaults.deckBMode),
+		gridDensity: clamp(source.gridDensity, 0, 1, defaults.gridDensity),
+		gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
+		gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
+		gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
+		deckAMode: clampInt(source.deckAMode, 0, 9, defaults.deckAMode),
+		deckBMode: clampInt(source.deckBMode, 0, 9, defaults.deckBMode),
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
@@ -472,7 +506,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 1, defaults.activeShader),
+		activeShader: clampInt(source.activeShader, 0, 9, defaults.activeShader),
 		bandCurves: (() => {
 			const bc =
 				source.bandCurves && typeof source.bandCurves === "object"
@@ -747,6 +781,13 @@ const broadcastPresetCommand = (address: string) => {
 	const data = JSON.stringify({ address, args: [] });
 	sockets.forEach((ws) => ws.send(data));
 };
+const broadcastImportedShader = (wgsl: string, meta: unknown) => {
+	const data = JSON.stringify({
+		address: "/bevyosc/shader/imported",
+		args: [{ wgsl, meta }],
+	});
+	sockets.forEach((ws) => ws.send(data));
+};
 const booleanArg = (arg: OscArg | undefined) => {
 	const value = valueOf(arg);
 	return Boolean(typeof value === "number" ? value >= 0.5 : value);
@@ -829,8 +870,26 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				break;
 			case "active_shader":
 				mergeControlState({
-					activeShader: Math.max(0, Math.min(1, Math.floor(value))),
+					activeShader: Math.max(0, Math.min(9, Math.floor(value))),
 				});
+				break;
+			case "palette_saturation":
+				mergeControlState({ paletteSaturation: value });
+				break;
+			case "palette_brightness":
+				mergeControlState({ paletteBrightness: value });
+				break;
+			case "grid_density":
+				mergeControlState({ gridDensity: value });
+				break;
+			case "grid_diamond":
+				mergeControlState({ gridDiamond: value });
+				break;
+			case "grid_line_width":
+				mergeControlState({ gridLineWidth: value });
+				break;
+			case "grid_shape_mix":
+				mergeControlState({ gridShapeMix: value });
 				break;
 			case "ema_alpha_bass":
 				mergeControlState({
@@ -1070,6 +1129,12 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"bar_sync",
 	"demo_mode",
 	"active_shader",
+	"palette_saturation",
+	"palette_brightness",
+	"grid_density",
+	"grid_diamond",
+	"grid_line_width",
+	"grid_shape_mix",
 	"ema_alpha_bass",
 	"ema_alpha_energy",
 	"ema_alpha_mid",
@@ -1208,11 +1273,115 @@ const visualServer = Bun.serve({
 	},
 });
 
+// Shadertoy API key supplied at runtime via the controls UI. Held only in
+// memory on the bridge process: never persisted, never sent back to the
+// client, and never logged. Falls back to the SHADERTOY_API_KEY env var if
+// the runtime slot is empty so existing setups keep working.
+let runtimeShadertoyKey: string | null = null;
+const SHADERTOY_KEY_RE = /^[A-Za-z0-9]{8,128}$/;
+const getShadertoyKey = (): string =>
+	runtimeShadertoyKey ?? Bun.env.SHADERTOY_API_KEY ?? "";
+const getShadertoyKeyStatus = () => ({
+	configured: getShadertoyKey().length > 0,
+	source: runtimeShadertoyKey
+		? ("runtime" as const)
+		: Bun.env.SHADERTOY_API_KEY
+			? ("env" as const)
+			: null,
+});
+
 const controlsServer = Bun.serve({
 	port: controlsPort,
+	hostname: "127.0.0.1",
 	async fetch(request) {
 		const url = new URL(request.url);
 		const pathname = decodeURIComponent(url.pathname);
+
+		if (pathname === "/api/shadertoy/key") {
+			if (request.method === "GET") {
+				return Response.json(getShadertoyKeyStatus());
+			}
+			if (request.method === "DELETE") {
+				runtimeShadertoyKey = null;
+				return Response.json({ ok: true, ...getShadertoyKeyStatus() });
+			}
+			if (request.method === "POST") {
+				let payload: { key?: unknown };
+				try {
+					payload = (await request.json()) as { key?: unknown };
+				} catch {
+					return Response.json(
+						{ ok: false, error: "Body must be JSON { key: string }" },
+						{ status: 400 },
+					);
+				}
+				const key = typeof payload.key === "string" ? payload.key.trim() : "";
+				if (!key) {
+					return Response.json(
+						{ ok: false, error: "Missing `key` field" },
+						{ status: 400 },
+					);
+				}
+				if (!SHADERTOY_KEY_RE.test(key)) {
+					return Response.json(
+						{
+							ok: false,
+							error:
+								"Key must be 8–128 alphanumeric characters (Shadertoy API key format)",
+						},
+						{ status: 400 },
+					);
+				}
+				runtimeShadertoyKey = key;
+				return Response.json({ ok: true, ...getShadertoyKeyStatus() });
+			}
+			return new Response("Method not allowed", { status: 405 });
+		}
+
+		if (request.method === "POST" && pathname === "/api/shadertoy/import") {
+			const apiKey = getShadertoyKey();
+			if (!apiKey) {
+				return Response.json(
+					{
+						ok: false,
+						error:
+							"Shadertoy API key not configured. Enter one in the controls UI or set SHADERTOY_API_KEY.",
+					},
+					{ status: 500 },
+				);
+			}
+			let payload: { url?: string; id?: string };
+			try {
+				payload = (await request.json()) as { url?: string; id?: string };
+			} catch {
+				return Response.json(
+					{
+						ok: false,
+						error: "Body must be JSON { url: string } or { id: string }",
+					},
+					{ status: 400 },
+				);
+			}
+			const target = payload.url ?? payload.id ?? "";
+			if (typeof target !== "string" || target.length === 0) {
+				return Response.json(
+					{ ok: false, error: "Missing `url` or `id` field" },
+					{ status: 400 },
+				);
+			}
+			const result = await importShadertoyUrl(target, apiKey);
+			if (!result.ok) {
+				return Response.json(result, { status: 400 });
+			}
+			broadcastImportedShader(result.wgsl, result.meta);
+			return Response.json({
+				ok: true,
+				meta: result.meta,
+				usedIChannel: result.usedIChannel,
+				wgslLength: result.wgsl.length,
+			});
+		}
+
 		const relativePath = pathname === "/" ? "controls.html" : pathname.slice(1);
 
 		if (relativePath.includes("..")) {
