@@ -715,10 +715,15 @@
 
       const PRESETS_KEY = "bevyosc.presets";
       const PRESET_BUNDLE_SCHEMA_VERSION = 1; // keep in sync with preset-bundle-schema.ts
+      // Cache the parsed presets blob so a continuous morph sweep does not
+      // re-JSON.parse localStorage on every weight update. Invalidated on save.
+      let _cachedPresets = null;
       const loadPresets = () => {
-        try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}"); } catch { return {}; }
+        if (_cachedPresets) return _cachedPresets;
+        try { _cachedPresets = JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}"); } catch { _cachedPresets = {}; }
+        return _cachedPresets;
       };
-      const savePresetsToStorage = (p) => localStorage.setItem(PRESETS_KEY, JSON.stringify(p));
+      const savePresetsToStorage = (p) => { _cachedPresets = p; localStorage.setItem(PRESETS_KEY, JSON.stringify(p)); };
       // Mirrors migratePresetBundle() in preset-bundle-schema.ts — keep in sync.
       const normalizePreset = (raw) => {
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -1110,7 +1115,9 @@
         if (changed) {
           if (morphChanged) applyMorph();
           syncInputs();
-          publish();
+          // Morph-driven blends are derived state; don't record them — matches the
+          // slider and remote/OSC paths so the same action records consistently.
+          publish(morphChanged ? { record: false } : {});
         }
       }
 

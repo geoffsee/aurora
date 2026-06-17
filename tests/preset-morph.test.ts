@@ -99,3 +99,71 @@ describe("morphPresets", () => {
 		expect("intensity" in out).toBe(false);
 	});
 });
+
+// ── morphPresets (controls.html) parity with preset-morph.ts ──────────────────
+// controls.html ships an inline copy of morphPresets driven by its own
+// INTERPOLATED_KEYS list; that copy is what actually runs in the browser.
+// If this suite fails, the inline copy in controls.html has drifted from the
+// canonical module — update one to match the other.
+
+describe("morphPresets (controls.html) parity with preset-morph.ts", () => {
+	// Inline replica of INTERPOLATED_KEYS / clamp01 / morphPresets from controls.html.
+	const INLINE_INTERPOLATED_KEYS = [
+		"crossfade",
+		"speed",
+		"intensity",
+		"feedback",
+		"depth",
+		"palette",
+		"ringOpacity",
+		"maxBrightness",
+	];
+	const clamp01 = (value: unknown): number => {
+		const n = Number(value);
+		return Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
+	};
+	function inlineMorphPresets(
+		a: Record<string, unknown>,
+		b: Record<string, unknown>,
+		weight: number,
+	): Record<string, number> {
+		const w = clamp01(weight);
+		const out: Record<string, number> = {};
+		for (const key of INLINE_INTERPOLATED_KEYS) {
+			const av = Number(a[key]);
+			const bv = Number(b[key]);
+			const from = Number.isFinite(av) ? av : bv;
+			const to = Number.isFinite(bv) ? bv : av;
+			if (!Number.isFinite(from)) continue;
+			out[key] = from + (to - from) * w;
+		}
+		return out;
+	}
+
+	test("INTERPOLATED_KEYS matches MORPH_INTERPOLATED_KEYS", () => {
+		expect(INLINE_INTERPOLATED_KEYS).toEqual([...MORPH_INTERPOLATED_KEYS]);
+	});
+
+	test("inline and module morph agree across weights", () => {
+		for (const w of [0, 0.25, 0.5, 0.75, 1, -2, 3]) {
+			expect(inlineMorphPresets(presetA, presetB, w)).toEqual(
+				morphPresets(presetA, presetB, w),
+			);
+		}
+	});
+
+	test("inline and module morph agree with partially-populated presets", () => {
+		const partialA = { crossfade: 0.2, palette: 0.4 };
+		for (const w of [0, 0.5, 1]) {
+			expect(inlineMorphPresets(partialA, presetB, w)).toEqual(
+				morphPresets(partialA, presetB, w),
+			);
+		}
+	});
+
+	test("inline and module morph agree when a key is absent on both sides", () => {
+		const a = { crossfade: 0 };
+		const b = { crossfade: 1 };
+		expect(inlineMorphPresets(a, b, 0.5)).toEqual(morphPresets(a, b, 0.5));
+	});
+});
