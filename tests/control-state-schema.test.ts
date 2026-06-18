@@ -15,29 +15,31 @@ const DEFAULT_BAND_CURVES = {
 	high: "linear",
 };
 
-test("v1 state is upgraded through v2, v3, v4 with activeShader=0, bandCurves, and emaAlphas added", () => {
+test("v1 state is upgraded through v2..v5 with activeShader=0, bandCurves, emaAlphas, and morph added", () => {
 	const result = migrateControlState({
 		schemaVersion: 1,
 		crossfade: 0.5,
 	}) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(4);
+	expect(result.schemaVersion).toBe(5);
 	expect(result.activeShader).toBe(0);
 	expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
 	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
+	expect(result.morph).toBe(0);
 });
 
-test("v2 state is upgraded through v3 then v4", () => {
+test("v2 state is upgraded through v3..v5", () => {
 	const result = migrateControlState({
 		schemaVersion: 2,
 		activeShader: 1,
 	}) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(4);
+	expect(result.schemaVersion).toBe(5);
 	expect(result.activeShader).toBe(1);
 	expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
 	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
+	expect(result.morph).toBe(0);
 });
 
-test("v3 state is upgraded to v4 with emaAlphas added", () => {
+test("v3 state is upgraded through v4..v5 with emaAlphas and morph added", () => {
 	const input = {
 		schemaVersion: 3,
 		activeShader: 1,
@@ -49,10 +51,11 @@ test("v3 state is upgraded to v4 with emaAlphas added", () => {
 		},
 	};
 	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(4);
+	expect(result.schemaVersion).toBe(5);
 	expect(result.activeShader).toBe(1);
 	expect(result.bandCurves).toEqual(input.bandCurves);
 	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
+	expect(result.morph).toBe(0);
 });
 
 test("v3 state with legacy flat emaAlpha* fields carries them forward into emaAlphas", () => {
@@ -72,7 +75,7 @@ test("v3 state with legacy flat emaAlpha* fields carries them forward into emaAl
 		emaAlphaPulse: 0.5,
 	};
 	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(4);
+	expect(result.schemaVersion).toBe(5);
 	expect(result.emaAlphas).toEqual({
 		energy: 0.3,
 		bass: 0.1,
@@ -80,9 +83,10 @@ test("v3 state with legacy flat emaAlpha* fields carries them forward into emaAl
 		high: 0.4,
 		pulse: 0.5,
 	});
+	expect(result.morph).toBe(0);
 });
 
-test("v4 state passes through unchanged", () => {
+test("v4 state is upgraded to v5 with morph added", () => {
 	const input = {
 		schemaVersion: 4,
 		activeShader: 1,
@@ -93,6 +97,26 @@ test("v4 state passes through unchanged", () => {
 			high: "linear",
 		},
 		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+	};
+	const result = migrateControlState(input) as Record<string, unknown>;
+	expect(result.schemaVersion).toBe(5);
+	expect(result.activeShader).toBe(1);
+	expect(result.emaAlphas).toEqual(input.emaAlphas);
+	expect(result.morph).toBe(0);
+});
+
+test("v5 state passes through unchanged", () => {
+	const input = {
+		schemaVersion: 5,
+		activeShader: 1,
+		bandCurves: {
+			energy: "exponential",
+			bass: "linear",
+			mid: "logarithmic",
+			high: "linear",
+		},
+		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+		morph: 0.4,
 	};
 	expect(migrateControlState(input)).toBe(input);
 });

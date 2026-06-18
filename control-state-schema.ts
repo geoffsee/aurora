@@ -40,7 +40,11 @@ export const migrateControlState = (state: unknown): unknown => {
 						pulse: s.emaAlphaPulse as number,
 				  }
 				: defaultEmaAlphas();
-		return { ...s, schemaVersion: 4, emaAlphas };
+		return migrateControlState({ ...s, schemaVersion: 4, emaAlphas });
+	}
+	// v4 → v5: add morph field (OSC-controlled preset-morph fader position)
+	if (s.schemaVersion === 4) {
+		return { ...s, schemaVersion: 5, morph: 0 };
 	}
 	return state;
 };

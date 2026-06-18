@@ -7,6 +7,7 @@ import {
 	type AudioCurveShape,
 	CONTROL_STATE_SCHEMA_VERSION,
 	isAudioCurveShape,
+	PRESET_MORPH_ADDRESS,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
@@ -14,6 +15,7 @@ import {
 	VST_TRIGGER_PREFIX,
 	validateControlStateVersion,
 	validateLiveOscMsg,
+	validatePresetMorphOscMsg,
 	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "./osc-validation.ts";
@@ -39,6 +41,12 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "./control-state-schema.ts";
+import {
+	type MorphCurve,
+	clampMorphPosition,
+	isMorphCurve,
+	morphPresetStates,
+} from "./preset-morph.ts";
 import {
 	makeAutomationBridge,
 	parseTriggerBindings,
@@ -103,6 +111,7 @@ type ControlState = {
 	activeShader: number;
 	bandCurves: BandCurves;
 	emaAlphas: AudioEmaAlphas;
+	morph: number;
 };
 
 const require = createRequire(import.meta.url);
@@ -310,6 +319,7 @@ const defaultControlState = (): ControlState => ({
 		high: "linear",
 	},
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
+	morph: 0,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -507,6 +517,7 @@ const coerceControlState = (state: unknown): ControlState => {
 			),
 		},
 		activeShader: clampInt(source.activeShader, 0, 9, defaults.activeShader),
+		morph: clamp(source.morph, 0, 1, defaults.morph),
 		bandCurves: (() => {
 			const bc =
 				source.bandCurves && typeof source.bandCurves === "object"
@@ -971,6 +982,29 @@ const applyVstControlMessage = (msg: OscMsg) => {
 	}
 };
 
+// Drive a continuous morph between two named cue presets. Validation has
+// already confirmed from/to are real cues and position is numeric. The two
+// endpoints are seeded from the current live state so morph keys that neither
+// cue defines (e.g. speed/ringOpacity/maxBrightness — only panic sets the
+// latter) stay put rather than snapping to defaults; this keeps position 0 a
+// no-op on the "from" end and matches normal partial-cue-apply semantics. The
+// result — plus the clamped fader position itself — is routed through
+// mergeControlState, so coerceControlState clamps every field before broadcast.
+const applyPresetMorph = (msg: OscMsg) => {
+	const args = msg.args ?? [];
+	const fromName = String(valueOf(args[0]));
+	const toName = String(valueOf(args[1]));
+	const position = clampMorphPosition(valueOf(args[2]));
+	const curveArg = args.length > 3 ? valueOf(args[3]) : undefined;
+	const curve: MorphCurve = isMorphCurve(curveArg) ? curveArg : "linear";
+
+	const base = currentControlState();
+	const from = { ...base, ...cuePresets[fromName] };
+	const to = { ...base, ...cuePresets[toName] };
+	const morphed = morphPresetStates(from, to, position, curve);
+	mergeControlState({ ...morphed, morph: position });
+};
+
 const isMidiClockActive = (): boolean =>
 	lastMidiClockAt > 0 && Date.now() - lastMidiClockAt < MIDI_CLOCK_TIMEOUT_MS;
 
@@ -1234,6 +1268,14 @@ const visualServer = Bun.serve({
 						typeof parsed.error === "string"
 					) {
 						broadcastError(parsed.error);
+					} else if (parsed.address === PRESET_MORPH_ADDRESS) {
+						const morphMsg = {
+							address: parsed.address,
+							args: Array.isArray(parsed.args) ? parsed.args : [],
+						};
+						if (validatePresetMorphOscMsg(morphMsg, "WS client", cueNames)) {
+							applyPresetMorph(morphMsg);
+						}
 					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
 						if (
 							validatePresetOscMsg({ address: parsed.address }, "WS client")
@@ -1453,6 +1495,14 @@ vstControlUdp.on("ready", () => {
 	console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
 });
 vstControlUdp.on("message", (msg: OscMsg) => {
+	if (msg.address === PRESET_MORPH_ADDRESS) {
+		if (
+			validatePresetMorphOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)
+		) {
+			applyPresetMorph(msg);
+		}
+		return;
+	}
 	if (msg.address.startsWith("/bevyosc/preset/")) {
 		if (validatePresetOscMsg(msg, `VST :${vstControlRecvPort}`)) {
 			broadcastPresetCommand(msg.address);

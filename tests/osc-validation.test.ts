@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
 	CONTROL_STATE_SCHEMA_VERSION,
+	PRESET_MORPH_ADDRESS,
 	validateControlStateVersion,
 	validateLiveOscMsg,
+	validatePresetMorphOscMsg,
 	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "../osc-validation.ts";
@@ -257,6 +259,121 @@ describe("validatePresetOscMsg", () => {
 
 	test("rejects empty address", () => {
 		expect(validatePresetOscMsg({ address: "" }, "test")).toBe(false);
+	});
+});
+
+// ── validatePresetMorphOscMsg ────────────────────────────────────────────────
+
+describe("validatePresetMorphOscMsg", () => {
+	test("accepts from/to/position", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{
+					address: PRESET_MORPH_ADDRESS,
+					args: [
+						{ type: "s", value: "warmup" },
+						{ type: "s", value: "drop" },
+						floatArg,
+					],
+				},
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(true);
+	});
+
+	test("accepts optional curve arg", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{
+					address: PRESET_MORPH_ADDRESS,
+					args: [
+						{ type: "s", value: "warmup" },
+						{ type: "s", value: "drop" },
+						floatArg,
+						{ type: "s", value: "ease" },
+					],
+				},
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(true);
+	});
+
+	test("accepts plain string/number args", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{ address: PRESET_MORPH_ADDRESS, args: ["warmup", "drop", 0.5] },
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(true);
+	});
+
+	test("rejects wrong address", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{ address: "/bevyosc/preset/recall/1", args: ["warmup", "drop", 0.5] },
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(false);
+	});
+
+	test("rejects too few args", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{ address: PRESET_MORPH_ADDRESS, args: ["warmup", "drop"] },
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(false);
+	});
+
+	test("rejects too many args", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{
+					address: PRESET_MORPH_ADDRESS,
+					args: ["warmup", "drop", 0.5, "ease", "extra"],
+				},
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(false);
+	});
+
+	test("rejects unknown cue name", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{ address: PRESET_MORPH_ADDRESS, args: ["warmup", "nope", 0.5] },
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(false);
+	});
+
+	test("rejects non-string from/to", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{ address: PRESET_MORPH_ADDRESS, args: [floatArg, floatArg, 0.5] },
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(false);
+	});
+
+	test("rejects non-numeric position", () => {
+		expect(
+			validatePresetMorphOscMsg(
+				{
+					address: PRESET_MORPH_ADDRESS,
+					args: ["warmup", "drop", { type: "s", value: "half" }],
+				},
+				"test",
+				CUE_NAMES,
+			),
+		).toBe(false);
 	});
 });
 
