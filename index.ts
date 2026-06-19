@@ -31,6 +31,7 @@ import {
 	deriveLinkFrame,
 	isLinkActive,
 } from "./ableton-link.ts";
+import { selectTempoSource } from "./clock-arbiter.ts";
 import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
@@ -53,7 +54,12 @@ import {
 	type AudioTransientConfig,
 } from "./automation-bridge.ts";
 import { DEFAULT_TRANSIENT_CONFIG } from "./audio-transient-trigger.ts";
+import {
+	makeAudioControlRouter,
+	parseAudioMappings,
+} from "./audio-control-router.ts";
 import { importShadertoyUrl } from "./shadertoy-import.ts";
+import audioMappingsRaw from "./audio-mappings.json" with { type: "json" };
 
 type TrackMapping = {
 	deckAStart: number;
@@ -112,6 +118,7 @@ type ControlState = {
 	bandCurves: BandCurves;
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
+	audioControlMode: boolean;
 };
 
 const require = createRequire(import.meta.url);
@@ -320,6 +327,7 @@ const defaultControlState = (): ControlState => ({
 	},
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 	morph: 0,
+	audioControlMode: false,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -543,6 +551,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				pulse: clamp(ea.pulse, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
 			};
 		})(),
+		audioControlMode: Boolean(source.audioControlMode),
 	};
 };
 
@@ -612,6 +621,25 @@ const automationBridge = makeAutomationBridge(
 	initialTransientConfig,
 );
 
+// Audio-control router: maps live audio features onto ControlState mutations.
+// Inert until ControlState.audioControlMode is enabled (synced in
+// broadcastControl) and at least one mapping is loaded. coerceControlState
+// remains the clamp on whatever diffs the router emits.
+const audioControlRouter = makeAudioControlRouter(
+	(diff) => mergeControlState(diff as Partial<ControlState>),
+	() => currentControlState() as unknown as Record<string, unknown>,
+);
+audioControlRouter.setMappings(parseAudioMappings(audioMappingsRaw));
+
+// The router has a single shared edge/continuous state, so only one audio
+// source may drive it at a time. A browser source (Phase 2) sending
+// /bevyosc/audio/features is authoritative while live; the synthetic demo-loop
+// feed is suppressed for this window so the two streams never interleave (which
+// would thrash rising-edge detection and no-op suppression). The demo feed
+// resumes once the browser source goes quiet.
+const BROWSER_AUDIO_FEATURE_TTL_MS = 1000;
+let lastBrowserAudioFeaturesMs = Number.NEGATIVE_INFINITY;
+
 // MIDI byte parser state for note-on and CC messages.
 // Real-time bytes (0xF8–0xFF) are single-byte and do not affect running status.
 const MIDI_NOTE_ON_STATUS = 0x90;
@@ -647,6 +675,20 @@ function parseMidiByte(byte: number): void {
 const sendOsc = (address: string, args: OscArg[] = []) => {
 	if (!oscReady) return;
 	udp.send({ address, args });
+};
+
+// Coerce an untrusted /bevyosc/audio/features payload into AudioFeatures.
+// Each band clamps to 0..1; missing/non-finite bands fall back to 0.
+const coerceAudioFeatures = (raw: unknown): AudioFeatures => {
+	const f =
+		raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+	return {
+		energy: clamp(f.energy, 0, 1, 0),
+		bass: clamp(f.bass, 0, 1, 0),
+		mid: clamp(f.mid, 0, 1, 0),
+		high: clamp(f.high, 0, 1, 0),
+		pulse: clamp(f.pulse, 0, 1, 0),
+	};
 };
 
 // Derive AudioFeatures from a raw AbletonOSC track_data response and feed the
@@ -770,6 +812,7 @@ const broadcast = (msg: OscMsg) => {
 const broadcastControl = (state: unknown) => {
 	const prev = latestControlState;
 	latestControlState = coerceControlState(state);
+	audioControlRouter.setEnabled(latestControlState.audioControlMode);
 	controlStateLog.record(
 		prev as Record<string, unknown> | null,
 		latestControlState as unknown as Record<string, unknown>,
@@ -1031,6 +1074,17 @@ function onMidiClock(): void {
 	if (bpm === null) return;
 
 	lastMidiClockBpmUpdate = now;
+	// MIDI clock is lower priority than Ableton Link. Keep recording timestamps
+	// above so MIDI takes over instantly if Link drops, but stay silent on the
+	// tempo mirror while Link is the authoritative source — otherwise the mirror
+	// flaps between two disagreeing sources.
+	if (
+		selectTempoSource({
+			linkActive: isAbletonLinkActive(),
+			midiActive: true,
+		}) !== "midi"
+	)
+		return;
 	mergeControlState({ bpm });
 	// Also deliver tempo on the AbletonOSC path so the renderer picks it up
 	// regardless of whether the control page is connected.
@@ -1133,8 +1187,8 @@ function startAbletonLink(): void {
 		if (!frame) return;
 		// Link owns beat phase whenever it is active, even alongside MIDI clock.
 		broadcastLinkBeat(frame.beat);
-		// MIDI clock stays authoritative for tempo when both are present.
-		if (isMidiClockActive()) return;
+		// Link is the highest-priority tempo source, so it always drives the
+		// mirror while active — even when MIDI clock is also running.
 		broadcastLinkTempo(frame.tempo);
 	});
 
@@ -1288,6 +1342,18 @@ const visualServer = Bun.serve({
 								address: "/bevyosc/pong",
 								id: typeof parsed.id === "number" ? parsed.id : 0,
 							}),
+						);
+					} else if (parsed.address === "/bevyosc/audio/features") {
+						// Browser audio features fed back to the bridge. The router ignores
+						// these unless ControlState.audioControlMode is enabled. While this
+						// feed is live it is the authoritative router source and suppresses
+						// the demo loop (see the demo-loop guard).
+						lastBrowserAudioFeaturesMs = Date.now();
+						audioControlRouter.onFeatures(
+							coerceAudioFeatures(
+								Array.isArray(parsed.args) ? parsed.args[0] : undefined,
+							),
+							Date.now(),
 						);
 					} else if (
 						parsed.address.startsWith("/bevyosc/automation/transient/")
@@ -1475,11 +1541,15 @@ udp.on("ready", () => {
 
 udp.on("message", (msg: OscMsg) => {
 	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
-	// External clocks are authoritative: MIDI clock and Ableton Link both override
-	// AbletonOSC tempo, and Link additionally owns beat phase while active.
+	// AbletonOSC tempo is the "internal" source — the lowest priority. Any active
+	// external clock (Link or MIDI) overrides it, and Link additionally owns beat
+	// phase while active.
 	if (
 		msg.address === OSC_ADDRESSES.TEMPO &&
-		(isMidiClockActive() || isAbletonLinkActive())
+		selectTempoSource({
+			linkActive: isAbletonLinkActive(),
+			midiActive: isMidiClockActive(),
+		}) !== "internal"
 	)
 		return;
 	if (msg.address === OSC_ADDRESSES.BEAT && isAbletonLinkActive()) return;
@@ -1577,6 +1647,12 @@ setInterval(() => {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
+	// Drive the router from the demo feed only when no browser source is active;
+	// otherwise both streams would share the router's edge state and thrash.
+	const routerNowMs = Date.now();
+	if (routerNowMs - lastBrowserAudioFeaturesMs >= BROWSER_AUDIO_FEATURE_TTL_MS) {
+		audioControlRouter.onFeatures(smoothed, routerNowMs);
+	}
 	const demo = {
 		tempo: state.bpm,
 		beat,
