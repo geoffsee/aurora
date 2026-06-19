@@ -60,7 +60,9 @@ describe("extractShadertoyId", () => {
 
 describe("wrapGlsl", () => {
 	test("emits the mainImage scaffold around user code", () => {
-		const out = wrapGlsl("void mainImage(out vec4 c, in vec2 p){ c = vec4(1.0); }");
+		const out = wrapGlsl(
+			"void mainImage(out vec4 c, in vec2 p){ c = vec4(1.0); }",
+		);
 		expect(out).toContain("#version 450");
 		expect(out).toContain("// === SHADERTOY USER CODE ===");
 		expect(out).toContain("// === END USER CODE ===");
@@ -103,7 +105,9 @@ describe("adaptNagaWgslForBevy", () => {
 				"@fragment\nfn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> { return vec4(1.0); }",
 			),
 		).toBeNull();
-		expect(adaptNagaWgslForBevy("fn helper() -> f32 { return 1.0; }")).toBeNull();
+		expect(
+			adaptNagaWgslForBevy("fn helper() -> f32 { return 1.0; }"),
+		).toBeNull();
 	});
 });
 
@@ -117,8 +121,8 @@ describe("checkIChannelUsage", () => {
 		expect(checkIChannelUsage("// blurs the texture (slow)\nvec4 c;")).toBe(
 			false,
 		);
-		expect(checkIChannelUsage("/* uses texture( ) elsewhere */\nfloat x;")).toBe(
-			false,
-		);
+		expect(
+			checkIChannelUsage("/* uses texture( ) elsewhere */\nfloat x;"),
+		).toBe(false);
 	});
 });

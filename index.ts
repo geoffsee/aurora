@@ -31,6 +31,7 @@ import {
 	deriveLinkFrame,
 	isLinkActive,
 } from "./ableton-link.ts";
+import { selectTempoSource } from "./clock-arbiter.ts";
 import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
@@ -1073,6 +1074,17 @@ function onMidiClock(): void {
 	if (bpm === null) return;
 
 	lastMidiClockBpmUpdate = now;
+	// MIDI clock is lower priority than Ableton Link. Keep recording timestamps
+	// above so MIDI takes over instantly if Link drops, but stay silent on the
+	// tempo mirror while Link is the authoritative source — otherwise the mirror
+	// flaps between two disagreeing sources.
+	if (
+		selectTempoSource({
+			linkActive: isAbletonLinkActive(),
+			midiActive: true,
+		}) !== "midi"
+	)
+		return;
 	mergeControlState({ bpm });
 	// Also deliver tempo on the AbletonOSC path so the renderer picks it up
 	// regardless of whether the control page is connected.
@@ -1175,8 +1187,8 @@ function startAbletonLink(): void {
 		if (!frame) return;
 		// Link owns beat phase whenever it is active, even alongside MIDI clock.
 		broadcastLinkBeat(frame.beat);
-		// MIDI clock stays authoritative for tempo when both are present.
-		if (isMidiClockActive()) return;
+		// Link is the highest-priority tempo source, so it always drives the
+		// mirror while active — even when MIDI clock is also running.
 		broadcastLinkTempo(frame.tempo);
 	});
 
@@ -1529,11 +1541,15 @@ udp.on("ready", () => {
 
 udp.on("message", (msg: OscMsg) => {
 	if (!validateLiveOscMsg(msg, `AbletonOSC :${liveRecvPort}`)) return;
-	// External clocks are authoritative: MIDI clock and Ableton Link both override
-	// AbletonOSC tempo, and Link additionally owns beat phase while active.
+	// AbletonOSC tempo is the "internal" source — the lowest priority. Any active
+	// external clock (Link or MIDI) overrides it, and Link additionally owns beat
+	// phase while active.
 	if (
 		msg.address === OSC_ADDRESSES.TEMPO &&
-		(isMidiClockActive() || isAbletonLinkActive())
+		selectTempoSource({
+			linkActive: isAbletonLinkActive(),
+			midiActive: isMidiClockActive(),
+		}) !== "internal"
 	)
 		return;
 	if (msg.address === OSC_ADDRESSES.BEAT && isAbletonLinkActive()) return;
