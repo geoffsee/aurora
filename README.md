@@ -107,6 +107,21 @@ The controls app shows `OSC live` plus energy bands, deck averages, server diagn
 LIVE_HOST=127.0.0.1 LIVE_SEND_PORT=11000 LIVE_RECV_PORT=11001 bun run serve
 ```
 
+### Clock-source priority
+
+The bridge can receive tempo from three places at once: an Ableton Link session
+(`ABLETON_LINK_ENABLED=1`), an external MIDI clock (`MIDI_CLOCK_DEVICE=...`), and
+the AbletonOSC tempo mirror. When two sources disagree they must not fight over
+the tempo mirror, so the bridge arbitrates with a fixed priority:
+
+**Ableton Link > MIDI clock > internal (AbletonOSC / default).**
+
+Only the highest-priority *active* source drives the tempo mirror; lower-priority
+sources stay silent while it is present. When a higher-priority source drops
+(its updates stop arriving within the timeout window), the next one down takes
+over with no gap — internal is always available as the floor. The arbitration
+lives in `clock-arbiter.ts`.
+
 ## Ableton MIDI Control Surface Bridge
 
 The repo includes a VST3 audio effect plugin at `plugins/bevyosc-vst`. Add it to an Ableton track, then use Ableton MIDI Map mode to map your MIDI controller knobs/buttons to the plugin parameters. The plugin sends parameter changes to the Bun bridge over local OSC on `VST_CONTROL_RECV_PORT` (`12000` by default), and the bridge rebroadcasts them to the controls page and projector.
