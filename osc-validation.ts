@@ -39,7 +39,7 @@ export const VST_OSC_CONTRACT = contract;
 //      5..8 = tunnel/glitch/fluid/truchet — packed into vj_palette.wgsl)
 // v3: added bandCurves field (per-band audio-reactive curve shaping)
 // v4: added emaAlphas field (per-band EMA decay constants for preset bundling)
-// v5: added morph field (OSC-controlled preset-morph fader position — PR #181)
+// v5: added morph field (OSC-controlled preset-morph fader position, 0..1 — PR #181)
 // v6: added audioControlMode field (global enable for the audio-control router)
 export const CONTROL_STATE_SCHEMA_VERSION = 6;
 
@@ -81,6 +81,7 @@ export const VST_CUE_PREFIX = "/bevyosc/vst/cue/";
 
 export const PRESET_SAVE_PREFIX = "/bevyosc/preset/save/";
 export const PRESET_RECALL_PREFIX = "/bevyosc/preset/recall/";
+export const PRESET_MORPH_ADDRESS = "/bevyosc/preset/morph";
 export const PRESET_SLOT_MIN = 1;
 export const PRESET_SLOT_MAX = 6;
 
@@ -107,6 +108,18 @@ const oscArgType = (arg: OscArg): string => {
 	return typeof arg;
 };
 
+const oscArgValue = (arg: OscArg): unknown =>
+	arg && typeof arg === "object" && "value" in arg
+		? (arg as { value: unknown }).value
+		: arg;
+
+const isStringOscArg = (arg: OscArg): boolean => {
+	if (arg && typeof arg === "object" && "type" in arg) {
+		return (arg as { type: string }).type === "s";
+	}
+	return typeof arg === "string";
+};
+
 export const validateLiveOscMsg = (msg: OscMsg, origin: string): boolean => {
 	if (!msg.address.startsWith("/live/")) {
 		console.error(
@@ -130,6 +143,46 @@ export const validatePresetOscMsg = (msg: OscMsg, origin: string): boolean => {
 	if (!Number.isInteger(n) || n < PRESET_SLOT_MIN || n > PRESET_SLOT_MAX) {
 		console.error(
 			`[OSC] dropping invalid preset slot "${address}" from ${origin} — slot must be ${PRESET_SLOT_MIN}–${PRESET_SLOT_MAX}`,
+		);
+		return false;
+	}
+	return true;
+};
+
+// /bevyosc/preset/morph <from:s> <to:s> <position:f> [curve:s]
+// from/to must be known cue names; position is the morph fader value. The
+// optional curve string is validated leniently — an unknown value falls back to
+// linear in the handler rather than rejecting the whole message.
+export const validatePresetMorphOscMsg = (
+	msg: OscMsg,
+	origin: string,
+	cueNames: ReadonlySet<string>,
+): boolean => {
+	if (msg.address !== PRESET_MORPH_ADDRESS) return false;
+	const args = msg.args ?? [];
+	if (args.length < 3 || args.length > 4) {
+		console.error(
+			`[OSC] dropping malformed preset morph from ${origin} — expected 3–4 args (from, to, position, [curve]), got ${args.length}`,
+		);
+		return false;
+	}
+	if (!isStringOscArg(args[0]) || !isStringOscArg(args[1])) {
+		console.error(
+			`[OSC] dropping malformed preset morph from ${origin} — from/to must be cue-name strings`,
+		);
+		return false;
+	}
+	const from = String(oscArgValue(args[0]));
+	const to = String(oscArgValue(args[1]));
+	if (!cueNames.has(from) || !cueNames.has(to)) {
+		console.error(
+			`[OSC] dropping preset morph from ${origin} — unknown cue "${cueNames.has(from) ? to : from}"`,
+		);
+		return false;
+	}
+	if (!isNumericOscArg(args[2])) {
+		console.error(
+			`[OSC] dropping malformed preset morph from ${origin} — position must be numeric, got type "${oscArgType(args[2])}"`,
 		);
 		return false;
 	}

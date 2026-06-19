@@ -46,8 +46,11 @@ export const migrateControlState = (state: unknown): unknown => {
 				: defaultEmaAlphas();
 		return migrateControlState({ ...s, schemaVersion: 4, emaAlphas });
 	}
+	// v4 → v5: add morph field (OSC-controlled preset-morph fader position)
+	if (s.schemaVersion === 4) {
+		return migrateControlState({ ...s, schemaVersion: 5, morph: 0 });
+	}
 	// v5 → v6: add audioControlMode field (audio-control router global enable)
-	// (the v4 → v5 morph branch is inherited from main; see PR #181)
 	if (s.schemaVersion === 5) {
 		return { ...s, schemaVersion: 6, audioControlMode: false };
 	}
