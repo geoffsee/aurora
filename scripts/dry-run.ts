@@ -61,7 +61,10 @@ async function connect(timeoutMs: number): Promise<WebSocket> {
 				sock.addEventListener("open", () => resolve(sock), { once: true });
 				sock.addEventListener(
 					"error",
-					() => reject(new Error(`connect failed: ${WS_URL}`)),
+					() => {
+						sock.close();
+						reject(new Error(`connect failed: ${WS_URL}`));
+					},
 					{ once: true },
 				);
 			});
@@ -88,6 +91,7 @@ function changedKeys(prev: Json | null, next: Json): string[] {
 }
 
 async function main(): Promise<number> {
+	const runStart = Date.now();
 	console.log(
 		`[dry-run] booting bridge on :${PORT} (controls :${CONTROLS_PORT}); window ${DURATION_MS}ms`,
 	);
@@ -113,7 +117,6 @@ async function main(): Promise<number> {
 	let controlBroadcasts = 0;
 	let demoAudioCount = 0;
 	let diagnosticsCount = 0;
-	let presetCommandCount = 0;
 	const fieldChanges = new Map<string, number>();
 	const clockSources = new Set<string>();
 	let everReplaying = false;
@@ -158,13 +161,10 @@ async function main(): Promise<number> {
 			case "/bevyosc/server/diagnostics": {
 				diagnosticsCount++;
 				const d = (msg.args?.[0] ?? {}) as Json;
-				if (d.abletonLinkActive) clockSources.add("link");
-				else if (d.midiClockActive) clockSources.add("midi");
-				else clockSources.add("internal");
+				// Read the arbiter's actual selection, not a reconstruction of it.
+				if (typeof d.clockSource === "string") clockSources.add(d.clockSource);
 				break;
 			}
-			default:
-				if (msg.address.startsWith("/bevyosc/preset/")) presetCommandCount++;
 		}
 	});
 
@@ -185,12 +185,21 @@ async function main(): Promise<number> {
 		],
 	});
 
-	// 2. Start automation playback so the recorder/player path is live; the demo
-	//    audio also auto-fires it through the transient detector.
+	// 2. Router-only window: demo audio + the router are live, but automation
+	//    playback and the morph sweep have NOT started yet. The morph path and
+	//    automation playback both also write intensity/depth, so intensity/depth
+	//    movement during the rest of the run can't isolate the router. Snapshot
+	//    their movement here, where the router is the only thing that can move
+	//    them — a dead router shows zero in this window.
 	await sleep(2000);
+	const routerOnlyIntensity = fieldChanges.get("intensity") ?? 0;
+	const routerOnlyDepth = fieldChanges.get("depth") ?? 0;
+
+	// 3. Start automation playback so the recorder/player path is live; the demo
+	//    audio also auto-fires it through the transient detector.
 	send({ address: "/bevyosc/automation/play-loop", args: [] });
 
-	// 3. Sweep the preset morph continuously, as an absent performer's fader would.
+	// 4. Sweep the preset morph continuously, as an absent performer's fader would.
 	let morphPhase = 0;
 	const morphTimer = setInterval(() => {
 		morphPhase += 0.04;
@@ -204,18 +213,17 @@ async function main(): Promise<number> {
 		});
 	}, 200);
 
-	const startedAt = Date.now();
 	await sleep(Math.max(0, DURATION_MS - 2000));
 	clearInterval(morphTimer);
-	const elapsedMs = Date.now() - startedAt + 2000;
 
 	ws.close();
 	bridge.kill();
+	const elapsedMs = Date.now() - runStart;
 
 	// ── Evaluate ──────────────────────────────────────────────────────────
 	const fc = (k: string) => fieldChanges.get(k) ?? 0;
 	const distinctFieldsMoved = fieldChanges.size;
-	const continuousMoved = fc("intensity") > 0 || fc("depth") > 0;
+	const continuousMoved = routerOnlyIntensity > 0 || routerOnlyDepth > 0;
 	const thresholdMoved = maxFlashVersion > firstFlashVersion;
 	const morphMoved = fc("morph") > 0;
 
@@ -243,7 +251,7 @@ async function main(): Promise<number> {
 			name: "audio_router_continuous",
 			ok: continuousMoved,
 			required: true,
-			detail: `intensity:${fc("intensity")} depth:${fc("depth")} moves`,
+			detail: `router-only window: intensity:${routerOnlyIntensity} depth:${routerOnlyDepth} moves`,
 		},
 		{
 			name: "preset_morph",
@@ -281,7 +289,6 @@ async function main(): Promise<number> {
 		controlBroadcasts,
 		demoAudioCount,
 		diagnosticsCount,
-		presetCommandCount,
 		distinctFieldsMoved,
 		fieldChanges: Object.fromEntries(fieldChanges),
 		checks,
