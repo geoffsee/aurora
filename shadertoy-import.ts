@@ -110,6 +110,11 @@ type NagaRun = {
 	stdout: string;
 };
 
+export const nagaAvailable = async (): Promise<boolean> => {
+	const { code } = await runNaga(["--version"]);
+	return code === 0;
+};
+
 const runNaga = async (args: string[]): Promise<NagaRun> => {
 	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
 	try {
@@ -136,10 +141,23 @@ const runNaga = async (args: string[]): Promise<NagaRun> => {
 	return { code, stdout, stderr };
 };
 
+const BEVY_VERTEX_OUTPUT_IMPORT =
+	"#import bevy_sprite::mesh2d_vertex_output::VertexOutput";
+
+// Bevy resolves the `#import` above at material-load time; bare naga can't. For
+// the standalone validation pass we swap it for a concrete VertexOutput matching
+// the mesh2d shape so naga can type-check the adapted module on its own.
+const VALIDATION_VERTEX_OUTPUT_STUB = `struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) world_position: vec4<f32>,
+    @location(1) world_normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+}`;
+
 /**
  * Naga emits a self-contained WGSL module with a `main` entry point and binding
  * layouts taken from our `layout(set=2, binding=N)` declarations. We need to:
- *   - Rename `fn main(...) -> @location(0) vec4<f32>` to `fn fragment(in: VertexOutput) -> ...`
+ *   - Rename `fn main(...) -> <return>` to `fn fragment(in: VertexOutput) -> <return>`
  *   - Replace the `@builtin(position)` parameter with `in.position`
  *   - Prepend the Bevy `#import` for `VertexOutput`
  * If naga's output diverges from what we expect (e.g. different attribute
@@ -147,17 +165,22 @@ const runNaga = async (args: string[]): Promise<NagaRun> => {
  * than emit a broken file.
  */
 export const adaptNagaWgslForBevy = (raw: string): string | null => {
-	const importLine = "#import bevy_sprite::mesh2d_vertex_output::VertexOutput";
+	const importLine = BEVY_VERTEX_OUTPUT_IMPORT;
 	if (raw.includes(importLine)) return raw;
 
+	// naga's return type varies by version: older builds inline `@location(0)
+	// vec4<f32>`, newer ones return a generated output struct (e.g.
+	// `FragmentOutput`). Capture whichever it is and keep it verbatim so the
+	// rewritten body (which may `return FragmentOutput(...)`) stays type-correct.
 	const fragmentSig =
-		/@fragment\s*\nfn\s+main\s*\(\s*@builtin\(position\)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*vec4<f32>\s*\)\s*->\s*@location\(0\)\s*vec4<f32>\s*\{/;
+		/@fragment\s*\nfn\s+main\s*\(\s*@builtin\(position\)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*vec4<f32>\s*\)\s*->\s*(@location\(0\)\s*vec4<f32>|[A-Za-z_][A-Za-z0-9_]*)\s*\{/;
 	const match = raw.match(fragmentSig);
 	if (!match) return null;
 	const posName = match[1];
+	const returnType = match[2];
 	const replaced = raw.replace(
 		fragmentSig,
-		`@fragment\nfn fragment(_bevyosc_in: VertexOutput) -> @location(0) vec4<f32> {\n    let ${posName}: vec4<f32> = _bevyosc_in.position;`,
+		`@fragment\nfn fragment(_bevyosc_in: VertexOutput) -> ${returnType} {\n    let ${posName}: vec4<f32> = _bevyosc_in.position;`,
 	);
 	return `${importLine}\n\n${replaced}`;
 };
@@ -187,6 +210,85 @@ const fetchShader = async (id: string, apiKey: string) => {
 		throw new Error("Shadertoy API response missing `Shader` field");
 	}
 	return shader;
+};
+
+export type TransformSuccess = {
+	ok: true;
+	wgsl: string;
+	usedIChannel: boolean;
+};
+
+export type TransformResult = TransformSuccess | ImportFailure;
+
+/**
+ * The network-free core of the import: take a Shadertoy Image-pass `mainImage`
+ * body, wrap it in our scaffold, convert GLSL→WGSL with naga, adapt naga's entry
+ * point to Bevy's Material2d shape, and re-validate the result. `importShadertoyUrl`
+ * fetches the source then defers to this; the shader-import regression harness
+ * drives it directly against a committed fixture so the real transform path is
+ * snapshotted rather than a CPU stand-in. Requires the `naga` CLI on PATH.
+ */
+export const transformShadertoyGlsl = async (
+	userGlsl: string,
+): Promise<TransformResult> => {
+	const usedIChannel = checkIChannelUsage(userGlsl);
+	const wrapped = wrapGlsl(userGlsl);
+
+	const stem = randomBytes(8).toString("hex");
+	const glslPath = join(tmpdir(), `shadertoy-${stem}.frag`);
+	const wgslPath = join(tmpdir(), `shadertoy-${stem}.wgsl`);
+
+	try {
+		await writeFile(glslPath, wrapped, "utf8");
+		// naga can't infer GLSL input from the `.frag` stem alone (it reads the
+		// stage but not the language), so name both explicitly.
+		const conv = await runNaga([
+			"--input-kind",
+			"glsl",
+			"--shader-stage",
+			"frag",
+			glslPath,
+			wgslPath,
+		]);
+		if (conv.code !== 0) {
+			return {
+				ok: false,
+				error: `naga GLSL→WGSL failed:\n${conv.stderr || conv.stdout}`,
+			};
+		}
+		const rawWgsl = await readFile(wgslPath, "utf8");
+		const adapted = adaptNagaWgslForBevy(rawWgsl);
+		if (!adapted) {
+			return {
+				ok: false,
+				error:
+					"Could not adapt naga output to Bevy Material2d shape (unexpected entry-point signature)",
+			};
+		}
+
+		// Round-trip validation: ensure the adapted WGSL parses cleanly. naga can't
+		// resolve Bevy's `#import`, so validate against a concrete VertexOutput stub
+		// — the returned `adapted` keeps the real import untouched.
+		const validationSrc = adapted.replace(
+			BEVY_VERTEX_OUTPUT_IMPORT,
+			VALIDATION_VERTEX_OUTPUT_STUB,
+		);
+		const validatePath = join(tmpdir(), `shadertoy-${stem}-validate.wgsl`);
+		await writeFile(validatePath, validationSrc, "utf8");
+		const verify = await runNaga([validatePath]);
+		await unlink(validatePath).catch(() => {});
+		if (verify.code !== 0) {
+			return {
+				ok: false,
+				error: `Adapted WGSL failed validation:\n${verify.stderr || verify.stdout}`,
+			};
+		}
+
+		return { ok: true, wgsl: adapted, usedIChannel };
+	} finally {
+		await unlink(glslPath).catch(() => {});
+		await unlink(wgslPath).catch(() => {});
+	}
 };
 
 export const importShadertoyUrl = async (
@@ -234,52 +336,20 @@ export const importShadertoyUrl = async (
 		return { ok: false, error: "Image pass has no source code" };
 	}
 
-	const usedIChannel = checkIChannelUsage(userGlsl);
-	const wrapped = wrapGlsl(userGlsl);
-
-	const stem = randomBytes(8).toString("hex");
-	const glslPath = join(tmpdir(), `shadertoy-${stem}.frag`);
-	const wgslPath = join(tmpdir(), `shadertoy-${stem}.wgsl`);
-
-	try {
-		await writeFile(glslPath, wrapped, "utf8");
-		const conv = await runNaga([glslPath, wgslPath]);
-		if (conv.code !== 0) {
-			return {
-				ok: false,
-				error: `naga GLSL→WGSL failed:\n${conv.stderr || conv.stdout}`,
-			};
-		}
-		const rawWgsl = await readFile(wgslPath, "utf8");
-		const adapted = adaptNagaWgslForBevy(rawWgsl);
-		if (!adapted) {
-			return {
-				ok: false,
-				error:
-					"Could not adapt naga output to Bevy Material2d shape (unexpected entry-point signature)",
-			};
-		}
-
-		// Round-trip validation: ensure the adapted WGSL parses cleanly.
-		const validatePath = join(tmpdir(), `shadertoy-${stem}-validate.wgsl`);
-		await writeFile(validatePath, adapted, "utf8");
-		const verify = await runNaga([validatePath]);
-		await unlink(validatePath).catch(() => {});
-		if (verify.code !== 0) {
-			return {
-				ok: false,
-				error: `Adapted WGSL failed validation:\n${verify.stderr || verify.stdout}`,
-			};
-		}
-
-		const meta: ShadertoyMeta = {
-			id,
-			name: sanitize(info.name ?? id),
-			username: sanitize(info.username ?? "unknown"),
-		};
-		return { ok: true, wgsl: adapted, meta, usedIChannel };
-	} finally {
-		await unlink(glslPath).catch(() => {});
-		await unlink(wgslPath).catch(() => {});
+	const transformed = await transformShadertoyGlsl(userGlsl);
+	if (!transformed.ok) {
+		return transformed;
 	}
+
+	const meta: ShadertoyMeta = {
+		id,
+		name: sanitize(info.name ?? id),
+		username: sanitize(info.username ?? "unknown"),
+	};
+	return {
+		ok: true,
+		wgsl: transformed.wgsl,
+		meta,
+		usedIChannel: transformed.usedIChannel,
+	};
 };

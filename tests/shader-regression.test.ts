@@ -29,6 +29,7 @@ const MAX_DRIFT_FRACTION = 0.005;
 // It does NOT exercise the real import/transform pipeline (shadertoy-import.ts:
 // wrapGlsl / adaptNagaWgslForBevy) or the GPU WGSL — those share no code with the
 // CPU reimplementation here, so a regression in them won't move these baselines.
+// That pipeline is covered separately by tests/shadertoy-import-regression.test.ts.
 test("a Shadertoy-style shader archetype is covered by the harness", () => {
 	expect(SHADERS.some((s) => s.shadertoyStyle)).toBe(true);
 });

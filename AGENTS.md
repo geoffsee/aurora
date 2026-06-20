@@ -33,19 +33,32 @@ the output against committed PNG baselines in
 `tests/__screenshots__/shader-regression.test.ts/`. The live Bevy/WASM GPU
 renderer cannot run under vitest's happy-dom, so this CPU harness is the
 safety-net that catches silent drift in the *rendered output* of these CPU
-shader reimplementations (one of which is a Shadertoy-style archetype). Note it
-does NOT exercise the real Shadertoy import/transform pipeline
-(`shadertoy-import.ts`) or the GPU WGSL — those share no code with these
-stand-ins, so a regression there will not move these baselines. It fails when
-more than 0.5% of pixels move beyond a small per-channel tolerance.
+shader reimplementations (one of which is a Shadertoy-style archetype). It fails
+when more than 0.5% of pixels move beyond a small per-channel tolerance. This CPU
+harness does NOT exercise the real Shadertoy import/transform pipeline or the GPU
+WGSL — those share no code with these stand-ins.
 
-To intentionally update the baselines after a deliberate shader/renderer change:
+That gap is covered by a companion harness, `tests/shadertoy-import-regression.test.ts`,
+which drives a real imported Shadertoy Image-pass fixture
+(`tests/fixtures/shadertoy/palette-swirl.frag`) through the *actual* transform in
+`shadertoy-import.ts` and text-snapshots its output, so a regression in the import
+path moves a baseline. Two stages:
+
+- `*.wrapped.glsl` — output of `wrapGlsl`. Pure TypeScript, so it always runs
+  (no `naga`) and guards the GLSL scaffold/preamble.
+- `*.wgsl` — the full GLSL→WGSL transform (`wrapGlsl` → `naga` → `adaptNagaWgslForBevy`
+  → validate). Needs the `naga` CLI (`cargo install naga-cli`); where it is absent
+  (e.g. CI without naga) this stage **skips** rather than failing on the missing tool.
+
+To intentionally update the baselines after a deliberate shader/renderer or
+import-transform change (one command refreshes both the PNG and the import baselines):
 
 ```bash
 UPDATE_SHADER_BASELINES=1 bun run test:web tests/shader-regression.test.ts
+UPDATE_SHADER_BASELINES=1 bun run test:web tests/shadertoy-import-regression.test.ts  # needs naga on PATH for the *.wgsl baseline
 ```
 
-Review the regenerated PNGs, then commit them. Locally, a missing baseline is
+Review the regenerated PNGs / WGSL, then commit them. Locally, a missing baseline is
 written and passes on first run; in CI a missing baseline fails the build (so an
 uncommitted or deleted baseline can't go green). An unexpected diff fails the build.
 
