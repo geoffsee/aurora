@@ -151,3 +151,136 @@ describe("router contract", () => {
 		expect(state.flashVersion).toBe(2);
 	});
 });
+
+// ── controls.html inline parity ───────────────────────────────────────────────
+// The code that actually ships is the inline copy of extractMicFeatures /
+// micSecureContextError in controls.html, but the tests above only exercise the
+// mic-features.ts module. These replicas are byte-faithful transcriptions of the
+// controls.html inline functions; asserting they match the module across a range
+// of inputs guards the two copies against silent drift (same hazard the preset
+// bundle solved with a parity test — see AGENTS.md). If you edit either copy,
+// update this replica so the divergence shows up here instead of in production.
+
+const INLINE_MIC_MIN_DB = -100;
+const INLINE_MIC_MAX_DB = -30;
+const INLINE_MIC_BANDS = {
+	bass: [20, 250],
+	mid: [250, 2000],
+	high: [2000, 8000],
+};
+
+const inlineClamp = (
+	value: number,
+	min: number,
+	max: number,
+	fallback = min,
+) => {
+	const number = Number(value);
+	return Math.max(min, Math.min(max, Number.isFinite(number) ? number : fallback));
+};
+const inlineClamp01 = (value: number) => inlineClamp(value, 0, 1, 0);
+
+// Mirror of micSecureContextError() in controls.html.
+function inlineSecureContextError(
+	isSecureContext: boolean,
+	hostname: string,
+): string | null {
+	if (isSecureContext) return null;
+	const host = hostname;
+	if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
+		return null;
+	}
+	return (
+		`Live mic capture needs a secure context: this page is served from ` +
+		`"${host || "an insecure origin"}" over plain HTTP. Browsers only allow ` +
+		`getUserMedia on HTTPS or localhost. Open the controls page via localhost ` +
+		`or terminate TLS / use a localhost tunnel for LAN deployments.`
+	);
+}
+
+// Mirror of extractMicFeatures() in controls.html.
+function inlineExtractMicFeatures(
+	freqDb: ArrayLike<number>,
+	sampleRate: number,
+	fftSize: number,
+): AudioFeatures {
+	const span = INLINE_MIC_MAX_DB - INLINE_MIC_MIN_DB;
+	const bins = freqDb.length;
+	if (bins === 0 || span <= 0 || !(sampleRate > 0) || !(fftSize > 0)) {
+		return { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 };
+	}
+	const hzPerBin = sampleRate / fftSize;
+	let energySum = 0,
+		bassSum = 0,
+		bassCount = 0,
+		midSum = 0,
+		midCount = 0;
+	let highSum = 0,
+		highCount = 0,
+		highPeak = 0;
+	for (let i = 0; i < bins; i++) {
+		const norm = inlineClamp01((freqDb[i] - INLINE_MIC_MIN_DB) / span);
+		energySum += norm;
+		const hz = i * hzPerBin;
+		if (hz >= INLINE_MIC_BANDS.bass[0] && hz < INLINE_MIC_BANDS.bass[1]) {
+			bassSum += norm;
+			bassCount++;
+		} else if (hz >= INLINE_MIC_BANDS.mid[0] && hz < INLINE_MIC_BANDS.mid[1]) {
+			midSum += norm;
+			midCount++;
+		} else if (
+			hz >= INLINE_MIC_BANDS.high[0] &&
+			hz < INLINE_MIC_BANDS.high[1]
+		) {
+			highSum += norm;
+			highCount++;
+			if (norm > highPeak) highPeak = norm;
+		}
+	}
+	return {
+		energy: inlineClamp01(energySum / bins),
+		bass: bassCount ? inlineClamp01(bassSum / bassCount) : 0,
+		mid: midCount ? inlineClamp01(midSum / midCount) : 0,
+		high: highCount ? inlineClamp01(highSum / highCount) : 0,
+		pulse: highPeak,
+	};
+}
+
+describe("controls.html inline parity", () => {
+	test("extractMicFeatures matches the module across representative spectra", () => {
+		const spectra: Float32Array[] = [
+			spectrumInBand(0, 9999),
+			spectrumInBand(20, 250),
+			spectrumInBand(250, 2000),
+			spectrumInBand(2000, 8000),
+			spectrumInBand(0, 0),
+			new Float32Array(BINS).fill((MIN_DB + MAX_DB) / 2),
+			new Float32Array(0),
+		];
+		for (const spectrum of spectra) {
+			expect(
+				inlineExtractMicFeatures(spectrum, SAMPLE_RATE, FFT_SIZE),
+			).toEqual(extractMicFeatures(spectrum, opts));
+		}
+		// Degenerate config degrades identically in both copies.
+		expect(inlineExtractMicFeatures(spectrumInBand(0, 9999), 0, FFT_SIZE)).toEqual(
+			extractMicFeatures(spectrumInBand(0, 9999), { ...opts, sampleRate: 0 }),
+		);
+	});
+
+	test("micSecureContextError matches the module across host/context combos", () => {
+		const cases: Array<[boolean, string]> = [
+			[true, "vj.example"],
+			[false, "localhost"],
+			[false, "127.0.0.1"],
+			[false, "[::1]"],
+			[false, "192.168.1.42"],
+			[false, ""],
+		];
+		for (const [isSecureContext, hostname] of cases) {
+			expect(inlineSecureContextError(isSecureContext, hostname)).toBe(
+				micSecureContextError({ isSecureContext, hostname }),
+			);
+		}
+	});
+});

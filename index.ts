@@ -170,6 +170,7 @@ let lastLinkUpdateAt = 0;
 let linkNumPeers = 0;
 const demoAudioEma = makeAudioEmaState();
 const liveAudioEma = makeAudioEmaState();
+const browserAudioEma = makeAudioEmaState();
 
 const _raw = Number(Bun.env.STATE_LOG_CAPACITY);
 const stateLogCapacity =
@@ -1349,12 +1350,17 @@ const visualServer = Bun.serve({
 						// feed is live it is the authoritative router source and suppresses
 						// the demo loop (see the demo-loop guard).
 						lastBrowserAudioFeaturesMs = Date.now();
-						audioControlRouter.onFeatures(
+						// Smooth raw browser features through the same EMA the demo and
+						// live-Ableton feeds use, so all three router sources share one
+						// response curve (the browser sends per-frame, ~20 Hz).
+						const smoothedBrowser = stepAudioEma(
+							browserAudioEma,
 							coerceAudioFeatures(
 								Array.isArray(parsed.args) ? parsed.args[0] : undefined,
 							),
-							Date.now(),
+							latestControlState?.emaAlphas ?? audioEmaAlphas,
 						);
+						audioControlRouter.onFeatures(smoothedBrowser, Date.now());
 					} else if (
 						parsed.address.startsWith("/bevyosc/automation/transient/")
 					) {

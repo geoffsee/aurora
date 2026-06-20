@@ -1731,6 +1731,7 @@
       let micTimer = null;
       let micFreqData = null;
       let micActive = false;
+      let micStarting = false;
 
       // Mirror of micSecureContextError() in mic-features.ts.
       function micSecureContextError() {
@@ -1790,32 +1791,45 @@
       }
 
       async function startMicCapture() {
-        const secureError = micSecureContextError();
-        if (secureError) {
-          addBanner(secureError, "error");
-          return;
-        }
-        if (!navigator.mediaDevices?.getUserMedia) {
-          addBanner("Live mic capture unavailable: getUserMedia is not supported in this browser.", "error");
-          return;
-        }
+        // Guard re-entry: micActive is only set at the end, after the awaits, so a
+        // second click while the first start is still pending would otherwise launch
+        // a parallel capture and orphan the first stream/context/timer.
+        if (micActive || micStarting) return;
+        micStarting = true;
         try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch (err) {
-          addBanner(`Live mic capture failed: ${err?.name || "Error"} — ${err?.message || err}`, "error");
-          return;
+          const secureError = micSecureContextError();
+          if (secureError) {
+            addBanner(secureError, "error");
+            return;
+          }
+          if (!navigator.mediaDevices?.getUserMedia) {
+            addBanner("Live mic capture unavailable: getUserMedia is not supported in this browser.", "error");
+            return;
+          }
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (err) {
+            addBanner(`Live mic capture failed: ${err?.name || "Error"} — ${err?.message || err}`, "error");
+            return;
+          }
+          micContext = new (window.AudioContext || window.webkitAudioContext)();
+          // The click's transient activation may have lapsed during the getUserMedia
+          // await; some browsers (Safari) then start the context suspended and the
+          // analyser graph never advances. Resume so capture isn't a silent dead toggle.
+          await micContext.resume().catch(() => {});
+          const source = micContext.createMediaStreamSource(micStream);
+          const analyser = micContext.createAnalyser();
+          analyser.fftSize = MIC_FFT_SIZE;
+          analyser.minDecibels = MIC_MIN_DB;
+          analyser.maxDecibels = MIC_MAX_DB;
+          source.connect(analyser);
+          micFreqData = { analyser, bins: new Float32Array(analyser.frequencyBinCount) };
+          micTimer = setInterval(micTick, MIC_SEND_INTERVAL_MS);
+          micActive = true;
+          render();
+        } finally {
+          micStarting = false;
         }
-        micContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = micContext.createMediaStreamSource(micStream);
-        const analyser = micContext.createAnalyser();
-        analyser.fftSize = MIC_FFT_SIZE;
-        analyser.minDecibels = MIC_MIN_DB;
-        analyser.maxDecibels = MIC_MAX_DB;
-        source.connect(analyser);
-        micFreqData = { analyser, bins: new Float32Array(analyser.frequencyBinCount) };
-        micTimer = setInterval(micTick, MIC_SEND_INTERVAL_MS);
-        micActive = true;
-        render();
       }
 
       function stopMicCapture() {
