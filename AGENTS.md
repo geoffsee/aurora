@@ -47,15 +47,23 @@ path moves a baseline. Two stages:
 - `*.wrapped.glsl` — output of `wrapGlsl`. Pure TypeScript, so it always runs
   (no `naga`) and guards the GLSL scaffold/preamble.
 - `*.wgsl` — the full GLSL→WGSL transform (`wrapGlsl` → `naga` → `adaptNagaWgslForBevy`
-  → validate). Needs the `naga` CLI (`cargo install naga-cli`); where it is absent
-  (e.g. CI without naga) this stage **skips** rather than failing on the missing tool.
+  → validate). naga's WGSL output is version-specific, so this baseline is pinned to
+  **naga-cli 26.0.0** (matches the `naga` crate in `Cargo.lock`; install with
+  `cargo install naga-cli@26.0.0`). The stage runs the snapshot **only** when the
+  local naga-cli is exactly that version, and **skips** otherwise (absent, or a
+  different release) rather than emitting a version-driven false positive. **CI does
+  not install naga** (`.github/workflows/ci.yml` installs Rust, wasm-bindgen, bun and
+  Playwright only), so this WGSL stage is **skipped in the CI gate** — only stage 1
+  (`*.wrapped.glsl`) is exercised there. If you bump the pinned naga-cli version,
+  update `PINNED_NAGA_VERSION` in `tests/shadertoy-import-regression.test.ts` and
+  regenerate the `*.wgsl` baseline in the same change.
 
 To intentionally update the baselines after a deliberate shader/renderer or
 import-transform change (one command refreshes both the PNG and the import baselines):
 
 ```bash
 UPDATE_SHADER_BASELINES=1 bun run test:web tests/shader-regression.test.ts
-UPDATE_SHADER_BASELINES=1 bun run test:web tests/shadertoy-import-regression.test.ts  # needs naga on PATH for the *.wgsl baseline
+UPDATE_SHADER_BASELINES=1 bun run test:web tests/shadertoy-import-regression.test.ts  # *.wgsl baseline needs naga-cli 26.0.0 on PATH
 ```
 
 Review the regenerated PNGs / WGSL, then commit them. Locally, a missing baseline is

@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
-	nagaAvailable,
+	nagaVersion,
 	transformShadertoyGlsl,
 	wrapGlsl,
 } from "../shadertoy-import.ts";
@@ -23,6 +23,15 @@ const WGSL_BASELINE = join(FIXTURE_DIR, `${SHADER_NAME}.wgsl`);
 // Shares the env var with the PNG harness so a single documented command refreshes
 // every shader baseline at once.
 const UPDATE = process.env.UPDATE_SHADER_BASELINES === "1";
+
+// naga's WGSL output is version-specific (SSA temp names, generated output-struct
+// shape), so the *.wgsl baseline is only reproducible against one pinned naga-cli
+// release. Matches the `naga` crate in Cargo.lock; install with
+// `cargo install naga-cli@26.0.0`. Also recorded in AGENTS.md. Stage 2 below runs
+// the WGSL snapshot ONLY against this version and skips on any other (or absent)
+// naga, so a contributor on a different release gets a skip rather than a
+// false-positive "regression". Bump this together with the regenerated baseline.
+const PINNED_NAGA_VERSION = "26.0.0";
 
 const userGlsl = readFileSync(FIXTURE_GLSL, "utf8");
 
@@ -59,12 +68,13 @@ describe("shadertoy import transform regression", () => {
 		expectMatchesBaseline(WRAPPED_BASELINE, wrapGlsl(userGlsl), "wrapped GLSL");
 	});
 
-	// Stage 2: the full GLSL→WGSL transform needs the `naga` CLI. Where it is present
-	// (dev machines, CI with naga-cli) we snapshot the real adapted WGSL and fail on
-	// drift; where it is absent we skip rather than fail on the missing tool — stage 1
-	// still covers the pure-TS portion of the pipeline in that environment.
+	// Stage 2: the full GLSL→WGSL transform needs the pinned `naga` CLI. We snapshot
+	// the real adapted WGSL and fail on drift ONLY when the local naga-cli matches
+	// PINNED_NAGA_VERSION; on any other (or absent) naga we skip rather than emit a
+	// version-driven false positive. Note CI does NOT install naga (see ci.yml), so
+	// this stage is skipped in the gate — stage 1 is what CI actually exercises here.
 	test("full transform WGSL for the imported shader matches its baseline", async (ctx) => {
-		if (!(await nagaAvailable())) {
+		if ((await nagaVersion()) !== PINNED_NAGA_VERSION) {
 			ctx.skip();
 			return;
 		}

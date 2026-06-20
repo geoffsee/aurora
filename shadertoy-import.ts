@@ -110,9 +110,15 @@ type NagaRun = {
 	stdout: string;
 };
 
-export const nagaAvailable = async (): Promise<boolean> => {
-	const { code } = await runNaga(["--version"]);
-	return code === 0;
+// Returns the installed naga-cli semver (e.g. "26.0.0"), or null when the CLI is
+// absent or its version can't be parsed. naga's WGSL output is version-specific,
+// so the import-regression harness uses this to pin the WGSL snapshot to one
+// release rather than failing across versions.
+export const nagaVersion = async (): Promise<string | null> => {
+	const { code, stdout } = await runNaga(["--version"]);
+	if (code !== 0) return null;
+	const match = stdout.match(/\d+\.\d+\.\d+/);
+	return match ? match[0] : null;
 };
 
 const runNaga = async (args: string[]): Promise<NagaRun> => {
