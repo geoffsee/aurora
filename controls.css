@@ -62,6 +62,7 @@ main {
     "hero hero hero hero cues cues cues cues cues cues cues cues"
     "slid slid slid slid slid slid slid slid slid slid slid slid"
     "mast mast mast mast mast map  map  map  map  reh  reh  reh"
+    "audc audc audc audc audc audc audc audc audc audc audc audc"
     "midi midi midi midi midi midi midi midi midi midi midi midi"
     "trig trig trig trig trig trig trig trig trig trig trig trig"
     "curv curv curv curv curv curv curv curv curv curv curv curv"
@@ -79,6 +80,7 @@ header { grid-area: head; }
 .s-midi-cc { grid-area: midi; }
 .s-triggers { grid-area: trig; }
 .s-audio-curves { grid-area: curv; }
+.s-audio-control { grid-area: audc; }
 .s-meters { grid-area: mete; }
 
 /* ============== Header ============== */
@@ -1021,6 +1023,7 @@ meter::-moz-meter-bar {
       "slid slid slid slid slid slid slid slid slid slid slid slid"
       "mast mast mast mast mast mast mast mast mast mast mast mast"
       "map  map  map  map  map  map  reh  reh  reh  reh  reh  reh"
+      "audc audc audc audc audc audc audc audc audc audc audc audc"
       "midi midi midi midi midi midi midi midi midi midi midi midi"
       "trig trig trig trig trig trig trig trig trig trig trig trig"
       "curv curv curv curv curv curv curv curv curv curv curv curv"
@@ -1052,6 +1055,7 @@ meter::-moz-meter-bar {
       "mast mast mast mast mast mast mast mast mast mast mast mast"
       "map  map  map  map  map  map  map  map  map  map  map  map"
       "reh  reh  reh  reh  reh  reh  reh  reh  reh  reh  reh  reh"
+      "audc audc audc audc audc audc audc audc audc audc audc audc"
       "midi midi midi midi midi midi midi midi midi midi midi midi"
       "trig trig trig trig trig trig trig trig trig trig trig trig"
       "curv curv curv curv curv curv curv curv curv curv curv curv"
