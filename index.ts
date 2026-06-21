@@ -1611,6 +1611,10 @@ setInterval(() => {
 		abletonLinkEnabled,
 		abletonLinkActive: isAbletonLinkActive(),
 		abletonLinkPeers: linkNumPeers,
+		clockSource: selectTempoSource({
+			linkActive: isAbletonLinkActive(),
+			midiActive: isMidiClockActive(),
+		}),
 		visualPort: port,
 		controlsPort,
 		numTracks,
