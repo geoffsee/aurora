@@ -15,6 +15,7 @@
     "install:vst:mac": "mkdir -p \"$HOME/Library/Audio/Plug-Ins/VST3\" && cp -R \"target-vst/bundled/bevyosc VJ Bridge.vst3\" \"$HOME/Library/Audio/Plug-Ins/VST3/\"",
     "serve": "bun run index.ts",
     "dev": "bun run build:web && HOT_RELOAD=1 bun run index.ts",
+    "dry-run": "bun run scripts/dry-run.ts",
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",
     "test:web": "vitest run",

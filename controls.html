@@ -241,6 +241,17 @@
         </div>
       </section>
 
+      <section class="panel s-audio-control" aria-label="Audio Control">
+        <div class="section-title">
+          <h2>Audio Control</h2>
+          <span id="audio-control-status" class="badge">Off</span>
+        </div>
+        <div class="button-grid compact">
+          <button id="audio-control-mode" aria-pressed="false">Audio Control</button>
+          <button id="mic-capture" aria-pressed="false">Live Mic</button>
+        </div>
+      </section>
+
       <section class="panel s-midi-cc" aria-label="MIDI CC Mapping">
         <div class="section-title">
           <h2>MIDI CC Mapping</h2>
@@ -1423,6 +1434,15 @@
         $("#beat-sync").setAttribute("aria-pressed", String(state.beatSync));
         $("#bar-sync").setAttribute("aria-pressed", String(state.barSync));
         $("#demo-mode").setAttribute("aria-pressed", String(state.demoMode));
+        $("#audio-control-mode").setAttribute("aria-pressed", String(state.audioControlMode));
+        $("#mic-capture").setAttribute("aria-pressed", String(micActive));
+        const audioControlBadge = $("#audio-control-status");
+        audioControlBadge.textContent = state.audioControlMode
+          ? micActive
+            ? "Mic live"
+            : "On"
+          : "Off";
+        audioControlBadge.dataset.state = state.audioControlMode && micActive ? "live" : state.audioControlMode ? "info" : "idle";
         $("#energy").value = osc.energy;
         $("#bass").value = osc.bass;
         $("#mid").value = osc.mid;
@@ -1692,6 +1712,142 @@
       $("#demo-mode").addEventListener("click", () => {
         state.demoMode = !state.demoMode;
         publish();
+      });
+
+      // ── Live Mic Capture (Phase 2: "Audio as the Only Controller") ──────────
+      // Browser-native audio source: getUserMedia → AnalyserNode → AudioFeatures,
+      // sent as /bevyosc/audio/features so the bridge's Phase-1 router drives
+      // ControlState from a live mic with no Ableton or MIDI. Features are only
+      // emitted while state.audioControlMode is enabled (the bridge router is
+      // also inert otherwise, but gating the send avoids needlessly suppressing
+      // the bridge demo loop). Mirrors mic-features.ts — keep the two in sync.
+      const MIC_FFT_SIZE = 2048;
+      const MIC_MIN_DB = -100;
+      const MIC_MAX_DB = -30;
+      const MIC_SEND_INTERVAL_MS = 50;
+      const MIC_BANDS = { bass: [20, 250], mid: [250, 2000], high: [2000, 8000] };
+      let micStream = null;
+      let micContext = null;
+      let micTimer = null;
+      let micFreqData = null;
+      let micActive = false;
+      let micStarting = false;
+
+      // Mirror of micSecureContextError() in mic-features.ts.
+      function micSecureContextError() {
+        if (window.isSecureContext) return null;
+        const host = location.hostname;
+        if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return null;
+        return (
+          `Live mic capture needs a secure context: this page is served from ` +
+          `"${host || "an insecure origin"}" over plain HTTP. Browsers only allow ` +
+          `getUserMedia on HTTPS or localhost. Open the controls page via localhost ` +
+          `or terminate TLS / use a localhost tunnel for LAN deployments.`
+        );
+      }
+
+      // Mirror of extractMicFeatures() in mic-features.ts.
+      function extractMicFeatures(freqDb, sampleRate, fftSize) {
+        const span = MIC_MAX_DB - MIC_MIN_DB;
+        const bins = freqDb.length;
+        if (bins === 0 || span <= 0 || !(sampleRate > 0) || !(fftSize > 0)) {
+          return { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 };
+        }
+        const hzPerBin = sampleRate / fftSize;
+        let energySum = 0, bassSum = 0, bassCount = 0, midSum = 0, midCount = 0;
+        let highSum = 0, highCount = 0, highPeak = 0;
+        for (let i = 0; i < bins; i++) {
+          const norm = clamp01((freqDb[i] - MIC_MIN_DB) / span);
+          energySum += norm;
+          const hz = i * hzPerBin;
+          if (hz >= MIC_BANDS.bass[0] && hz < MIC_BANDS.bass[1]) {
+            bassSum += norm; bassCount++;
+          } else if (hz >= MIC_BANDS.mid[0] && hz < MIC_BANDS.mid[1]) {
+            midSum += norm; midCount++;
+          } else if (hz >= MIC_BANDS.high[0] && hz < MIC_BANDS.high[1]) {
+            highSum += norm; highCount++;
+            if (norm > highPeak) highPeak = norm;
+          }
+        }
+        return {
+          energy: clamp01(energySum / bins),
+          bass: bassCount ? clamp01(bassSum / bassCount) : 0,
+          mid: midCount ? clamp01(midSum / midCount) : 0,
+          high: highCount ? clamp01(highSum / highCount) : 0,
+          pulse: highPeak,
+        };
+      }
+
+      function micTick() {
+        if (!micContext || !micFreqData) return;
+        micFreqData.analyser.getFloatFrequencyData(micFreqData.bins);
+        if (!state.audioControlMode || ws?.readyState !== WebSocket.OPEN) return;
+        const features = extractMicFeatures(
+          micFreqData.bins,
+          micContext.sampleRate,
+          MIC_FFT_SIZE,
+        );
+        ws.send(JSON.stringify({ address: "/bevyosc/audio/features", args: [features] }));
+      }
+
+      async function startMicCapture() {
+        // Guard re-entry: micActive is only set at the end, after the awaits, so a
+        // second click while the first start is still pending would otherwise launch
+        // a parallel capture and orphan the first stream/context/timer.
+        if (micActive || micStarting) return;
+        micStarting = true;
+        try {
+          const secureError = micSecureContextError();
+          if (secureError) {
+            addBanner(secureError, "error");
+            return;
+          }
+          if (!navigator.mediaDevices?.getUserMedia) {
+            addBanner("Live mic capture unavailable: getUserMedia is not supported in this browser.", "error");
+            return;
+          }
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (err) {
+            addBanner(`Live mic capture failed: ${err?.name || "Error"} — ${err?.message || err}`, "error");
+            return;
+          }
+          micContext = new (window.AudioContext || window.webkitAudioContext)();
+          // The click's transient activation may have lapsed during the getUserMedia
+          // await; some browsers (Safari) then start the context suspended and the
+          // analyser graph never advances. Resume so capture isn't a silent dead toggle.
+          await micContext.resume().catch(() => {});
+          const source = micContext.createMediaStreamSource(micStream);
+          const analyser = micContext.createAnalyser();
+          analyser.fftSize = MIC_FFT_SIZE;
+          analyser.minDecibels = MIC_MIN_DB;
+          analyser.maxDecibels = MIC_MAX_DB;
+          source.connect(analyser);
+          micFreqData = { analyser, bins: new Float32Array(analyser.frequencyBinCount) };
+          micTimer = setInterval(micTick, MIC_SEND_INTERVAL_MS);
+          micActive = true;
+          render();
+        } finally {
+          micStarting = false;
+        }
+      }
+
+      function stopMicCapture() {
+        if (micTimer) { clearInterval(micTimer); micTimer = null; }
+        if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+        if (micContext) { micContext.close().catch(() => {}); micContext = null; }
+        micFreqData = null;
+        micActive = false;
+        render();
+      }
+
+      $("#audio-control-mode").addEventListener("click", () => {
+        state.audioControlMode = !state.audioControlMode;
+        publish();
+      });
+      $("#mic-capture").addEventListener("click", () => {
+        if (micActive) stopMicCapture();
+        else startMicCapture();
       });
       $("#save-preset").addEventListener("click", savePreset);
       $("#record").addEventListener("click", startRecording);
