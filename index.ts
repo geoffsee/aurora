@@ -1604,6 +1604,8 @@ vstControlUdp.open();
 
 setInterval(() => {
 	const now = Date.now();
+	const linkActive = isAbletonLinkActive();
+	const midiActive = isMidiClockActive();
 	const diagnostics = {
 		sockets: sockets.size,
 		oscReady,
@@ -1613,14 +1615,11 @@ setInterval(() => {
 		liveRecvPort,
 		vstControlRecvPort,
 		midiClockDevice: midiClockDevice || null,
-		midiClockActive: isMidiClockActive(),
+		midiClockActive: midiActive,
 		abletonLinkEnabled,
-		abletonLinkActive: isAbletonLinkActive(),
+		abletonLinkActive: linkActive,
 		abletonLinkPeers: linkNumPeers,
-		clockSource: selectTempoSource({
-			linkActive: isAbletonLinkActive(),
-			midiActive: isMidiClockActive(),
-		}),
+		clockSource: selectTempoSource({ linkActive, midiActive }),
 		visualPort: port,
 		controlsPort,
 		numTracks,
