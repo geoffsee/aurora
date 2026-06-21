@@ -94,6 +94,19 @@ describe("adaptNagaWgslForBevy", () => {
 		expect(adapted).not.toContain("fn main(");
 	});
 
+	test("preserves a generated output struct return type (newer naga)", () => {
+		const structReturn =
+			"@fragment\nfn main(@builtin(position) pos: vec4<f32>) -> FragmentOutput {\n    return FragmentOutput(pos);\n}";
+		const adapted = adaptNagaWgslForBevy(structReturn);
+		expect(adapted).not.toBeNull();
+		expect(adapted).toContain("fn fragment(_bevyosc_in: VertexOutput)");
+		// The body still constructs FragmentOutput, so the return type must be kept
+		// verbatim rather than rewritten to @location(0) vec4<f32>.
+		expect(adapted).toContain("-> FragmentOutput {");
+		expect(adapted).toContain("let pos: vec4<f32> = _bevyosc_in.position;");
+		expect(adapted).not.toContain("fn main(");
+	});
+
 	test("is idempotent when the import is already present", () => {
 		const already = `#import bevy_sprite::mesh2d_vertex_output::VertexOutput\n\nfn fragment() {}`;
 		expect(adaptNagaWgslForBevy(already)).toBe(already);

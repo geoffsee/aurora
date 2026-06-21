@@ -33,19 +33,40 @@ the output against committed PNG baselines in
 `tests/__screenshots__/shader-regression.test.ts/`. The live Bevy/WASM GPU
 renderer cannot run under vitest's happy-dom, so this CPU harness is the
 safety-net that catches silent drift in the *rendered output* of these CPU
-shader reimplementations (one of which is a Shadertoy-style archetype). Note it
-does NOT exercise the real Shadertoy import/transform pipeline
-(`shadertoy-import.ts`) or the GPU WGSL — those share no code with these
-stand-ins, so a regression there will not move these baselines. It fails when
-more than 0.5% of pixels move beyond a small per-channel tolerance.
+shader reimplementations (one of which is a Shadertoy-style archetype). It fails
+when more than 0.5% of pixels move beyond a small per-channel tolerance. This CPU
+harness does NOT exercise the real Shadertoy import/transform pipeline or the GPU
+WGSL — those share no code with these stand-ins.
 
-To intentionally update the baselines after a deliberate shader/renderer change:
+That gap is covered by a companion harness, `tests/shadertoy-import-regression.test.ts`,
+which drives a real imported Shadertoy Image-pass fixture
+(`tests/fixtures/shadertoy/palette-swirl.frag`) through the *actual* transform in
+`shadertoy-import.ts` and text-snapshots its output, so a regression in the import
+path moves a baseline. Two stages:
+
+- `*.wrapped.glsl` — output of `wrapGlsl`. Pure TypeScript, so it always runs
+  (no `naga`) and guards the GLSL scaffold/preamble.
+- `*.wgsl` — the full GLSL→WGSL transform (`wrapGlsl` → `naga` → `adaptNagaWgslForBevy`
+  → validate). naga's WGSL output is version-specific, so this baseline is pinned to
+  **naga-cli 26.0.0** (matches the `naga` crate in `Cargo.lock`; install with
+  `cargo install naga-cli@26.0.0`). The stage runs the snapshot **only** when the
+  local naga-cli is exactly that version, and **skips** otherwise (absent, or a
+  different release) rather than emitting a version-driven false positive. **CI does
+  not install naga** (`.github/workflows/ci.yml` installs Rust, wasm-bindgen, bun and
+  Playwright only), so this WGSL stage is **skipped in the CI gate** — only stage 1
+  (`*.wrapped.glsl`) is exercised there. If you bump the pinned naga-cli version,
+  update `PINNED_NAGA_VERSION` in `tests/shadertoy-import-regression.test.ts` and
+  regenerate the `*.wgsl` baseline in the same change.
+
+To intentionally update the baselines after a deliberate shader/renderer or
+import-transform change (one command refreshes both the PNG and the import baselines):
 
 ```bash
 UPDATE_SHADER_BASELINES=1 bun run test:web tests/shader-regression.test.ts
+UPDATE_SHADER_BASELINES=1 bun run test:web tests/shadertoy-import-regression.test.ts  # *.wgsl baseline needs naga-cli 26.0.0 on PATH
 ```
 
-Review the regenerated PNGs, then commit them. Locally, a missing baseline is
+Review the regenerated PNGs / WGSL, then commit them. Locally, a missing baseline is
 written and passes on first run; in CI a missing baseline fails the build (so an
 uncommitted or deleted baseline can't go green). An unexpected diff fails the build.
 
