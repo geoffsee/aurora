@@ -17,6 +17,7 @@
         <div class="status" role="status" aria-live="polite">
           <span id="bridge-status" class="pill" data-state="connecting">bridge connecting</span>
           <span id="osc-status" class="pill" data-state="idle">OSC idle</span>
+          <span id="clock-status" class="pill" data-state="info">Clock —</span>
           <span id="preset-status" class="pill" data-state="idle">No preset</span>
           <span id="diagnostics-status" class="pill" data-state="info">0 viewers</span>
           <span id="latency-status" class="pill" data-state="info">P95 —ms</span>
@@ -486,13 +487,15 @@
         previousEnergy: 0,
         lastEnvelopeAt: 0,
       };
-      const diagnostics = { sockets: 0, oscReady: false, oscActive: false, demoMode: false, replaying: false };
+      const diagnostics = { sockets: 0, oscReady: false, oscActive: false, demoMode: false, replaying: false, clockSource: null };
+      const CLOCK_LABELS = { link: "Link", midi: "MIDI", internal: "Internal" };
 
       const $ = (selector) => document.querySelector(selector);
       const $$ = (selector) => Array.from(document.querySelectorAll(selector));
       const bridgeStatus = $("#bridge-status");
       const oscStatus = $("#osc-status");
       const diagnosticsStatus = $("#diagnostics-status");
+      const clockStatus = $("#clock-status");
       const recordingStatus = $("#recording-status");
       const latencyStatus = $("#latency-status");
       const latencyWindow = [];
@@ -1463,6 +1466,8 @@
         oscStatus.dataset.state = state.demoMode ? "demo" : oscLive ? "live" : "idle";
         diagnosticsStatus.textContent = `${diagnostics.sockets} viewer${diagnostics.sockets === 1 ? "" : "s"} · ${diagnostics.oscReady ? "OSC ready" : "OSC wait"}`;
         diagnosticsStatus.dataset.state = diagnostics.oscReady ? "info" : "warn";
+        clockStatus.textContent = `Clock ${CLOCK_LABELS[diagnostics.clockSource] ?? "—"}`;
+        clockStatus.dataset.state = diagnostics.clockSource === "internal" ? "info" : diagnostics.clockSource ? "live" : "idle";
         if (latencyWindow.length > 0) {
           const sorted = [...latencyWindow].sort((a, b) => a - b);
           const idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
