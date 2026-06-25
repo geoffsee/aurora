@@ -11,9 +11,8 @@ import type { AudioFeatures } from "./audio-ema.ts";
 // feeding the same Phase-1 router contract (audio-control-router.ts) that the
 // demo loop and live AbletonOSC path already use.
 //
-// This module is the testable mirror of the inline capture math in
-// controls.html (`extractMicFeatures` / `micSecureContextError`). Keep the two
-// in sync — the controls-page copy must produce identical output so the unit
+// This module is the testable mirror of the controls app capture math in
+// web/controls/lib/mic.ts. Keep the two in sync — the controls-page copy must produce identical output so the unit
 // tests here are a faithful contract check on what the browser ships.
 // ──────────────────────────────────────────────────────────────────────────
 

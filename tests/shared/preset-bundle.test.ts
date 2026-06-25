@@ -51,8 +51,8 @@ function recallPreset(bundle: PresetBundle, current: PresetState): PresetState {
 // ── PRESET_BUNDLE_SCHEMA_VERSION ──────────────────────────────────────────────
 
 describe("PRESET_BUNDLE_SCHEMA_VERSION", () => {
-	// If this assertion fails, also bump the constant in controls.html.
-	test("equals 1 (pin to catch controls.html drift)", () => {
+	// If this assertion fails, also bump the constant in web/controls/lib/default-state.ts.
+	test("equals 1 (pin to catch controls app drift)", () => {
 		expect(PRESET_BUNDLE_SCHEMA_VERSION).toBe(1);
 	});
 
@@ -453,7 +453,7 @@ describe("schema migration preserves bundling intent", () => {
 			},
 		};
 		const migrated = migrateControlState(v3State) as Record<string, unknown>;
-		expect(migrated.schemaVersion).toBe(6);
+		expect(migrated.schemaVersion).toBe(7);
 		expect(migrated.emaAlphas).toEqual(DEFAULT_AUDIO_EMA_ALPHAS);
 		expect(migrated.bandCurves).toEqual(v3State.bandCurves);
 		expect(migrated.activeShader).toBe(1);
@@ -548,49 +548,12 @@ describe("normalizeEmaAlphas", () => {
 	});
 });
 
-// ── normalizePreset (controls.html) / migratePresetBundle parity ──────────────
-// If this suite fails after a schema bump, update normalizePreset in controls.html too.
+// ── normalizePreset (web/controls) / migratePresetBundle parity ──────────────
+// If this suite fails after a schema bump, update migratePresetBundle in shared/preset-bundle-schema.ts.
 
-describe("normalizePreset (controls.html) parity with migratePresetBundle", () => {
-	// Inline replica of normalizePreset from controls.html.
-	function normalizePreset(raw: unknown): PresetBundle | null {
-		if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-		const r = raw as Record<string, unknown>;
-		if (!("state" in r))
-			return {
-				schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION,
-				name: "",
-				state: r,
-				curves: {},
-			};
-		const state =
-			r.state && typeof r.state === "object"
-				? (r.state as Record<string, unknown>)
-				: {};
-		const curvesRaw = r.curves;
-		const curves: Record<string, string> =
-			curvesRaw && typeof curvesRaw === "object" && !Array.isArray(curvesRaw)
-				? Object.fromEntries(
-						Object.entries(curvesRaw as Record<string, unknown>).filter(
-							([, v]) => typeof v === "string",
-						) as [string, string][],
-					)
-				: {};
-		const name = typeof r.name === "string" ? r.name : "";
-		if (
-			!("schemaVersion" in r) ||
-			r.schemaVersion === PRESET_BUNDLE_SCHEMA_VERSION
-		) {
-			return {
-				schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION,
-				name,
-				state,
-				curves,
-			};
-		}
-		return null;
-	}
+import { normalizePreset } from "../../web/controls/lib/presets.ts";
 
+describe("normalizePreset (web/controls) parity with migratePresetBundle", () => {
 	test("null → null", () =>
 		expect(normalizePreset(null)).toEqual(migratePresetBundle(null)));
 	test("undefined → null", () =>

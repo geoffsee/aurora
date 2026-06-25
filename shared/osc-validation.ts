@@ -33,7 +33,7 @@ export const VST_OSC_CONTRACT = contract;
 
 // CONTROL_STATE_SCHEMA_VERSION tracks the ControlState wire format.
 // To bump: increment this integer, add a migration branch in
-// control-state-schema.ts, and update defaultState() in controls.html
+// control-state-schema.ts, and update defaultState() in web/controls/lib/default-state.ts
 // to emit the new version number.
 // v2: added activeShader field (0..3 = palette variants, 4 = grid,
 //      5..8 = tunnel/glitch/fluid/truchet — packed into vj_palette.wgsl)
@@ -41,7 +41,8 @@ export const VST_OSC_CONTRACT = contract;
 // v4: added emaAlphas field (per-band EMA decay constants for preset bundling)
 // v5: added morph field (OSC-controlled preset-morph fader position, 0..1 — PR #181)
 // v6: added audioControlMode field (global enable for the audio-control router)
-export const CONTROL_STATE_SCHEMA_VERSION = 6;
+// v7: added paletteR/G/B fields (color-picker duotone base; palette hue kept for VST/MIDI)
+export const CONTROL_STATE_SCHEMA_VERSION = 7;
 
 export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [

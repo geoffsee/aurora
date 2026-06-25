@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "build:web": "CARGO_TARGET_DIR=target cargo build --release -p bevyosc --target wasm32-unknown-unknown && wasm-bindgen --out-dir dist/pkg --out-name bevyosc --target web target/wasm32-unknown-unknown/release/bevyosc.wasm",
+    "build:controls": "bun build web/controls/index.html --outdir dist/controls --minify",
     "check:wasm": "CARGO_TARGET_DIR=target cargo check -p bevyosc --target wasm32-unknown-unknown",
     "check:vst": "cargo check -p bevyosc-vst",
     "clippy:wasm": "CARGO_TARGET_DIR=target cargo clippy -p bevyosc --target wasm32-unknown-unknown -- -D warnings",
@@ -14,7 +15,7 @@
     "build:vst": "CARGO_TARGET_DIR=target-vst cargo run -p xtask -- bundle bevyosc-vst --release",
     "install:vst:mac": "mkdir -p \"$HOME/Library/Audio/Plug-Ins/VST3\" && cp -R \"target-vst/bundled/bevyosc VJ Bridge.vst3\" \"$HOME/Library/Audio/Plug-Ins/VST3/\"",
     "serve": "bun run bridge/index.ts",
-    "dev": "bun run build:web && HOT_RELOAD=1 bun run bridge/index.ts",
+    "dev": "bun run build:web && bun run build:controls && HOT_RELOAD=1 bun run bridge/index.ts",
     "dry-run": "bun run scripts/dry-run.ts",
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",
@@ -26,6 +27,8 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "happy-dom": "^20.9.0",
     "vitest": "^4.0.0",
@@ -35,6 +38,10 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "osc": "^2.4.5"
+    "@chakra-ui/react": "^3.36.0",
+    "@emotion/react": "^11.14.0",
+    "osc": "^2.4.5",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   }
 }

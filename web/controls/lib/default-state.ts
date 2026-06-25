@@ -1,0 +1,100 @@
+import { CONTROL_STATE_SCHEMA_VERSION } from "../../../shared/osc-validation.ts";
+import { DEFAULT_PALETTE_RGB } from "../../../shared/palette-color.ts";
+import type { ControlState } from "./types.ts";
+
+export function defaultState(): ControlState {
+	return {
+		schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
+		crossfade: 0.5,
+		bpm: 124,
+		speed: 1,
+		intensity: 0.82,
+		feedback: 0.35,
+		depth: 0,
+		palette: 0,
+		paletteR: DEFAULT_PALETTE_RGB.r,
+		paletteG: DEFAULT_PALETTE_RGB.g,
+		paletteB: DEFAULT_PALETTE_RGB.b,
+		paletteSaturation: 1,
+		paletteBrightness: 1,
+		gridDensity: 0.5,
+		gridDiamond: 0.5,
+		gridLineWidth: 0.5,
+		gridShapeMix: 0.5,
+		deckAMode: 0,
+		deckBMode: 1,
+		rings: true,
+		ringOpacity: 1,
+		strobe: false,
+		strobeLockout: false,
+		blackout: false,
+		freeze: false,
+		maxBrightness: 0.9,
+		showGpuPalette: false,
+		beatSync: true,
+		barSync: false,
+		demoMode: false,
+		replaying: false,
+		flashVersion: 0,
+		resetVersion: 0,
+		cueVersion: 0,
+		cueIntensity: 0,
+		cuePalette: 0,
+		cueCrossfade: 0.5,
+		cueDeckAMode: 0,
+		cueDeckBMode: 1,
+		trackMapping: {
+			deckAStart: 0,
+			deckACount: 8,
+			deckBStart: 8,
+			deckBCount: 8,
+			bassTrack: 0,
+			midTrack: 1,
+			highTrack: 2,
+		},
+		activeShader: 0,
+		bandCurves: {
+			energy: "linear",
+			bass: "linear",
+			mid: "linear",
+			high: "linear",
+		},
+		emaAlphas: {
+			energy: 0.12,
+			bass: 0.08,
+			mid: 0.15,
+			high: 0.22,
+			pulse: 0.28,
+		},
+		morph: 0,
+		audioControlMode: false,
+	};
+}
+
+export function defaultOscMeters() {
+	return {
+		lastFrameAt: 0,
+		beat: 0,
+		beatIndex: 0,
+		energy: 0,
+		bass: 0,
+		mid: 0,
+		high: 0,
+		deckA: 0,
+		deckB: 0,
+		lastBrowserAudioAt: 0,
+		previousEnergy: 0,
+		lastEnvelopeAt: 0,
+	};
+}
+
+export function defaultDiagnostics() {
+	return {
+		sockets: 0,
+		oscReady: false,
+		oscActive: false,
+		demoMode: false,
+		replaying: false,
+		clockSource: null,
+	};
+}

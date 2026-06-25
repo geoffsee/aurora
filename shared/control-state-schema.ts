@@ -5,6 +5,8 @@ const defaultBandCurves = () => ({
 	high: "linear" as const,
 });
 
+import { hueToRgb } from "./palette-color.ts";
+
 const defaultEmaAlphas = () => ({
 	energy: 0.12,
 	bass: 0.08,
@@ -52,7 +54,23 @@ export const migrateControlState = (state: unknown): unknown => {
 	}
 	// v5 → v6: add audioControlMode field (audio-control router global enable)
 	if (s.schemaVersion === 5) {
-		return { ...s, schemaVersion: 6, audioControlMode: false };
+		return migrateControlState({
+			...s,
+			schemaVersion: 6,
+			audioControlMode: false,
+		});
+	}
+	// v6 → v7: add paletteR/G/B (derive from legacy palette hue when absent)
+	if (s.schemaVersion === 6) {
+		const palette = typeof s.palette === "number" ? s.palette : 0;
+		const rgb = hueToRgb(palette);
+		return {
+			...s,
+			schemaVersion: 7,
+			paletteR: rgb.r,
+			paletteG: rgb.g,
+			paletteB: rgb.b,
+		};
 	}
 	return state;
 };

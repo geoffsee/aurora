@@ -19,6 +19,7 @@ import {
 	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "../shared/osc-validation.ts";
+import { DEFAULT_PALETTE_RGB, resolvePaletteColor } from "../shared/palette-color.ts";
 import {
 	MIDI_CLOCK_TICK,
 	MIDI_CLOCK_WINDOW,
@@ -85,6 +86,9 @@ type ControlState = {
 	feedback: number;
 	depth: number;
 	palette: number;
+	paletteR: number;
+	paletteG: number;
+	paletteB: number;
 	paletteSaturation: number;
 	paletteBrightness: number;
 	gridDensity: number;
@@ -152,6 +156,7 @@ const controlsPort = Number(Bun.env.CONTROLS_PORT ?? 3001);
 const bridgeRoot = import.meta.dir;
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const webRoot = `${root}/web`;
+const controlsDistRoot = `${root}/dist/controls`;
 const liveHost = Bun.env.LIVE_HOST ?? "127.0.0.1";
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
@@ -202,6 +207,9 @@ const resolveStaticFile = (relativePath: string) => {
 			: webRoot;
 	return Bun.file(`${base}/${relativePath}`);
 };
+
+const resolveControlsFile = (relativePath: string) =>
+	Bun.file(`${controlsDistRoot}/${relativePath}`);
 
 const udp = new osc.UDPPort({
 	localAddress: "127.0.0.1",
@@ -300,6 +308,9 @@ const defaultControlState = (): ControlState => ({
 	feedback: 0.35,
 	depth: 0,
 	palette: 0,
+	paletteR: DEFAULT_PALETTE_RGB.r,
+	paletteG: DEFAULT_PALETTE_RGB.g,
+	paletteB: DEFAULT_PALETTE_RGB.b,
 	paletteSaturation: 1,
 	paletteBrightness: 1,
 	gridDensity: 0.5,
@@ -428,6 +439,10 @@ const coerceControlState = (state: unknown): ControlState => {
 		source.trackMapping && typeof source.trackMapping === "object"
 			? source.trackMapping
 			: {};
+	const paletteColor = resolvePaletteColor(source, {
+		palette: defaults.palette,
+		...DEFAULT_PALETTE_RGB,
+	});
 
 	return {
 		schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
@@ -437,7 +452,10 @@ const coerceControlState = (state: unknown): ControlState => {
 		intensity: clamp(source.intensity, 0.05, 1.5, defaults.intensity),
 		feedback: clamp(source.feedback, 0, 1, defaults.feedback),
 		depth: clamp(source.depth, 0, 1, defaults.depth),
-		palette: clamp(source.palette, 0, 1, defaults.palette),
+		palette: paletteColor.palette,
+		paletteR: paletteColor.r,
+		paletteG: paletteColor.g,
+		paletteB: paletteColor.b,
 		paletteSaturation: clamp(
 			source.paletteSaturation,
 			0,
@@ -650,6 +668,7 @@ audioControlRouter.setMappings(parseAudioMappings(audioMappingsRaw));
 // resumes once the browser source goes quiet.
 const BROWSER_AUDIO_FEATURE_TTL_MS = 1000;
 let lastBrowserAudioFeaturesMs = Number.NEGATIVE_INFINITY;
+const OSC_ACTIVE_TTL_MS = 3000;
 
 // MIDI byte parser state for note-on and CC messages.
 // Real-time bytes (0xF8–0xFF) are single-byte and do not affect running status.
@@ -701,6 +720,17 @@ const coerceAudioFeatures = (raw: unknown): AudioFeatures => {
 		pulse: clamp(f.pulse, 0, 1, 0),
 	};
 };
+
+function broadcastBrowserAudioFeatures(features: AudioFeatures, nowMs: number): void {
+	// Live AbletonOSC remains authoritative. Browser mic frames fill the same
+	// renderer-facing audio lane only while OSC has gone quiet.
+	if (nowMs - latestOscFrameAt < OSC_ACTIVE_TTL_MS) return;
+	const data = JSON.stringify({
+		address: "/bevyosc/audio/features",
+		args: [features],
+	});
+	sockets.forEach((ws) => ws.send(data));
+}
 
 // Derive AudioFeatures from a raw AbletonOSC track_data response and feed the
 // transient detector. The response carries meter floats, optionally preceded by
@@ -1359,18 +1389,22 @@ const visualServer = Bun.serve({
 						// these unless ControlState.audioControlMode is enabled. While this
 						// feed is live it is the authoritative router source and suppresses
 						// the demo loop (see the demo-loop guard).
-						lastBrowserAudioFeaturesMs = Date.now();
+						const nowMs = Date.now();
+						lastBrowserAudioFeaturesMs = nowMs;
+						const rawBrowserFeatures = coerceAudioFeatures(
+							Array.isArray(parsed.args) ? parsed.args[0] : undefined,
+						);
 						// Smooth raw browser features through the same EMA the demo and
 						// live-Ableton feeds use, so all three router sources share one
 						// response curve (the browser sends per-frame, ~20 Hz).
 						const smoothedBrowser = stepAudioEma(
 							browserAudioEma,
-							coerceAudioFeatures(
-								Array.isArray(parsed.args) ? parsed.args[0] : undefined,
-							),
+							rawBrowserFeatures,
 							latestControlState?.emaAlphas ?? audioEmaAlphas,
 						);
-						audioControlRouter.onFeatures(smoothedBrowser, Date.now());
+						audioControlRouter.onFeatures(smoothedBrowser, nowMs);
+						automationBridge.onAudioFeatures(smoothedBrowser, nowMs);
+						broadcastBrowserAudioFeatures(smoothedBrowser, nowMs);
 					} else if (
 						parsed.address.startsWith("/bevyosc/automation/transient/")
 					) {
@@ -1506,13 +1540,13 @@ const controlsServer = Bun.serve({
 			});
 		}
 
-		const relativePath = pathname === "/" ? "controls.html" : pathname.slice(1);
+		const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
 
 		if (relativePath.includes("..")) {
 			return new Response("Not found", { status: 404 });
 		}
 
-		const file = resolveStaticFile(relativePath);
+		const file = resolveControlsFile(relativePath);
 		if (!(await file.exists())) {
 			return new Response("Not found", { status: 404 });
 		}
@@ -1619,7 +1653,7 @@ setInterval(() => {
 	const diagnostics = {
 		sockets: sockets.size,
 		oscReady,
-		oscActive: now - latestOscFrameAt < 3000,
+		oscActive: now - latestOscFrameAt < OSC_ACTIVE_TTL_MS,
 		liveHost,
 		liveSendPort,
 		liveRecvPort,

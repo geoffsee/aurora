@@ -6,7 +6,7 @@ use bevy::{
     render::render_resource::AsBindGroup,
     shader::{Shader, ShaderRef},
     sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
-    window::{PresentMode, WindowResolution},
+    window::{PresentMode, PrimaryWindow, WindowResolution},
     winit::WinitSettings,
 };
 #[cfg(target_arch = "wasm32")]
@@ -51,6 +51,12 @@ unsafe extern "C" {
     fn browser_control_depth() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPalette)]
     fn browser_control_palette() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteR)]
+    fn browser_control_palette_r() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteG)]
+    fn browser_control_palette_g() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteB)]
+    fn browser_control_palette_b() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlDeckAMode)]
     fn browser_control_deck_a_mode() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlDeckBMode)]
@@ -111,7 +117,8 @@ unsafe extern "C" {
 }
 
 /// GPU material driven by the `palette` controls.
-/// `params`: x=hue_shift (0..1), y=show_time (s), z=unused, w=unused.
+/// `params`: x=legacy hue (0..1), y=show_time (s), z=variant, w=window aspect.
+/// `palette_rgb`: xyz = picked duotone base (0..1 per channel).
 /// `palette_extra`: x=saturation multiplier (0..1), y=brightness multiplier (0..1), z=pulse (0..1).
 /// `audio_uniforms`: x=energy (-1.0 = inactive), y=bass, z=mid, w=high (all 0..1 when active).
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
@@ -122,11 +129,10 @@ struct VjPaletteMaterial {
     palette_extra: Vec4,
     #[uniform(2)]
     audio_uniforms: Vec4,
-    /// Unused by the palette shader, but keeps the bind-group layout structurally
-    /// identical to `VjGridMaterial` so Bevy's Material2d pipeline cache doesn't
-    /// reuse the wrong layout for the grid pipeline.
+    /// Picked duotone base color (RGB 0..1). Shared bind-group slot with grid's
+    /// `grid_extra` on the grid material — only read by palette/imported shaders.
     #[uniform(3)]
-    _reserved: Vec4,
+    palette_rgb: Vec4,
 }
 
 impl Material2d for VjPaletteMaterial {
@@ -178,7 +184,7 @@ struct VjImportedMaterial {
     #[uniform(2)]
     audio_uniforms: Vec4,
     #[uniform(3)]
-    _reserved: Vec4,
+    palette_rgb: Vec4,
 }
 
 impl Material2d for VjImportedMaterial {
@@ -258,6 +264,7 @@ fn main() {
                 update_palette_material,
                 consume_pending_imported_shader,
                 debug_inject_imported_shader,
+                fit_gpu_quads_to_window,
             )
                 .chain(),
         )
@@ -273,6 +280,9 @@ struct VjState {
     feedback: f32,
     depth: f32,
     palette: f32,
+    palette_r: f32,
+    palette_g: f32,
+    palette_b: f32,
     palette_saturation: f32,
     palette_brightness: f32,
     grid_density: f32,
@@ -319,6 +329,9 @@ impl Default for VjState {
             feedback: 0.35,
             depth: 0.0,
             palette: 0.0,
+            palette_r: 61.0 / 255.0,
+            palette_g: 90.0 / 255.0,
+            palette_b: 128.0 / 255.0,
             palette_saturation: 1.0,
             palette_brightness: 1.0,
             grid_density: 0.5,
@@ -442,7 +455,9 @@ fn setup(
     ));
 
     let quad = meshes.add(Rectangle::default());
-    let circle = meshes.add(Circle::new(1.0));
+    // Rings render as a thin annulus. Keep it restrained; a thick, bright ring
+    // reads like a target overlay rather than part of the visual texture.
+    let ring_mesh = meshes.add(Annulus::new(0.94, 1.0));
     let torus = meshes.add(Torus {
         minor_radius: 0.035,
         major_radius: 1.0,
@@ -489,7 +504,7 @@ fn setup(
 
     for index in 0..DECK_A_RINGS {
         commands.spawn((
-            Mesh2d(circle.clone()),
+            Mesh2d(ring_mesh.clone()),
             MeshMaterial2d(materials.add(transparent)),
             Transform::from_xyz(0.0, 0.0, 2.0 + index as f32 * 0.01),
             VisualElement {
@@ -542,7 +557,7 @@ fn setup(
         params: Vec4::ZERO,
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
-        _reserved: Vec4::ZERO,
+        palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
     });
     commands.insert_resource(VjPaletteHandle(gpu_mat.clone()));
     commands.spawn((
@@ -574,7 +589,7 @@ fn setup(
         params: Vec4::ZERO,
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 0.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
-        _reserved: Vec4::ZERO,
+        palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
     });
     commands.insert_resource(VjImportedHandle(imported_mat.clone()));
     let imported_shader: Handle<Shader> = asset_server.load("shaders/imported.wgsl");
@@ -588,6 +603,28 @@ fn setup(
     ));
 
     // The control surface now lives on port 3001, so the projector output has no HUD.
+}
+
+/// Stretch the fullscreen GPU-shader quads to cover the whole window. The
+/// Camera2d maps one world unit to one pixel, so the quads (unit `Rectangle`s)
+/// must be scaled to the live window size every frame — otherwise they stay at
+/// the fixed `STAGE_WIDTH`×`STAGE_HEIGHT` design resolution and leave letterbox
+/// bars on any window with a different size or aspect ratio. The fragment
+/// shaders sample `frag.uv` (0..1 across the quad), so stretching simply maps
+/// the effect across the full viewport.
+fn fit_gpu_quads_to_window(
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut quads: Query<&mut Transform, With<GpuShaderQuad>>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let width = window.width().max(1.0);
+    let height = window.height().max(1.0);
+    for mut transform in &mut quads {
+        transform.scale.x = width;
+        transform.scale.y = height;
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -692,6 +729,9 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.feedback = browser_control_feedback().clamp(0.0, 1.0);
         state.depth = browser_control_depth().clamp(0.0, 1.0);
         state.palette = browser_control_palette().clamp(0.0, 1.0);
+        state.palette_r = browser_control_palette_r().clamp(0.0, 1.0);
+        state.palette_g = browser_control_palette_g().clamp(0.0, 1.0);
+        state.palette_b = browser_control_palette_b().clamp(0.0, 1.0);
         state.palette_saturation = browser_control_palette_saturation().clamp(0.0, 1.0);
         state.palette_brightness = browser_control_palette_brightness().clamp(0.0, 1.0);
         state.grid_density = browser_control_grid_density().clamp(0.0, 1.0);
@@ -719,6 +759,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
             state.flash = state.flash.max(0.6);
             state.intensity = browser_control_cue_intensity().clamp(0.05, 1.5);
             state.palette = browser_control_cue_palette().clamp(0.0, 1.0);
+            sync_palette_rgb_from_hue(&mut state);
             state.crossfade = browser_control_cue_crossfade().clamp(0.0, 1.0);
             state.deck_a_mode = VisualMode::from_control(browser_control_cue_deck_a_mode());
             state.deck_b_mode = VisualMode::from_control(browser_control_cue_deck_b_mode());
@@ -848,9 +889,11 @@ fn keyboard_controls(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut state
 
     if keys.just_pressed(KeyCode::KeyQ) {
         state.palette = (state.palette - 0.025).rem_euclid(1.0);
+        sync_palette_rgb_from_hue(&mut state);
     }
     if keys.just_pressed(KeyCode::KeyE) {
         state.palette = (state.palette + 0.025).rem_euclid(1.0);
+        sync_palette_rgb_from_hue(&mut state);
     }
     if keys.just_pressed(KeyCode::KeyF) {
         state.flash = 1.0;
@@ -1086,86 +1129,72 @@ fn update_visuals(
                     + high * 0.04;
             }
             VisualKind::Ring => {
-                let fraction = element.index as f32 / DECK_A_RINGS as f32;
-                let pulse = wave(t * 3.2 - fraction * 3.4);
-                let size = 90.0
-                    + fraction * 560.0
-                    + pulse * 80.0 * motion_drive
-                    + beat_hit * 110.0
-                    + deck_drive * 130.0
-                    + melodic_activity * 52.0;
+                // A restrained halo, not a target ring. Layers stay close and faint so
+                // the ring supports the beams instead of becoming the whole composition.
+                let layer = if DECK_A_RINGS > 1 {
+                    element.index as f32 / (DECK_A_RINGS as f32 - 1.0)
+                } else {
+                    0.0
+                };
+                let ring_pulse = wave(t * 2.4);
+                let beat_swell = beat_hit * 0.7 + cue_hit * 0.4;
+                let pump = (beat * TAU).sin().abs();
 
-                transform.translation = Vec3::new(0.0, 0.0, 18.0 + fraction);
-                transform.rotation = Quat::from_rotation_z(-t * (0.4 + fraction));
+                // Per-mode feel WITHOUT moving the ring off-centre or onto multiple
+                // radii (that is exactly what read as a web). Only radius, halo spread,
+                // alpha, and an on/off gate change per mode; the ring stays centred.
+                let (radius_gain, halo_gain, alpha_gain, mode_gate) = match deck_mode {
+                    VisualMode::Tunnel => (0.92 + state.depth * 0.18, 0.9, 0.65, 1.0),
+                    VisualMode::Burst => (0.96 + beat_hit * 0.32 + cue_hit * 0.18, 1.0, 0.72, 1.0),
+                    VisualMode::Mirror => (0.9, 0.65, 0.58 + mid * 0.28, 1.0),
+                    VisualMode::Wash => (1.02 + state.feedback * 0.18, 1.4, 0.44, 1.0),
+                    VisualMode::Strobe => (
+                        0.9 + bass * 0.22,
+                        0.8,
+                        0.75,
+                        if (bass + beat_hit * 1.2).clamp(0.0, 1.0) > 0.4 {
+                            1.0
+                        } else {
+                            0.0
+                        },
+                    ),
+                    VisualMode::Swarm => (0.88 + ring_pulse * 0.05, 1.1, 0.5, 1.0),
+                    VisualMode::Orbit => (0.92, 0.9, 0.6, 1.0),
+                    VisualMode::Pulse => (0.78 + pump * 0.22 + beat_hit * 0.14, 0.8, 0.42 + pump * 0.32, 1.0),
+                    VisualMode::Spiral => (0.9, 1.05, 0.55, 1.0),
+                    VisualMode::Beams => (0.9, 0.8, 0.55, 1.0),
+                };
+
+                let base_radius = 220.0
+                    + deck_drive * 44.0
+                    + bass * 58.0
+                    + melodic_activity * 18.0
+                    + ring_pulse * 9.0 * motion_drive
+                    + beat_swell * 24.0;
+                let size = (base_radius * radius_gain * (1.0 + layer * 0.08 * halo_gain)).max(1.0);
+
+                transform.translation = Vec3::new(0.0, 0.0, 18.0 - layer);
+                transform.rotation = Quat::from_rotation_z(-t * 0.22);
                 transform.scale = Vec3::splat(size);
 
-                match deck_mode {
-                    VisualMode::Tunnel => {
-                        let offset = (fraction - 0.5) * state.depth * 220.0;
-                        transform.translation =
-                            Vec3::new(offset * wave(t + fraction), offset, 24.0 + fraction * 20.0);
-                        transform.scale *= 0.75 + fraction * 1.3 + beat_hit * 0.6;
-                        alpha *= 1.15 + state.depth;
-                    }
-                    VisualMode::Burst => {
-                        transform.scale *= 0.8 + beat_hit * 2.4 + cue_hit;
-                        alpha *= 0.7 + beat_hit * 1.8;
-                    }
-                    VisualMode::Mirror => {
-                        transform.translation.x = (fraction - 0.5) * STAGE_WIDTH * 0.55;
-                        transform.scale.y *= 0.55;
-                        alpha *= 0.8 + mid * 0.7;
-                    }
-                    VisualMode::Wash => {
-                        transform.scale *= 1.9 + state.feedback;
-                        alpha *= 0.4 + state.feedback * 0.5;
-                    }
-                    VisualMode::Strobe => {
-                        let gate = (bass + beat_hit * 1.2).clamp(0.0, 1.0);
-                        let on = if gate > 0.4 { 1.0 } else { 0.0 };
-                        alpha *= on;
-                        transform.scale *= 1.0 + bass * 1.4 + beat_hit * 0.9;
-                    }
-                    VisualMode::Swarm => {
-                        let dx = (t * 1.3 + fraction * 13.0).sin() * 180.0;
-                        let dy = (t * 1.6 + fraction * 9.0).cos() * 120.0;
-                        transform.translation.x = dx;
-                        transform.translation.y = dy;
-                        transform.scale *= 0.55 + fraction * 0.8;
-                        alpha *= 0.7;
-                    }
-                    VisualMode::Orbit => {
-                        let orbit_a = t * (0.5 + fraction * 0.6) + fraction * TAU;
-                        transform.translation.x = orbit_a.cos() * 200.0 * fraction;
-                        transform.translation.y = orbit_a.sin() * 200.0 * fraction;
-                        transform.scale *= 0.6 + fraction * 0.7;
-                    }
-                    VisualMode::Pulse => {
-                        let pump = (beat * TAU).sin().abs();
-                        transform.scale *= 0.5 + pump * 1.7 + beat_hit * 0.6;
-                        alpha *= 0.4 + pump * 1.0;
-                    }
-                    VisualMode::Spiral => {
-                        let spiral_a = fraction * TAU * 2.0 + t * 0.6;
-                        transform.translation.x = spiral_a.cos() * 280.0 * fraction;
-                        transform.translation.y = spiral_a.sin() * 280.0 * fraction;
-                        transform.rotation = Quat::from_rotation_z(spiral_a);
-                        transform.scale *= 0.5 + fraction * 0.9;
-                    }
-                    VisualMode::Beams => {}
-                }
+                hue += 35.0 + layer * 24.0;
 
-                hue += 35.0 + fraction * 240.0;
-                alpha *= 0.02
-                    + pulse * 0.18 * motion_drive
-                    + beat_hit * 0.05
-                    + melodic_activity * 0.12
-                    + state.flash * 0.24;
+                // Faint inner band; halo falls off quickly outward.
+                let halo = 1.0 - layer;
+                let glow = halo * halo;
+                alpha *= mode_gate
+                    * alpha_gain
+                    * (0.015 + 0.22 * glow)
+                    * (0.26
+                        + ring_pulse * 0.12 * motion_drive
+                        + beat_hit * 0.22
+                        + melodic_activity * 0.08
+                        + state.flash * 0.16);
                 alpha *= state.ring_opacity;
                 if !state.rings_enabled {
                     alpha = 0.0;
                 }
-                lightness += 0.1 + mid * 0.04;
+                lightness += 0.04 + mid * 0.025 + high * 0.02 + glow * 0.035;
             }
             VisualKind::Tile => {
                 let x_step = STAGE_WIDTH / DECK_B_COLS as f32;
@@ -1356,7 +1385,15 @@ fn update_visuals(
         let alpha = ((alpha + strobe_alpha * deck_alpha) * state.max_brightness).clamp(0.0, 1.0);
         let lightness = lightness * (0.45 + state.max_brightness * 0.55);
         if let Some(material) = materials.get_mut(&material_handle.0) {
-            material.color = palette_color(state.palette, hue, saturation, lightness, alpha);
+            material.color = palette_color(
+                state.palette_r,
+                state.palette_g,
+                state.palette_b,
+                hue,
+                saturation,
+                lightness,
+                alpha,
+            );
         }
     }
 }
@@ -1419,7 +1456,15 @@ fn update_tunnel_rings(
             (bell * (0.55 + beat_hit * 0.45) * deck_mix * state.max_brightness).clamp(0.0, 1.0);
 
         if let Some(material) = materials.get_mut(&material_handle.0) {
-            material.base_color = palette_color(state.palette, hue, 0.85, lightness, alpha);
+            material.base_color = palette_color(
+                state.palette_r,
+                state.palette_g,
+                state.palette_b,
+                hue,
+                0.85,
+                lightness,
+                alpha,
+            );
         }
     }
 }
@@ -1427,6 +1472,7 @@ fn update_tunnel_rings(
 #[allow(clippy::too_many_arguments)]
 fn update_palette_material(
     state: Res<VjState>,
+    windows: Query<&Window, With<PrimaryWindow>>,
     palette_handle: Res<VjPaletteHandle>,
     grid_handle: Res<VjGridHandle>,
     imported_handle: Res<VjImportedHandle>,
@@ -1452,7 +1498,7 @@ fn update_palette_material(
     };
 
     // active_shader routing:
-    //   0..=3 → palette quad with palette_variant set (Web/Spokes/Rings/Plasma)
+    //   0..=3 → palette quad with palette_variant set (Rehoboam/Spokes/Rings/Plasma)
     //   4     → grid quad
     //   5..=8 → palette quad with palette_variant set (Tunnel/Glitch/Fluid/Truchet)
     //   9     → imported quad (Shadertoy hot-swap slot)
@@ -1464,7 +1510,18 @@ fn update_palette_material(
         (0u32, state.active_shader as f32)
     };
 
-    let params = Vec4::new(state.palette, state.show_time, palette_variant, 0.0);
+    let aspect = windows
+        .single()
+        .map(|window| window.width() / window.height().max(1.0))
+        .unwrap_or(STAGE_WIDTH / STAGE_HEIGHT);
+    let params = Vec4::new(state.palette, state.show_time, palette_variant, aspect);
+    let palette_rgb = Vec4::new(state.palette_r, state.palette_g, state.palette_b, 0.0);
+    let grid_params = Vec4::new(
+        state.palette_r,
+        state.palette_g,
+        state.show_time,
+        state.palette_b,
+    );
     let palette_extra = Vec4::new(
         state.palette_saturation,
         state.palette_brightness,
@@ -1477,9 +1534,10 @@ fn update_palette_material(
         mat.params = params;
         mat.palette_extra = palette_extra;
         mat.audio_uniforms = audio_uniforms;
+        mat.palette_rgb = palette_rgb;
     }
     if let Some(mat) = grid_materials.get_mut(&grid_handle.0) {
-        mat.params = params;
+        mat.params = grid_params;
         mat.palette_extra = palette_extra;
         mat.audio_uniforms = audio_uniforms;
         mat.grid_extra = Vec4::new(
@@ -1493,6 +1551,7 @@ fn update_palette_material(
         mat.params = params;
         mat.palette_extra = palette_extra;
         mat.audio_uniforms = audio_uniforms;
+        mat.palette_rgb = palette_rgb;
     }
 
     for (quad, mut vis) in &mut gpu_quads {
@@ -1535,18 +1594,59 @@ fn smooth_signal(current: f32, target: f32, dt: f32, attack_speed: f32, release_
     current + (target - current) * blend.clamp(0.0, 1.0)
 }
 
-fn palette_color(palette: f32, hue: f32, saturation: f32, lightness: f32, alpha: f32) -> Color {
+fn palette_color(
+    palette_r: f32,
+    palette_g: f32,
+    palette_b: f32,
+    hue: f32,
+    saturation: f32,
+    lightness: f32,
+    alpha: f32,
+) -> Color {
     let phase = (hue / 360.0).fract();
-    let base_hue = palette.rem_euclid(1.0) * 360.0;
-    let lightness = lightness.clamp(0.0, 0.86);
-    let saturation = saturation.clamp(0.0, 1.0);
+    let base = Vec3::new(palette_r, palette_g, palette_b);
+    let accent = duotone_accent_rgb(base);
+    let mix = (phase - 0.5).abs() * 2.0;
+    let rgb = base.lerp(accent, mix);
+    let gray = Vec3::splat(rgb.dot(Vec3::new(0.299, 0.587, 0.114)));
+    let rgb = gray.lerp(rgb, saturation.clamp(0.0, 1.0)) * lightness.clamp(0.0, 0.92);
 
-    let hue = base_hue + (phase - 0.5) * 42.0;
+    Color::srgba(rgb.x, rgb.y, rgb.z, alpha)
+}
 
-    Color::hsla(
-        hue % 360.0,
-        (saturation * 0.86).clamp(0.0, 1.0),
-        lightness.clamp(0.0, 0.92),
-        alpha,
-    )
+// Accent stays in the picked color's hue family: a brighter, slightly
+// warmer tint. Rotating channels here produced jarring opposite hues
+// (e.g. a purple accent from a green base), so keep it monochromatic.
+fn duotone_accent_rgb(base: Vec3) -> Vec3 {
+    (base * 1.35 + Vec3::splat(0.18)).clamp(Vec3::ZERO, Vec3::ONE)
+}
+
+fn sync_palette_rgb_from_hue(state: &mut VjState) {
+    let rgb = hue_to_rgb(state.palette);
+    state.palette_r = rgb.x;
+    state.palette_g = rgb.y;
+    state.palette_b = rgb.z;
+}
+
+fn hue_to_rgb(hue: f32) -> Vec3 {
+    let h = hue.rem_euclid(1.0);
+    let saturation = 0.72;
+    let lightness = 0.52;
+    let c = (1.0_f32 - (2.0_f32 * lightness - 1.0_f32).abs()) * saturation;
+    let x = c * (1.0 - ((h * 6.0) % 2.0 - 1.0).abs());
+    let m = lightness - c * 0.5;
+    let (r, g, b) = if h < 1.0 / 6.0 {
+        (c, x, 0.0)
+    } else if h < 2.0 / 6.0 {
+        (x, c, 0.0)
+    } else if h < 3.0 / 6.0 {
+        (0.0, c, x)
+    } else if h < 4.0 / 6.0 {
+        (0.0, x, c)
+    } else if h < 5.0 / 6.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+    Vec3::new(r + m, g + m, b + m)
 }

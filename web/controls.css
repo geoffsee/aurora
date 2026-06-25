@@ -786,18 +786,23 @@ button.rec:hover {
   gap: 0.35rem;
 }
 
-.palette-strip {
-  height: 1.6rem;
-  border-radius: 999px;
+.palette-slot input[type="color"] {
+  width: 100%;
+  height: 2.4rem;
+  padding: 0.15rem;
+  border-radius: 0.65rem;
   border: 1px solid var(--panel-border-hi);
-  background: linear-gradient(
-    90deg,
-    #111827,
-    #334155,
-    var(--accent),
-    #e2e8f0
-  );
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  background: var(--panel-bg);
+  cursor: pointer;
+}
+
+.palette-slot input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.palette-slot input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 0.45rem;
 }
 
 .safety {

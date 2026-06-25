@@ -22,6 +22,7 @@
         TRACK_DATA: "/live/song/get/track_data",
         CONNECTED: "/bevyosc/osc/connected",
         DEMO: "/bevyosc/demo/audio",
+        BROWSER_AUDIO: "/bevyosc/audio/features",
         DIAGNOSTICS: "/bevyosc/server/diagnostics",
         DEV_RELOAD: "/bevyosc/dev/reload",
         SHADER_IMPORTED: "/bevyosc/shader/imported",
@@ -59,6 +60,9 @@
         feedback: 0.35,
         depth: 0,
         palette: 0,
+        paletteR: 61 / 255,
+        paletteG: 90 / 255,
+        paletteB: 128 / 255,
         paletteSaturation: 1,
         paletteBrightness: 1,
         gridDensity: 0.5,
@@ -201,6 +205,8 @@
           oscState.bridgeReady = Boolean(args[0]);
         } else if (address === OSC.DEMO) {
           applyDemoFrame(args[0]);
+        } else if (address === OSC.BROWSER_AUDIO) {
+          applyBrowserAudioFrame(args[0]);
         } else if (address === OSC.DIAGNOSTICS && args[0] && typeof args[0] === "object") {
           Object.assign(diagnostics, args[0]);
         } else if (address === OSC.TEMPO) {
@@ -259,6 +265,26 @@
         oscState.high = clamp01(frame.high);
       }
 
+      function applyBrowserAudioFrame(frame) {
+        if (!frame || typeof frame !== "object") return;
+
+        const now = performance.now();
+        const energy = clamp01(frame.energy);
+        oscState.lastFrameAt = now;
+        oscState.lastMeterAt = now;
+        oscState.lastBeatAt = clamp01(frame.pulse) > 0.8 ? now : oscState.lastBeatAt;
+        oscState.tempo = controlState.bpm;
+        oscState.playing = 1;
+        oscState.energy = energy;
+        oscState.deckA = energy;
+        oscState.deckB = energy;
+        oscState.bass = clamp01(frame.bass);
+        oscState.mid = clamp01(frame.mid);
+        oscState.high = clamp01(frame.high);
+        oscState.previousEnergy = energy;
+        oscState.lastEnvelopeAt = now;
+      }
+
       function applyControlState(next) {
         if (!next || typeof next !== "object") return;
 
@@ -271,6 +297,9 @@
         controlState.feedback = clamp01(next.feedback);
         controlState.depth = clamp01(next.depth);
         controlState.palette = clamp01(next.palette);
+        controlState.paletteR = next.paletteR === undefined ? controlState.paletteR : clamp01(next.paletteR);
+        controlState.paletteG = next.paletteG === undefined ? controlState.paletteG : clamp01(next.paletteG);
+        controlState.paletteB = next.paletteB === undefined ? controlState.paletteB : clamp01(next.paletteB);
         controlState.paletteSaturation = next.paletteSaturation === undefined ? controlState.paletteSaturation : clamp01(next.paletteSaturation);
         controlState.paletteBrightness = next.paletteBrightness === undefined ? controlState.paletteBrightness : clamp01(next.paletteBrightness);
         controlState.gridDensity = next.gridDensity === undefined ? controlState.gridDensity : clamp01(next.gridDensity);
@@ -400,6 +429,9 @@
       window.__bevyoscControlFeedback = () => controlState.feedback;
       window.__bevyoscControlDepth = () => controlState.depth;
       window.__bevyoscControlPalette = () => controlState.palette;
+      window.__bevyoscControlPaletteR = () => controlState.paletteR;
+      window.__bevyoscControlPaletteG = () => controlState.paletteG;
+      window.__bevyoscControlPaletteB = () => controlState.paletteB;
       window.__bevyoscControlPaletteSaturation = () => controlState.paletteSaturation;
       window.__bevyoscControlPaletteBrightness = () => controlState.paletteBrightness;
       window.__bevyoscControlGridDensity = () => controlState.gridDensity;

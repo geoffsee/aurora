@@ -112,7 +112,7 @@
         <label class="panel slot">
           <div class="slot-head"><span>GPU Shader</span></div>
           <select id="active-shader">
-            <option value="0">Palette - Web (Kaleido)</option>
+            <option value="0">Palette - Rehoboam (Ring)</option>
             <option value="1">Palette - Spokes</option>
             <option value="2">Palette - Rings</option>
             <option value="3">Palette - Plasma (Warp)</option>
@@ -167,9 +167,8 @@
 
       <section class="panel s-master">
         <label class="slot palette-slot">
-          <div class="slot-head"><span>Color</span><output id="palette-value">0 deg</output></div>
-          <input id="palette" type="range" min="0" max="1" step="0.001" value="0" />
-          <div class="palette-strip" aria-hidden="true"></div>
+          <div class="slot-head"><span>Color</span><output id="palette-value">#3d5a80</output></div>
+          <input id="palette" type="color" value="#3d5a80" />
         </label>
         <label class="slot">
           <div class="slot-head"><span>GPU Saturation</span><output id="palette-saturation-value">100%</output></div>
@@ -412,6 +411,52 @@
     <div id="error-banners" role="alert" aria-live="assertive" aria-atomic="false"></div>
 
     <script type="module">
+      const DEFAULT_PALETTE_RGB = { r: 61 / 255, g: 90 / 255, b: 128 / 255 };
+      const rgbToHex = (r, g, b) => {
+        const byte = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0");
+        return `#${byte(r)}${byte(g)}${byte(b)}`;
+      };
+      const hexToRgb = (hex) => {
+        const match = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+        if (!match) return null;
+        const n = Number.parseInt(match[1], 16);
+        return { r: ((n >> 16) & 0xff) / 255, g: ((n >> 8) & 0xff) / 255, b: (n & 0xff) / 255 };
+      };
+      const rgbToHue = (r, g, b) => {
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const delta = max - min;
+        if (delta < 1e-6) return 0;
+        let hue = 0;
+        if (max === r) hue = ((g - b) / delta) % 6;
+        else if (max === g) hue = (b - r) / delta + 2;
+        else hue = (r - g) / delta + 4;
+        return (((hue / 6) % 1) + 1) % 1;
+      };
+      const hueToRgb = (hue, saturation = 0.72, lightness = 0.52) => {
+        const h = ((hue % 1) + 1) % 1;
+        const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+        const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
+        const m = lightness - c / 2;
+        let r = 0, g = 0, b = 0;
+        if (h < 1 / 6) { r = c; g = x; }
+        else if (h < 2 / 6) { r = x; g = c; }
+        else if (h < 3 / 6) { g = c; b = x; }
+        else if (h < 4 / 6) { g = x; b = c; }
+        else if (h < 5 / 6) { r = x; b = c; }
+        else { r = c; b = x; }
+        return { r: r + m, g: g + m, b: b + m };
+      };
+      const syncPaletteFromHue = (target) => {
+        const rgb = hueToRgb(target.palette);
+        target.paletteR = rgb.r;
+        target.paletteG = rgb.g;
+        target.paletteB = rgb.b;
+      };
+      const syncPaletteFromRgb = (target) => {
+        target.palette = rgbToHue(target.paletteR, target.paletteG, target.paletteB);
+      };
+
       const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral"];
       const cuePresets = {
         warmup: { crossfade: 0.5, intensity: 0.62, feedback: 0.22, depth: 0.15, palette: 0.58, deckAMode: 4, deckBMode: 4 },
@@ -422,7 +467,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 6, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 7, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -430,6 +475,9 @@
         feedback: 0.35,
         depth: 0,
         palette: 0,
+        paletteR: DEFAULT_PALETTE_RGB.r,
+        paletteG: DEFAULT_PALETTE_RGB.g,
+        paletteB: DEFAULT_PALETTE_RGB.b,
         paletteSaturation: 1,
         paletteBrightness: 1,
         gridDensity: 0.5,
@@ -484,6 +532,7 @@
         high: 0,
         deckA: 0,
         deckB: 0,
+        lastBrowserAudioAt: 0,
         previousEnergy: 0,
         lastEnvelopeAt: 0,
       };
@@ -645,6 +694,9 @@
         if (frame?.address === "/bevyosc/demo/audio" && state.demoMode && args[0]) {
           applyDemo(args[0]);
         }
+        if (frame?.address === "/bevyosc/audio/features" && args[0]) {
+          applyBrowserAudio(args[0]);
+        }
         if (frame?.address === "/live/song/get/tempo" && Number.isFinite(Number(args[0]))) {
           state.bpm = Number(args[0]);
           $("#bpm").value = String(state.bpm);
@@ -724,6 +776,22 @@
         osc.lastEnvelopeAt = now;
       }
 
+      function applyBrowserAudio(frame) {
+        if (!frame || typeof frame !== "object") return;
+        const energy = clamp01(frame.energy);
+        const now = performance.now();
+        osc.lastFrameAt = now;
+        osc.lastBrowserAudioAt = now;
+        osc.energy = energy;
+        osc.bass = clamp01(frame.bass);
+        osc.mid = clamp01(frame.mid);
+        osc.high = clamp01(frame.high);
+        osc.deckA = energy;
+        osc.deckB = energy;
+        osc.previousEnergy = energy;
+        osc.lastEnvelopeAt = now;
+      }
+
       function applyDemo(frame) {
         osc.lastFrameAt = performance.now();
         osc.energy = clamp01(frame.energy);
@@ -756,6 +824,7 @@
 
       function applyCue(name, cue) {
         Object.assign(state, cue);
+        if (cue.palette !== undefined) syncPaletteFromHue(state);
         state.cueVersion += 1;
         state.cueIntensity = clamp01(cue.intensity ?? state.intensity);
         state.cuePalette = clamp01(cue.palette ?? state.palette);
@@ -791,11 +860,11 @@
         return null;
       };
 
-      const INTERPOLATED_KEYS = ["crossfade", "speed", "intensity", "feedback", "depth", "palette", "ringOpacity", "maxBrightness"];
+      const INTERPOLATED_KEYS = ["crossfade", "speed", "intensity", "feedback", "depth", "paletteR", "paletteG", "paletteB", "ringOpacity", "maxBrightness"];
       const CURVE_MODES = ["snap", "linear", "ease"];
       const CURVE_PARAM_LABELS = {
         crossfade: "Crossfade", speed: "Speed", intensity: "Intensity",
-        feedback: "Trails", depth: "3D Lines", palette: "Color",
+        feedback: "Trails", depth: "3D Lines", paletteR: "Color R", paletteG: "Color G", paletteB: "Color B",
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
       };
       let transitionDurationMs = 500;
@@ -808,7 +877,8 @@
         const preset = normalizePreset(presets[`slot-${n}`]);
         if (!preset) return;
         const from = cloneState();
-        const to = preset.state;
+        const to = { ...preset.state };
+        if (to.paletteR === undefined) syncPaletteFromHue(to);
         const presetCurves = preset.curves && typeof preset.curves === "object" ? preset.curves : {};
         const start = performance.now();
         activePresetIndex = n;
@@ -841,6 +911,7 @@
           }
           const { cueVersion, flashVersion, resetVersion, ...rest } = lerped;
           Object.assign(state, rest, { replaying: false });
+          syncPaletteFromRgb(state);
           syncInputs();
           publish({ record: false });
         }
@@ -1373,7 +1444,6 @@
           ["feedback", "feedback"],
           ["depth", "depth"],
           ["ring-opacity", "ringOpacity"],
-          ["palette", "palette"],
           ["palette-saturation", "paletteSaturation"],
           ["palette-brightness", "paletteBrightness"],
           ["grid-density", "gridDensity"],
@@ -1387,6 +1457,7 @@
         ]) {
           $(`#${id}`).value = String(state[key]);
         }
+        $("#palette").value = rgbToHex(state.paletteR, state.paletteG, state.paletteB);
         for (const [id, key] of [
           ["map-deck-a-start", "deckAStart"],
           ["map-deck-a-count", "deckACount"],
@@ -1418,7 +1489,7 @@
         $("#feedback-value").textContent = state.feedback.toFixed(2);
         $("#depth-value").textContent = state.depth.toFixed(2);
         $("#ring-opacity-value").textContent = `${Math.round(state.ringOpacity * 100)}%`;
-        $("#palette-value").textContent = `${Math.round(state.palette * 360)} deg`;
+        $("#palette-value").textContent = rgbToHex(state.paletteR, state.paletteG, state.paletteB);
         $("#palette-saturation-value").textContent = `${Math.round(state.paletteSaturation * 100)}%`;
         $("#palette-brightness-value").textContent = `${Math.round(state.paletteBrightness * 100)}%`;
         $("#grid-density-value").textContent = `${Math.round(state.gridDensity * 100)}%`;
@@ -1462,8 +1533,9 @@
               : "Beat sync"
             : "Immediate";
         const oscLive = performance.now() - osc.lastFrameAt < 3000;
-        oscStatus.textContent = state.demoMode ? "Demo audio" : oscLive ? "OSC live" : "OSC idle";
-        oscStatus.dataset.state = state.demoMode ? "demo" : oscLive ? "live" : "idle";
+        const browserAudioLive = performance.now() - osc.lastBrowserAudioAt < 3000;
+        oscStatus.textContent = state.demoMode ? "Demo audio" : browserAudioLive ? "Mic audio" : oscLive ? "OSC live" : "OSC idle";
+        oscStatus.dataset.state = state.demoMode ? "demo" : browserAudioLive ? "live" : oscLive ? "live" : "idle";
         diagnosticsStatus.textContent = `${diagnostics.sockets} viewer${diagnostics.sockets === 1 ? "" : "s"} · ${diagnostics.oscReady ? "OSC ready" : "OSC wait"}`;
         diagnosticsStatus.dataset.state = diagnostics.oscReady ? "info" : "warn";
         clockStatus.textContent = `Clock ${CLOCK_LABELS[diagnostics.clockSource] ?? "—"}`;
@@ -1496,7 +1568,6 @@
         ["feedback", "feedback"],
         ["depth", "depth"],
         ["ring-opacity", "ringOpacity"],
-        ["palette", "palette"],
         ["palette-saturation", "paletteSaturation"],
         ["palette-brightness", "paletteBrightness"],
         ["grid-density", "gridDensity"],
@@ -1510,6 +1581,16 @@
           publish();
         });
       }
+
+      $("#palette").addEventListener("input", (event) => {
+        const rgb = hexToRgb(event.target.value);
+        if (!rgb) return;
+        state.paletteR = rgb.r;
+        state.paletteG = rgb.g;
+        state.paletteB = rgb.b;
+        syncPaletteFromRgb(state);
+        publish();
+      });
 
       for (const [id, key] of [
         ["deck-a-mode", "deckAMode"],
@@ -1722,10 +1803,10 @@
       // ── Live Mic Capture (Phase 2: "Audio as the Only Controller") ──────────
       // Browser-native audio source: getUserMedia → AnalyserNode → AudioFeatures,
       // sent as /bevyosc/audio/features so the bridge's Phase-1 router drives
-      // ControlState from a live mic with no Ableton or MIDI. Features are only
-      // emitted while state.audioControlMode is enabled (the bridge router is
-      // also inert otherwise, but gating the send avoids needlessly suppressing
-      // the bridge demo loop). Mirrors mic-features.ts — keep the two in sync.
+      // ControlState from a live mic with no Ableton or MIDI. The bridge router
+      // is inert unless state.audioControlMode is enabled, but frames still feed
+      // the projector as a renderer audio fallback when AbletonOSC is quiet.
+      // Mirrors mic-features.ts — keep the two in sync.
       const MIC_FFT_SIZE = 2048;
       const MIC_MIN_DB = -100;
       const MIC_MAX_DB = -30;
@@ -1786,7 +1867,7 @@
       function micTick() {
         if (!micContext || !micFreqData) return;
         micFreqData.analyser.getFloatFrequencyData(micFreqData.bins);
-        if (!state.audioControlMode || ws?.readyState !== WebSocket.OPEN) return;
+        if (ws?.readyState !== WebSocket.OPEN) return;
         const features = extractMicFeatures(
           micFreqData.bins,
           micContext.sampleRate,
