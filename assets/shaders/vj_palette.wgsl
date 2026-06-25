@@ -7,19 +7,20 @@ const TAU: f32 = 6.283185307179586;
 @group(2) @binding(1) var<uniform> palette_extra: vec4<f32>;
 // audio_uniforms.x = energy (-1.0 = inactive), y = bass, z = mid, w = high (0..1 when active)
 @group(2) @binding(2) var<uniform> audio_uniforms: vec4<f32>;
+// palette_rgb.xyz = color-picker duotone base (0..1 per channel)
+@group(2) @binding(3) var<uniform> palette_rgb: vec4<f32>;
 
-fn hue_to_rgb(hue: f32) -> vec3<f32> {
-  let h = fract(hue);
-  let r = abs(h * 6.0 - 3.0) - 1.0;
-  let g = 2.0 - abs(h * 6.0 - 2.0);
-  let b = 2.0 - abs(h * 6.0 - 4.0);
-  return clamp(vec3<f32>(r, g, b), vec3<f32>(0.0), vec3<f32>(1.0));
+// Accent stays in the picked color's hue family: a brighter tint, not a
+// channel rotation (which yields jarring opposite hues, e.g. purple from green).
+fn duotone_accent(base: vec3<f32>) -> vec3<f32> {
+  return clamp(base * 1.35 + vec3<f32>(0.18), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
-fn vj_palette(selector: f32, phase: f32, saturation: f32, value: f32) -> vec3<f32> {
+fn vj_duotone(base: vec3<f32>, phase: f32, saturation: f32, value: f32) -> vec3<f32> {
+  let accent = duotone_accent(base);
   let local = fract(phase) - 0.5;
-  let hue = selector + local * 0.11;
-  let rgb = hue_to_rgb(hue);
+  let t = abs(local) * 2.0;
+  let rgb = mix(base, accent, t);
   let grayscale = vec3<f32>(dot(rgb, vec3<f32>(0.299, 0.587, 0.114)));
   return mix(grayscale, rgb, saturation) * value;
 }
@@ -68,11 +69,65 @@ fn kaleidoscope(p: vec2<f32>, slices: f32, rotation: f32) -> vec2<f32> {
   return vec2<f32>(cos(folded), sin(folded)) * r;
 }
 
-// Inigo Quilez cosine palette: a + b * cos(TAU * (c*t + d)).
-// Different (a,b,c,d) tuples give radically different color schemes — far
-// richer than the hue_to_rgb rainbow. Reference: iquilezles.org/articles/palettes
-fn cosine_palette(t: f32, a: vec3<f32>, b: vec3<f32>, c: vec3<f32>, d: vec3<f32>) -> vec3<f32> {
-  return a + b * cos(TAU * (c * t + d));
+// Crisp concentric ring band: full strength within `half_width` of `radius`,
+// then a thin `softness` edge. Keeps rings sharp instead of bleeding into glow.
+fn crisp_ring(r: f32, radius: f32, half_width: f32, softness: f32) -> f32 {
+  return 1.0 - smoothstep(half_width, half_width + softness, abs(r - radius));
+}
+
+// === Variant 0: Soft Orbital Halo ===
+// A restrained atmosphere around the centre, not a target outline. Bass gives
+// the halo a slow breath, highs break up the rim texture, and pulse adds a
+// short bloom without turning the shape into a hard neon circle.
+fn rehoboam_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let angle = atan2(p.y, p.x);
+
+  let breathe = 0.015 * sin(time * 0.55);
+  let ring_r = 0.52 + breathe + bass * 0.055 + pulse * 0.018;
+  let dist = abs(r - ring_r);
+
+  // Sample the rim texture on the unit circle so it wraps seamlessly. Feeding
+  // the raw atan2 `angle` here jumped from +pi to -pi across the -x axis, which
+  // tore a hard break into the ring at the 270deg / left side.
+  let ring_dir = vec2<f32>(cos(angle), sin(angle)) * 0.75;
+  let rim_noise = fbm(ring_dir + vec2<f32>(0.0, time * 0.035) + p * 1.8);
+  let broken = smoothstep(0.22 - high * 0.08, 0.82, rim_noise);
+
+  // Crisp main ring: tight band with a thin soft edge, still textured by `broken`.
+  let band = crisp_ring(r, ring_r, 0.012 + bass * 0.012, 0.018) * broken;
+
+  // Two concentric rings bracketing the main one (one inner, one outer). These
+  // stay clean/continuous so they read as defined rings around the halo.
+  let ring_gap = 0.13 + pulse * 0.012;
+  let ring_inner = crisp_ring(r, ring_r - ring_gap, 0.008, 0.014);
+  let ring_outer = crisp_ring(r, ring_r + ring_gap, 0.008, 0.014);
+  let rings = ring_inner + ring_outer;
+
+  let halo = exp(-dist * (9.5 - pulse * 1.4)) * (0.12 + 0.12 * pulse);
+  let inner = exp(-r * r * 3.8) * (0.08 + 0.08 * energy);
+  let core = exp(-r * r * 12.0) * (0.08 + 0.16 * pulse);
+  let sweep = pow(0.5 + 0.5 * cos(angle - time * (0.18 + mid * 0.45)), 3.0);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  // sin(angle) keeps the same +-0.06 angular hue drift but is continuous across
+  // the atan2 seam, so the colour no longer steps at the 270deg break.
+  let hue_phase = sin(angle) * 0.06 + r * 0.38 + time * 0.012;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.55 * sat, bri);
+  let accent = vj_duotone(palette_rgb.xyz, hue_phase + 0.23, 0.78 * sat, bri);
+  let color = base * (halo + inner)
+    + accent * (band * (0.7 + 0.3 * sweep) + rings * (0.5 + 0.25 * sweep) + core);
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  let alpha = clamp(
+    (halo * 0.42 + band * 0.78 + rings * 0.6 + inner * 0.32 + core * 0.38) * enabled,
+    0.0,
+    0.9
+  );
+  return vec4<f32>(color * enabled, alpha);
 }
 
 // === Variant 5: Cyberpunk Tunnel ===
@@ -101,8 +156,8 @@ fn tunnel_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: 
   let sat = clamp(palette_extra.x, 0.0, 1.0);
   let bri = clamp(palette_extra.y, 0.0, 1.0);
   let hue_phase = depth * 0.05 + u * 0.4 + time * 0.04;
-  let base = vj_palette(hue_shift, hue_phase, 0.85 * sat, bri);
-  let accent = vj_palette(hue_shift, hue_phase + 0.5, sat, bri);
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.85 * sat, bri);
+  let accent = vj_duotone(palette_rgb.xyz, hue_phase + 0.5, sat, bri);
   let color = mix(base, accent, neon) * clamp(0.2 + layer, 0.0, 1.6);
 
   let enabled = select(1.0, 0.0, energy < 0.0);
@@ -132,9 +187,9 @@ fn glitch_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: 
   let bri = clamp(palette_extra.y, 0.0, 1.0);
   let split = 0.18 + 0.25 * blk_active + 0.20 * bass;
   let h_base = bars + shifted.x * 0.1 + time * 0.07;
-  let r_col = vj_palette(hue_shift, h_base - split, sat, bri).r;
-  let g_col = vj_palette(hue_shift, h_base,         sat, bri).g;
-  let b_col = vj_palette(hue_shift, h_base + split, sat, bri).b;
+  let r_col = vj_duotone(palette_rgb.xyz, h_base - split, sat, bri).r;
+  let g_col = vj_duotone(palette_rgb.xyz, h_base,         sat, bri).g;
+  let b_col = vj_duotone(palette_rgb.xyz, h_base + split, sat, bri).b;
 
   let color = vec3<f32>(r_col, g_col, b_col) * scan;
   let intensity = bars * (0.5 + 0.5 * blk_active) + 0.2 * pulse;
@@ -162,27 +217,9 @@ fn fluid_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f
   );
   let field = fbm(p + 4.5 * s + pulse * 0.6);
 
-  let pal_a = cosine_palette(field + q.x * 0.3,
-    vec3<f32>(0.5, 0.5, 0.5),
-    vec3<f32>(0.5, 0.5, 0.5),
-    vec3<f32>(1.0, 1.0, 1.0),
-    vec3<f32>(0.00, 0.33, 0.67));
-  let pal_b = cosine_palette(field + r.y * 0.4,
-    vec3<f32>(0.80, 0.50, 0.40),
-    vec3<f32>(0.20, 0.40, 0.20),
-    vec3<f32>(2.00, 1.00, 1.00),
-    vec3<f32>(0.00, 0.25, 0.25));
-  let pal_c = cosine_palette(field + s.x * 0.5,
-    vec3<f32>(0.50, 0.50, 0.50),
-    vec3<f32>(0.50, 0.50, 0.50),
-    vec3<f32>(1.00, 0.70, 0.40),
-    vec3<f32>(0.00, 0.15, 0.20));
-  let pick = fract(hue_shift) * 3.0;
-  let raw = select(
-    select(pal_b, pal_c, pick >= 2.0),
-    pal_a,
-    pick < 1.0,
-  );
+  let base = palette_rgb.xyz;
+  let accent = duotone_accent(base);
+  let raw = mix(base, accent, field);
 
   let sat = clamp(palette_extra.x, 0.0, 1.0);
   let bri = clamp(palette_extra.y, 0.0, 1.0);
@@ -221,8 +258,8 @@ fn truchet_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy:
   let sat = clamp(palette_extra.x, 0.0, 1.0);
   let bri = clamp(palette_extra.y, 0.0, 1.0);
   let hue_a = (cell.x + cell.y * 1.7) * 0.13 + time * 0.04;
-  let line_col = vj_palette(hue_shift, hue_a + h * 0.3, sat, bri);
-  let fill_col = vj_palette(hue_shift, hue_a + 0.5 + h * 0.2, 0.5 * sat, 0.6 * bri);
+  let line_col = vj_duotone(palette_rgb.xyz, hue_a + h * 0.3, sat, bri);
+  let fill_col = vj_duotone(palette_rgb.xyz, hue_a + 0.5 + h * 0.2, 0.5 * sat, 0.6 * bri);
 
   let intensity = arc + fill_mask * (0.2 + 0.15 * pulse);
   let color = mix(fill_col, line_col, arc);
@@ -250,7 +287,9 @@ fn geometry_field(
   let grain = noise(center * 4.0 + vec2<f32>(time * 0.22, energy * 1.3));
   let drift = fbm(center * 2.2 + vec2<f32>(grain, pulse * 1.5));
 
-  // Variant: 0=Web (kaleidoscope), 1=Spokes, 2=Rings, 3=Plasma (domain-warped FBM).
+  // Variant: 1=Spokes, 2=Rings, 3=Plasma (domain-warped FBM). Variant 0
+  // (Rehoboam ring) is dispatched in fragment() before reaching here; the v==0
+  // branches below remain only as the defensive fallback for unexpected values.
   let v = i32(round(variant));
 
   // Kaleidoscope-folded sampling space for Web variant. Slice count rises with bass,
@@ -325,8 +364,8 @@ fn geometry_field(
   let bri = clamp(palette_extra.y, 0.0, 1.0);
   let hue_bias = select(0.0, dw_q.x * 0.45, v == 3);
   let hue_phase = angle / TAU * 0.42 + radius * 0.52 + time * 0.03 + 0.21 * drift + hue_bias;
-  let base = vj_palette(hue_shift, hue_phase, 0.62 * sat, 0.82 * bri);
-  let accent = vj_palette(hue_shift, hue_phase + 0.33 + 0.45 * grain, 0.74 * sat, bri);
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.62 * sat, 0.82 * bri);
+  let accent = vj_duotone(palette_rgb.xyz, hue_phase + 0.33 + 0.45 * grain, 0.74 * sat, bri);
   let fill = mix(base, accent, 0.38 + 0.35 * energy);
   let color = fill * clamp(0.32 + layer, 0.0, 1.0) + vec3<f32>(line_glow) * accent + vec3<f32>(core * 0.45);
   let alpha = clamp(
@@ -354,6 +393,7 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let hue = params.x;
   let v = i32(round(params.z));
 
+  if (v == 0) { return rehoboam_variant(uv, time, hue, pulse, energy, bass, mid, high); }
   if (v == 5) { return tunnel_variant(uv, time, hue, pulse, energy, bass, mid, high); }
   if (v == 6) { return glitch_variant(uv, time, hue, pulse, energy, bass, mid, high); }
   if (v == 7) { return fluid_variant(uv, time, hue, pulse, energy, bass, mid, high); }
