@@ -2,7 +2,7 @@
 // ──────────────────────────────────────────────────────────────────────────
 // Performer-Less Set Dry Run (issue #193)
 //
-// Boots the real bridge (index.ts) on isolated ports and drives the full
+// Boots the real bridge (bridge/index.ts) on isolated ports and drives the full
 // autonomy stack end-to-end with NO human at the controls: demo audio →
 // audio-control router (continuous + threshold mappings), the audio transient
 // detector → automation playback, OSC-controlled preset morph, and clock-source
@@ -25,7 +25,7 @@
 // run — the first run is expected to surface known gaps.
 // ──────────────────────────────────────────────────────────────────────────
 
-import { CONTROL_STATE_SCHEMA_VERSION } from "../osc-validation.ts";
+import { CONTROL_STATE_SCHEMA_VERSION } from "../shared/osc-validation.ts";
 
 type Json = Record<string, unknown>;
 type OscMsg = { address: string; args?: unknown[] };
@@ -47,7 +47,7 @@ const WS_URL = `ws://127.0.0.1:${PORT}/ws`;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-// Cue names the bridge knows (see cuePresets in index.ts). The morph driver
+// Cue names the bridge knows (see cuePresets in bridge/index.ts). The morph driver
 // sweeps between adjacent pairs so a fader-less performer-less blend is proven.
 const CUES = ["warmup", "drop", "tunnel", "burst", "wash", "panic"] as const;
 
@@ -96,7 +96,7 @@ async function main(): Promise<number> {
 		`[dry-run] booting bridge on :${PORT} (controls :${CONTROLS_PORT}); window ${DURATION_MS}ms`,
 	);
 
-	const bridge = Bun.spawn(["bun", "run", "index.ts"], {
+	const bridge = Bun.spawn(["bun", "run", "bridge/bridge/index.ts"], {
 		cwd: new URL("..", import.meta.url).pathname,
 		env: {
 			...process.env,

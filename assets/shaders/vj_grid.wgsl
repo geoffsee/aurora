@@ -10,18 +10,17 @@ const TAU: f32 = 6.283185307179586;
 // grid_extra.x = density (0..1), y = diamond size (0..1), z = line width (0..1), w = shape mix (0=diamond, 1=cross)
 @group(2) @binding(3) var<uniform> grid_extra: vec4<f32>;
 
-fn hue_to_rgb(hue: f32) -> vec3<f32> {
-  let h = fract(hue);
-  let r = abs(h * 6.0 - 3.0) - 1.0;
-  let g = 2.0 - abs(h * 6.0 - 2.0);
-  let b = 2.0 - abs(h * 6.0 - 4.0);
-  return clamp(vec3<f32>(r, g, b), vec3<f32>(0.0), vec3<f32>(1.0));
+// Accent stays in the picked color's hue family: a brighter tint, not a
+// channel rotation (which yields jarring opposite hues, e.g. purple from green).
+fn duotone_accent(base: vec3<f32>) -> vec3<f32> {
+  return clamp(base * 1.35 + vec3<f32>(0.18), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
-fn vj_palette(selector: f32, phase: f32, saturation: f32, value: f32) -> vec3<f32> {
+fn vj_duotone(base: vec3<f32>, phase: f32, saturation: f32, value: f32) -> vec3<f32> {
+  let accent = duotone_accent(base);
   let local = fract(phase) - 0.5;
-  let hue = selector + local * 0.11;
-  let rgb = hue_to_rgb(hue);
+  let t = abs(local) * 2.0;
+  let rgb = mix(base, accent, t);
   let grayscale = vec3<f32>(dot(rgb, vec3<f32>(0.299, 0.587, 0.114)));
   return mix(grayscale, rgb, saturation) * value;
 }
@@ -29,8 +28,9 @@ fn vj_palette(selector: f32, phase: f32, saturation: f32, value: f32) -> vec3<f3
 @fragment
 fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let uv = (frag.uv - vec2<f32>(0.5)) * 2.0;
-  let time = params.y;
-  let hue_shift = params.x;
+  // Grid packs picked RGB into params (x,y,w) and show_time into z.
+  let base = vec3<f32>(params.x, params.y, params.w);
+  let time = params.z;
   let pulse = palette_extra.z;
   let energy = audio_uniforms.x;
   let bass = audio_uniforms.y;
@@ -81,7 +81,7 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
                 + tile_phase * 0.1;
   let sat = clamp(palette_extra.x, 0.0, 1.0);
   let bri = clamp(palette_extra.y, 0.0, 1.0);
-  let color = vj_palette(hue_shift, hue_phase, 0.72 * sat, bri);
+  let color = vj_duotone(base, hue_phase, 0.72 * sat, bri);
 
   let vignette = 1.0 - smoothstep(0.55, 1.0, length(uv) * 0.75);
   let alpha = clamp(shape * (0.55 + 0.45 * pulse) * vignette * enabled, 0.0, 1.0);

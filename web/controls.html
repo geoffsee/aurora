@@ -1,0 +1,1987 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bevyosc Controls</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./controls.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">
+          <p class="eyebrow">bevyosc</p>
+          <h1>VJ Controls</h1>
+        </div>
+        <div class="status" role="status" aria-live="polite">
+          <span id="bridge-status" class="pill" data-state="connecting">bridge connecting</span>
+          <span id="osc-status" class="pill" data-state="idle">OSC idle</span>
+          <span id="clock-status" class="pill" data-state="info">Clock —</span>
+          <span id="preset-status" class="pill" data-state="idle">No preset</span>
+          <span id="diagnostics-status" class="pill" data-state="info">0 viewers</span>
+          <span id="latency-status" class="pill" data-state="info">P95 —ms</span>
+        </div>
+      </header>
+
+      <section class="panel hero crossfade-panel s-hero" aria-label="Crossfade">
+        <div class="xfade-head">
+          <span class="xfade-tag deck-a">A</span>
+          <div class="xfade-meta">
+            <span class="xfade-label">Crossfade</span>
+            <output id="crossfade-value" class="xfade-value">50%</output>
+          </div>
+          <span class="xfade-tag deck-b">B</span>
+        </div>
+        <input id="crossfade" class="xfade-slider" type="range" min="0" max="1" step="0.001" value="0.5" />
+        <div class="snap-row">
+          <button data-snap="0" class="snap-a">Deck A</button>
+          <button data-snap="0.5" class="snap-c">Center</button>
+          <button data-snap="1" class="snap-b">Deck B</button>
+        </div>
+      </section>
+
+      <section class="panel s-cues">
+        <div class="section-title">
+          <h2>Cues</h2>
+          <span id="quantize-status" class="badge">Beat sync</span>
+        </div>
+        <div class="cue-grid">
+          <button data-cue="warmup">Warmup</button>
+          <button data-cue="drop">Drop</button>
+          <button data-cue="tunnel">Tunnel</button>
+          <button data-cue="burst">Burst</button>
+          <button data-cue="wash">Wash</button>
+          <button data-cue="panic" class="danger">Panic Dim</button>
+        </div>
+        <div class="button-grid compact">
+          <button id="beat-sync" aria-pressed="true">Beat Sync</button>
+          <button id="bar-sync" aria-pressed="false">Bar Sync</button>
+          <button id="flash" class="accent">Flash</button>
+          <button id="save-preset">Save Preset</button>
+        </div>
+        <div class="preset-controls">
+          <span class="preset-label">Transition</span>
+          <input id="preset-transition" type="number" min="0" max="10000" step="100" value="500" aria-label="Transition duration in milliseconds" />
+          <span class="preset-label">ms</span>
+        </div>
+        <details class="curves-config">
+          <summary class="preset-label">Curves</summary>
+          <div id="curves-grid" class="curves-grid" aria-label="Per-parameter transition curves"></div>
+        </details>
+        <div id="preset-grid" class="preset-grid" aria-label="Saved presets"></div>
+      </section>
+
+      <section class="grid s-sliders">
+        <label class="panel slot deck-slot" data-deck="a">
+          <div class="slot-head">
+            <span>Deck A Mode</span>
+            <span class="deck-chip deck-a">A</span>
+          </div>
+          <select id="deck-a-mode">
+            <option value="0">Beams</option>
+            <option value="1">Tunnel</option>
+            <option value="2">Burst</option>
+            <option value="3">Mirror</option>
+            <option value="4">Wash</option>
+            <option value="5">Strobe</option>
+            <option value="6">Swarm</option>
+            <option value="7">Orbit</option>
+            <option value="8">Pulse</option>
+            <option value="9">Spiral</option>
+          </select>
+        </label>
+        <label class="panel slot deck-slot" data-deck="b">
+          <div class="slot-head">
+            <span>Deck B Mode</span>
+            <span class="deck-chip deck-b">B</span>
+          </div>
+          <select id="deck-b-mode">
+            <option value="0">Beams</option>
+            <option value="1">Tunnel</option>
+            <option value="2">Burst</option>
+            <option value="3">Mirror</option>
+            <option value="4">Wash</option>
+            <option value="5">Strobe</option>
+            <option value="6">Swarm</option>
+            <option value="7">Orbit</option>
+            <option value="8">Pulse</option>
+            <option value="9">Spiral</option>
+          </select>
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>GPU Shader</span></div>
+          <select id="active-shader">
+            <option value="0">Palette - Rehoboam (Ring)</option>
+            <option value="1">Palette - Spokes</option>
+            <option value="2">Palette - Rings</option>
+            <option value="3">Palette - Plasma (Warp)</option>
+            <option value="4">Grid (Tiles)</option>
+            <option value="5">Tunnel (Cyberpunk)</option>
+            <option value="6">Glitch (Y2K)</option>
+            <option value="7">Fluid (Ambient)</option>
+            <option value="8">Truchet (Geometric)</option>
+            <option value="9">Imported (Shadertoy)</option>
+          </select>
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Shadertoy API Key</span><output id="shadertoy-key-status">checking…</output></div>
+          <input id="shadertoy-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Shadertoy API key" style="width:100%;" />
+          <div style="display:flex;gap:4px;margin-top:4px;">
+            <button id="shadertoy-key-save" type="button">Save</button>
+            <button id="shadertoy-key-clear" type="button">Clear</button>
+            <button id="shadertoy-key-reveal" type="button" aria-pressed="false">Show</button>
+          </div>
+          <small style="opacity:0.7;display:block;margin-top:4px;">Stored in bridge memory only. Get a key at shadertoy.com → Account → Apps.</small>
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Shadertoy Import</span><output id="shadertoy-import-status">idle</output></div>
+          <input id="shadertoy-import-url" type="text" placeholder="https://www.shadertoy.com/view/XXXXX" style="width:100%;" />
+          <button id="shadertoy-import-btn" type="button" style="margin-top:4px;">Import</button>
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>BPM</span><output id="bpm-value">124</output></div>
+          <input id="bpm" type="range" min="60" max="190" step="0.1" value="124" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Speed</span><output id="speed-value">1.00</output></div>
+          <input id="speed" type="range" min="0.1" max="3" step="0.01" value="1" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Intensity</span><output id="intensity-value">0.82</output></div>
+          <input id="intensity" type="range" min="0.05" max="1.5" step="0.01" value="0.82" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Trails</span><output id="feedback-value">0.35</output></div>
+          <input id="feedback" type="range" min="0" max="1" step="0.01" value="0.35" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>3D Lines</span><output id="depth-value">0.00</output></div>
+          <input id="depth" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+        <label class="panel slot">
+          <div class="slot-head"><span>Ring Opacity</span><output id="ring-opacity-value">100%</output></div>
+          <input id="ring-opacity" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+      </section>
+
+      <section class="panel s-master">
+        <label class="slot palette-slot">
+          <div class="slot-head"><span>Color</span><output id="palette-value">#3d5a80</output></div>
+          <input id="palette" type="color" value="#3d5a80" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>GPU Saturation</span><output id="palette-saturation-value">100%</output></div>
+          <input id="palette-saturation" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>GPU Brightness</span><output id="palette-brightness-value">100%</output></div>
+          <input id="palette-brightness" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Density</span><output id="grid-density-value">50%</output></div>
+          <input id="grid-density" type="range" min="0" max="1" step="0.01" value="0.5" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Diamond</span><output id="grid-diamond-value">50%</output></div>
+          <input id="grid-diamond" type="range" min="0" max="1" step="0.01" value="0.5" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Lines</span><output id="grid-line-width-value">50%</output></div>
+          <input id="grid-line-width" type="range" min="0" max="1" step="0.01" value="0.5" />
+        </label>
+        <label class="slot">
+          <div class="slot-head"><span>Grid Shape (◆↔+)</span><output id="grid-shape-mix-value">50%</output></div>
+          <input id="grid-shape-mix" type="range" min="0" max="1" step="0.01" value="0.5" />
+        </label>
+        <div class="button-grid">
+          <button id="rings" aria-pressed="true">Rings</button>
+          <button id="strobe" aria-pressed="false">Strobe</button>
+          <button id="strobe-lockout" aria-pressed="true">Strobe Lock</button>
+          <button id="show-gpu-palette" aria-pressed="false">GPU Rehoboam</button>
+          <button id="freeze" aria-pressed="false">Freeze</button>
+          <button id="blackout" aria-pressed="false">Blackout</button>
+          <button id="reset" class="danger">Reset</button>
+        </div>
+        <label class="slot safety">
+          <div class="slot-head">
+            <span>Max Brightness</span>
+            <output id="max-brightness-value">90%</output>
+          </div>
+          <input id="max-brightness" type="range" min="0.1" max="1" step="0.01" value="0.9" />
+        </label>
+      </section>
+
+      <section class="panel s-mapping">
+        <div class="section-title">
+          <h2>Ableton Mapping</h2>
+          <span class="badge subtle">0-based track indices</span>
+        </div>
+        <div class="mapping-grid">
+          <label><span>A Start</span><input id="map-deck-a-start" type="number" min="0" max="31" value="0" /></label>
+          <label><span>A Count</span><input id="map-deck-a-count" type="number" min="1" max="32" value="8" /></label>
+          <label><span>B Start</span><input id="map-deck-b-start" type="number" min="0" max="31" value="8" /></label>
+          <label><span>B Count</span><input id="map-deck-b-count" type="number" min="1" max="32" value="8" /></label>
+          <label><span>Bass</span><input id="map-bass-track" type="number" min="0" max="31" value="0" /></label>
+          <label><span>Mid</span><input id="map-mid-track" type="number" min="0" max="31" value="1" /></label>
+          <label><span>High</span><input id="map-high-track" type="number" min="0" max="31" value="2" /></label>
+        </div>
+      </section>
+
+      <section class="panel s-rehearsal">
+        <div class="section-title">
+          <h2>Rehearsal</h2>
+          <span id="recording-status" class="badge">Ready</span>
+        </div>
+        <div class="button-grid compact">
+          <button id="demo-mode" aria-pressed="false">Demo Audio</button>
+          <button id="record" class="rec">Record</button>
+          <button id="play-replay">Play Replay</button>
+          <button id="stop-replay">Stop</button>
+        </div>
+      </section>
+
+      <section class="panel s-audio-control" aria-label="Audio Control">
+        <div class="section-title">
+          <h2>Audio Control</h2>
+          <span id="audio-control-status" class="badge">Off</span>
+        </div>
+        <div class="button-grid compact">
+          <button id="audio-control-mode" aria-pressed="false">Audio Control</button>
+          <button id="mic-capture" aria-pressed="false">Live Mic</button>
+        </div>
+      </section>
+
+      <section class="panel s-midi-cc" aria-label="MIDI CC Mapping">
+        <div class="section-title">
+          <h2>MIDI CC Mapping</h2>
+          <span id="midi-cc-status" class="badge">No MIDI</span>
+        </div>
+        <div class="midi-cc-head">
+          <button id="midi-cc-enable" aria-pressed="false">Enable MIDI</button>
+        </div>
+        <div id="midi-cc-bindings" class="midi-cc-bindings" aria-label="CC bindings list"></div>
+        <details class="midi-cc-add-wrap">
+          <summary class="preset-label">Add Binding</summary>
+          <div class="midi-cc-form">
+            <label><span>CC#</span><input id="midi-cc-cc" type="number" min="0" max="127" step="1" value="74" /></label>
+            <label><span>Ch (0=any)</span><input id="midi-cc-channel" type="number" min="0" max="16" step="1" value="0" /></label>
+            <label><span>Parameter</span>
+              <select id="midi-cc-param">
+                <option value="crossfade">Crossfade</option>
+                <option value="bpm">BPM</option>
+                <option value="speed">Speed</option>
+                <option value="intensity" selected>Intensity</option>
+                <option value="feedback">Trails</option>
+                <option value="depth">3D Lines</option>
+                <option value="palette">Color</option>
+                <option value="paletteSaturation">GPU Sat</option>
+                <option value="paletteBrightness">GPU Bright</option>
+                <option value="gridDensity">Grid Density</option>
+                <option value="gridDiamond">Grid Diamond</option>
+                <option value="gridLineWidth">Grid Lines</option>
+                <option value="gridShapeMix">Grid Shape</option>
+                <option value="deckAMode">Deck A Mode</option>
+                <option value="deckBMode">Deck B Mode</option>
+                <option value="ringOpacity">Ring Opacity</option>
+                <option value="maxBrightness">Max Brightness</option>
+              </select>
+            </label>
+            <label><span>CC Min</span><input id="midi-cc-cc-min" type="number" min="0" max="127" step="1" value="0" /></label>
+            <label><span>CC Max</span><input id="midi-cc-cc-max" type="number" min="0" max="127" step="1" value="127" /></label>
+            <label><span>Param Min</span><input id="midi-cc-param-min" type="number" step="0.01" value="0" /></label>
+            <label><span>Param Max</span><input id="midi-cc-param-max" type="number" step="0.01" value="1" /></label>
+            <button id="midi-cc-add-btn">Add</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel s-triggers" aria-label="Automation Triggers">
+        <div class="section-title">
+          <h2>Playback Triggers</h2>
+          <span id="trigger-status" class="badge">0 triggers</span>
+        </div>
+        <div id="trigger-bindings" class="midi-cc-bindings" aria-label="Trigger bindings list"></div>
+        <details class="midi-cc-add-wrap">
+          <summary class="preset-label">Add Trigger</summary>
+          <div class="trigger-form">
+            <label><span>Type</span>
+              <select id="trigger-type">
+                <option value="midi-note">MIDI Note</option>
+                <option value="midi-cc">MIDI CC</option>
+                <option value="osc">OSC</option>
+              </select>
+            </label>
+            <label id="trigger-note-label"><span>Note (0–127)</span><input id="trigger-note" type="number" min="0" max="127" step="1" value="60" /></label>
+            <label id="trigger-cc-label" style="display:none"><span>CC# (0–127)</span><input id="trigger-cc" type="number" min="0" max="127" step="1" value="64" /></label>
+            <label id="trigger-threshold-label" style="display:none"><span>Threshold ≥</span><input id="trigger-threshold" type="number" min="0" max="127" step="1" value="64" /></label>
+            <label id="trigger-channel-label"><span>Channel (0=any)</span><input id="trigger-channel" type="number" min="0" max="16" step="1" value="0" /></label>
+            <label id="trigger-osc-label" style="display:none"><span>OSC Address</span><input id="trigger-osc-address" type="text" value="/bevyosc/automation/play" /></label>
+            <label><span>Action</span>
+              <select id="trigger-action">
+                <option value="toggle">Toggle play/stop</option>
+                <option value="toggle-loop">Toggle loop/stop</option>
+                <option value="play">Play once</option>
+                <option value="play-loop">Play loop</option>
+                <option value="stop">Stop</option>
+              </select>
+            </label>
+            <button id="trigger-add-btn">Add</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel s-audio-curves" aria-label="Audio Curve Shaping">
+        <div class="section-title">
+          <h2>Audio Curve Shaping</h2>
+          <span class="badge subtle">per-band</span>
+        </div>
+        <div class="band-curves-grid">
+          <label class="slot">
+            <div class="slot-head"><span>Energy</span></div>
+            <select id="band-curve-energy" aria-label="Energy curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Bass</span></div>
+            <select id="band-curve-bass" aria-label="Bass curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Mid</span></div>
+            <select id="band-curve-mid" aria-label="Mid curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>High</span></div>
+            <select id="band-curve-high" aria-label="High curve shape">
+              <option value="linear">Linear</option>
+              <option value="exponential">Exponential (punchy)</option>
+              <option value="logarithmic">Logarithmic (ambient)</option>
+            </select>
+          </label>
+        </div>
+        <div class="section-title" style="margin-top:0.75rem">
+          <h3 style="font-size:0.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.7">EMA Decay</h3>
+          <span class="badge subtle">per-band smoothing</span>
+        </div>
+        <div class="band-curves-grid">
+          <label class="slot">
+            <div class="slot-head"><span>Energy</span><output id="ema-energy-value">0.12</output></div>
+            <input id="ema-alpha-energy" type="range" min="0.01" max="1" step="0.01" value="0.12" aria-label="Energy EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Bass</span><output id="ema-bass-value">0.08</output></div>
+            <input id="ema-alpha-bass" type="range" min="0.01" max="1" step="0.01" value="0.08" aria-label="Bass EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Mid</span><output id="ema-mid-value">0.15</output></div>
+            <input id="ema-alpha-mid" type="range" min="0.01" max="1" step="0.01" value="0.15" aria-label="Mid EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>High</span><output id="ema-high-value">0.22</output></div>
+            <input id="ema-alpha-high" type="range" min="0.01" max="1" step="0.01" value="0.22" aria-label="High EMA decay alpha" />
+          </label>
+          <label class="slot">
+            <div class="slot-head"><span>Pulse</span><output id="ema-pulse-value">0.28</output></div>
+            <input id="ema-alpha-pulse" type="range" min="0.01" max="1" step="0.01" value="0.28" aria-label="Pulse EMA decay alpha" />
+          </label>
+        </div>
+      </section>
+
+      <section class="panel meters s-meters">
+        <div data-channel="energy"><span>Energy</span><meter id="energy" min="0" max="1" value="0"></meter></div>
+        <div data-channel="bass"><span>Bass</span><meter id="bass" min="0" max="1" value="0"></meter></div>
+        <div data-channel="mid"><span>Mid</span><meter id="mid" min="0" max="1" value="0"></meter></div>
+        <div data-channel="high"><span>High</span><meter id="high" min="0" max="1" value="0"></meter></div>
+        <div data-channel="deck-a"><span>Deck A</span><meter id="deck-a" min="0" max="1" value="0"></meter></div>
+        <div data-channel="deck-b"><span>Deck B</span><meter id="deck-b" min="0" max="1" value="0"></meter></div>
+      </section>
+    </main>
+
+    <div id="error-banners" role="alert" aria-live="assertive" aria-atomic="false"></div>
+
+    <script type="module">
+      const DEFAULT_PALETTE_RGB = { r: 61 / 255, g: 90 / 255, b: 128 / 255 };
+      const rgbToHex = (r, g, b) => {
+        const byte = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0");
+        return `#${byte(r)}${byte(g)}${byte(b)}`;
+      };
+      const hexToRgb = (hex) => {
+        const match = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+        if (!match) return null;
+        const n = Number.parseInt(match[1], 16);
+        return { r: ((n >> 16) & 0xff) / 255, g: ((n >> 8) & 0xff) / 255, b: (n & 0xff) / 255 };
+      };
+      const rgbToHue = (r, g, b) => {
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const delta = max - min;
+        if (delta < 1e-6) return 0;
+        let hue = 0;
+        if (max === r) hue = ((g - b) / delta) % 6;
+        else if (max === g) hue = (b - r) / delta + 2;
+        else hue = (r - g) / delta + 4;
+        return (((hue / 6) % 1) + 1) % 1;
+      };
+      const hueToRgb = (hue, saturation = 0.72, lightness = 0.52) => {
+        const h = ((hue % 1) + 1) % 1;
+        const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+        const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
+        const m = lightness - c / 2;
+        let r = 0, g = 0, b = 0;
+        if (h < 1 / 6) { r = c; g = x; }
+        else if (h < 2 / 6) { r = x; g = c; }
+        else if (h < 3 / 6) { g = c; b = x; }
+        else if (h < 4 / 6) { g = x; b = c; }
+        else if (h < 5 / 6) { r = x; b = c; }
+        else { r = c; b = x; }
+        return { r: r + m, g: g + m, b: b + m };
+      };
+      const syncPaletteFromHue = (target) => {
+        const rgb = hueToRgb(target.palette);
+        target.paletteR = rgb.r;
+        target.paletteG = rgb.g;
+        target.paletteB = rgb.b;
+      };
+      const syncPaletteFromRgb = (target) => {
+        target.palette = rgbToHue(target.paletteR, target.paletteG, target.paletteB);
+      };
+
+      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral"];
+      const cuePresets = {
+        warmup: { crossfade: 0.5, intensity: 0.62, feedback: 0.22, depth: 0.15, palette: 0.58, deckAMode: 4, deckBMode: 4 },
+        drop: { crossfade: 1, intensity: 1.25, feedback: 0.42, depth: 0.58, palette: 0.9, deckAMode: 2, deckBMode: 2 },
+        tunnel: { crossfade: 0.25, intensity: 1.0, feedback: 0.5, depth: 0.85, palette: 0.66, deckAMode: 1, deckBMode: 3 },
+        burst: { crossfade: 0.75, intensity: 1.35, feedback: 0.32, depth: 0.35, palette: 0.04, deckAMode: 2, deckBMode: 2 },
+        wash: { crossfade: 0.5, intensity: 0.48, feedback: 0.68, depth: 0.25, palette: 0.33, deckAMode: 4, deckBMode: 4 },
+        panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
+      };
+      const defaultState = () => ({
+        schemaVersion: 7, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        crossfade: 0.5,
+        bpm: 124,
+        speed: 1,
+        intensity: 0.82,
+        feedback: 0.35,
+        depth: 0,
+        palette: 0,
+        paletteR: DEFAULT_PALETTE_RGB.r,
+        paletteG: DEFAULT_PALETTE_RGB.g,
+        paletteB: DEFAULT_PALETTE_RGB.b,
+        paletteSaturation: 1,
+        paletteBrightness: 1,
+        gridDensity: 0.5,
+        gridDiamond: 0.5,
+        gridLineWidth: 0.5,
+        gridShapeMix: 0.5,
+        deckAMode: 0,
+        deckBMode: 1,
+        rings: true,
+        ringOpacity: 1,
+        strobe: false,
+        strobeLockout: false,
+        blackout: false,
+        freeze: false,
+        maxBrightness: 0.9,
+        showGpuPalette: false,
+        beatSync: true,
+        barSync: false,
+        demoMode: false,
+        replaying: false,
+        flashVersion: 0,
+        resetVersion: 0,
+        cueVersion: 0,
+        cueIntensity: 0,
+        cuePalette: 0,
+        cueCrossfade: 0.5,
+        cueDeckAMode: 0,
+        cueDeckBMode: 1,
+        trackMapping: {
+          deckAStart: 0,
+          deckACount: 8,
+          deckBStart: 8,
+          deckBCount: 8,
+          bassTrack: 0,
+          midTrack: 1,
+          highTrack: 2,
+        },
+        activeShader: 0,
+        bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+        emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 },
+        morph: 0,
+        audioControlMode: false,
+      });
+      const state = defaultState();
+      const osc = {
+        lastFrameAt: 0,
+        beat: 0,
+        beatIndex: 0,
+        energy: 0,
+        bass: 0,
+        mid: 0,
+        high: 0,
+        deckA: 0,
+        deckB: 0,
+        lastBrowserAudioAt: 0,
+        previousEnergy: 0,
+        lastEnvelopeAt: 0,
+      };
+      const diagnostics = { sockets: 0, oscReady: false, oscActive: false, demoMode: false, replaying: false, clockSource: null };
+      const CLOCK_LABELS = { link: "Link", midi: "MIDI", internal: "Internal" };
+
+      const $ = (selector) => document.querySelector(selector);
+      const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+      const bridgeStatus = $("#bridge-status");
+      const oscStatus = $("#osc-status");
+      const diagnosticsStatus = $("#diagnostics-status");
+      const clockStatus = $("#clock-status");
+      const recordingStatus = $("#recording-status");
+      const latencyStatus = $("#latency-status");
+      const latencyWindow = [];
+      let pingId = 0;
+      let pendingPings = {};
+      let ws;
+      let reconnectTimer;
+      let reconnectDelay = 1000;
+      let pendingCue = null;
+      let isRecording = false;
+      let recordStart = 0;
+      let recording = [];
+      let replayTimers = [];
+      let isReplayLooping = false;
+
+      function addBanner(description, type) {
+        const container = document.getElementById("error-banners");
+        if (!container) return;
+        const existing = container.querySelectorAll(".error-banner");
+        if (existing.length >= 10) existing[0].remove();
+
+        const banner = document.createElement("div");
+        const isWarn = type === "warn" || type === "disconnect";
+        banner.className = isWarn ? "error-banner error-banner--warn" : "error-banner";
+        banner.dataset.bannerType = type || "error";
+
+        const body = document.createElement("div");
+        body.className = "error-banner__body";
+
+        const msg = document.createElement("span");
+        msg.className = "error-banner__msg";
+        msg.textContent = description;
+
+        const ts = document.createElement("span");
+        ts.className = "error-banner__ts";
+        ts.textContent = new Date().toLocaleTimeString();
+
+        const dismiss = document.createElement("button");
+        dismiss.className = "error-banner__dismiss";
+        dismiss.setAttribute("aria-label", "Dismiss");
+        dismiss.textContent = "×";
+        dismiss.addEventListener("click", () => banner.remove());
+
+        body.append(msg, ts);
+        banner.append(body, dismiss);
+        container.appendChild(banner);
+      }
+
+      const clamp = (value, min, max, fallback = min) => {
+        const number = Number(value);
+        return Math.max(min, Math.min(max, Number.isFinite(number) ? number : fallback));
+      };
+      const clamp01 = (value) => clamp(value, 0, 1, 0);
+      const clampInt = (value, min, max, fallback = min) => Math.floor(clamp(value, min, max, fallback));
+      const average = (items) => (items.length ? items.reduce((sum, value) => sum + value, 0) / items.length : 0);
+      const smoothSignal = (current, target, dtMs, attackMs, releaseMs) => {
+        const timeMs = target > current ? attackMs : releaseMs;
+        const blend = 1 - Math.exp(-dtMs / Math.max(1, timeMs));
+        return current + (target - current) * blend;
+      };
+      const cloneState = () => JSON.parse(JSON.stringify(state));
+
+      function sendPing() {
+        if (ws?.readyState !== WebSocket.OPEN) return;
+        pingId += 1;
+        pendingPings[pingId] = performance.now();
+        ws.send(JSON.stringify({ address: "/bevyosc/ping", id: pingId }));
+      }
+
+      function connect() {
+        clearTimeout(reconnectTimer);
+        const scheme = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(`${scheme}://${location.hostname || "localhost"}:3000/ws`);
+
+        ws.onopen = () => {
+          bridgeStatus.textContent = "bridge live";
+          bridgeStatus.dataset.state = "live";
+          document.querySelectorAll("[data-banner-type='disconnect']").forEach((b) => b.remove());
+          reconnectDelay = 1000;
+          publish({ record: false });
+        };
+        ws.onclose = () => {
+          bridgeStatus.textContent = "bridge reconnecting";
+          bridgeStatus.dataset.state = "connecting";
+          addBanner("Bridge WebSocket disconnected — reconnecting…", "disconnect");
+          pendingPings = {};
+          reconnectTimer = setTimeout(connect, reconnectDelay);
+          reconnectDelay = Math.min(reconnectDelay * 2, 16000);
+        };
+        ws.onerror = () => {
+          bridgeStatus.textContent = "bridge error";
+          bridgeStatus.dataset.state = "error";
+        };
+        ws.onmessage = (event) => {
+          try {
+            applyFrame(JSON.parse(event.data));
+          } catch {
+            // Ignore malformed frames on a live controls surface.
+          }
+        };
+      }
+
+      function publish(options = {}) {
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ address: "/bevyosc/control/state", args: [state] }));
+        }
+        if (isRecording && options.record !== false) {
+          const now = performance.now();
+          const last = recording[recording.length - 1];
+          if (!last || now - last.t > 100) {
+            recording.push({ t: now - recordStart, state: cloneState() });
+          }
+        }
+        render();
+      }
+
+      function trackDataValueStart(args) {
+        const fieldIndex = args.findIndex(
+          (arg) => typeof arg === "string" && (arg === "track.output_meter_level" || arg.startsWith("track.")),
+        );
+        if (fieldIndex >= 0) return fieldIndex + 1;
+
+        const allNumeric = args.every((arg) => Number.isFinite(Number(arg)));
+        if (allNumeric && args.length >= 3) {
+          const start = Number(args[0]);
+          const count = Number(args[1]);
+          if (Number.isInteger(start) && Number.isInteger(count) && count > 0 && count <= args.length - 2) {
+            return 2;
+          }
+        }
+        if (allNumeric && args.length <= 32) return 0;
+
+        return Math.min(2, args.length);
+      }
+
+      function applyFrame(frame) {
+        if (frame?.address === "/bevyosc/error" && frame.error) {
+          addBanner(String(frame.error));
+        }
+        const args = Array.isArray(frame?.args) ? frame.args : [];
+        if (frame?.address === "/bevyosc/control/state" && args[0] && typeof args[0] === "object") {
+          syncFromRemote(args[0]);
+        }
+        if (frame?.address === "/bevyosc/server/diagnostics" && args[0] && typeof args[0] === "object") {
+          Object.assign(diagnostics, args[0]);
+        }
+        if (frame?.address === "/bevyosc/demo/audio" && state.demoMode && args[0]) {
+          applyDemo(args[0]);
+        }
+        if (frame?.address === "/bevyosc/audio/features" && args[0]) {
+          applyBrowserAudio(args[0]);
+        }
+        if (frame?.address === "/live/song/get/tempo" && Number.isFinite(Number(args[0]))) {
+          state.bpm = Number(args[0]);
+          $("#bpm").value = String(state.bpm);
+        }
+        if (frame?.address === "/live/song/get/beat") {
+          const nextBeat = Number(args[0]) || 0;
+          if (Math.floor(nextBeat) !== osc.beatIndex) {
+            osc.beatIndex = Math.floor(nextBeat);
+            flushPendingCue(nextBeat);
+          }
+          osc.beat = nextBeat;
+          osc.lastFrameAt = performance.now();
+        }
+        if (frame?.address === "/live/song/get/track_data") {
+          applyTrackData(args);
+        }
+        if (frame?.address?.startsWith("/bevyosc/preset/recall/")) {
+          const n = Number(frame.address.split("/").pop());
+          // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
+          if (Number.isInteger(n) && n >= 1 && n <= 6) recallPreset(n);
+        }
+        if (frame?.address?.startsWith("/bevyosc/preset/save/")) {
+          const n = Number(frame.address.split("/").pop());
+          // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
+          if (Number.isInteger(n) && n >= 1 && n <= 6) savePresetSilent(n);
+        }
+        if (frame?.address === "/bevyosc/pong" && typeof frame.id === "number") {
+          const sentAt = pendingPings[frame.id];
+          if (sentAt !== undefined) {
+            delete pendingPings[frame.id];
+            latencyWindow.push(performance.now() - sentAt);
+            if (latencyWindow.length > 20) latencyWindow.shift();
+          }
+        }
+        checkOscTrigger(frame?.address);
+        render();
+      }
+
+      function syncFromRemote(next) {
+        if (next.replaying && !state.replaying) return;
+        Object.assign(state, { ...state, ...next, trackMapping: { ...state.trackMapping, ...(next.trackMapping || {}) } });
+        syncInputs();
+        // If a transition is running, state is already the live 'from'; no extra action needed.
+      }
+
+      function applyTrackData(args) {
+        const valueStart = trackDataValueStart(args);
+        const values = args
+          .slice(valueStart)
+          .filter((value) => Number.isFinite(Number(value)))
+          .slice(0, 32)
+          .map(clamp01);
+        if (!values.length) return;
+
+        const mapping = state.trackMapping;
+        const mappedAverage = (start, count) => average(values.slice(start, start + Math.max(1, count)));
+        const mappedTrack = (index, fallback) => (Number.isFinite(values[index]) ? values[index] : fallback);
+        const avg = average(values);
+        const peak = Math.max(avg, ...values);
+        const energyTarget = peak * 0.72 + avg * 0.28;
+        const transient = Math.max(0, energyTarget - osc.previousEnergy);
+        const now = performance.now();
+        const dtMs = Math.max(16, Math.min(250, now - (osc.lastEnvelopeAt || now)));
+
+        // Convert per-band EMA alpha to smoothSignal time constants.
+        // Attack uses the alpha directly; release is 2.4× slower for musical feel.
+        const alphas = state.emaAlphas ?? { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 };
+        const emaMs = (alpha) => -dtMs / Math.log(Math.max(1e-9, 1 - Math.min(0.999, alpha)));
+        osc.lastFrameAt = now;
+        osc.energy = smoothSignal(osc.energy, energyTarget, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
+        osc.bass = smoothSignal(osc.bass, mappedTrack(mapping.bassTrack, energyTarget), dtMs, emaMs(alphas.bass), emaMs(alphas.bass) * 2.4);
+        osc.mid = smoothSignal(osc.mid, mappedTrack(mapping.midTrack, avg), dtMs, emaMs(alphas.mid), emaMs(alphas.mid) * 2.4);
+        osc.high = smoothSignal(osc.high, Math.max(mappedTrack(mapping.highTrack, 0), Math.min(1, transient * 2.2)), dtMs, emaMs(alphas.high), emaMs(alphas.high) * 2.9);
+        osc.deckA = smoothSignal(osc.deckA, mappedAverage(mapping.deckAStart, mapping.deckACount) || avg, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
+        osc.deckB = smoothSignal(osc.deckB, mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
+        osc.previousEnergy = energyTarget;
+        osc.lastEnvelopeAt = now;
+      }
+
+      function applyBrowserAudio(frame) {
+        if (!frame || typeof frame !== "object") return;
+        const energy = clamp01(frame.energy);
+        const now = performance.now();
+        osc.lastFrameAt = now;
+        osc.lastBrowserAudioAt = now;
+        osc.energy = energy;
+        osc.bass = clamp01(frame.bass);
+        osc.mid = clamp01(frame.mid);
+        osc.high = clamp01(frame.high);
+        osc.deckA = energy;
+        osc.deckB = energy;
+        osc.previousEnergy = energy;
+        osc.lastEnvelopeAt = now;
+      }
+
+      function applyDemo(frame) {
+        osc.lastFrameAt = performance.now();
+        osc.energy = clamp01(frame.energy);
+        osc.bass = clamp01(frame.bass);
+        osc.mid = clamp01(frame.mid);
+        osc.high = clamp01(frame.high);
+        osc.deckA = clamp01(frame.deckA);
+        osc.deckB = clamp01(frame.deckB);
+        flushPendingCue(Number(frame.beat) || 0);
+      }
+
+      function queueCue(name) {
+        const cue = cuePresets[name];
+        if (!cue) return;
+        if (!state.beatSync) {
+          applyCue(name, cue);
+          return;
+        }
+        pendingCue = { name, cue };
+        $("#quantize-status").textContent = state.barSync ? `Queued ${name} on bar` : `Queued ${name} on beat`;
+        render();
+      }
+
+      function flushPendingCue(beat) {
+        if (!pendingCue) return;
+        if (state.barSync && Math.floor(beat) % 4 !== 0) return;
+        applyCue(pendingCue.name, pendingCue.cue);
+        pendingCue = null;
+      }
+
+      function applyCue(name, cue) {
+        Object.assign(state, cue);
+        if (cue.palette !== undefined) syncPaletteFromHue(state);
+        state.cueVersion += 1;
+        state.cueIntensity = clamp01(cue.intensity ?? state.intensity);
+        state.cuePalette = clamp01(cue.palette ?? state.palette);
+        state.cueCrossfade = clamp01(cue.crossfade ?? state.crossfade);
+        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 4, state.deckAMode);
+        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 4, state.deckBMode);
+        state.flashVersion += name === "panic" ? 0 : 1;
+        syncInputs();
+        publish();
+      }
+
+      const PRESETS_KEY = "bevyosc.presets";
+      const PRESET_BUNDLE_SCHEMA_VERSION = 1; // keep in sync with preset-bundle-schema.ts
+      const loadPresets = () => {
+        try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}"); } catch { return {}; }
+      };
+      const savePresetsToStorage = (p) => localStorage.setItem(PRESETS_KEY, JSON.stringify(p));
+      // Mirrors migratePresetBundle() in preset-bundle-schema.ts — keep in sync.
+      const normalizePreset = (raw) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+        // Legacy: raw ControlState stored directly (no "state" wrapper key)
+        if (!("state" in raw)) return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: "", state: raw, curves: {} };
+        const state = raw.state && typeof raw.state === "object" ? raw.state : {};
+        const curvesRaw = raw.curves;
+        const curves = curvesRaw && typeof curvesRaw === "object" && !Array.isArray(curvesRaw)
+          ? Object.fromEntries(Object.entries(curvesRaw).filter(([, v]) => typeof v === "string"))
+          : {};
+        const name = typeof raw.name === "string" ? raw.name : "";
+        // v0 unversioned or v1 current — normalise to v1 shape
+        if (!("schemaVersion" in raw) || raw.schemaVersion === PRESET_BUNDLE_SCHEMA_VERSION) {
+          return { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name, state, curves };
+        }
+        return null;
+      };
+
+      const INTERPOLATED_KEYS = ["crossfade", "speed", "intensity", "feedback", "depth", "paletteR", "paletteG", "paletteB", "ringOpacity", "maxBrightness"];
+      const CURVE_MODES = ["snap", "linear", "ease"];
+      const CURVE_PARAM_LABELS = {
+        crossfade: "Crossfade", speed: "Speed", intensity: "Intensity",
+        feedback: "Trails", depth: "3D Lines", paletteR: "Color R", paletteG: "Color G", paletteB: "Color B",
+        ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
+      };
+      let transitionDurationMs = 500;
+      let activePresetIndex = null;
+      let activeTransitionRaf = null;
+      const pendingCurves = Object.fromEntries(INTERPOLATED_KEYS.map(k => [k, "snap"]));
+
+      function recallPreset(n) {
+        const presets = loadPresets();
+        const preset = normalizePreset(presets[`slot-${n}`]);
+        if (!preset) return;
+        const from = cloneState();
+        const to = { ...preset.state };
+        if (to.paletteR === undefined) syncPaletteFromHue(to);
+        const presetCurves = preset.curves && typeof preset.curves === "object" ? preset.curves : {};
+        const start = performance.now();
+        activePresetIndex = n;
+        state.cueVersion += 1;
+        for (const key of INTERPOLATED_KEYS) {
+          const c = presetCurves[key];
+          pendingCurves[key] = CURVE_MODES.includes(c) ? c : "snap";
+        }
+        renderCurves();
+        if (activeTransitionRaf !== null) {
+          cancelAnimationFrame(activeTransitionRaf);
+          activeTransitionRaf = null;
+        }
+        function applyAt(t) {
+          const lerped = Object.assign({}, to);
+          const snapAll = transitionDurationMs <= 0;
+          for (const key of INTERPOLATED_KEYS) {
+            const a = typeof from[key] === "number" ? from[key] : (typeof to[key] === "number" ? to[key] : 0);
+            const b = typeof to[key] === "number" ? to[key] : a;
+            const curve = pendingCurves[key] ?? "snap";
+            let tv;
+            if (curve === "snap" || snapAll) {
+              tv = 1;
+            } else if (curve === "ease") {
+              tv = t * t * (3 - 2 * t);
+            } else {
+              tv = t;
+            }
+            lerped[key] = a + (b - a) * tv;
+          }
+          const { cueVersion, flashVersion, resetVersion, ...rest } = lerped;
+          Object.assign(state, rest, { replaying: false });
+          syncPaletteFromRgb(state);
+          syncInputs();
+          publish({ record: false });
+        }
+        function tick() {
+          const elapsed = performance.now() - start;
+          const t = Math.min(1, elapsed / Math.max(1, transitionDurationMs));
+          applyAt(t);
+          if (t < 1) {
+            activeTransitionRaf = requestAnimationFrame(tick);
+          } else {
+            activeTransitionRaf = null;
+            renderPresets();
+          }
+        }
+        if (transitionDurationMs <= 0) {
+          applyAt(1);
+          renderPresets();
+        } else {
+          tick();
+        }
+      }
+
+      function savePresetSilent(n) {
+        const presets = loadPresets();
+        const existing = normalizePreset(presets[`slot-${n}`]);
+        presets[`slot-${n}`] = { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: existing?.name || `Preset ${n}`, state: cloneState(), curves: { ...pendingCurves } };
+        savePresetsToStorage(presets);
+        activePresetIndex = n;
+        renderPresets();
+      }
+
+      function savePresetToSlot(n) {
+        const presets = loadPresets();
+        const existing = normalizePreset(presets[`slot-${n}`]);
+        const defaultName = existing?.name || `Preset ${n}`;
+        const name = prompt(`Name for slot ${n}:`, defaultName);
+        if (name === null) return;
+        presets[`slot-${n}`] = { schemaVersion: PRESET_BUNDLE_SCHEMA_VERSION, name: name.trim() || defaultName, state: cloneState(), curves: { ...pendingCurves } };
+        savePresetsToStorage(presets);
+        activePresetIndex = n;
+        renderPresets();
+      }
+
+      function savePreset() {
+        const presets = loadPresets();
+        let defaultSlot = 1;
+        for (let i = 1; i <= 6; i++) {
+          if (!presets[`slot-${i}`]) { defaultSlot = i; break; }
+        }
+        const slotStr = prompt("Save to slot (1–6):", String(defaultSlot));
+        if (!slotStr) return;
+        const n = Math.max(1, Math.min(6, Number(slotStr) || defaultSlot));
+        savePresetToSlot(n);
+      }
+
+      function renamePreset(n) {
+        const presets = loadPresets();
+        const existing = normalizePreset(presets[`slot-${n}`]);
+        if (!existing) return;
+        const name = prompt("Rename preset:", existing.name || `Preset ${n}`);
+        if (name === null) return;
+        presets[`slot-${n}`] = { ...existing, name: name.trim() || `Preset ${n}` };
+        savePresetsToStorage(presets);
+        renderPresets();
+      }
+
+      function renderPresets() {
+        const root = $("#preset-grid");
+        const presets = loadPresets();
+        root.innerHTML = "";
+        for (let i = 1; i <= 6; i++) {
+          const preset = normalizePreset(presets[`slot-${i}`]);
+          const isActive = activePresetIndex === i;
+          const btn = document.createElement("button");
+          btn.textContent = preset ? (preset.name || `Preset ${i}`) : `— ${i} —`;
+          btn.disabled = !preset;
+          btn.setAttribute("aria-pressed", String(isActive));
+          btn.title = preset
+            ? "Click to recall · Shift+click to overwrite · Dbl-click to rename"
+            : "Empty — use Save Preset to fill";
+          btn.addEventListener("click", (e) => {
+            if (e.shiftKey) {
+              savePresetToSlot(i);
+            } else if (preset) {
+              recallPreset(i);
+            }
+          });
+          btn.addEventListener("dblclick", (e) => {
+            e.preventDefault();
+            if (preset) renamePreset(i);
+          });
+          root.append(btn);
+        }
+        const activePill = $("#preset-status");
+        if (activePill) {
+          const activePreset = activePresetIndex !== null
+            ? normalizePreset(presets[`slot-${activePresetIndex}`])
+            : null;
+          const label = activePreset ? (activePreset.name || `Preset ${activePresetIndex}`) : "No preset";
+          activePill.textContent = label;
+          activePill.dataset.state = activePreset ? "info" : "idle";
+        }
+      }
+
+      function syncCurveRow(row, key) {
+        const current = pendingCurves[key] ?? "snap";
+        for (const btn of row.querySelectorAll(".curve-btn")) {
+          btn.setAttribute("aria-pressed", String(btn.dataset.mode === current));
+        }
+      }
+
+      function renderCurves() {
+        const grid = document.getElementById("curves-grid");
+        if (!grid) return;
+        if (!grid.children.length) {
+          for (const key of INTERPOLATED_KEYS) {
+            const row = document.createElement("div");
+            row.className = "curve-row";
+            row.dataset.key = key;
+            const lbl = document.createElement("span");
+            lbl.className = "curve-param";
+            lbl.textContent = CURVE_PARAM_LABELS[key] || key;
+            row.appendChild(lbl);
+            for (const mode of CURVE_MODES) {
+              const btn = document.createElement("button");
+              btn.className = "curve-btn";
+              btn.textContent = mode;
+              btn.dataset.mode = mode;
+              btn.addEventListener("click", () => {
+                pendingCurves[key] = mode;
+                syncCurveRow(row, key);
+              });
+              row.appendChild(btn);
+            }
+            grid.appendChild(row);
+          }
+        }
+        for (const row of grid.children) {
+          syncCurveRow(row, row.dataset.key);
+        }
+      }
+
+      function startRecording() {
+        isRecording = !isRecording;
+        if (isRecording) {
+          recording = [];
+          recordStart = performance.now();
+          $("#record").textContent = "Stop Rec";
+        } else {
+          $("#record").textContent = "Record";
+        }
+        render();
+      }
+
+      function playReplay(opts) {
+        if (!recording.length) return;
+        stopReplay();
+        isReplayLooping = Boolean(opts && opts.loop);
+        state.replaying = true;
+        _runReplayIteration();
+        publish({ record: false });
+      }
+
+      function _runReplayIteration() {
+        const durationMs = recording[recording.length - 1].t;
+        for (const item of recording) {
+          const timer = setTimeout(() => {
+            Object.assign(state, item.state, { replaying: true });
+            syncInputs();
+            publish({ record: false });
+          }, item.t);
+          replayTimers.push(timer);
+        }
+        replayTimers.push(setTimeout(() => {
+          if (isReplayLooping && state.replaying) {
+            replayTimers.forEach(clearTimeout);
+            replayTimers = [];
+            _runReplayIteration();
+          } else {
+            stopReplay();
+          }
+        }, durationMs + 100));
+      }
+
+      function stopReplay() {
+        replayTimers.forEach(clearTimeout);
+        replayTimers = [];
+        state.replaying = false;
+        isReplayLooping = false;
+        publish({ record: false });
+      }
+
+      const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
+      const MIDI_CC_SCHEMA_VERSION = 1; // keep in sync with midi-cc-schema.ts
+      const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);
+      const MIDI_CC_PARAM_LABELS = {
+        crossfade: "Crossfade", bpm: "BPM", speed: "Speed",
+        intensity: "Intensity", feedback: "Trails", depth: "3D Lines",
+        palette: "Color", paletteSaturation: "GPU Sat", paletteBrightness: "GPU Bright",
+        gridDensity: "Grid Density", gridDiamond: "Grid Diamond",
+        gridLineWidth: "Grid Lines", gridShapeMix: "Grid Shape",
+        deckAMode: "Deck A Mode", deckBMode: "Deck B Mode",
+        ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
+      };
+
+      // Mirrors migrateMidiBindings() in midi-cc-schema.ts — keep in sync.
+      function migrateMidiBindings(raw) {
+        if (Array.isArray(raw)) {
+          return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: raw };
+        }
+        if (raw !== null && typeof raw === "object") {
+          const bindings = Array.isArray(raw.bindings) ? raw.bindings : [];
+          return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings };
+        }
+        // Add future migration branches here, e.g.:
+        // if (store.schemaVersion === 1) { ...transform bindings for v2... }
+        return { schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings: [] };
+      }
+
+      let _cachedBindings = null;
+      function loadMidiBindings() {
+        if (_cachedBindings) return _cachedBindings;
+        try {
+          const stored = localStorage.getItem(MIDI_CC_BINDINGS_KEY);
+          if (!stored) { _cachedBindings = []; return _cachedBindings; }
+          const parsed = JSON.parse(stored);
+          const store = migrateMidiBindings(parsed);
+          _cachedBindings = store.bindings;
+          if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed?.schemaVersion !== MIDI_CC_SCHEMA_VERSION) {
+            localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify(store));
+          }
+        } catch { _cachedBindings = []; }
+        return _cachedBindings;
+      }
+      function saveMidiBindings(bindings) {
+        _cachedBindings = bindings;
+        localStorage.setItem(MIDI_CC_BINDINGS_KEY, JSON.stringify({ schemaVersion: MIDI_CC_SCHEMA_VERSION, bindings }));
+      }
+
+      function scaleCcToParam(ccValue, binding) {
+        const { ccMin, ccMax, paramMin, paramMax } = binding;
+        const range = ccMax - ccMin;
+        if (range === 0) return paramMin;
+        const t = Math.max(0, Math.min(1, (ccValue - ccMin) / range));
+        return paramMin + t * (paramMax - paramMin);
+      }
+
+      let midiAccess = null;
+      let midiEnabled = false;
+
+      function applyMidiCc(ccNumber, ccChannel, ccValue) {
+        const bindings = loadMidiBindings();
+        let changed = false;
+        for (const binding of bindings) {
+          if (binding.cc !== ccNumber) continue;
+          if (binding.channel !== 0 && binding.channel !== ccChannel) continue;
+          const raw = scaleCcToParam(ccValue, binding);
+          state[binding.param] = MIDI_CC_INTEGER_PARAMS.has(binding.param) ? Math.round(raw) : raw;
+          if (binding.param === "deckAMode" || binding.param === "deckBMode") {
+            state.cueVersion += 1;
+          }
+          changed = true;
+        }
+        if (changed) {
+          syncInputs();
+          publish();
+        }
+      }
+
+      function onMidiMessage(event) {
+        const [status, data1, data2] = event.data;
+        const msgType = status & 0xf0;
+        const channel = (status & 0x0f) + 1;
+        if (msgType === 0xb0) {
+          applyMidiCc(data1, channel, data2);
+          checkMidiCcTrigger(data1, channel, data2);
+        } else if (msgType === 0x90 && data2 > 0) {
+          checkMidiNoteTrigger(data1, channel);
+        }
+      }
+
+      function enableMidi() {
+        if (!navigator.requestMIDIAccess) {
+          addBanner("Web MIDI API not supported in this browser.", "warn");
+          return;
+        }
+        navigator.requestMIDIAccess().then(
+          (access) => {
+            midiAccess = access;
+            midiEnabled = true;
+            $("#midi-cc-enable").setAttribute("aria-pressed", "true");
+            for (const input of access.inputs.values()) {
+              input.onmidimessage = onMidiMessage;
+            }
+            access.onstatechange = () => {
+              for (const input of access.inputs.values()) {
+                input.onmidimessage = onMidiMessage;
+              }
+              renderMidiStatus();
+            };
+            renderMidiStatus();
+          },
+          (err) => {
+            addBanner(`MIDI access denied: ${err.message}`, "warn");
+          },
+        );
+      }
+
+      function renderMidiStatus() {
+        const badge = $("#midi-cc-status");
+        if (!badge) return;
+        if (!midiEnabled) {
+          badge.textContent = "No MIDI";
+          badge.dataset.state = "idle";
+          return;
+        }
+        const count = midiAccess ? [...midiAccess.inputs.values()].length : 0;
+        badge.textContent = count > 0 ? `${count} MIDI in` : "MIDI ready";
+        badge.dataset.state = count > 0 ? "live" : "info";
+      }
+
+      function renderMidiBindings() {
+        const container = $("#midi-cc-bindings");
+        if (!container) return;
+        const bindings = loadMidiBindings();
+        container.innerHTML = "";
+        if (!bindings.length) {
+          const empty = document.createElement("p");
+          empty.className = "midi-cc-empty";
+          empty.textContent = "No bindings — use Add Binding to create one.";
+          container.appendChild(empty);
+          return;
+        }
+        for (let i = 0; i < bindings.length; i++) {
+          const b = bindings[i];
+          const row = document.createElement("div");
+          row.className = "midi-cc-row";
+          const info = document.createElement("span");
+          info.className = "midi-cc-row-label";
+          const chStr = b.channel === 0 ? "any" : `ch${b.channel}`;
+          info.textContent = `CC${b.cc} (${chStr}) → ${MIDI_CC_PARAM_LABELS[b.param] || b.param} [${b.paramMin}–${b.paramMax}]`;
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "midi-cc-remove";
+          removeBtn.setAttribute("aria-label", `Remove CC${b.cc} binding`);
+          removeBtn.textContent = "×";
+          removeBtn.addEventListener("click", () => {
+            const current = loadMidiBindings();
+            current.splice(i, 1);
+            saveMidiBindings(current);
+            renderMidiBindings();
+          });
+          row.append(info, removeBtn);
+          container.appendChild(row);
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // Automation playback triggers (MIDI note, MIDI CC, OSC)
+      // ---------------------------------------------------------------------------
+
+      const AUTOMATION_TRIGGERS_KEY = "bevyosc.automation-triggers";
+      let _cachedTriggers = null;
+
+      function loadTriggerBindings() {
+        if (_cachedTriggers) return _cachedTriggers;
+        try { _cachedTriggers = JSON.parse(localStorage.getItem(AUTOMATION_TRIGGERS_KEY) || "[]"); }
+        catch { _cachedTriggers = []; }
+        return _cachedTriggers;
+      }
+
+      function saveTriggerBindings(bindings) {
+        _cachedTriggers = bindings;
+        localStorage.setItem(AUTOMATION_TRIGGERS_KEY, JSON.stringify(bindings));
+      }
+
+      function executeTriggerAction(action) {
+        const resolved = action === "toggle"
+          ? (state.replaying ? "stop" : "play")
+          : action === "toggle-loop"
+          ? (state.replaying ? "stop" : "play-loop")
+          : action;
+        if (resolved === "stop") stopReplay();
+        else if (resolved === "play") playReplay({ loop: false });
+        else if (resolved === "play-loop") playReplay({ loop: true });
+      }
+
+      function checkMidiNoteTrigger(note, channel) {
+        const bindings = loadTriggerBindings();
+        for (const b of bindings) {
+          if (b.type !== "midi-note") continue;
+          if (b.note !== note) continue;
+          if (b.channel !== 0 && b.channel !== channel) continue;
+          executeTriggerAction(b.action);
+          return;
+        }
+      }
+
+      function checkMidiCcTrigger(cc, channel, value) {
+        const bindings = loadTriggerBindings();
+        for (const b of bindings) {
+          if (b.type !== "midi-cc") continue;
+          if (b.cc !== cc) continue;
+          if (b.channel !== 0 && b.channel !== channel) continue;
+          if (value < b.threshold) continue;
+          executeTriggerAction(b.action);
+          return;
+        }
+      }
+
+      function checkOscTrigger(address) {
+        if (!address) return;
+        const bindings = loadTriggerBindings();
+        for (const b of bindings) {
+          if (b.type === "osc" && b.address === address) {
+            executeTriggerAction(b.action);
+            return;
+          }
+        }
+      }
+
+      function renderTriggerBindings() {
+        const container = document.getElementById("trigger-bindings");
+        if (!container) return;
+        const bindings = loadTriggerBindings();
+        container.innerHTML = "";
+        const badge = document.getElementById("trigger-status");
+        if (badge) badge.textContent = `${bindings.length} trigger${bindings.length !== 1 ? "s" : ""}`;
+        if (!bindings.length) {
+          const empty = document.createElement("p");
+          empty.className = "midi-cc-empty";
+          empty.textContent = "No triggers — use Add Trigger to create one.";
+          container.appendChild(empty);
+          return;
+        }
+        for (let i = 0; i < bindings.length; i++) {
+          const b = bindings[i];
+          const row = document.createElement("div");
+          row.className = "midi-cc-row";
+          const info = document.createElement("span");
+          info.className = "midi-cc-row-label";
+          if (b.type === "midi-note") {
+            const chStr = b.channel === 0 ? "any" : `ch${b.channel}`;
+            info.textContent = `Note ${b.note} (${chStr}) → ${b.action}`;
+          } else if (b.type === "midi-cc") {
+            const chStr = b.channel === 0 ? "any" : `ch${b.channel}`;
+            info.textContent = `CC${b.cc} (${chStr}) ≥ ${b.threshold} → ${b.action}`;
+          } else {
+            info.textContent = `OSC ${b.address} → ${b.action}`;
+          }
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "midi-cc-remove";
+          removeBtn.setAttribute("aria-label", `Remove trigger ${i + 1}`);
+          removeBtn.textContent = "×";
+          removeBtn.addEventListener("click", () => {
+            const current = loadTriggerBindings();
+            current.splice(i, 1);
+            saveTriggerBindings(current);
+            renderTriggerBindings();
+          });
+          row.append(info, removeBtn);
+          container.appendChild(row);
+        }
+      }
+
+      function updateTriggerFormVisibility() {
+        const type = document.getElementById("trigger-type")?.value;
+        const showNote = type === "midi-note";
+        const showCc = type === "midi-cc";
+        const showChannel = type === "midi-note" || type === "midi-cc";
+        const showOsc = type === "osc";
+        const setVis = (id, visible) => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = visible ? "" : "none";
+        };
+        setVis("trigger-note-label", showNote);
+        setVis("trigger-cc-label", showCc);
+        setVis("trigger-threshold-label", showCc);
+        setVis("trigger-channel-label", showChannel);
+        setVis("trigger-osc-label", showOsc);
+      }
+
+      document.getElementById("trigger-type")?.addEventListener("change", updateTriggerFormVisibility);
+
+      document.getElementById("trigger-add-btn")?.addEventListener("click", () => {
+        const type = document.getElementById("trigger-type")?.value;
+        const action = document.getElementById("trigger-action")?.value;
+        if (!type || !action) return;
+        const channel = Math.max(0, Math.min(16, Math.floor(Number(document.getElementById("trigger-channel")?.value) || 0)));
+        const bindings = loadTriggerBindings();
+        if (type === "midi-note") {
+          const note = Math.max(0, Math.min(127, Math.floor(Number(document.getElementById("trigger-note")?.value) || 0)));
+          bindings.push({ type: "midi-note", note, channel, action });
+        } else if (type === "midi-cc") {
+          const cc = Math.max(0, Math.min(127, Math.floor(Number(document.getElementById("trigger-cc")?.value) || 0)));
+          const threshold = Math.max(0, Math.min(127, Math.floor(Number(document.getElementById("trigger-threshold")?.value) || 64)));
+          bindings.push({ type: "midi-cc", cc, channel, threshold, action });
+        } else if (type === "osc") {
+          const address = (document.getElementById("trigger-osc-address")?.value || "").trim();
+          if (!address.startsWith("/")) return;
+          bindings.push({ type: "osc", address, action });
+        }
+        saveTriggerBindings(bindings);
+        renderTriggerBindings();
+      });
+
+      updateTriggerFormVisibility();
+
+      $("#midi-cc-enable").addEventListener("click", enableMidi);
+      $("#midi-cc-add-btn").addEventListener("click", () => {
+        const cc = Math.max(0, Math.min(127, Math.floor(Number($("#midi-cc-cc").value))));
+        const channel = Math.max(0, Math.min(16, Math.floor(Number($("#midi-cc-channel").value))));
+        const param = $("#midi-cc-param").value;
+        const ccMin = Math.max(0, Math.min(127, Math.floor(Number($("#midi-cc-cc-min").value))));
+        const ccMax = Math.max(0, Math.min(127, Math.floor(Number($("#midi-cc-cc-max").value))));
+        const paramMin = Number($("#midi-cc-param-min").value);
+        const paramMax = Number($("#midi-cc-param-max").value);
+        if (!Number.isFinite(paramMin) || !Number.isFinite(paramMax)) return;
+        const bindings = loadMidiBindings();
+        bindings.push({ cc, channel, param, ccMin, ccMax, paramMin, paramMax });
+        saveMidiBindings(bindings);
+        renderMidiBindings();
+      });
+
+      function syncInputs() {
+        for (const [id, key] of [
+          ["crossfade", "crossfade"],
+          ["bpm", "bpm"],
+          ["speed", "speed"],
+          ["intensity", "intensity"],
+          ["feedback", "feedback"],
+          ["depth", "depth"],
+          ["ring-opacity", "ringOpacity"],
+          ["palette-saturation", "paletteSaturation"],
+          ["palette-brightness", "paletteBrightness"],
+          ["grid-density", "gridDensity"],
+          ["grid-diamond", "gridDiamond"],
+          ["grid-line-width", "gridLineWidth"],
+          ["grid-shape-mix", "gridShapeMix"],
+          ["max-brightness", "maxBrightness"],
+          ["deck-a-mode", "deckAMode"],
+          ["deck-b-mode", "deckBMode"],
+          ["active-shader", "activeShader"],
+        ]) {
+          $(`#${id}`).value = String(state[key]);
+        }
+        $("#palette").value = rgbToHex(state.paletteR, state.paletteG, state.paletteB);
+        for (const [id, key] of [
+          ["map-deck-a-start", "deckAStart"],
+          ["map-deck-a-count", "deckACount"],
+          ["map-deck-b-start", "deckBStart"],
+          ["map-deck-b-count", "deckBCount"],
+          ["map-bass-track", "bassTrack"],
+          ["map-mid-track", "midTrack"],
+          ["map-high-track", "highTrack"],
+        ]) {
+          $(`#${id}`).value = String(state.trackMapping[key]);
+        }
+        for (const band of ["energy", "bass", "mid", "high"]) {
+          const el = $(`#band-curve-${band}`);
+          if (el) el.value = state.bandCurves?.[band] ?? "linear";
+        }
+        for (const band of ["energy", "bass", "mid", "high", "pulse"]) {
+          const el = $(`#ema-alpha-${band}`);
+          if (el) el.value = String(state.emaAlphas?.[band] ?? 0.15);
+          const out = $(`#ema-${band}-value`);
+          if (out) out.textContent = (state.emaAlphas?.[band] ?? 0.15).toFixed(2);
+        }
+      }
+
+      function render() {
+        $("#crossfade-value").textContent = `${Math.round(state.crossfade * 100)}%`;
+        $("#bpm-value").textContent = state.bpm.toFixed(1);
+        $("#speed-value").textContent = state.speed.toFixed(2);
+        $("#intensity-value").textContent = state.intensity.toFixed(2);
+        $("#feedback-value").textContent = state.feedback.toFixed(2);
+        $("#depth-value").textContent = state.depth.toFixed(2);
+        $("#ring-opacity-value").textContent = `${Math.round(state.ringOpacity * 100)}%`;
+        $("#palette-value").textContent = rgbToHex(state.paletteR, state.paletteG, state.paletteB);
+        $("#palette-saturation-value").textContent = `${Math.round(state.paletteSaturation * 100)}%`;
+        $("#palette-brightness-value").textContent = `${Math.round(state.paletteBrightness * 100)}%`;
+        $("#grid-density-value").textContent = `${Math.round(state.gridDensity * 100)}%`;
+        $("#grid-diamond-value").textContent = `${Math.round(state.gridDiamond * 100)}%`;
+        $("#grid-line-width-value").textContent = `${Math.round(state.gridLineWidth * 100)}%`;
+        $("#grid-shape-mix-value").textContent = `${Math.round(state.gridShapeMix * 100)}%`;
+        $("#max-brightness-value").textContent = `${Math.round(state.maxBrightness * 100)}%`;
+        $("#deck-a-mode").title = visualModes[state.deckAMode] || "Mode";
+        $("#deck-b-mode").title = visualModes[state.deckBMode] || "Mode";
+        $("#rings").setAttribute("aria-pressed", String(state.rings));
+        $("#strobe").setAttribute("aria-pressed", String(state.strobe));
+        $("#strobe-lockout").setAttribute("aria-pressed", String(state.strobeLockout));
+        $("#freeze").setAttribute("aria-pressed", String(state.freeze));
+        $("#show-gpu-palette").setAttribute("aria-pressed", String(state.showGpuPalette));
+        $("#blackout").setAttribute("aria-pressed", String(state.blackout));
+        $("#beat-sync").setAttribute("aria-pressed", String(state.beatSync));
+        $("#bar-sync").setAttribute("aria-pressed", String(state.barSync));
+        $("#demo-mode").setAttribute("aria-pressed", String(state.demoMode));
+        $("#audio-control-mode").setAttribute("aria-pressed", String(state.audioControlMode));
+        $("#mic-capture").setAttribute("aria-pressed", String(micActive));
+        const audioControlBadge = $("#audio-control-status");
+        audioControlBadge.textContent = state.audioControlMode
+          ? micActive
+            ? "Mic live"
+            : "On"
+          : "Off";
+        audioControlBadge.dataset.state = state.audioControlMode && micActive ? "live" : state.audioControlMode ? "info" : "idle";
+        $("#energy").value = osc.energy;
+        $("#bass").value = osc.bass;
+        $("#mid").value = osc.mid;
+        $("#high").value = osc.high;
+        $("#deck-a").value = osc.deckA;
+        $("#deck-b").value = osc.deckB;
+        $("#quantize-status").textContent = pendingCue
+          ? state.barSync
+            ? `Queued ${pendingCue.name} on bar`
+            : `Queued ${pendingCue.name} on beat`
+          : state.beatSync
+            ? state.barSync
+              ? "Bar sync"
+              : "Beat sync"
+            : "Immediate";
+        const oscLive = performance.now() - osc.lastFrameAt < 3000;
+        const browserAudioLive = performance.now() - osc.lastBrowserAudioAt < 3000;
+        oscStatus.textContent = state.demoMode ? "Demo audio" : browserAudioLive ? "Mic audio" : oscLive ? "OSC live" : "OSC idle";
+        oscStatus.dataset.state = state.demoMode ? "demo" : browserAudioLive ? "live" : oscLive ? "live" : "idle";
+        diagnosticsStatus.textContent = `${diagnostics.sockets} viewer${diagnostics.sockets === 1 ? "" : "s"} · ${diagnostics.oscReady ? "OSC ready" : "OSC wait"}`;
+        diagnosticsStatus.dataset.state = diagnostics.oscReady ? "info" : "warn";
+        clockStatus.textContent = `Clock ${CLOCK_LABELS[diagnostics.clockSource] ?? "—"}`;
+        clockStatus.dataset.state = diagnostics.clockSource === "internal" ? "info" : diagnostics.clockSource ? "live" : "idle";
+        if (latencyWindow.length > 0) {
+          const sorted = [...latencyWindow].sort((a, b) => a - b);
+          const idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+          const p95 = sorted[idx];
+          latencyStatus.textContent = `P95 ${p95.toFixed(0)}ms`;
+          latencyStatus.dataset.state = p95 < 30 ? "live" : p95 < 100 ? "info" : "warn";
+        } else {
+          latencyStatus.textContent = "P95 —ms";
+          latencyStatus.dataset.state = "info";
+        }
+        recordingStatus.textContent = state.replaying
+          ? `Replaying ${recording.length} frames`
+          : isRecording
+            ? `Recording ${recording.length} frames`
+            : recording.length
+              ? `${recording.length} frames saved`
+              : "Ready";
+        recordingStatus.dataset.state = state.replaying ? "replaying" : isRecording ? "recording" : "ready";
+      }
+
+      for (const [id, key] of [
+        ["crossfade", "crossfade"],
+        ["bpm", "bpm"],
+        ["speed", "speed"],
+        ["intensity", "intensity"],
+        ["feedback", "feedback"],
+        ["depth", "depth"],
+        ["ring-opacity", "ringOpacity"],
+        ["palette-saturation", "paletteSaturation"],
+        ["palette-brightness", "paletteBrightness"],
+        ["grid-density", "gridDensity"],
+        ["grid-diamond", "gridDiamond"],
+        ["grid-line-width", "gridLineWidth"],
+        ["grid-shape-mix", "gridShapeMix"],
+        ["max-brightness", "maxBrightness"],
+      ]) {
+        $(`#${id}`).addEventListener("input", (event) => {
+          state[key] = Number(event.target.value);
+          publish();
+        });
+      }
+
+      $("#palette").addEventListener("input", (event) => {
+        const rgb = hexToRgb(event.target.value);
+        if (!rgb) return;
+        state.paletteR = rgb.r;
+        state.paletteG = rgb.g;
+        state.paletteB = rgb.b;
+        syncPaletteFromRgb(state);
+        publish();
+      });
+
+      for (const [id, key] of [
+        ["deck-a-mode", "deckAMode"],
+        ["deck-b-mode", "deckBMode"],
+      ]) {
+        $(`#${id}`).addEventListener("change", (event) => {
+          state[key] = Number(event.target.value);
+          state.cueVersion += 1;
+          publish();
+        });
+      }
+
+      $("#active-shader").addEventListener("change", (event) => {
+        state.activeShader = Math.max(0, Math.min(9, Number(event.target.value)));
+        publish();
+      });
+
+      const VALID_CURVES = new Set(["linear", "exponential", "logarithmic"]);
+      for (const band of ["energy", "bass", "mid", "high"]) {
+        $(`#band-curve-${band}`).addEventListener("change", (event) => {
+          state.bandCurves[band] = VALID_CURVES.has(event.target.value) ? event.target.value : "linear";
+          publish();
+        });
+      }
+
+      for (const band of ["energy", "bass", "mid", "high", "pulse"]) {
+        $(`#ema-alpha-${band}`)?.addEventListener("input", (event) => {
+          const v = Math.max(0.01, Math.min(1, Number(event.target.value)));
+          state.emaAlphas[band] = v;
+          const out = $(`#ema-${band}-value`);
+          if (out) out.textContent = v.toFixed(2);
+          publish();
+        });
+      }
+
+      const renderKeyStatus = (body) => {
+        const status = $("#shadertoy-key-status");
+        if (!body || typeof body !== "object") {
+          status.textContent = "unknown";
+          return;
+        }
+        if (body.configured) {
+          status.textContent = body.source === "env" ? "set (env)" : "set";
+        } else {
+          status.textContent = "not set";
+        }
+      };
+
+      const refreshKeyStatus = async () => {
+        try {
+          const res = await fetch("/api/shadertoy/key");
+          renderKeyStatus(await res.json());
+        } catch {
+          $("#shadertoy-key-status").textContent = "offline";
+        }
+      };
+
+      $("#shadertoy-key-save").addEventListener("click", async () => {
+        const input = $("#shadertoy-key-input");
+        const status = $("#shadertoy-key-status");
+        const key = input.value.trim();
+        if (!key) {
+          status.textContent = "enter key";
+          return;
+        }
+        status.textContent = "saving…";
+        try {
+          const res = await fetch("/api/shadertoy/key", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ key }),
+          });
+          const body = await res.json();
+          if (!res.ok || body.ok === false) {
+            status.textContent = `err: ${String(body.error ?? res.statusText).slice(0, 60)}`;
+            return;
+          }
+          input.value = "";
+          renderKeyStatus(body);
+        } catch (err) {
+          status.textContent = `net err: ${(err && err.message) || String(err)}`;
+        }
+      });
+
+      $("#shadertoy-key-clear").addEventListener("click", async () => {
+        const status = $("#shadertoy-key-status");
+        status.textContent = "clearing…";
+        try {
+          const res = await fetch("/api/shadertoy/key", { method: "DELETE" });
+          renderKeyStatus(await res.json());
+        } catch (err) {
+          status.textContent = `net err: ${(err && err.message) || String(err)}`;
+        }
+      });
+
+      $("#shadertoy-key-reveal").addEventListener("click", (event) => {
+        const input = $("#shadertoy-key-input");
+        const btn = event.currentTarget;
+        const showing = input.type === "text";
+        input.type = showing ? "password" : "text";
+        btn.textContent = showing ? "Show" : "Hide";
+        btn.setAttribute("aria-pressed", String(!showing));
+      });
+
+      refreshKeyStatus();
+
+      $("#shadertoy-import-btn").addEventListener("click", async () => {
+        const input = $("#shadertoy-import-url");
+        const status = $("#shadertoy-import-status");
+        const value = input.value.trim();
+        if (!value) {
+          status.textContent = "enter URL";
+          return;
+        }
+        status.textContent = "importing…";
+        try {
+          const res = await fetch("/api/shadertoy/import", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: value }),
+          });
+          const body = await res.json();
+          if (!res.ok || body.ok === false) {
+            status.textContent = `err: ${String(body.error ?? res.statusText).slice(0, 60)}`;
+            return;
+          }
+          const meta = body.meta ?? {};
+          const warn = body.usedIChannel ? " (iChannel: lossy)" : "";
+          status.textContent = `loaded: ${meta.name ?? meta.id}${warn}`;
+          state.activeShader = 9;
+          $("#active-shader").value = "9";
+          publish();
+        } catch (err) {
+          status.textContent = `net err: ${(err && err.message) || String(err)}`;
+        }
+      });
+
+      for (const [id, key] of [
+        ["map-deck-a-start", "deckAStart"],
+        ["map-deck-a-count", "deckACount"],
+        ["map-deck-b-start", "deckBStart"],
+        ["map-deck-b-count", "deckBCount"],
+        ["map-bass-track", "bassTrack"],
+        ["map-mid-track", "midTrack"],
+        ["map-high-track", "highTrack"],
+      ]) {
+        $(`#${id}`).addEventListener("input", (event) => {
+          state.trackMapping[key] = Number(event.target.value);
+          publish();
+        });
+      }
+
+      $$("[data-snap]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.crossfade = Number(button.dataset.snap);
+          $("#crossfade").value = String(state.crossfade);
+          publish();
+        });
+      });
+      $$("[data-cue]").forEach((button) => button.addEventListener("click", () => queueCue(button.dataset.cue)));
+
+      $("#flash").addEventListener("click", () => {
+        state.flashVersion += 1;
+        publish();
+      });
+      $("#rings").addEventListener("click", () => {
+        state.rings = !state.rings;
+        publish();
+      });
+      $("#strobe").addEventListener("click", () => {
+        if (state.strobeLockout) {
+          state.strobeLockout = false;
+          state.strobe = true;
+        } else {
+          state.strobe = !state.strobe;
+        }
+        publish();
+      });
+      $("#strobe-lockout").addEventListener("click", () => {
+        state.strobeLockout = !state.strobeLockout;
+        if (state.strobeLockout) state.strobe = false;
+        publish();
+      });
+      $("#show-gpu-palette").addEventListener("click", () => {
+        state.showGpuPalette = !state.showGpuPalette;
+        publish();
+      });
+      $("#freeze").addEventListener("click", () => {
+        state.freeze = !state.freeze;
+        publish();
+      });
+      $("#blackout").addEventListener("click", () => {
+        state.blackout = !state.blackout;
+        publish();
+      });
+      $("#beat-sync").addEventListener("click", () => {
+        state.beatSync = !state.beatSync;
+        publish();
+      });
+      $("#bar-sync").addEventListener("click", () => {
+        state.barSync = !state.barSync;
+        state.beatSync = state.beatSync || state.barSync;
+        publish();
+      });
+      $("#demo-mode").addEventListener("click", () => {
+        state.demoMode = !state.demoMode;
+        publish();
+      });
+
+      // ── Live Mic Capture (Phase 2: "Audio as the Only Controller") ──────────
+      // Browser-native audio source: getUserMedia → AnalyserNode → AudioFeatures,
+      // sent as /bevyosc/audio/features so the bridge's Phase-1 router drives
+      // ControlState from a live mic with no Ableton or MIDI. The bridge router
+      // is inert unless state.audioControlMode is enabled, but frames still feed
+      // the projector as a renderer audio fallback when AbletonOSC is quiet.
+      // Mirrors mic-features.ts — keep the two in sync.
+      const MIC_FFT_SIZE = 2048;
+      const MIC_MIN_DB = -100;
+      const MIC_MAX_DB = -30;
+      const MIC_SEND_INTERVAL_MS = 50;
+      const MIC_BANDS = { bass: [20, 250], mid: [250, 2000], high: [2000, 8000] };
+      // Per-band tilt that compensates the natural high-frequency rolloff so the
+      // spectrum reads evenly across bands — keep in sync with mic-features.ts.
+      const MIC_BAND_GAIN = { bass: 10 ** (-10 / 20), mid: 10 ** (-10 / 20), high: 1.4 * 10 ** (-10 / 20) };
+      // Bias the wide high band toward its loudest bin so hi-hats/cymbals are not
+      // averaged into ~0 by the dead upper bins (0 = mean, 1 = peak).
+      const MIC_HIGH_PEAK_BIAS = 0.65;
+      let micStream = null;
+      let micContext = null;
+      let micTimer = null;
+      let micFreqData = null;
+      let micActive = false;
+      let micStarting = false;
+
+      // Mirror of micSecureContextError() in mic-features.ts.
+      function micSecureContextError() {
+        if (window.isSecureContext) return null;
+        const host = location.hostname;
+        if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return null;
+        return (
+          `Live mic capture needs a secure context: this page is served from ` +
+          `"${host || "an insecure origin"}" over plain HTTP. Browsers only allow ` +
+          `getUserMedia on HTTPS or localhost. Open the controls page via localhost ` +
+          `or terminate TLS / use a localhost tunnel for LAN deployments.`
+        );
+      }
+
+      // Mirror of extractMicFeatures() in mic-features.ts.
+      function extractMicFeatures(freqDb, sampleRate, fftSize) {
+        const span = MIC_MAX_DB - MIC_MIN_DB;
+        const bins = freqDb.length;
+        if (bins === 0 || span <= 0 || !(sampleRate > 0) || !(fftSize > 0)) {
+          return { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 };
+        }
+        const hzPerBin = sampleRate / fftSize;
+        let energySum = 0, bassSum = 0, bassCount = 0, midSum = 0, midCount = 0;
+        let highSum = 0, highCount = 0, highPeak = 0;
+        for (let i = 0; i < bins; i++) {
+          const norm = clamp01((freqDb[i] - MIC_MIN_DB) / span);
+          energySum += norm;
+          const hz = i * hzPerBin;
+          if (hz >= MIC_BANDS.bass[0] && hz < MIC_BANDS.bass[1]) {
+            bassSum += norm; bassCount++;
+          } else if (hz >= MIC_BANDS.mid[0] && hz < MIC_BANDS.mid[1]) {
+            midSum += norm; midCount++;
+          } else if (hz >= MIC_BANDS.high[0] && hz < MIC_BANDS.high[1]) {
+            highSum += norm; highCount++;
+            if (norm > highPeak) highPeak = norm;
+          }
+        }
+        const highMean = highCount ? highSum / highCount : 0;
+        const highValue = highMean * (1 - MIC_HIGH_PEAK_BIAS) + highPeak * MIC_HIGH_PEAK_BIAS;
+        return {
+          energy: clamp01(energySum / bins),
+          bass: bassCount ? clamp01((bassSum / bassCount) * MIC_BAND_GAIN.bass) : 0,
+          mid: midCount ? clamp01((midSum / midCount) * MIC_BAND_GAIN.mid) : 0,
+          high: highCount ? clamp01(highValue * MIC_BAND_GAIN.high) : 0,
+          pulse: clamp01(highPeak * MIC_BAND_GAIN.high),
+        };
+      }
+
+      function micTick() {
+        if (!micContext || !micFreqData) return;
+        micFreqData.analyser.getFloatFrequencyData(micFreqData.bins);
+        if (ws?.readyState !== WebSocket.OPEN) return;
+        const features = extractMicFeatures(
+          micFreqData.bins,
+          micContext.sampleRate,
+          MIC_FFT_SIZE,
+        );
+        ws.send(JSON.stringify({ address: "/bevyosc/audio/features", args: [features] }));
+      }
+
+      async function startMicCapture() {
+        // Guard re-entry: micActive is only set at the end, after the awaits, so a
+        // second click while the first start is still pending would otherwise launch
+        // a parallel capture and orphan the first stream/context/timer.
+        if (micActive || micStarting) return;
+        micStarting = true;
+        try {
+          const secureError = micSecureContextError();
+          if (secureError) {
+            addBanner(secureError, "error");
+            return;
+          }
+          if (!navigator.mediaDevices?.getUserMedia) {
+            addBanner("Live mic capture unavailable: getUserMedia is not supported in this browser.", "error");
+            return;
+          }
+          try {
+            // Disable the browser's voice-DSP: echo cancellation actively SUBTRACTS
+            // system/speaker audio from the mic (killing the music, highs worst),
+            // and AGC/noise-suppression squash + gate the signal. We want the raw
+            // spectrum, not a cleaned-up voice channel.
+            micStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              },
+            });
+          } catch (err) {
+            addBanner(`Live mic capture failed: ${err?.name || "Error"} — ${err?.message || err}`, "error");
+            return;
+          }
+          micContext = new (window.AudioContext || window.webkitAudioContext)();
+          // The click's transient activation may have lapsed during the getUserMedia
+          // await; some browsers (Safari) then start the context suspended and the
+          // analyser graph never advances. Resume so capture isn't a silent dead toggle.
+          await micContext.resume().catch(() => {});
+          const source = micContext.createMediaStreamSource(micStream);
+          const analyser = micContext.createAnalyser();
+          analyser.fftSize = MIC_FFT_SIZE;
+          analyser.minDecibels = MIC_MIN_DB;
+          analyser.maxDecibels = MIC_MAX_DB;
+          source.connect(analyser);
+          micFreqData = { analyser, bins: new Float32Array(analyser.frequencyBinCount) };
+          micTimer = setInterval(micTick, MIC_SEND_INTERVAL_MS);
+          micActive = true;
+          render();
+        } finally {
+          micStarting = false;
+        }
+      }
+
+      function stopMicCapture() {
+        if (micTimer) { clearInterval(micTimer); micTimer = null; }
+        if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+        if (micContext) { micContext.close().catch(() => {}); micContext = null; }
+        micFreqData = null;
+        micActive = false;
+        render();
+      }
+
+      $("#audio-control-mode").addEventListener("click", () => {
+        state.audioControlMode = !state.audioControlMode;
+        publish();
+      });
+      $("#mic-capture").addEventListener("click", () => {
+        if (micActive) stopMicCapture();
+        else startMicCapture();
+      });
+      $("#save-preset").addEventListener("click", savePreset);
+      $("#record").addEventListener("click", startRecording);
+      $("#play-replay").addEventListener("click", playReplay);
+      $("#stop-replay").addEventListener("click", stopReplay);
+      $("#reset").addEventListener("click", () => {
+        Object.assign(state, defaultState(), {
+          flashVersion: state.flashVersion,
+          resetVersion: state.resetVersion + 1,
+        });
+        pendingCue = null;
+        syncInputs();
+        publish();
+      });
+
+      $("#preset-transition").addEventListener("input", (event) => {
+        transitionDurationMs = Math.max(0, Math.min(10000, Number(event.target.value) || 0));
+      });
+
+      renderPresets();
+      renderCurves();
+      renderMidiBindings();
+      renderMidiStatus();
+      renderTriggerBindings();
+      syncInputs();
+      setInterval(publish, 500);
+      setInterval(render, 500);
+      setInterval(sendPing, 1000);
+      connect();
+      render();
+    </script>
+  </body>
+</html>

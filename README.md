@@ -151,9 +151,9 @@ The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, t
 ## Layout
 
 - `src/main.rs` – Bevy app compiled to WebAssembly.
-- `index.ts` – Bun server hosting the projector page, the controls page, and the OSC/WebSocket bridge.
-- `index.html` / `styles.css` – projector output (port `3000`).
-- `controls.html` / `controls.css` – controls app (port `3001`).
+- `bridge/index.ts` – Bun server hosting the projector page, the controls page, and the OSC/WebSocket bridge.
+- `web/index.html` / `web/styles.css` – projector output (port `3000`).
+- `web/controls.html` / `web/controls.css` – controls app (port `3001`).
 - `plugins/bevyosc-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.
 - `assets/` – fonts, images, and reserved shaders.
 
