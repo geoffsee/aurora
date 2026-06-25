@@ -164,10 +164,10 @@ describe("router contract", () => {
 const INLINE_MIC_MIN_DB = -100;
 const INLINE_MIC_MAX_DB = -30;
 const INLINE_MIC_BANDS = {
-	bass: [20, 250],
-	mid: [250, 2000],
-	high: [2000, 8000],
-};
+	bass: [20, 250] as const,
+	mid: [250, 2000] as const,
+	high: [2000, 8000] as const,
+} as const;
 
 const inlineClamp = (
 	value: number,
@@ -219,7 +219,7 @@ function inlineExtractMicFeatures(
 		highCount = 0,
 		highPeak = 0;
 	for (let i = 0; i < bins; i++) {
-		const norm = inlineClamp01((freqDb[i] - INLINE_MIC_MIN_DB) / span);
+		const norm = inlineClamp01(((freqDb[i] ?? INLINE_MIC_MIN_DB) - INLINE_MIC_MIN_DB) / span);
 		energySum += norm;
 		const hz = i * hzPerBin;
 		if (hz >= INLINE_MIC_BANDS.bass[0] && hz < INLINE_MIC_BANDS.bass[1]) {
