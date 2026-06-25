@@ -538,13 +538,13 @@ describe("normalizeEmaAlphas", () => {
 			energy: 0,
 			bass: 1.5,
 			mid: -0.1,
-			high: 0.22,
-			pulse: 0.28,
+			high: 0.65,
+			pulse: 0.85,
 		});
 		expect(ea.energy).toBe(DEFAULT_AUDIO_EMA_ALPHAS.energy);
 		expect(ea.bass).toBe(DEFAULT_AUDIO_EMA_ALPHAS.bass);
 		expect(ea.mid).toBe(DEFAULT_AUDIO_EMA_ALPHAS.mid);
-		expect(ea.high).toBeCloseTo(0.22);
+		expect(ea.high).toBeCloseTo(0.65);
 	});
 });
 

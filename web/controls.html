@@ -517,7 +517,7 @@
         },
         activeShader: 0,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
-        emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 },
+        emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 },
         morph: 0,
         audioControlMode: false,
       });
@@ -763,7 +763,7 @@
 
         // Convert per-band EMA alpha to smoothSignal time constants.
         // Attack uses the alpha directly; release is 2.4× slower for musical feel.
-        const alphas = state.emaAlphas ?? { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 };
+        const alphas = state.emaAlphas ?? { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 };
         const emaMs = (alpha) => -dtMs / Math.log(Math.max(1e-9, 1 - Math.min(0.999, alpha)));
         osc.lastFrameAt = now;
         osc.energy = smoothSignal(osc.energy, energyTarget, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
@@ -1812,6 +1812,12 @@
       const MIC_MAX_DB = -30;
       const MIC_SEND_INTERVAL_MS = 50;
       const MIC_BANDS = { bass: [20, 250], mid: [250, 2000], high: [2000, 8000] };
+      // Per-band tilt that compensates the natural high-frequency rolloff so the
+      // spectrum reads evenly across bands — keep in sync with mic-features.ts.
+      const MIC_BAND_GAIN = { bass: 10 ** (-10 / 20), mid: 10 ** (-10 / 20), high: 1.4 * 10 ** (-10 / 20) };
+      // Bias the wide high band toward its loudest bin so hi-hats/cymbals are not
+      // averaged into ~0 by the dead upper bins (0 = mean, 1 = peak).
+      const MIC_HIGH_PEAK_BIAS = 0.65;
       let micStream = null;
       let micContext = null;
       let micTimer = null;
@@ -1855,12 +1861,14 @@
             if (norm > highPeak) highPeak = norm;
           }
         }
+        const highMean = highCount ? highSum / highCount : 0;
+        const highValue = highMean * (1 - MIC_HIGH_PEAK_BIAS) + highPeak * MIC_HIGH_PEAK_BIAS;
         return {
           energy: clamp01(energySum / bins),
-          bass: bassCount ? clamp01(bassSum / bassCount) : 0,
-          mid: midCount ? clamp01(midSum / midCount) : 0,
-          high: highCount ? clamp01(highSum / highCount) : 0,
-          pulse: highPeak,
+          bass: bassCount ? clamp01((bassSum / bassCount) * MIC_BAND_GAIN.bass) : 0,
+          mid: midCount ? clamp01((midSum / midCount) * MIC_BAND_GAIN.mid) : 0,
+          high: highCount ? clamp01(highValue * MIC_BAND_GAIN.high) : 0,
+          pulse: clamp01(highPeak * MIC_BAND_GAIN.high),
         };
       }
 
@@ -1893,7 +1901,17 @@
             return;
           }
           try {
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Disable the browser's voice-DSP: echo cancellation actively SUBTRACTS
+            // system/speaker audio from the mic (killing the music, highs worst),
+            // and AGC/noise-suppression squash + gate the signal. We want the raw
+            // spectrum, not a cleaned-up voice channel.
+            micStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              },
+            });
           } catch (err) {
             addBanner(`Live mic capture failed: ${err?.name || "Error"} — ${err?.message || err}`, "error");
             return;

@@ -958,7 +958,12 @@ fn update_visuals(
     };
     let strobe_alpha = if state.strobe
         && if state.osc_connected {
-            audio_active && state.osc_pulse > 0.45 && (high > 0.04 || bass > 0.08)
+            // Flash on audio transients: the bass-activity envelope spikes on
+            // kicks and `osc_pulse` (high-band peak) spikes on hats/snares, so
+            // the strobe tracks the beat instead of sitting dark. The old
+            // `osc_pulse > 0.45` gate was effectively unreachable because pulse
+            // is scaled by energy/bass, so it never followed the music.
+            audio_active && (bass_activity > 0.5 || state.osc_pulse > 0.3)
         } else {
             beat < 0.16
         } {
@@ -1514,13 +1519,24 @@ fn update_palette_material(
         .single()
         .map(|window| window.width() / window.height().max(1.0))
         .unwrap_or(STAGE_WIDTH / STAGE_HEIGHT);
-    let params = Vec4::new(state.palette, state.show_time, palette_variant, aspect);
-    let palette_rgb = Vec4::new(state.palette_r, state.palette_g, state.palette_b, 0.0);
+
+    // Color (hue): manual palette is the anchor; mids/highs sweep the wheel when
+    // audio is live. palette_rgb tracks the reactive hue so GPU duotone follows.
+    let audio_hue = if active {
+        (mid * 0.62 + high * 0.38).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let display_hue = (state.palette * 0.35 + audio_hue * 0.65).rem_euclid(1.0);
+    let display_rgb = hue_to_rgb(display_hue);
+
+    let params = Vec4::new(display_hue, state.show_time, palette_variant, aspect);
+    let palette_rgb = Vec4::new(display_rgb.x, display_rgb.y, display_rgb.z, 0.0);
     let grid_params = Vec4::new(
-        state.palette_r,
-        state.palette_g,
+        display_rgb.x,
+        display_rgb.y,
         state.show_time,
-        state.palette_b,
+        display_rgb.z,
     );
     let palette_extra = Vec4::new(
         state.palette_saturation,

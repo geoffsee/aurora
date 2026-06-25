@@ -37,6 +37,7 @@ import { makeStateLog } from "./state-log.ts";
 import {
 	DEFAULT_AUDIO_EMA_ALPHA,
 	DEFAULT_AUDIO_EMA_ALPHAS,
+	DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 	type AudioEmaAlphas,
 	type AudioFeatures,
 	makeAudioEmaState,
@@ -766,6 +767,7 @@ function processLiveTrackData(args: unknown[]): void {
 		liveAudioEma,
 		rawFeatures,
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
+		DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 }
@@ -1401,6 +1403,7 @@ const visualServer = Bun.serve({
 							browserAudioEma,
 							rawBrowserFeatures,
 							latestControlState?.emaAlphas ?? audioEmaAlphas,
+							DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 						);
 						audioControlRouter.onFeatures(smoothedBrowser, nowMs);
 						automationBridge.onAudioFeatures(smoothedBrowser, nowMs);
@@ -1698,6 +1701,7 @@ setInterval(() => {
 		demoAudioEma,
 		rawFeatures,
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
+		DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 	);
 	automationBridge.onAudioFeatures(smoothed, Date.now());
 	// Drive the router from the demo feed only when no browser source is active;

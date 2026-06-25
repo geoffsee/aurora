@@ -69,6 +69,12 @@ fn kaleidoscope(p: vec2<f32>, slices: f32, rotation: f32) -> vec2<f32> {
   return vec2<f32>(cos(folded), sin(folded)) * r;
 }
 
+// Crisp concentric ring band: full strength within `half_width` of `radius`,
+// then a thin `softness` edge. Keeps rings sharp instead of bleeding into glow.
+fn crisp_ring(r: f32, radius: f32, half_width: f32, softness: f32) -> f32 {
+  return 1.0 - smoothstep(half_width, half_width + softness, abs(r - radius));
+}
+
 // === Variant 0: Soft Orbital Halo ===
 // A restrained atmosphere around the centre, not a target outline. Bass gives
 // the halo a slow breath, highs break up the rim texture, and pulse adds a
@@ -83,27 +89,43 @@ fn rehoboam_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy
   let ring_r = 0.52 + breathe + bass * 0.055 + pulse * 0.018;
   let dist = abs(r - ring_r);
 
-  let rim_noise = fbm(vec2<f32>(angle * 0.75, time * 0.035) + p * 1.8);
+  // Sample the rim texture on the unit circle so it wraps seamlessly. Feeding
+  // the raw atan2 `angle` here jumped from +pi to -pi across the -x axis, which
+  // tore a hard break into the ring at the 270deg / left side.
+  let ring_dir = vec2<f32>(cos(angle), sin(angle)) * 0.75;
+  let rim_noise = fbm(ring_dir + vec2<f32>(0.0, time * 0.035) + p * 1.8);
   let broken = smoothstep(0.22 - high * 0.08, 0.82, rim_noise);
-  let band = (1.0 - smoothstep(0.012, 0.105 + bass * 0.035, dist)) * broken;
 
-  let halo = exp(-dist * (6.5 - pulse * 1.4)) * (0.14 + 0.14 * pulse);
+  // Crisp main ring: tight band with a thin soft edge, still textured by `broken`.
+  let band = crisp_ring(r, ring_r, 0.012 + bass * 0.012, 0.018) * broken;
+
+  // Two concentric rings bracketing the main one (one inner, one outer). These
+  // stay clean/continuous so they read as defined rings around the halo.
+  let ring_gap = 0.13 + pulse * 0.012;
+  let ring_inner = crisp_ring(r, ring_r - ring_gap, 0.008, 0.014);
+  let ring_outer = crisp_ring(r, ring_r + ring_gap, 0.008, 0.014);
+  let rings = ring_inner + ring_outer;
+
+  let halo = exp(-dist * (9.5 - pulse * 1.4)) * (0.12 + 0.12 * pulse);
   let inner = exp(-r * r * 3.8) * (0.08 + 0.08 * energy);
   let core = exp(-r * r * 12.0) * (0.08 + 0.16 * pulse);
   let sweep = pow(0.5 + 0.5 * cos(angle - time * (0.18 + mid * 0.45)), 3.0);
 
   let sat = clamp(palette_extra.x, 0.0, 1.0);
   let bri = clamp(palette_extra.y, 0.0, 1.0);
-  let hue_phase = angle / TAU * 0.12 + r * 0.38 + time * 0.012;
+  // sin(angle) keeps the same +-0.06 angular hue drift but is continuous across
+  // the atan2 seam, so the colour no longer steps at the 270deg break.
+  let hue_phase = sin(angle) * 0.06 + r * 0.38 + time * 0.012;
   let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.55 * sat, bri);
   let accent = vj_duotone(palette_rgb.xyz, hue_phase + 0.23, 0.78 * sat, bri);
-  let color = base * (halo + inner) + accent * (band * (0.16 + 0.24 * sweep) + core);
+  let color = base * (halo + inner)
+    + accent * (band * (0.7 + 0.3 * sweep) + rings * (0.5 + 0.25 * sweep) + core);
 
   let enabled = select(1.0, 0.0, energy < 0.0);
   let alpha = clamp(
-    (halo * 0.58 + band * 0.36 + inner * 0.42 + core * 0.38) * enabled,
+    (halo * 0.42 + band * 0.78 + rings * 0.6 + inner * 0.32 + core * 0.38) * enabled,
     0.0,
-    0.58
+    0.9
   );
   return vec4<f32>(color * enabled, alpha);
 }

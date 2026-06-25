@@ -56,8 +56,8 @@ export function applyTrackData(
 		energy: 0.12,
 		bass: 0.08,
 		mid: 0.15,
-		high: 0.22,
-		pulse: 0.28,
+		high: 0.65,
+		pulse: 0.85,
 	};
 	const emaMs = (alpha: number) =>
 		-dtMs / Math.log(Math.max(1e-9, 1 - Math.min(0.999, alpha)));

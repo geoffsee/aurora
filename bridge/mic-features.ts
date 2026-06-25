@@ -25,6 +25,29 @@ const BANDS = {
 	high: [2000, 8000],
 } as const;
 
+// Natural music spectra roll off toward higher frequencies (roughly pink, ~-3dB
+// per octave, often steeper), and the wide high band averages many near-silent
+// bins — so the raw averages come out bass >> mid >> high and the highs read as
+// ~0. These per-band gains tilt the three bands back toward parity so the
+// spectrum spreads evenly. bass is the reference (1.0); mid/high are lifted to
+// compensate the rolloff plus the averaging dilution. Applied to the band
+// values (and the high-band peak that feeds `pulse`), then re-clamped to 0..1.
+// `high` reads the band *peak* (see HIGH_PEAK_BIAS), which is already several
+// times larger than the diluted mean — so it needs only a gentle gain, not the
+// big dilution-compensation factor mid (a mean) still needs. A larger high gain
+// here just slams the meter to 1.0 on every hi-hat and then bleeds off.
+const BAND_GAIN = {
+	bass: 10 ** (-10 / 20), // -10 dB: pull the dominant low end back down
+	mid: 10 ** (-10 / 20), // -10 dB: same trim on the mids
+	high: 1.4 * 10 ** (-10 / 20), // peak-biased base, then -10 dB trim
+} as const;
+
+// The high band (2-8kHz) is wide and music rarely fills its top end, so a flat
+// mean is dragged to ~0 by the dead upper bins. Bias the high value toward the
+// band's loudest bin (peak) so hi-hats/cymbals actually register instead of
+// being averaged away. 0 = pure mean, 1 = pure peak.
+const HIGH_PEAK_BIAS = 0.65;
+
 export type MicSecureContextInput = {
 	isSecureContext: boolean;
 	hostname: string;
@@ -123,11 +146,14 @@ export function extractMicFeatures(
 		}
 	}
 
+	const highMean = highCount ? highSum / highCount : 0;
+	const highValue = highMean * (1 - HIGH_PEAK_BIAS) + highPeak * HIGH_PEAK_BIAS;
+
 	return {
 		energy: clamp01(energySum / bins),
-		bass: bassCount ? clamp01(bassSum / bassCount) : 0,
-		mid: midCount ? clamp01(midSum / midCount) : 0,
-		high: highCount ? clamp01(highSum / highCount) : 0,
-		pulse: highPeak,
+		bass: bassCount ? clamp01((bassSum / bassCount) * BAND_GAIN.bass) : 0,
+		mid: midCount ? clamp01((midSum / midCount) * BAND_GAIN.mid) : 0,
+		high: highCount ? clamp01(highValue * BAND_GAIN.high) : 0,
+		pulse: clamp01(highPeak * BAND_GAIN.high),
 	};
 }

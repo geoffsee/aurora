@@ -40,6 +40,7 @@ export const CLOCK_LABELS: Record<string, string> = {
 };
 
 export const PRESETS_KEY = "bevyosc.presets";
+export const SESSION_STATE_KEY = "bevyosc.control-session";
 export const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
 export const AUTOMATION_TRIGGERS_KEY = "bevyosc.automation-triggers";
 

@@ -100,6 +100,27 @@ describe("stepAudioEma", () => {
 		expect(returned).toBe(state);
 	});
 
+	test("release alphas fade slower than attack on falling bands", () => {
+		// Attack fast, release slow: a band shoots up quickly but, once the signal
+		// drops, fades gently instead of snapping to zero (the between-songs case).
+		const state = makeAudioEmaState();
+		const attack = uniform(0.8);
+		const release = uniform(0.1);
+		// Rising: uses the fast attack alpha.
+		stepAudioEma(state, { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 }, attack, release);
+		expect(state.high).toBeCloseTo(0.8);
+		// Falling: uses the slow release alpha, so most of the signal is retained.
+		stepAudioEma(state, { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 }, attack, release);
+		expect(state.high).toBeCloseTo(0.8 * (1 - 0.1));
+	});
+
+	test("omitting release alphas keeps symmetric attack/release", () => {
+		const state = makeAudioEmaState();
+		state.high = 1;
+		stepAudioEma(state, { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 }, uniform(0.5));
+		expect(state.high).toBeCloseTo(0.5);
+	});
+
 	test("per-band alphas apply independently", () => {
 		const state = makeAudioEmaState();
 		const raw = { energy: 1, bass: 1, mid: 1, high: 1, pulse: 1 };

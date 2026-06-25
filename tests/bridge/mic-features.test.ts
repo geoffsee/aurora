@@ -79,15 +79,17 @@ describe("extractMicFeatures", () => {
 
 	test("routes energy into the band whose frequency range is excited", () => {
 		const bass = extractMicFeatures(spectrumInBand(20, 250), opts);
-		expect(bass.bass).toBeGreaterThan(0.9);
+		// bass band carries a -10 dB (~0.316x) gain, so a fully-lit band reads ~0.316.
+		expect(bass.bass).toBeCloseTo(10 ** (-10 / 20), 5);
 		expect(bass.mid).toBe(0);
 		expect(bass.high).toBe(0);
 
 		const high = extractMicFeatures(spectrumInBand(2000, 8000), opts);
-		expect(high.high).toBeGreaterThan(0.9);
+		const highGain = 1.4 * 10 ** (-10 / 20);
+		expect(high.high).toBeCloseTo(highGain, 5);
 		expect(high.bass).toBe(0);
 		// pulse is the high-band peak, so a loud high band lights pulse too.
-		expect(high.pulse).toBeGreaterThan(0.9);
+		expect(high.pulse).toBeCloseTo(highGain, 5);
 	});
 
 	test("normalises decibels across [minDecibels, maxDecibels]", () => {
@@ -95,7 +97,9 @@ describe("extractMicFeatures", () => {
 		const mid = new Float32Array(BINS).fill((MIN_DB + MAX_DB) / 2);
 		const f = extractMicFeatures(mid, opts);
 		expect(f.energy).toBeCloseTo(0.5, 5);
-		expect(f.bass).toBeCloseTo(0.5, 5);
+		// bass/mid bands carry a -10 dB (~0.316x) gain on top of the 0.5 level.
+		expect(f.bass).toBeCloseTo(0.5 * 10 ** (-10 / 20), 5);
+		expect(f.mid).toBeCloseTo(0.5 * 10 ** (-10 / 20), 5);
 	});
 });
 
@@ -130,7 +134,7 @@ describe("router contract", () => {
 				mode: "threshold",
 				targetMin: 0,
 				targetMax: 1,
-				level: 0.75,
+				level: 0.4,
 				offDelayMs: 200,
 				increment: true,
 			},
@@ -168,6 +172,8 @@ const INLINE_MIC_BANDS = {
 	mid: [250, 2000] as const,
 	high: [2000, 8000] as const,
 } as const;
+const INLINE_MIC_BAND_GAIN = { bass: 10 ** (-10 / 20), mid: 10 ** (-10 / 20), high: 1.4 * 10 ** (-10 / 20) } as const;
+const INLINE_MIC_HIGH_PEAK_BIAS = 0.65;
 
 const inlineClamp = (
 	value: number,
@@ -237,12 +243,20 @@ function inlineExtractMicFeatures(
 			if (norm > highPeak) highPeak = norm;
 		}
 	}
+	const highMean = highCount ? highSum / highCount : 0;
+	const highValue =
+		highMean * (1 - INLINE_MIC_HIGH_PEAK_BIAS) +
+		highPeak * INLINE_MIC_HIGH_PEAK_BIAS;
 	return {
 		energy: inlineClamp01(energySum / bins),
-		bass: bassCount ? inlineClamp01(bassSum / bassCount) : 0,
-		mid: midCount ? inlineClamp01(midSum / midCount) : 0,
-		high: highCount ? inlineClamp01(highSum / highCount) : 0,
-		pulse: highPeak,
+		bass: bassCount
+			? inlineClamp01((bassSum / bassCount) * INLINE_MIC_BAND_GAIN.bass)
+			: 0,
+		mid: midCount
+			? inlineClamp01((midSum / midCount) * INLINE_MIC_BAND_GAIN.mid)
+			: 0,
+		high: highCount ? inlineClamp01(highValue * INLINE_MIC_BAND_GAIN.high) : 0,
+		pulse: inlineClamp01(highPeak * INLINE_MIC_BAND_GAIN.high),
 	};
 }
 

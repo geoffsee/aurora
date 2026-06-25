@@ -11,8 +11,8 @@ const defaultEmaAlphas = () => ({
 	energy: 0.12,
 	bass: 0.08,
 	mid: 0.15,
-	high: 0.22,
-	pulse: 0.28,
+	high: 0.65,
+	pulse: 0.85,
 });
 
 // Migrate a control state payload from an older schema version to the current one.

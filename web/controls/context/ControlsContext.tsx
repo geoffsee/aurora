@@ -16,6 +16,11 @@ import {
 	defaultState,
 } from "../lib/default-state.ts";
 import {
+	clearSessionState,
+	loadSessionState,
+	saveSessionState,
+} from "../lib/session-state.ts";
+import {
 	applyBrowserAudio,
 	applyDemo,
 	applyTrackData,
@@ -130,7 +135,7 @@ export function useControls() {
 }
 
 export function ControlsProvider({ children }: { children: ReactNode }) {
-	const [state, setState] = useState<ControlState>(() => defaultState());
+	const [state, setState] = useState<ControlState>(() => loadSessionState());
 	const [osc, setOsc] = useState<OscMeters>(() => defaultOscMeters());
 	const [diagnostics, setDiagnostics] = useState<Diagnostics>(() =>
 		defaultDiagnostics(),
@@ -681,7 +686,17 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			}
 			let stream: MediaStream;
 			try {
-				stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				// Disable the browser's voice-DSP: echo cancellation actively SUBTRACTS
+				// system/speaker audio from the mic (killing the music we want to
+				// capture, highs worst), and AGC/noise-suppression squash + gate the
+				// signal. We want the raw spectrum, not a cleaned-up voice channel.
+				stream = await navigator.mediaDevices.getUserMedia({
+					audio: {
+						echoCancellation: false,
+						noiseSuppression: false,
+						autoGainControl: false,
+					},
+				});
 			} catch (err) {
 				const e = err as Error;
 				addBanner(
@@ -736,6 +751,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	const resetState = useCallback(() => {
+		clearSessionState();
 		setState((prev) => {
 			const next = {
 				...defaultState(),
@@ -932,6 +948,11 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			}
 		};
 	}, [addBanner, applyFrame, publish]);
+
+	useEffect(() => {
+		const timer = setTimeout(() => saveSessionState(stateRef.current), 300);
+		return () => clearTimeout(timer);
+	}, [state]);
 
 	useEffect(() => {
 		connect();
