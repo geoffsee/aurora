@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { TEST_WS_PORT } from "./constants.js";
+import { TEST_WS_PORT } from "../constants.js";
 
 // Measures P95 round-trip latency for the OSC → bridge → WebSocket path.
 // The test server in global-setup.ts mirrors the bridge's fan-out behaviour:

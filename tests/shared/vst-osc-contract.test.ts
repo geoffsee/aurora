@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import contract from "../vst-osc-contract.json" with { type: "json" };
+import contract from "../../shared/vst-osc-contract.json" with { type: "json" };
 
 const VST_LIB_PATH = join(
 	__dirname,
+	"..",
 	"..",
 	"plugins",
 	"bevyosc-vst",
@@ -68,7 +69,7 @@ describe("VST OSC contract", () => {
 	test("contract files are kept in sync at module load", async () => {
 		// Importing osc-validation.ts runs the runtime assertSubset checks. If they
 		// fail, the import itself throws. This test confirms the module loads.
-		const mod = await import("../osc-validation.ts");
+		const mod = await import("../../shared/osc-validation.ts");
 		expect(mod.VST_CONTROL_NAMES.size).toBe(
 			contract.controls.bridgeAccepts.length,
 		);

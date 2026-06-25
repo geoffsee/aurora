@@ -3,7 +3,7 @@ import {
 	MIDI_CC_SCHEMA_VERSION,
 	migrateMidiBindings,
 	type MidiCcBinding,
-} from "../midi-cc-schema.ts";
+} from "../../shared/midi-cc-schema.ts";
 
 const sample: MidiCcBinding = {
 	cc: 74,

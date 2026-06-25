@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { diffObjects, makeStateLog } from "../state-log.ts";
+import { diffObjects, makeStateLog } from "../../bridge/state-log.ts";
 
 // --- diffObjects ---
 

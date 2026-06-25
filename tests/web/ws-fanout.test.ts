@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { TEST_WS_PORT } from "./constants.js";
+import { TEST_WS_PORT } from "../constants.js";
 
 const WS_URL = `ws://localhost:${TEST_WS_PORT}/ws`;
 

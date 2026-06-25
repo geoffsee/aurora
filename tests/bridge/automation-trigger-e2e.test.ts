@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { makeStateLog } from "../state-log.ts";
-import { buildRecording } from "../automation-player.ts";
-import { CONTROL_STATE_SCHEMA_VERSION } from "../osc-validation.ts";
+import { makeStateLog } from "../../bridge/state-log.ts";
+import { buildRecording } from "../../bridge/automation-player.ts";
+import { CONTROL_STATE_SCHEMA_VERSION } from "../../shared/osc-validation.ts";
 import {
 	DEFAULT_OSC_BINDINGS,
 	makeAutomationBridge,
 	parseTriggerBindings,
-} from "../automation-bridge.ts";
+} from "../../bridge/automation-bridge.ts";
 
 // ---------------------------------------------------------------------------
 // parseTriggerBindings

@@ -1,5 +1,5 @@
 import { expect, test, afterEach } from "vitest";
-import { nextReconnectDelay } from "../src/reconnect.ts";
+import { nextReconnectDelay } from "../../src/reconnect.ts";
 
 test("vitest happy-dom environment is wired up", () => {
 	expect(typeof window).toBe("object");

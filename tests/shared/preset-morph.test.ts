@@ -5,7 +5,7 @@ import {
 	clampMorphPosition,
 	isMorphCurve,
 	morphPresetStates,
-} from "../preset-morph.ts";
+} from "../../bridge/preset-morph.ts";
 
 describe("clampMorphPosition edge behavior", () => {
 	test("clamps below 0 to 0", () => {

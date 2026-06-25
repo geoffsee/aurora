@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import type { AudioFeatures } from "../audio-ema.ts";
+import type { AudioFeatures } from "../../bridge/audio-ema.ts";
 import {
 	type AudioMapping,
 	makeAudioControlRouter,
 	parseAudioMappings,
-} from "../audio-control-router.ts";
+} from "../../bridge/audio-control-router.ts";
 
 const features = (patch: Partial<AudioFeatures>): AudioFeatures => ({
 	energy: 0,

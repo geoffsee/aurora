@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { migrateControlState } from "../control-state-schema.ts";
+import { migrateControlState } from "../../shared/control-state-schema.ts";
 
 const DEFAULT_EMA_ALPHAS = {
 	energy: 0.12,

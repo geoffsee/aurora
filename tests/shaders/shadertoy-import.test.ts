@@ -4,7 +4,7 @@ import {
 	checkIChannelUsage,
 	extractShadertoyId,
 	wrapGlsl,
-} from "../shadertoy-import.ts";
+} from "../../shared/shadertoy-import.ts";
 
 describe("extractShadertoyId", () => {
 	test("accepts a bare shader ID", () => {

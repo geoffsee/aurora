@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { makeAudioControlRouter } from "../audio-control-router.ts";
-import type { AudioFeatures } from "../audio-ema.ts";
+import { makeAudioControlRouter } from "../../bridge/audio-control-router.ts";
+import type { AudioFeatures } from "../../bridge/audio-ema.ts";
 import {
 	extractMicFeatures,
 	micSecureContextError,
-} from "../mic-features.ts";
+} from "../../bridge/mic-features.ts";
 
 // AnalyserNode defaults used by the controls page capture path.
 const SAMPLE_RATE = 48000;

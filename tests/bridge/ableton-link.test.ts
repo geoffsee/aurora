@@ -7,7 +7,7 @@ import {
 	deriveLinkFrame,
 	isLinkActive,
 	wrapPhase,
-} from "../ableton-link.ts";
+} from "../../bridge/ableton-link.ts";
 
 describe("wrapPhase", () => {
 	test("passes through values already in range", () => {

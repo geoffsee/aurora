@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { CLOCK_PRIORITY, selectTempoSource } from "../clock-arbiter.ts";
+import { CLOCK_PRIORITY, selectTempoSource } from "../../bridge/clock-arbiter.ts";
 
 describe("selectTempoSource priority", () => {
 	test("Link wins when active, even alongside MIDI clock", () => {

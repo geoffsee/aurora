@@ -3,10 +3,10 @@ import {
 	DEFAULT_TRANSIENT_CONFIG,
 	makeAudioTransientDetector,
 	type AudioTransientConfig,
-} from "../audio-transient-trigger.ts";
-import { makeStateLog } from "../state-log.ts";
-import { makeAutomationBridge } from "../automation-bridge.ts";
-import type { AudioFeatures } from "../audio-ema.ts";
+} from "../../bridge/audio-transient-trigger.ts";
+import { makeStateLog } from "../../bridge/state-log.ts";
+import { makeAutomationBridge } from "../../bridge/automation-bridge.ts";
+import type { AudioFeatures } from "../../bridge/audio-ema.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

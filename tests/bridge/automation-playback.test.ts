@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { makeStateLog } from "../state-log.ts";
+import { makeStateLog } from "../../bridge/state-log.ts";
 import {
 	RECORDING_EXCLUDED_FIELDS,
 	buildRecording,
 	makeAutomationPlayer,
-} from "../automation-player.ts";
-import { CONTROL_STATE_SCHEMA_VERSION } from "../osc-validation.ts";
+} from "../../bridge/automation-player.ts";
+import { CONTROL_STATE_SCHEMA_VERSION } from "../../shared/osc-validation.ts";
 
 // Player tick interval — frames are applied at most this many ms late.
 const TICK_MS = 16;

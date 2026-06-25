@@ -5,7 +5,7 @@ import {
 	matchOscAddress,
 	resolveAction,
 	type AutomationTriggerBinding,
-} from "../automation-trigger.ts";
+} from "../../bridge/automation-trigger.ts";
 
 // ---------------------------------------------------------------------------
 // matchMidiNote

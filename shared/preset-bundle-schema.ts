@@ -1,4 +1,4 @@
-import { DEFAULT_AUDIO_EMA_ALPHAS, type AudioEmaAlphas } from "./audio-ema.ts";
+import { DEFAULT_AUDIO_EMA_ALPHAS, type AudioEmaAlphas } from "../bridge/audio-ema.ts";
 import { isAudioCurveShape, type AudioCurveShape } from "./osc-validation.ts";
 
 // PRESET_BUNDLE_SCHEMA_VERSION tracks the stored preset bundle format.

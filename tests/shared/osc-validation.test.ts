@@ -7,7 +7,7 @@ import {
 	validatePresetMorphOscMsg,
 	validatePresetOscMsg,
 	validateVstOscMsg,
-} from "../osc-validation.ts";
+} from "../../shared/osc-validation.ts";
 
 const CUE_NAMES: ReadonlySet<string> = new Set([
 	"warmup",

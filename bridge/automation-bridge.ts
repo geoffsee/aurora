@@ -8,7 +8,7 @@ import {
 	type TriggerAction,
 } from "./automation-trigger.ts";
 import type { StateLogEntry } from "./state-log.ts";
-import { CONTROL_STATE_SCHEMA_VERSION } from "./osc-validation.ts";
+import { CONTROL_STATE_SCHEMA_VERSION } from "../shared/osc-validation.ts";
 import type { AudioFeatures } from "./audio-ema.ts";
 import {
 	makeAudioTransientDetector,

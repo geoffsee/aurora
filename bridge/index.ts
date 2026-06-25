@@ -18,7 +18,7 @@ import {
 	validatePresetMorphOscMsg,
 	validatePresetOscMsg,
 	validateVstOscMsg,
-} from "./osc-validation.ts";
+} from "../shared/osc-validation.ts";
 import {
 	MIDI_CLOCK_TICK,
 	MIDI_CLOCK_WINDOW,
@@ -41,7 +41,7 @@ import {
 	makeAudioEmaState,
 	stepAudioEma,
 } from "./audio-ema.ts";
-import { migrateControlState } from "./control-state-schema.ts";
+import { migrateControlState } from "../shared/control-state-schema.ts";
 import {
 	type MorphCurve,
 	clampMorphPosition,
@@ -58,7 +58,7 @@ import {
 	makeAudioControlRouter,
 	parseAudioMappings,
 } from "./audio-control-router.ts";
-import { importShadertoyUrl } from "./shadertoy-import.ts";
+import { importShadertoyUrl } from "../shared/shadertoy-import.ts";
 import audioMappingsRaw from "./audio-mappings.json" with { type: "json" };
 
 type TrackMapping = {
@@ -149,7 +149,9 @@ const OSC_ADDRESSES = {
 
 const port = Number(Bun.env.PORT ?? 3000);
 const controlsPort = Number(Bun.env.CONTROLS_PORT ?? 3001);
-const root = import.meta.dir;
+const bridgeRoot = import.meta.dir;
+const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const webRoot = `${root}/web`;
 const liveHost = Bun.env.LIVE_HOST ?? "127.0.0.1";
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
@@ -192,6 +194,14 @@ function contentType(pathname: string) {
 		? "application/octet-stream"
 		: (mimeTypes[pathname.slice(dot)] ?? "application/octet-stream");
 }
+
+const resolveStaticFile = (relativePath: string) => {
+	const base =
+		relativePath.startsWith("dist/") || relativePath.startsWith("assets/")
+			? root
+			: webRoot;
+	return Bun.file(`${base}/${relativePath}`);
+};
 
 const udp = new osc.UDPPort({
 	localAddress: "127.0.0.1",
@@ -1262,7 +1272,7 @@ const visualServer = Bun.serve({
 			return new Response("Not found", { status: 404 });
 		}
 
-		const file = Bun.file(`${root}/${relativePath}`);
+		const file = resolveStaticFile(relativePath);
 		if (!(await file.exists())) {
 			return new Response("Not found", { status: 404 });
 		}
@@ -1502,7 +1512,7 @@ const controlsServer = Bun.serve({
 			return new Response("Not found", { status: 404 });
 		}
 
-		const file = Bun.file(`${root}/${relativePath}`);
+		const file = resolveStaticFile(relativePath);
 		if (!(await file.exists())) {
 			return new Response("Not found", { status: 404 });
 		}

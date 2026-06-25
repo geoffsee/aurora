@@ -5,7 +5,7 @@ import {
 	type AudioEmaAlphas,
 	makeAudioEmaState,
 	stepAudioEma,
-} from "../audio-ema.ts";
+} from "../../bridge/audio-ema.ts";
 
 /** Build a uniform AudioEmaAlphas with the same value for all bands. */
 function uniform(alpha: number): AudioEmaAlphas {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { DEFAULT_AUDIO_EMA_ALPHAS, type AudioEmaAlphas } from "../audio-ema.ts";
-import { type AudioCurveShape } from "../osc-validation.ts";
-import { migrateControlState } from "../control-state-schema.ts";
+import { DEFAULT_AUDIO_EMA_ALPHAS, type AudioEmaAlphas } from "../../bridge/audio-ema.ts";
+import { type AudioCurveShape } from "../../shared/osc-validation.ts";
+import { migrateControlState } from "../../shared/control-state-schema.ts";
 import {
 	PRESET_BUNDLE_SCHEMA_VERSION,
 	migratePresetBundle,
@@ -9,7 +9,7 @@ import {
 	normalizeBandCurves,
 	type BandCurves,
 	type PresetBundle,
-} from "../preset-bundle-schema.ts";
+} from "../../shared/preset-bundle-schema.ts";
 
 // Mirror of the preset-relevant ControlState fields used by recall helpers below.
 type PresetState = {

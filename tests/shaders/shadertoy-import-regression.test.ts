@@ -6,7 +6,7 @@ import {
 	nagaVersion,
 	transformShadertoyGlsl,
 	wrapGlsl,
-} from "../shadertoy-import.ts";
+} from "../../shared/shadertoy-import.ts";
 
 // Unlike tests/shader-regression.test.ts (which diffs CPU stand-in renders), this
 // harness drives a real imported Shadertoy shader through the *actual* import
@@ -14,7 +14,7 @@ import {
 // false-coverage gap called out in AGENTS.md. The fixture is the raw Image-pass
 // source as the Shadertoy API returns it.
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_DIR = join(HERE, "fixtures", "shadertoy");
+const FIXTURE_DIR = join(HERE, "..", "fixtures", "shadertoy");
 const SHADER_NAME = "palette-swirl";
 const FIXTURE_GLSL = join(FIXTURE_DIR, `${SHADER_NAME}.frag`);
 const WRAPPED_BASELINE = join(FIXTURE_DIR, `${SHADER_NAME}.wrapped.glsl`);

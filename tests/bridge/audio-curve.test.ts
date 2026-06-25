@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { isAudioCurveShape, AUDIO_CURVE_SHAPES } from "../osc-validation.ts";
+import { isAudioCurveShape, AUDIO_CURVE_SHAPES } from "../../shared/osc-validation.ts";
 
 // Mirror of the applyAudioCurve function from index.html.
 type CurveShape = "linear" | "exponential" | "logarithmic";

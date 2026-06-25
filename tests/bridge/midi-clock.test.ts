@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	MIDI_CLOCKS_PER_BEAT,
 	deriveBpmFromTimestamps,
-} from "../midi-clock.ts";
+} from "../../bridge/midi-clock.ts";
 
 function makeTimestamps(bpm: number, count: number, startMs = 1000): number[] {
 	const msPerClock = 60000 / (bpm * MIDI_CLOCKS_PER_BEAT);
