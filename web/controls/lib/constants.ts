@@ -9,6 +9,12 @@ export const VISUAL_MODES = [
 	"Orbit",
 	"Pulse",
 	"Spiral",
+	"Ripple",
+	"Shatter",
+	"Flux",
+	"Lattice",
+	"Drift",
+	"Storm",
 ] as const;
 
 export const SHADER_OPTIONS = [
@@ -22,6 +28,12 @@ export const SHADER_OPTIONS = [
 	"Fluid (Ambient)",
 	"Truchet (Geometric)",
 	"Imported (Shadertoy)",
+	"Bass Reactor",
+	"High Spark Field",
+	"Kick Rings",
+	"Laser Lattice",
+	"Strobe Shards",
+	"Vortex Bloom",
 ] as const;
 
 export const CUE_NAMES = [

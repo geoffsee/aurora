@@ -89,6 +89,12 @@
             <option value="7">Orbit</option>
             <option value="8">Pulse</option>
             <option value="9">Spiral</option>
+            <option value="10">Ripple</option>
+            <option value="11">Shatter</option>
+            <option value="12">Flux</option>
+            <option value="13">Lattice</option>
+            <option value="14">Drift</option>
+            <option value="15">Storm</option>
           </select>
         </label>
         <label class="panel slot deck-slot" data-deck="b">
@@ -107,6 +113,12 @@
             <option value="7">Orbit</option>
             <option value="8">Pulse</option>
             <option value="9">Spiral</option>
+            <option value="10">Ripple</option>
+            <option value="11">Shatter</option>
+            <option value="12">Flux</option>
+            <option value="13">Lattice</option>
+            <option value="14">Drift</option>
+            <option value="15">Storm</option>
           </select>
         </label>
         <label class="panel slot">
@@ -122,6 +134,12 @@
             <option value="7">Fluid (Ambient)</option>
             <option value="8">Truchet (Geometric)</option>
             <option value="9">Imported (Shadertoy)</option>
+            <option value="10">Bass Reactor</option>
+            <option value="11">High Spark Field</option>
+            <option value="12">Kick Rings</option>
+            <option value="13">Laser Lattice</option>
+            <option value="14">Strobe Shards</option>
+            <option value="15">Vortex Bloom</option>
           </select>
         </label>
         <label class="panel slot">
@@ -208,7 +226,7 @@
             <span>Max Brightness</span>
             <output id="max-brightness-value">90%</output>
           </div>
-          <input id="max-brightness" type="range" min="0.1" max="1" step="0.01" value="0.9" />
+          <input id="max-brightness" type="range" min="0" max="1" step="0.01" value="0.9" />
         </label>
       </section>
 
@@ -457,7 +475,7 @@
         target.palette = rgbToHue(target.paletteR, target.paletteG, target.paletteB);
       };
 
-      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral"];
+      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral", "Ripple", "Shatter", "Flux", "Lattice", "Drift", "Storm"];
       const cuePresets = {
         warmup: { crossfade: 0.5, intensity: 0.62, feedback: 0.22, depth: 0.15, palette: 0.58, deckAMode: 4, deckBMode: 4 },
         drop: { crossfade: 1, intensity: 1.25, feedback: 0.42, depth: 0.58, palette: 0.9, deckAMode: 2, deckBMode: 2 },
@@ -467,7 +485,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 7, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 8, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -520,6 +538,7 @@
         emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 },
         morph: 0,
         audioControlMode: false,
+        audioTransientAutomation: false,
       });
       const state = defaultState();
       const osc = {
@@ -829,8 +848,8 @@
         state.cueIntensity = clamp01(cue.intensity ?? state.intensity);
         state.cuePalette = clamp01(cue.palette ?? state.palette);
         state.cueCrossfade = clamp01(cue.crossfade ?? state.crossfade);
-        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 4, state.deckAMode);
-        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 4, state.deckBMode);
+        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 15, state.deckAMode);
+        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 15, state.deckBMode);
         state.flashVersion += name === "panic" ? 0 : 1;
         syncInputs();
         publish();
@@ -1604,7 +1623,7 @@
       }
 
       $("#active-shader").addEventListener("change", (event) => {
-        state.activeShader = Math.max(0, Math.min(9, Number(event.target.value)));
+        state.activeShader = Math.max(0, Math.min(15, Number(event.target.value)));
         publish();
       });
 

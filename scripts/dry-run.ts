@@ -171,9 +171,8 @@ async function main(): Promise<number> {
 	const send = (m: OscMsg) => ws.send(JSON.stringify(m));
 
 	// 1. Hand the set to the machine: enable demo audio (the single performer-less
-	//    audio source that drives BOTH the router and the transient detector) and
-	//    turn the audio-control router on. coerceControlState fills every other
-	//    field with its default.
+	//    audio source that drives the audio-control router when armed) and turn
+	//    the router on. coerceControlState fills every other field with its default.
 	send({
 		address: "/bevyosc/control/state",
 		args: [
@@ -195,8 +194,7 @@ async function main(): Promise<number> {
 	const routerOnlyIntensity = fieldChanges.get("intensity") ?? 0;
 	const routerOnlyDepth = fieldChanges.get("depth") ?? 0;
 
-	// 3. Start automation playback so the recorder/player path is live; the demo
-	//    audio also auto-fires it through the transient detector.
+	// 3. Start automation playback so the recorder/player path is live.
 	send({ address: "/bevyosc/automation/play-loop", args: [] });
 
 	// 4. Sweep the preset morph continuously, as an absent performer's fader would.

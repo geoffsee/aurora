@@ -269,6 +269,159 @@ fn truchet_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy:
   return vec4<f32>(color * enabled, alpha);
 }
 
+// === Variant 10: Bass Reactor ===
+// Heavy low-end blob field. `drive` keys the whole shape off the bass band but
+// falls back to overall energy/pulse so it still pumps when no dedicated bass
+// track is mapped — otherwise a flat bass meter leaves it looking static.
+fn bass_reactor_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let a = atan2(p.y, p.x);
+
+  // Combined low-end drive: bass when available, otherwise energy/pulse.
+  let drive = clamp(max(bass, energy * 0.6 + pulse * 0.4), 0.0, 1.0);
+
+  let lobes = 5.0 + floor((bass + pulse) * 6.0);
+  let membrane = 0.32 + drive * 0.36 + 0.05 * sin(a * lobes + time * (0.6 + drive * 1.8));
+  let band_w = 0.09 + drive * 0.22;
+  let body = 1.0 - smoothstep(0.0, band_w, abs(r - membrane));
+  // Core blob swells and brightens hard with the low end.
+  let core = exp(-r * r * (6.5 - drive * 3.8)) * (0.18 + 1.25 * drive);
+  // Beat shockwave: each pulse launches an outward ring that fades with radius.
+  let shock_r = fract(time * 0.4);
+  let shock = crisp_ring(r, shock_r, 0.01 + drive * 0.03, 0.045)
+    * pulse * (1.0 - shock_r) * 1.6;
+  let texture = fbm(p * (2.0 + mid * 3.0) + vec2<f32>(time * 0.08, -time * 0.05));
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = a / TAU * 0.25 + texture * 0.3 + time * 0.02 + drive * 0.2;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.8 * sat, bri);
+  let accent = vj_duotone(palette_rgb.xyz, hue_phase + 0.22, sat, bri);
+  let layer = body * (0.38 + drive * 0.95 + texture * 0.3) + core + shock;
+  let color = mix(base, accent, clamp(body + shock, 0.0, 1.0))
+    * clamp(layer * (0.6 + drive), 0.0, 1.7);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * enabled, 0.0, 1.0));
+}
+
+// === Variant 11: High Spark Field ===
+// A starfield of hashed cells where high frequencies reveal glitter density.
+fn high_spark_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let sparkle = clamp(max(high, energy * 0.45 + pulse * 0.55), 0.0, 1.0);
+  let p = uv + vec2<f32>(time * 0.035, -time * 0.02);
+  let scale = 14.0 + sparkle * 42.0;
+  let cell = floor(p * scale);
+  let local = fract(p * scale) - vec2<f32>(0.5);
+  let seed = hash21(cell);
+  let twinkle = 0.5 + 0.5 * sin(time * (5.0 + sparkle * 12.0) + seed * TAU);
+  let point = 1.0 - smoothstep(0.018 + sparkle * 0.018, 0.19, length(local));
+  let visible = step(0.82 - sparkle * 0.45 - pulse * 0.2, seed);
+  let streak = (1.0 - smoothstep(0.0, 0.05 + sparkle * 0.04, abs(local.y))) *
+    (1.0 - smoothstep(0.0, 0.38, abs(local.x))) * step(0.88 - pulse * 0.3, seed);
+  let glow = (point * (0.35 + 0.65 * twinkle) + streak * (0.45 + pulse * 0.5)) * visible;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let color = vj_duotone(palette_rgb.xyz, seed + time * 0.04 + sparkle * 0.12, sat, bri) * (0.45 + 1.1 * glow + sparkle * 0.35);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * glow * enabled, clamp(glow * (0.55 + sparkle), 0.0, 1.0) * enabled);
+}
+
+// === Variant 12: Kick Rings ===
+// Concentric impact rings with low-end thickness and pulse-driven bloom.
+fn kick_rings_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let a = atan2(p.y, p.x);
+  let drive = clamp(max(bass, energy * 0.55 + pulse * 0.45), 0.0, 1.0);
+  let wave = fract(r * (5.0 + drive * 8.0) - time * (0.75 + drive * 1.7));
+  let rings = 1.0 - smoothstep(0.0, 0.12 + drive * 0.12, abs(wave - 0.5) * 2.0);
+  let burst_r = 0.12 + fract(time * 0.42) * 0.74;
+  let burst = crisp_ring(r, burst_r, 0.018 + drive * 0.04, 0.04) * pulse * (1.0 - burst_r);
+  let spokes = 1.0 - smoothstep(0.0, 0.08 + high * 0.08, abs(fract(a / TAU * (10.0 + floor(mid * 14.0))) - 0.5) * 2.0);
+  let layer = rings * (0.35 + 0.95 * drive) + burst * (1.0 + pulse) + spokes * drive * 0.35;
+  let vignette = 1.0 - smoothstep(0.72, 1.35, r);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let color = vj_duotone(palette_rgb.xyz, r * 0.42 + time * 0.03 + drive * 0.18, sat, bri) * clamp(layer * (0.75 + drive), 0.0, 1.7);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * vignette * enabled, clamp(layer * vignette * enabled, 0.0, 1.0));
+}
+
+// === Variant 13: Laser Lattice ===
+// Perspective laser plane; bass pushes depth, highs sharpen the beams.
+fn laser_lattice_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let drive = clamp(max(bass, energy * 0.55 + pulse * 0.45), 0.0, 1.0);
+  let sharpen = clamp(max(high, energy * 0.35 + pulse * 0.65), 0.0, 1.0);
+  let y = uv.y + 0.72;
+  let persp = 1.0 / max(y + 1.05, 0.18);
+  let p = vec2<f32>(uv.x * persp * (1.0 + drive), y * persp + time * (0.6 + drive * 1.5));
+  let grid_x = abs(fract(p.x * (5.0 + mid * 9.0)) - 0.5) * 2.0;
+  let grid_y = abs(fract(p.y * (4.0 + drive * 7.0)) - 0.5) * 2.0;
+  let line_w = 0.028 + sharpen * 0.09 + pulse * 0.035;
+  let beams = max(1.0 - smoothstep(0.0, line_w, grid_x), 1.0 - smoothstep(0.0, line_w, grid_y));
+  let horizon = exp(-abs(uv.y + 0.34) * (7.0 - drive * 2.0));
+  let sweep = 1.0 - smoothstep(0.0, 0.05 + sharpen * 0.04, abs(fract((uv.x + time * (0.2 + pulse * 0.25)) * 2.0) - 0.5) * 2.0);
+  let layer = beams * (0.45 + 0.85 * drive) + horizon * (0.25 + pulse * 0.7) + sweep * sharpen * 0.5;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, p.y * 0.08 + time * 0.03 + drive * 0.18, sat, bri);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(base * layer * enabled, clamp(layer * enabled, 0.0, 1.0));
+}
+
+// === Variant 14: Strobe Shards ===
+// Angular fractured polygons. Pulse reveals shards; highs increase fragmentation.
+fn strobe_shards_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let drive = clamp(max(pulse, energy * 0.45 + high * 0.55), 0.0, 1.0);
+  let scale = 4.0 + drive * 12.0;
+  let cell = floor((uv + vec2<f32>(0.04 * sin(time), 0.03 * cos(time * 0.8))) * scale);
+  let local = fract(uv * scale) - vec2<f32>(0.5);
+  let seed = hash21(cell);
+  let angle = seed * TAU + time * (0.12 + max(bass, drive * 0.5) * 0.4);
+  let axis = vec2<f32>(cos(angle), sin(angle));
+  let cut = abs(dot(local, axis));
+  let shard = 1.0 - smoothstep(0.08 + drive * 0.12, 0.34, cut + length(local) * 0.15);
+  let gate = step(0.58 - drive * 0.5 - energy * 0.2, seed);
+  let edge = 1.0 - smoothstep(0.0, 0.04 + drive * 0.04, abs(cut - 0.16));
+  let layer = gate * (shard * (0.35 + drive) + edge * drive * 0.85);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let color = vj_duotone(palette_rgb.xyz, seed + dot(local, axis) * 0.5 + drive * 0.16, sat, bri);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * layer * enabled, clamp(layer * enabled, 0.0, 1.0));
+}
+
+// === Variant 15: Vortex Bloom ===
+// Spiral bloom field: bass controls swirl speed, mid controls arm count.
+fn vortex_bloom_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = max(length(p), 0.001);
+  let a = atan2(p.y, p.x);
+  let drive = clamp(max(bass, energy * 0.55 + pulse * 0.45), 0.0, 1.0);
+  let arm_drive = clamp(max(mid, energy * 0.4 + pulse * 0.35), 0.0, 1.0);
+  let arms = 3.0 + floor(arm_drive * 8.0);
+  let swirl = a * arms + log(r + 0.08) * (5.5 + drive * 7.0) - time * (0.9 + drive * 2.4);
+  let spiral = 1.0 - smoothstep(0.0, 0.22 + max(high, drive * 0.55) * 0.12, abs(fract(swirl / TAU) - 0.5) * 2.0);
+  let bloom = exp(-r * (1.7 - drive * 0.65)) * (0.2 + 0.9 * drive);
+  let core = exp(-r * r * (9.0 - pulse * 3.0 - drive * 1.8)) * (0.25 + pulse * 0.8 + drive * 0.45);
+  let dust = fbm(p * (2.0 + high * 5.0) + vec2<f32>(time * 0.04, -time * 0.03));
+  let layer = spiral * bloom * (0.7 + 0.3 * dust) + core;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let color = vj_duotone(palette_rgb.xyz, a / TAU * 0.35 + r * 0.3 + time * 0.025 + dust * 0.18 + drive * 0.2, 0.85 * sat, bri);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * layer * enabled, clamp(layer * enabled, 0.0, 1.0));
+}
+
 fn geometry_field(
   uv: vec2<f32>,
   time: f32,
@@ -398,6 +551,12 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   if (v == 6) { return glitch_variant(uv, time, hue, pulse, energy, bass, mid, high); }
   if (v == 7) { return fluid_variant(uv, time, hue, pulse, energy, bass, mid, high); }
   if (v == 8) { return truchet_variant(uv, time, hue, pulse, energy, bass, mid, high); }
+  if (v == 10) { return bass_reactor_variant(uv, time, hue, pulse, energy, bass, mid, high); }
+  if (v == 11) { return high_spark_variant(uv, time, hue, pulse, energy, bass, mid, high); }
+  if (v == 12) { return kick_rings_variant(uv, time, hue, pulse, energy, bass, mid, high); }
+  if (v == 13) { return laser_lattice_variant(uv, time, hue, pulse, energy, bass, mid, high); }
+  if (v == 14) { return strobe_shards_variant(uv, time, hue, pulse, energy, bass, mid, high); }
+  if (v == 15) { return vortex_bloom_variant(uv, time, hue, pulse, energy, bass, mid, high); }
 
   return geometry_field(uv, time, hue, params.z, pulse, energy, bass, mid, high);
 }

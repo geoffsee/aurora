@@ -306,15 +306,15 @@
         controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
-        controlState.deckAMode = clampInt(next.deckAMode, 0, 9, controlState.deckAMode);
-        controlState.deckBMode = clampInt(next.deckBMode, 0, 9, controlState.deckBMode);
+        controlState.deckAMode = clampInt(next.deckAMode, 0, 15, controlState.deckAMode);
+        controlState.deckBMode = clampInt(next.deckBMode, 0, 15, controlState.deckBMode);
         controlState.rings = next.rings !== false;
         controlState.ringOpacity = next.ringOpacity === undefined ? controlState.ringOpacity : clamp01(next.ringOpacity);
         controlState.strobe = Boolean(next.strobe);
         controlState.strobeLockout = Boolean(next.strobeLockout);
         controlState.blackout = Boolean(next.blackout);
         controlState.freeze = Boolean(next.freeze);
-        controlState.maxBrightness = Math.max(0.1, Math.min(1, Number(next.maxBrightness) || controlState.maxBrightness));
+        controlState.maxBrightness = Math.max(0, Math.min(1, Number(next.maxBrightness) || controlState.maxBrightness));
         controlState.showGpuPalette = Boolean(next.showGpuPalette);
         controlState.beatSync = next.beatSync !== false;
         controlState.barSync = Boolean(next.barSync);
@@ -326,9 +326,9 @@
         controlState.cueIntensity = clamp01(next.cueIntensity);
         controlState.cuePalette = clamp01(next.cuePalette);
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
-        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
-        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
-        controlState.activeShader = clampInt(next.activeShader, 0, 9, controlState.activeShader);
+        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 15, controlState.cueDeckAMode);
+        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 15, controlState.cueDeckBMode);
+        controlState.activeShader = clampInt(next.activeShader, 0, 15, controlState.activeShader);
         if (next.bandCurves && typeof next.bandCurves === "object") {
           const bc = next.bandCurves;
           controlState.bandCurves = {

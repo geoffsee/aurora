@@ -270,13 +270,13 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 				next.cueDeckAMode = clampInt(
 					cue.deckAMode ?? prev.deckAMode,
 					0,
-					4,
+					15,
 					prev.deckAMode,
 				);
 				next.cueDeckBMode = clampInt(
 					cue.deckBMode ?? prev.deckBMode,
 					0,
-					4,
+					15,
 					prev.deckBMode,
 				);
 				next.flashVersion += name === "panic" ? 0 : 1;

@@ -50,6 +50,12 @@ const SOURCES: ReadonlySet<string> = new Set([
 	"pulse",
 ]);
 
+// Audio must never drive its own arm/disarm switches — that creates feedback loops.
+const FORBIDDEN_MAPPING_TARGETS: ReadonlySet<string> = new Set([
+	"audioControlMode",
+	"audioTransientAutomation",
+]);
+
 // Continuous mappings only emit when the output moves more than this, so a
 // steady audio level does not spam mergeControlState with no-op broadcasts.
 const CONTINUOUS_EPSILON = 0.001;
@@ -74,6 +80,7 @@ export function parseAudioMappings(raw: unknown): AudioMapping[] {
 		const e = entry as Record<string, unknown>;
 		if (!SOURCES.has(String(e.source))) continue;
 		if (typeof e.target !== "string" || e.target.length === 0) continue;
+		if (FORBIDDEN_MAPPING_TARGETS.has(e.target)) continue;
 		const mode = e.mode === "threshold" ? "threshold" : "continuous";
 		out.push({
 			source: e.source as AudioMappingSource,

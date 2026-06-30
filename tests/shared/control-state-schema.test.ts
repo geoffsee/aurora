@@ -20,12 +20,13 @@ test("v1 state is upgraded through v2..v6 with activeShader=0, bandCurves, emaAl
 		schemaVersion: 1,
 		crossfade: 0.5,
 	}) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(7);
+	expect(result.schemaVersion).toBe(8);
 	expect(result.activeShader).toBe(0);
 	expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
 	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
 	expect(result.morph).toBe(0);
 	expect(result.audioControlMode).toBe(false);
+	expect(result.audioTransientAutomation).toBe(false);
 });
 
 test("v2 state is upgraded through v3..v6", () => {
@@ -33,7 +34,7 @@ test("v2 state is upgraded through v3..v6", () => {
 		schemaVersion: 2,
 		activeShader: 1,
 	}) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(7);
+	expect(result.schemaVersion).toBe(8);
 	expect(result.activeShader).toBe(1);
 	expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
 	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
@@ -53,7 +54,7 @@ test("v3 state is upgraded through v4..v6 with emaAlphas, morph, and audioContro
 		},
 	};
 	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(7);
+	expect(result.schemaVersion).toBe(8);
 	expect(result.activeShader).toBe(1);
 	expect(result.bandCurves).toEqual(input.bandCurves);
 	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
@@ -74,7 +75,7 @@ test("v4 state is upgraded to v6 with morph and audioControlMode added", () => {
 		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
 	};
 	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(7);
+	expect(result.schemaVersion).toBe(8);
 	expect(result.emaAlphas).toEqual(input.emaAlphas);
 	expect(result.morph).toBe(0);
 	expect(result.audioControlMode).toBe(false);
@@ -97,7 +98,7 @@ test("v3 state with legacy flat emaAlpha* fields carries them forward into emaAl
 		emaAlphaPulse: 0.5,
 	};
 	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(7);
+	expect(result.schemaVersion).toBe(8);
 	expect(result.emaAlphas).toEqual({
 		energy: 0.3,
 		bass: 0.1,
@@ -123,11 +124,12 @@ test("v5 state is upgraded to v6 with audioControlMode added", () => {
 		morph: 0.4,
 	};
 	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(7);
+	expect(result.schemaVersion).toBe(8);
 	expect(result.activeShader).toBe(1);
 	expect(result.emaAlphas).toEqual(input.emaAlphas);
 	expect(result.morph).toBe(0.4);
 	expect(result.audioControlMode).toBe(false);
+	expect(result.audioTransientAutomation).toBe(false);
 });
 
 test("v6 state is upgraded to v7 with paletteR/G/B derived from legacy palette hue", () => {
@@ -146,13 +148,13 @@ test("v6 state is upgraded to v7 with paletteR/G/B derived from legacy palette h
 		audioControlMode: true,
 	};
 	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(7);
+	expect(result.schemaVersion).toBe(8);
 	expect(result.paletteR).toBeTypeOf("number");
 	expect(result.paletteG).toBeTypeOf("number");
 	expect(result.paletteB).toBeTypeOf("number");
 });
 
-test("v7 state passes through unchanged", () => {
+test("v7 state is upgraded to v8 with audioTransientAutomation added", () => {
 	const input = {
 		schemaVersion: 7,
 		activeShader: 1,
@@ -168,6 +170,30 @@ test("v7 state passes through unchanged", () => {
 		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
 		morph: 0.4,
 		audioControlMode: true,
+	};
+	const result = migrateControlState(input) as Record<string, unknown>;
+	expect(result.schemaVersion).toBe(8);
+	expect(result.audioTransientAutomation).toBe(false);
+	expect(result.audioControlMode).toBe(true);
+});
+
+test("v8 state passes through unchanged", () => {
+	const input = {
+		schemaVersion: 8,
+		activeShader: 1,
+		paletteR: 0.2,
+		paletteG: 0.4,
+		paletteB: 0.8,
+		bandCurves: {
+			energy: "exponential",
+			bass: "linear",
+			mid: "logarithmic",
+			high: "linear",
+		},
+		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+		morph: 0.4,
+		audioControlMode: true,
+		audioTransientAutomation: true,
 	};
 	expect(migrateControlState(input)).toBe(input);
 });

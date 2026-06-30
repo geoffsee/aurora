@@ -175,7 +175,10 @@ export function SlidersPanel() {
 							value={String(state.activeShader)}
 							onChange={(e) =>
 								updateState({
-									activeShader: Math.max(0, Math.min(9, Number(e.target.value))),
+									activeShader: Math.max(
+										0,
+										Math.min(SHADER_OPTIONS.length - 1, Number(e.target.value)),
+									),
 								})
 							}
 						>

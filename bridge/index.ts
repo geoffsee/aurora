@@ -124,6 +124,7 @@ type ControlState = {
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
 	audioControlMode: boolean;
+	audioTransientAutomation: boolean;
 };
 
 const require = createRequire(import.meta.url);
@@ -351,6 +352,7 @@ const defaultControlState = (): ControlState => ({
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 	morph: 0,
 	audioControlMode: false,
+	audioTransientAutomation: false,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -473,15 +475,15 @@ const coerceControlState = (state: unknown): ControlState => {
 		gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
 		gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
 		gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
-		deckAMode: clampInt(source.deckAMode, 0, 9, defaults.deckAMode),
-		deckBMode: clampInt(source.deckBMode, 0, 9, defaults.deckBMode),
+		deckAMode: clampInt(source.deckAMode, 0, 15, defaults.deckAMode),
+		deckBMode: clampInt(source.deckBMode, 0, 15, defaults.deckBMode),
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
 		strobeLockout: Boolean(source.strobeLockout),
 		blackout: Boolean(source.blackout),
 		freeze: Boolean(source.freeze),
-		maxBrightness: clamp(source.maxBrightness, 0.1, 1, defaults.maxBrightness),
+		maxBrightness: clamp(source.maxBrightness, 0, 1, defaults.maxBrightness),
 		showGpuPalette: source.showGpuPalette === true,
 		beatSync: source.beatSync !== false,
 		barSync: Boolean(source.barSync),
@@ -508,8 +510,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		cueIntensity: clamp(source.cueIntensity, 0, 1, defaults.cueIntensity),
 		cuePalette: clamp(source.cuePalette, 0, 1, defaults.cuePalette),
 		cueCrossfade: clamp(source.cueCrossfade, 0, 1, defaults.cueCrossfade),
-		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 4, defaults.cueDeckAMode),
-		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 4, defaults.cueDeckBMode),
+		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 15, defaults.cueDeckAMode),
+		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 15, defaults.cueDeckBMode),
 		trackMapping: {
 			deckAStart: clampInt(
 				(mapping as Partial<TrackMapping>).deckAStart,
@@ -554,7 +556,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 9, defaults.activeShader),
+		activeShader: clampInt(source.activeShader, 0, 15, defaults.activeShader),
 		morph: clamp(source.morph, 0, 1, defaults.morph),
 		bandCurves: (() => {
 			const bc =
@@ -582,10 +584,19 @@ const coerceControlState = (state: unknown): ControlState => {
 			};
 		})(),
 		audioControlMode: Boolean(source.audioControlMode),
+		audioTransientAutomation: Boolean(source.audioTransientAutomation),
 	};
 };
 
 const currentControlState = () => latestControlState ?? defaultControlState();
+
+const maybeFeedAutomationAudio = (
+	features: AudioFeatures,
+	nowMs: number,
+): void => {
+	if (!currentControlState().audioTransientAutomation) return;
+	automationBridge.onAudioFeatures(features, nowMs);
+};
 const mergeControlState = (partial: Partial<ControlState>) => {
 	const current = currentControlState();
 	broadcastControl({
@@ -655,6 +666,9 @@ const automationBridge = makeAutomationBridge(
 // Inert until ControlState.audioControlMode is enabled (synced in
 // broadcastControl) and at least one mapping is loaded. coerceControlState
 // remains the clamp on whatever diffs the router emits.
+//
+// Audio→automation transient detector: inert until ControlState.audioTransientAutomation
+// is enabled (see maybeFeedAutomationAudio).
 const audioControlRouter = makeAudioControlRouter(
 	(diff) => mergeControlState(diff as Partial<ControlState>),
 	() => currentControlState() as unknown as Record<string, unknown>,
@@ -769,7 +783,7 @@ function processLiveTrackData(args: unknown[]): void {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 		DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 	);
-	automationBridge.onAudioFeatures(smoothed, Date.now());
+	maybeFeedAutomationAudio(smoothed, Date.now());
 }
 
 // Apply a single transient-config OSC message. firstArg is the raw payload value.
@@ -967,7 +981,7 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				break;
 			case "active_shader":
 				mergeControlState({
-					activeShader: Math.max(0, Math.min(9, Math.floor(value))),
+					activeShader: Math.max(0, Math.min(15, Math.floor(value))),
 				});
 				break;
 			case "palette_saturation":
@@ -1406,7 +1420,7 @@ const visualServer = Bun.serve({
 							DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 						);
 						audioControlRouter.onFeatures(smoothedBrowser, nowMs);
-						automationBridge.onAudioFeatures(smoothedBrowser, nowMs);
+						maybeFeedAutomationAudio(smoothedBrowser, nowMs);
 						broadcastBrowserAudioFeatures(smoothedBrowser, nowMs);
 					} else if (
 						parsed.address.startsWith("/bevyosc/automation/transient/")
@@ -1703,7 +1717,7 @@ setInterval(() => {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 		DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 	);
-	automationBridge.onAudioFeatures(smoothed, Date.now());
+	maybeFeedAutomationAudio(smoothed, Date.now());
 	// Drive the router from the demo feed only when no browser source is active;
 	// otherwise both streams would share the router's edge state and thrash.
 	const routerNowMs = Date.now();

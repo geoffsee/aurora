@@ -453,12 +453,13 @@ describe("schema migration preserves bundling intent", () => {
 			},
 		};
 		const migrated = migrateControlState(v3State) as Record<string, unknown>;
-		expect(migrated.schemaVersion).toBe(7);
+		expect(migrated.schemaVersion).toBe(8);
 		expect(migrated.emaAlphas).toEqual(DEFAULT_AUDIO_EMA_ALPHAS);
 		expect(migrated.bandCurves).toEqual(v3State.bandCurves);
 		expect(migrated.activeShader).toBe(1);
 		expect(migrated.morph).toBe(0);
 		expect(migrated.audioControlMode).toBe(false);
+		expect(migrated.audioTransientAutomation).toBe(false);
 	});
 });
 

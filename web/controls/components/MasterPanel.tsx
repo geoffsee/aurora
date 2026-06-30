@@ -132,7 +132,7 @@ export function MasterPanel() {
 				<ParamSlider
 					label="Max Brightness"
 					value={state.maxBrightness}
-					min={0.1}
+					min={0}
 					max={1}
 					step={0.01}
 					onChange={(maxBrightness) => updateState({ maxBrightness })}

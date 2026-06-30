@@ -396,6 +396,12 @@ enum VisualMode {
     Orbit,
     Pulse,
     Spiral,
+    Ripple,
+    Shatter,
+    Flux,
+    Lattice,
+    Drift,
+    Storm,
 }
 
 impl VisualMode {
@@ -410,6 +416,12 @@ impl VisualMode {
             7 => Self::Orbit,
             8 => Self::Pulse,
             9 => Self::Spiral,
+            10 => Self::Ripple,
+            11 => Self::Shatter,
+            12 => Self::Flux,
+            13 => Self::Lattice,
+            14 => Self::Drift,
+            15 => Self::Storm,
             _ => Self::Beams,
         }
     }
@@ -738,7 +750,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.grid_diamond = browser_control_grid_diamond().clamp(0.0, 1.0);
         state.grid_line_width = browser_control_grid_line_width().clamp(0.0, 1.0);
         state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
-        state.active_shader = browser_control_active_shader().min(9);
+        state.active_shader = browser_control_active_shader().min(15);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.rings_enabled = browser_control_rings();
@@ -748,7 +760,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.blackout = browser_control_blackout();
         state.freeze = browser_control_freeze();
         state.show_gpu_palette = browser_control_show_gpu_palette();
-        state.max_brightness = browser_control_max_brightness().clamp(0.1, 1.0);
+        state.max_brightness = browser_control_max_brightness().clamp(0.0, 1.0);
 
         if flash_version != state.last_control_flash_version {
             state.flash = 1.0;
@@ -1115,6 +1127,63 @@ fn update_visuals(
                         transform.scale.y *= 1.1 + fraction * 0.5;
                         hue += fraction * 360.0;
                     }
+                    VisualMode::Ripple => {
+                        let ripple = (fraction * 12.0 - t * (1.4 + bass * 2.2)).sin();
+                        let swell = 1.0 + ripple * (0.22 + bass * 0.35) + beat_hit * 0.18;
+                        transform.translation.x *= swell;
+                        transform.translation.y *= swell;
+                        transform.scale.x *= 0.85 + ripple.abs() * 0.35;
+                        transform.scale.y *= 0.9 + ripple.abs() * 0.5;
+                        alpha *= 0.55 + ripple.abs() * 0.45;
+                        hue += ripple * 40.0;
+                    }
+                    VisualMode::Shatter => {
+                        let shard = (element.seed * 17.3 + t * 3.7).sin() * 0.5 + 0.5;
+                        let jitter = (shard * 2.0 - 1.0) * (28.0 + high * 72.0);
+                        transform.translation.x += jitter;
+                        transform.translation.y += jitter * 0.7;
+                        transform.scale.x *= 0.35 + shard * 0.9 + high * 0.4;
+                        transform.scale.y *= 0.25 + (1.0 - shard) * 0.8;
+                        alpha *= 0.4 + high * 0.55;
+                        hue += shard * 180.0;
+                    }
+                    VisualMode::Flux => {
+                        let flow = wave(t * (0.9 + mid * 1.4) + element.seed * 3.0);
+                        transform.translation.x += flow * (60.0 + mid * 90.0);
+                        transform.translation.y += (1.0 - flow) * (40.0 + mid * 70.0);
+                        transform.rotation *= Quat::from_rotation_z(flow * 0.35 + mid * 0.2);
+                        transform.scale.y *= 0.75 + flow * 0.55;
+                        alpha *= 0.6 + mid * 0.35;
+                        hue += flow * 55.0;
+                    }
+                    VisualMode::Lattice => {
+                        let snap_a = (angle / (TAU / 12.0)).round() * (TAU / 12.0);
+                        let snap_r = (radial_offset / 40.0).round() * 40.0;
+                        transform.rotation = Quat::from_rotation_z(snap_a);
+                        transform.translation.x = snap_a.cos() * snap_r;
+                        transform.translation.y = snap_a.sin() * snap_r;
+                        transform.scale.x *= 0.7 + (element.index % 3) as f32 * 0.15;
+                        alpha *= 0.65;
+                        hue += (element.index % 6) as f32 * 22.0;
+                    }
+                    VisualMode::Drift => {
+                        let drift_a = t * (0.08 + element.seed * 0.05) + element.seed * TAU;
+                        transform.translation.x += drift_a.cos() * 36.0;
+                        transform.translation.y += drift_a.sin() * 24.0;
+                        transform.scale.y *= 0.9 + wave(t * 0.35 + element.seed) * 0.15;
+                        alpha *= 0.45 + state.feedback * 0.25;
+                        hue += element.seed * 40.0;
+                    }
+                    VisualMode::Storm => {
+                        let chaos = (t * 7.0 + element.seed * 13.0).sin();
+                        let surge = osc_drive * 0.8 + state.osc_pulse * 0.6 + beat_hit;
+                        transform.translation.x *= 1.0 + chaos * surge * 0.45;
+                        transform.translation.y *= 1.0 + (chaos * 0.7).cos() * surge * 0.35;
+                        transform.scale.x *= 0.6 + surge * 1.4;
+                        transform.scale.y *= 0.5 + surge * 1.1;
+                        alpha *= 0.35 + surge * 0.75;
+                        hue += chaos * 90.0 + surge * 60.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1167,6 +1236,21 @@ fn update_visuals(
                     VisualMode::Orbit => (0.92, 0.9, 0.6, 1.0),
                     VisualMode::Pulse => (0.78 + pump * 0.22 + beat_hit * 0.14, 0.8, 0.42 + pump * 0.32, 1.0),
                     VisualMode::Spiral => (0.9, 1.05, 0.55, 1.0),
+                    VisualMode::Ripple => (0.84 + bass * 0.2, 1.05, 0.58 + bass * 0.22, 1.0),
+                    VisualMode::Shatter => (0.94, 0.72, 0.48 + high * 0.35, if high > 0.45 { 1.0 } else { 0.35 }),
+                    VisualMode::Flux => (0.9, 1.0, 0.56 + mid * 0.24, 1.0),
+                    VisualMode::Lattice => (0.88, 0.82, 0.62, 1.0),
+                    VisualMode::Drift => (0.96, 1.15, 0.38, 1.0),
+                    VisualMode::Storm => (
+                        0.82 + osc_drive * 0.18,
+                        0.95,
+                        0.5 + state.osc_pulse * 0.35,
+                        if osc_drive + state.osc_pulse > 0.55 {
+                            1.0
+                        } else {
+                            0.25
+                        },
+                    ),
                     VisualMode::Beams => (0.9, 0.8, 0.55, 1.0),
                 };
 
@@ -1293,6 +1377,52 @@ fn update_visuals(
                         transform.translation.y = spiral_a.sin() * (60.0 + diagonal * 50.0);
                         transform.rotation = Quat::from_rotation_z(spiral_a + diagonal * 0.5);
                     }
+                    VisualMode::Ripple => {
+                        let centered_x = x / (STAGE_WIDTH * 0.5);
+                        let centered_y = y / (STAGE_HEIGHT * 0.5);
+                        let radius = (centered_x * centered_x + centered_y * centered_y).sqrt();
+                        let ripple = (radius * 10.0 - t * (1.6 + bass * 2.0)).sin();
+                        transform.translation.x += centered_x * ripple * (24.0 + bass * 40.0);
+                        transform.translation.y += centered_y * ripple * (24.0 + bass * 40.0);
+                        transform.scale *= 0.8 + ripple.abs() * 0.55;
+                        alpha *= 0.55 + ripple.abs() * 0.4;
+                    }
+                    VisualMode::Shatter => {
+                        let shard = (element.seed * 11.0 + t * 4.2).sin();
+                        transform.translation.x += shard * (18.0 + high * 42.0);
+                        transform.translation.y += (element.seed * 7.0 + t).cos() * (14.0 + high * 30.0);
+                        transform.scale *= 0.55 + shard.abs() * 0.9;
+                        alpha *= 0.45 + high * 0.5;
+                        hue += shard * 120.0;
+                    }
+                    VisualMode::Flux => {
+                        let flow = wave(t * (1.0 + mid * 1.2) + diagonal);
+                        transform.translation.x += flow * 22.0;
+                        transform.translation.y -= flow * 16.0;
+                        transform.rotation *= Quat::from_rotation_z(flow * 0.4);
+                        alpha *= 0.65 + mid * 0.3;
+                    }
+                    VisualMode::Lattice => {
+                        let snap_x = (x / 48.0).round() * 48.0;
+                        let snap_y = (y / 48.0).round() * 48.0;
+                        transform.translation.x = snap_x + (element.col % 2) as f32 * 6.0;
+                        transform.translation.y = snap_y + (element.row % 2) as f32 * 6.0;
+                        transform.scale *= 0.85 + (element.col % 3) as f32 * 0.12;
+                    }
+                    VisualMode::Drift => {
+                        let drift = wave(t * 0.25 + diagonal * 0.4);
+                        transform.translation.x += drift * 18.0;
+                        transform.translation.y += (1.0 - drift) * 12.0;
+                        alpha *= 0.35 + state.feedback * 0.35;
+                    }
+                    VisualMode::Storm => {
+                        let chaos = (t * 6.0 + diagonal * 2.5).sin();
+                        let surge = osc_drive + state.osc_pulse * 0.8 + beat_hit;
+                        transform.translation.x += chaos * surge * 28.0;
+                        transform.translation.y += (chaos * 0.7).cos() * surge * 22.0;
+                        transform.scale *= 0.55 + surge * 1.5;
+                        alpha *= 0.35 + surge * 0.8;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1377,6 +1507,43 @@ fn update_visuals(
                         transform.translation.y = spiral_a.sin() * (160.0 + fraction * 100.0);
                         transform.rotation = Quat::from_rotation_z(spiral_a);
                         transform.scale.x *= 0.5;
+                    }
+                    VisualMode::Ripple => {
+                        let ripple = (fraction * 10.0 - t * (1.1 + bass * 1.8)).sin();
+                        transform.scale.x *= 1.0 + ripple.abs() * (0.5 + bass);
+                        transform.scale.y *= 0.8 + ripple.abs() * (0.8 + bass * 0.6);
+                        alpha *= 0.35 + ripple.abs() * 0.45;
+                    }
+                    VisualMode::Shatter => {
+                        let shard = (fraction * 19.0 + t * 5.0).sin();
+                        transform.translation.x += shard * (80.0 + high * 120.0);
+                        transform.scale.x *= 0.35 + shard.abs();
+                        alpha *= 0.3 + high * 0.55;
+                    }
+                    VisualMode::Flux => {
+                        let flow = wave(t * 0.7 + fraction * 4.0);
+                        transform.translation.x += flow * 90.0;
+                        transform.translation.y -= flow * 50.0;
+                        transform.rotation = Quat::from_rotation_z(flow * 0.5 + fraction);
+                    }
+                    VisualMode::Lattice => {
+                        transform.translation.x = (transform.translation.x / 80.0).round() * 80.0;
+                        transform.translation.y = (transform.translation.y / 50.0).round() * 50.0;
+                        transform.scale.x *= 0.7 + (element.index % 4) as f32 * 0.12;
+                    }
+                    VisualMode::Drift => {
+                        let drift_a = t * 0.12 + fraction * TAU;
+                        transform.translation.x = drift_a.cos() * (140.0 + fraction * 40.0);
+                        transform.translation.y = drift_a.sin() * (80.0 + fraction * 20.0);
+                        alpha *= 0.55 + state.feedback * 0.25;
+                    }
+                    VisualMode::Storm => {
+                        let chaos = (t * 5.5 + fraction * 11.0).sin();
+                        let surge = osc_drive + state.osc_pulse + beat_hit;
+                        transform.scale.x *= 0.4 + surge * 2.0;
+                        transform.scale.y *= 0.35 + surge * 1.6;
+                        transform.translation.x *= 1.0 + chaos * surge * 0.5;
+                        alpha *= 0.25 + surge * 0.7;
                     }
                     VisualMode::Beams => {}
                 }
@@ -1507,6 +1674,7 @@ fn update_palette_material(
     //   4     → grid quad
     //   5..=8 → palette quad with palette_variant set (Tunnel/Glitch/Fluid/Truchet)
     //   9     → imported quad (Shadertoy hot-swap slot)
+    //   10..=15 → palette quad with newer audio-reactive variants
     let (quad_index, palette_variant) = if state.active_shader == 4 {
         (1u32, 0.0)
     } else if state.active_shader == 9 {
