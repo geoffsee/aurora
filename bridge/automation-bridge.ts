@@ -21,11 +21,11 @@ export type { AudioTransientConfig };
 // Default OSC addresses wired unconditionally. Hardware/software controllers
 // can send to these without any per-deployment configuration.
 export const DEFAULT_OSC_BINDINGS: readonly AutomationTriggerBinding[] = [
-	{ type: "osc", address: "/bevyosc/automation/play", action: "play" },
-	{ type: "osc", address: "/bevyosc/automation/play-loop", action: "play-loop" },
-	{ type: "osc", address: "/bevyosc/automation/stop", action: "stop" },
-	{ type: "osc", address: "/bevyosc/automation/toggle", action: "toggle" },
-	{ type: "osc", address: "/bevyosc/automation/toggle-loop", action: "toggle-loop" },
+	{ type: "osc", address: "/aurora/automation/play", action: "play" },
+	{ type: "osc", address: "/aurora/automation/play-loop", action: "play-loop" },
+	{ type: "osc", address: "/aurora/automation/stop", action: "stop" },
+	{ type: "osc", address: "/aurora/automation/toggle", action: "toggle" },
+	{ type: "osc", address: "/aurora/automation/toggle-loop", action: "toggle-loop" },
 ];
 
 const VALID_ACTIONS: ReadonlySet<string> = new Set([

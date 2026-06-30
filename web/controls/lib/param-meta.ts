@@ -53,7 +53,7 @@ export const PARAM_META: Record<MappableParam, ParamMeta> = {
 	gridLineWidth: { key: "gridLineWidth", label: "Grid Lines", min: 0, max: 1, step: 0.01, format: pct },
 	gridShapeMix: { key: "gridShapeMix", label: "Grid Shape", min: 0, max: 1, step: 0.01, format: pct },
 	ringOpacity: { key: "ringOpacity", label: "Ring Opacity", min: 0, max: 1, step: 0.01, format: pct },
-	maxBrightness: { key: "maxBrightness", label: "Max Brightness", min: 0.1, max: 1, step: 0.01, format: pct },
+	maxBrightness: { key: "maxBrightness", label: "Max Brightness", min: 0, max: 1, step: 0.01, format: pct },
 	deckAMode: {
 		key: "deckAMode",
 		label: "Deck A Mode",

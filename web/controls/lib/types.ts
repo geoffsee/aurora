@@ -66,6 +66,7 @@ export type ControlState = {
 	morph: number;
 	audioControlMode: boolean;
 	outputs: OutputRoute[];
+	audioTransientAutomation: boolean;
 };
 
 export type OscMeters = {

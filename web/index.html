@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bevyosc VJ</title>
+    <title>aurora VJ</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -27,15 +27,15 @@
         IS_PLAYING: "/live/song/get/is_playing",
         BEAT: "/live/song/get/beat",
         TRACK_DATA: "/live/song/get/track_data",
-        CONNECTED: "/bevyosc/osc/connected",
-        DEMO: "/bevyosc/demo/audio",
-        BROWSER_AUDIO: "/bevyosc/audio/features",
-        DIAGNOSTICS: "/bevyosc/server/diagnostics",
-        DEV_RELOAD: "/bevyosc/dev/reload",
-        SHADER_IMPORTED: "/bevyosc/shader/imported",
+        CONNECTED: "/aurora/osc/connected",
+        DEMO: "/aurora/demo/audio",
+        BROWSER_AUDIO: "/aurora/audio/features",
+        DIAGNOSTICS: "/aurora/server/diagnostics",
+        DEV_RELOAD: "/aurora/dev/reload",
+        SHADER_IMPORTED: "/aurora/shader/imported",
       };
       const CONTROL = {
-        STATE: "/bevyosc/control/state",
+        STATE: "/aurora/control/state",
       };
       const oscState = {
         connected: false,
@@ -313,15 +313,15 @@
         controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
-        controlState.deckAMode = clampInt(next.deckAMode, 0, 9, controlState.deckAMode);
-        controlState.deckBMode = clampInt(next.deckBMode, 0, 9, controlState.deckBMode);
+        controlState.deckAMode = clampInt(next.deckAMode, 0, 15, controlState.deckAMode);
+        controlState.deckBMode = clampInt(next.deckBMode, 0, 15, controlState.deckBMode);
         controlState.rings = next.rings !== false;
         controlState.ringOpacity = next.ringOpacity === undefined ? controlState.ringOpacity : clamp01(next.ringOpacity);
         controlState.strobe = Boolean(next.strobe);
         controlState.strobeLockout = Boolean(next.strobeLockout);
         controlState.blackout = Boolean(next.blackout);
         controlState.freeze = Boolean(next.freeze);
-        controlState.maxBrightness = Math.max(0.1, Math.min(1, Number(next.maxBrightness) || controlState.maxBrightness));
+        controlState.maxBrightness = Math.max(0, Math.min(1, Number(next.maxBrightness) || controlState.maxBrightness));
         controlState.showGpuPalette = Boolean(next.showGpuPalette);
         controlState.beatSync = next.beatSync !== false;
         controlState.barSync = Boolean(next.barSync);
@@ -333,9 +333,9 @@
         controlState.cueIntensity = clamp01(next.cueIntensity);
         controlState.cuePalette = clamp01(next.cuePalette);
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
-        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 4, controlState.cueDeckAMode);
-        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 4, controlState.cueDeckBMode);
-        controlState.activeShader = clampInt(next.activeShader, 0, 9, controlState.activeShader);
+        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 15, controlState.cueDeckAMode);
+        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 15, controlState.cueDeckBMode);
+        controlState.activeShader = clampInt(next.activeShader, 0, 15, controlState.activeShader);
         if (next.bandCurves && typeof next.bandCurves === "object") {
           const bc = next.bandCurves;
           controlState.bandCurves = {
@@ -388,7 +388,7 @@
 
       function sendErrorToControls(description) {
         if (oscWs?.readyState === WebSocket.OPEN) {
-          oscWs.send(JSON.stringify({ address: "/bevyosc/error", error: description, args: [] }));
+          oscWs.send(JSON.stringify({ address: "/aurora/error", error: description, args: [] }));
         }
       }
 
@@ -428,76 +428,76 @@
         sendErrorToControls(`Runtime error: ${msg}`);
       });
 
-      window.__bevyoscOscConnected = () => {
+      window.__auroraOscConnected = () => {
         oscState.connected = controlState.demoMode || performance.now() - oscState.lastFrameAt < 3000;
         return oscState.connected;
       };
-      window.__bevyoscOscPlaying = () => Boolean(oscState.playing);
-      window.__bevyoscOscTempo = () => oscState.tempo;
-      window.__bevyoscOscEnergy = () => (decayMeters(), applyAudioCurve(oscState.energy, controlState.bandCurves.energy));
-      window.__bevyoscOscDeckA = () => (decayMeters(), oscState.deckA);
-      window.__bevyoscOscDeckB = () => (decayMeters(), oscState.deckB);
-      window.__bevyoscOscBass = () => (decayMeters(), applyAudioCurve(oscState.bass, controlState.bandCurves.bass));
-      window.__bevyoscOscMid = () => (decayMeters(), applyAudioCurve(oscState.mid, controlState.bandCurves.mid));
-      window.__bevyoscOscHigh = () => (decayMeters(), applyAudioCurve(oscState.high, controlState.bandCurves.high));
-      window.__bevyoscOscPulse = () => {
+      window.__auroraOscPlaying = () => Boolean(oscState.playing);
+      window.__auroraOscTempo = () => oscState.tempo;
+      window.__auroraOscEnergy = () => (decayMeters(), applyAudioCurve(oscState.energy, controlState.bandCurves.energy));
+      window.__auroraOscDeckA = () => (decayMeters(), oscState.deckA);
+      window.__auroraOscDeckB = () => (decayMeters(), oscState.deckB);
+      window.__auroraOscBass = () => (decayMeters(), applyAudioCurve(oscState.bass, controlState.bandCurves.bass));
+      window.__auroraOscMid = () => (decayMeters(), applyAudioCurve(oscState.mid, controlState.bandCurves.mid));
+      window.__auroraOscHigh = () => (decayMeters(), applyAudioCurve(oscState.high, controlState.bandCurves.high));
+      window.__auroraOscPulse = () => {
         decayMeters();
         if (oscState.energy < 0.02) return 0;
         return Math.max(0, 1 - (performance.now() - oscState.lastBeatAt) / 180);
       };
-      window.__bevyoscControlConnected = () => {
+      window.__auroraControlConnected = () => {
         controlState.connected = performance.now() - controlState.lastFrameAt < 3000;
         return controlState.connected;
       };
-      window.__bevyoscControlCrossfade = () => controlState.crossfade;
-      window.__bevyoscControlBpm = () => controlState.bpm;
-      window.__bevyoscControlSpeed = () => controlState.speed;
-      window.__bevyoscControlIntensity = () => controlState.intensity;
-      window.__bevyoscControlFeedback = () => controlState.feedback;
-      window.__bevyoscControlDepth = () => controlState.depth;
-      window.__bevyoscControlPalette = () => controlState.palette;
-      window.__bevyoscControlPaletteR = () => controlState.paletteR;
-      window.__bevyoscControlPaletteG = () => controlState.paletteG;
-      window.__bevyoscControlPaletteB = () => controlState.paletteB;
-      window.__bevyoscControlPaletteSaturation = () => controlState.paletteSaturation;
-      window.__bevyoscControlPaletteBrightness = () => controlState.paletteBrightness;
-      window.__bevyoscControlGridDensity = () => controlState.gridDensity;
-      window.__bevyoscControlGridDiamond = () => controlState.gridDiamond;
-      window.__bevyoscControlGridLineWidth = () => controlState.gridLineWidth;
-      window.__bevyoscControlGridShapeMix = () => controlState.gridShapeMix;
-      window.__bevyoscControlDeckAMode = () => controlState.deckAMode;
-      window.__bevyoscControlDeckBMode = () => controlState.deckBMode;
-      window.__bevyoscControlRings = () => controlState.rings;
-      window.__bevyoscControlRingOpacity = () => controlState.ringOpacity;
-      window.__bevyoscControlStrobe = () => controlState.strobe;
-      window.__bevyoscControlStrobeLockout = () => controlState.strobeLockout;
-      window.__bevyoscControlBlackout = () => controlState.blackout;
-      window.__bevyoscControlFreeze = () => controlState.freeze;
-      window.__bevyoscControlMaxBrightness = () => controlState.maxBrightness;
-      window.__bevyoscControlShowGpuPalette = () => controlState.showGpuPalette;
-      window.__bevyoscControlBeatSync = () => controlState.beatSync;
-      window.__bevyoscControlBarSync = () => controlState.barSync;
-      window.__bevyoscControlDemoMode = () => controlState.demoMode;
-      window.__bevyoscControlFlashVersion = () => controlState.flashVersion;
-      window.__bevyoscControlResetVersion = () => controlState.resetVersion;
-      window.__bevyoscControlCueVersion = () => controlState.cueVersion;
-      window.__bevyoscControlCueIntensity = () => controlState.cueIntensity;
-      window.__bevyoscControlCuePalette = () => controlState.cuePalette;
-      window.__bevyoscControlCueCrossfade = () => controlState.cueCrossfade;
-      window.__bevyoscControlCueDeckAMode = () => controlState.cueDeckAMode;
-      window.__bevyoscControlCueDeckBMode = () => controlState.cueDeckBMode;
-      window.__bevyoscControlActiveShader = () => controlState.activeShader;
-      window.__bevyoscTakePendingImportedShader = () => {
+      window.__auroraControlCrossfade = () => controlState.crossfade;
+      window.__auroraControlBpm = () => controlState.bpm;
+      window.__auroraControlSpeed = () => controlState.speed;
+      window.__auroraControlIntensity = () => controlState.intensity;
+      window.__auroraControlFeedback = () => controlState.feedback;
+      window.__auroraControlDepth = () => controlState.depth;
+      window.__auroraControlPalette = () => controlState.palette;
+      window.__auroraControlPaletteR = () => controlState.paletteR;
+      window.__auroraControlPaletteG = () => controlState.paletteG;
+      window.__auroraControlPaletteB = () => controlState.paletteB;
+      window.__auroraControlPaletteSaturation = () => controlState.paletteSaturation;
+      window.__auroraControlPaletteBrightness = () => controlState.paletteBrightness;
+      window.__auroraControlGridDensity = () => controlState.gridDensity;
+      window.__auroraControlGridDiamond = () => controlState.gridDiamond;
+      window.__auroraControlGridLineWidth = () => controlState.gridLineWidth;
+      window.__auroraControlGridShapeMix = () => controlState.gridShapeMix;
+      window.__auroraControlDeckAMode = () => controlState.deckAMode;
+      window.__auroraControlDeckBMode = () => controlState.deckBMode;
+      window.__auroraControlRings = () => controlState.rings;
+      window.__auroraControlRingOpacity = () => controlState.ringOpacity;
+      window.__auroraControlStrobe = () => controlState.strobe;
+      window.__auroraControlStrobeLockout = () => controlState.strobeLockout;
+      window.__auroraControlBlackout = () => controlState.blackout;
+      window.__auroraControlFreeze = () => controlState.freeze;
+      window.__auroraControlMaxBrightness = () => controlState.maxBrightness;
+      window.__auroraControlShowGpuPalette = () => controlState.showGpuPalette;
+      window.__auroraControlBeatSync = () => controlState.beatSync;
+      window.__auroraControlBarSync = () => controlState.barSync;
+      window.__auroraControlDemoMode = () => controlState.demoMode;
+      window.__auroraControlFlashVersion = () => controlState.flashVersion;
+      window.__auroraControlResetVersion = () => controlState.resetVersion;
+      window.__auroraControlCueVersion = () => controlState.cueVersion;
+      window.__auroraControlCueIntensity = () => controlState.cueIntensity;
+      window.__auroraControlCuePalette = () => controlState.cuePalette;
+      window.__auroraControlCueCrossfade = () => controlState.cueCrossfade;
+      window.__auroraControlCueDeckAMode = () => controlState.cueDeckAMode;
+      window.__auroraControlCueDeckBMode = () => controlState.cueDeckBMode;
+      window.__auroraControlActiveShader = () => controlState.activeShader;
+      window.__auroraTakePendingImportedShader = () => {
         const wgsl = pendingImportedShader;
         pendingImportedShader = null;
         return wgsl;
       };
-      window.__bevyoscDiagnostics = () => diagnostics;
+      window.__auroraDiagnostics = () => diagnostics;
 
       connectOscSocket();
 
       try {
-        const { default: init } = await import("./dist/pkg/bevyosc.js");
+        const { default: init } = await import("./dist/pkg/aurora.js");
         await init();
         boot?.remove();
       } catch (error) {

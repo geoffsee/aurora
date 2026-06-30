@@ -72,10 +72,18 @@ export const migrateControlState = (state: unknown): unknown => {
 			paletteB: rgb.b,
 		});
 	}
-	// v7 → v8: add outputs field (multi-output routing). Empty by default so the
-	// single-projector path stays a no-op.
+	// v7 → v8: add audioTransientAutomation field (opt-in audio→automation trigger)
 	if (s.schemaVersion === 7) {
-		return { ...s, schemaVersion: 8, outputs: [] };
+		return migrateControlState({
+			...s,
+			schemaVersion: 8,
+			audioTransientAutomation: false,
+		});
+	}
+	// v8 → v9: add outputs field (multi-output routing). Empty by default so the
+	// single-projector path stays a no-op.
+	if (s.schemaVersion === 8) {
+		return { ...s, schemaVersion: 9, outputs: [] };
 	}
 	return state;
 };

@@ -34,7 +34,7 @@ function waitForControlStateWithCrossfade(
 				address: string;
 				args: unknown[];
 			};
-			if (msg.address === "/bevyosc/control/state") {
+			if (msg.address === "/aurora/control/state") {
 				const state = msg.args[0] as Record<string, unknown>;
 				if (Math.abs((state["crossfade"] as number) - crossfade) < 1e-9) {
 					clearTimeout(timerId);
@@ -59,7 +59,7 @@ test("controls-page state mutation is reflected on projector page within 500ms",
 
 		controlsWs.send(
 			JSON.stringify({
-				address: "/bevyosc/control/state",
+				address: "/aurora/control/state",
 				args: [{ crossfade: 0.33 }],
 			}),
 		);
@@ -90,7 +90,7 @@ test("preset recall command is broadcast to all connected clients", async () => 
 					address: string;
 					args: unknown[];
 				};
-				if (msg.address === "/bevyosc/preset/recall/3") {
+				if (msg.address === "/aurora/preset/recall/3") {
 					clearTimeout(timerId);
 					observerWs.removeEventListener("message", onMessage);
 					resolve(msg.address);
@@ -100,11 +100,11 @@ test("preset recall command is broadcast to all connected clients", async () => 
 		});
 
 		senderWs.send(
-			JSON.stringify({ address: "/bevyosc/preset/recall/3", args: [] }),
+			JSON.stringify({ address: "/aurora/preset/recall/3", args: [] }),
 		);
 
 		const address = await received;
-		expect(address).toBe("/bevyosc/preset/recall/3");
+		expect(address).toBe("/aurora/preset/recall/3");
 	} finally {
 		senderWs.close();
 		observerWs.close();
@@ -127,7 +127,7 @@ test("second simultaneous controls-page client receives the same state update", 
 
 		controlsWs.send(
 			JSON.stringify({
-				address: "/bevyosc/control/state",
+				address: "/aurora/control/state",
 				args: [{ crossfade: 0.67 }],
 			}),
 		);

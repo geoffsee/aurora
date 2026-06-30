@@ -120,11 +120,11 @@ describe("DEFAULT_OSC_BINDINGS", () => {
 			),
 		);
 		for (const addr of [
-			"/bevyosc/automation/play",
-			"/bevyosc/automation/play-loop",
-			"/bevyosc/automation/stop",
-			"/bevyosc/automation/toggle",
-			"/bevyosc/automation/toggle-loop",
+			"/aurora/automation/play",
+			"/aurora/automation/play-loop",
+			"/aurora/automation/stop",
+			"/aurora/automation/toggle",
+			"/aurora/automation/toggle-loop",
 		]) {
 			expect(addresses.has(addr)).toBe(true);
 		}
@@ -205,7 +205,7 @@ describe("makeAutomationBridge", () => {
 		expect(bridge.player.isActive()).toBe(false);
 	});
 
-	test("onOscAddress with default /bevyosc/automation/toggle starts then stops playback", () => {
+	test("onOscAddress with default /aurora/automation/toggle starts then stops playback", () => {
 		const log = makeRecordedEntries();
 		const applied: Record<string, unknown>[] = [];
 		const bridge = makeAutomationBridge(
@@ -215,16 +215,16 @@ describe("makeAutomationBridge", () => {
 		);
 
 		// First trigger: toggle → play
-		bridge.onOscAddress("/bevyosc/automation/toggle");
+		bridge.onOscAddress("/aurora/automation/toggle");
 		expect(bridge.player.isActive()).toBe(true);
 
 		// Second trigger: toggle → stop
-		bridge.onOscAddress("/bevyosc/automation/toggle");
+		bridge.onOscAddress("/aurora/automation/toggle");
 		expect(bridge.player.isActive()).toBe(false);
 		expect(applied.at(-1)).toMatchObject({ replaying: false });
 	});
 
-	test("onOscAddress with /bevyosc/automation/play always starts (even if active)", () => {
+	test("onOscAddress with /aurora/automation/play always starts (even if active)", () => {
 		const log = makeRecordedEntries();
 		const bridge = makeAutomationBridge(
 			() => {},
@@ -232,15 +232,15 @@ describe("makeAutomationBridge", () => {
 			() => log.toArray(),
 		);
 
-		bridge.onOscAddress("/bevyosc/automation/play");
+		bridge.onOscAddress("/aurora/automation/play");
 		expect(bridge.player.isActive()).toBe(true);
 
 		// Play again while active — should restart (play is not a toggle)
-		bridge.onOscAddress("/bevyosc/automation/play");
+		bridge.onOscAddress("/aurora/automation/play");
 		expect(bridge.player.isActive()).toBe(true);
 	});
 
-	test("onOscAddress with /bevyosc/automation/stop stops active playback", () => {
+	test("onOscAddress with /aurora/automation/stop stops active playback", () => {
 		const log = makeRecordedEntries();
 		const applied: Record<string, unknown>[] = [];
 		const bridge = makeAutomationBridge(
@@ -249,10 +249,10 @@ describe("makeAutomationBridge", () => {
 			() => log.toArray(),
 		);
 
-		bridge.onOscAddress("/bevyosc/automation/play");
+		bridge.onOscAddress("/aurora/automation/play");
 		expect(bridge.player.isActive()).toBe(true);
 
-		bridge.onOscAddress("/bevyosc/automation/stop");
+		bridge.onOscAddress("/aurora/automation/stop");
 		expect(bridge.player.isActive()).toBe(false);
 	});
 
@@ -407,7 +407,7 @@ describe("automation trigger E2E via MIDI note", () => {
 		);
 
 		vi.setSystemTime(0);
-		bridge.onOscAddress("/bevyosc/automation/play");
+		bridge.onOscAddress("/aurora/automation/play");
 		expect(bridge.player.isActive()).toBe(true);
 
 		const recording = buildRecording(
@@ -424,7 +424,7 @@ describe("automation trigger E2E via MIDI note", () => {
 		expect(dataFrames.at(-1)).toMatchObject({ depth: 0.9 });
 
 		// Manually stop — verifies stop works regardless of how playback ended
-		bridge.onOscAddress("/bevyosc/automation/stop");
+		bridge.onOscAddress("/aurora/automation/stop");
 		expect(bridge.player.isActive()).toBe(false);
 	});
 });

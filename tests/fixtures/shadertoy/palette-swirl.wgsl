@@ -17,7 +17,7 @@ struct Reserved {
 }
 
 struct FragmentOutput {
-    @location(0) _bevyosc_frag_out: vec4<f32>,
+    @location(0) _aurora_frag_out: vec4<f32>,
 }
 
 const iChannelResolution: array<vec3<f32>, 4> = array<vec3<f32>, 4>(vec3<f32>(512f, 2f, 1f), vec3<f32>(512f, 2f, 1f), vec3<f32>(512f, 2f, 1f), vec3<f32>(512f, 2f, 1f));
@@ -35,10 +35,10 @@ var<uniform> global_1: PaletteExtra;
 var<uniform> global_2: AudioUniforms;
 @group(2) @binding(3) 
 var<uniform> global_3: Reserved;
-var<private> _bevyosc_frag_out: vec4<f32>;
+var<private> _aurora_frag_out: vec4<f32>;
 var<private> gl_FragCoord_1: vec4<f32>;
 
-fn _bevyosc_channel(ch: i32) -> vec4<f32> {
+fn _aurora_channel(ch: i32) -> vec4<f32> {
     var ch_1: i32;
 
     ch_1 = ch;
@@ -91,15 +91,15 @@ fn main_1() {
     let _e18 = gl_FragCoord_1;
     mainImage((&color), _e18.xy);
     let _e21 = color;
-    _bevyosc_frag_out = _e21;
+    _aurora_frag_out = _e21;
     return;
 }
 
 @fragment
-fn fragment(_bevyosc_in: VertexOutput) -> FragmentOutput {
-    let gl_FragCoord: vec4<f32> = _bevyosc_in.position;
+fn fragment(_aurora_in: VertexOutput) -> FragmentOutput {
+    let gl_FragCoord: vec4<f32> = _aurora_in.position;
     gl_FragCoord_1 = gl_FragCoord;
     main_1();
-    let _e25 = _bevyosc_frag_out;
+    let _e25 = _aurora_frag_out;
     return FragmentOutput(_e25);
 }

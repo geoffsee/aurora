@@ -52,7 +52,7 @@ export function StatusHeader() {
 						color="whiteAlpha.700"
 						mb={1}
 					>
-						bevyosc
+						aurora
 					</Text>
 					<Text as="h1" fontSize="2xl" fontWeight="bold" m={0}>
 						VJ Controls

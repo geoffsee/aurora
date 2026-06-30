@@ -15,6 +15,7 @@ export type AutomationRecording = {
 
 // Volatile/edge-trigger fields excluded from recordings per spike #57.
 // strobeLockout is a safety interlock and must never be automated.
+// audioControlMode / audioTransientAutomation are arm switches — replay must not toggle them.
 export const RECORDING_EXCLUDED_FIELDS: ReadonlySet<string> = new Set([
 	"schemaVersion",
 	"replaying",
@@ -22,6 +23,8 @@ export const RECORDING_EXCLUDED_FIELDS: ReadonlySet<string> = new Set([
 	"resetVersion",
 	"cueVersion",
 	"strobeLockout",
+	"audioControlMode",
+	"audioTransientAutomation",
 ]);
 
 /**

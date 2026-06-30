@@ -1,11 +1,11 @@
 [package]
-name = "bevyosc-vst"
+name = "aurora-vst"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [lib]
-name = "bevyosc_vst"
+name = "aurora_vst"
 crate-type = ["cdylib"]
 
 [dependencies]

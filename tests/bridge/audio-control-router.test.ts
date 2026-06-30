@@ -91,6 +91,29 @@ describe("parseAudioMappings", () => {
 		});
 	});
 
+	test("drops forbidden arm-switch targets", () => {
+		const parsed = parseAudioMappings([
+			{
+				source: "energy",
+				target: "audioTransientAutomation",
+				mode: "continuous",
+			},
+			{
+				source: "pulse",
+				target: "audioControlMode",
+				mode: "threshold",
+				level: 0.5,
+			},
+			{
+				source: "energy",
+				target: "intensity",
+				mode: "continuous",
+			},
+		]);
+		expect(parsed).toHaveLength(1);
+		expect(parsed[0]?.target).toBe("intensity");
+	});
+
 	test("non-array input yields empty mappings", () => {
 		expect(parseAudioMappings(null)).toEqual([]);
 		expect(parseAudioMappings({})).toEqual([]);

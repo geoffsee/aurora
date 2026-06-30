@@ -1,4 +1,4 @@
-# bevy-osc
+# aurora
 
 Browser/WebAssembly Bevy app for live Video DJ performance. The first show build favors dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.
 
@@ -124,7 +124,7 @@ lives in `clock-arbiter.ts`.
 
 ## Ableton MIDI Control Surface Bridge
 
-The repo includes a VST3 audio effect plugin at `plugins/bevyosc-vst`. Add it to an Ableton track, then use Ableton MIDI Map mode to map your MIDI controller knobs/buttons to the plugin parameters. The plugin sends parameter changes to the Bun bridge over local OSC on `VST_CONTROL_RECV_PORT` (`12000` by default), and the bridge rebroadcasts them to the controls page and projector.
+The repo includes a VST3 audio effect plugin at `plugins/aurora-vst`. Add it to an Ableton track, then use Ableton MIDI Map mode to map your MIDI controller knobs/buttons to the plugin parameters. The plugin sends parameter changes to the Bun bridge over local OSC on `VST_CONTROL_RECV_PORT` (`12000` by default), and the bridge rebroadcasts them to the controls page and projector.
 
 Build and install the plugin on macOS:
 
@@ -133,7 +133,7 @@ bun run build:vst
 bun run install:vst:mac
 ```
 
-After installing, rescan plugins in Ableton and load `bevyosc VJ Bridge` as a VST3 audio effect. Start the VJ bridge with:
+After installing, rescan plugins in Ableton and load `aurora VJ Bridge` as a VST3 audio effect. Start the VJ bridge with:
 
 ```bash
 bun run build:web
@@ -154,7 +154,7 @@ The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, t
 - `bridge/index.ts` – Bun server hosting the projector page, the controls page, and the OSC/WebSocket bridge.
 - `web/index.html` / `web/styles.css` – projector output (port `3000`).
 - `web/controls.html` / `web/controls.css` – controls app (port `3001`).
-- `plugins/bevyosc-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.
+- `plugins/aurora-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.
 - `assets/` – fonts, images, and reserved shaders.
 
 ## Notes

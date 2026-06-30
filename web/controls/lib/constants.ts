@@ -9,6 +9,12 @@ export const VISUAL_MODES = [
 	"Orbit",
 	"Pulse",
 	"Spiral",
+	"Ripple",
+	"Shatter",
+	"Flux",
+	"Lattice",
+	"Drift",
+	"Storm",
 ] as const;
 
 export const SHADER_OPTIONS = [
@@ -22,6 +28,12 @@ export const SHADER_OPTIONS = [
 	"Fluid (Ambient)",
 	"Truchet (Geometric)",
 	"Imported (Shadertoy)",
+	"Bass Reactor",
+	"High Spark Field",
+	"Kick Rings",
+	"Laser Lattice",
+	"Strobe Shards",
+	"Vortex Bloom",
 ] as const;
 
 export const CUE_NAMES = [
@@ -39,10 +51,10 @@ export const CLOCK_LABELS: Record<string, string> = {
 	internal: "Internal",
 };
 
-export const PRESETS_KEY = "bevyosc.presets";
-export const SESSION_STATE_KEY = "bevyosc.control-session";
-export const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
-export const AUTOMATION_TRIGGERS_KEY = "bevyosc.automation-triggers";
+export const PRESETS_KEY = "aurora.presets";
+export const SESSION_STATE_KEY = "aurora.control-session";
+export const MIDI_CC_BINDINGS_KEY = "aurora.midi-cc-bindings";
+export const AUTOMATION_TRIGGERS_KEY = "aurora.automation-triggers";
 
 export const MIDI_CC_PARAM_LABELS: Record<string, string> = {
 	crossfade: "Crossfade",

@@ -56,8 +56,8 @@ jobs:
           cp web/index.html web/controls.html web/styles.css web/controls.css dist/
           cp -r assets dist/
           # In dev, the Bun server serves web/ plus the root dist/pkg bundle so the HTML imports
-          # `./dist/pkg/bevyosc.js`. In the Pages bundle, HTML and WASM sit
-          # together, so the WASM lives at `./pkg/bevyosc.js`.
+          # `./dist/pkg/aurora.js`. In the Pages bundle, HTML and WASM sit
+          # together, so the WASM lives at `./pkg/aurora.js`.
           sed -i 's|./dist/pkg/|./pkg/|g' dist/index.html
           touch dist/.nojekyll
 

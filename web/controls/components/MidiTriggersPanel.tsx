@@ -196,14 +196,19 @@ export function MidiCcPanel() {
 }
 
 export function TriggersPanel() {
-	const { triggerBindings, addTriggerBinding, removeTriggerBinding } =
-		useControls();
+	const {
+		state,
+		updateState,
+		triggerBindings,
+		addTriggerBinding,
+		removeTriggerBinding,
+	} = useControls();
 	const [type, setType] = useState<TriggerBinding["type"]>("midi-note");
 	const [note, setNote] = useState(60);
 	const [cc, setCc] = useState(64);
 	const [threshold, setThreshold] = useState(64);
 	const [channel, setChannel] = useState(0);
-	const [oscAddress, setOscAddress] = useState("/bevyosc/automation/play");
+	const [oscAddress, setOscAddress] = useState("/aurora/automation/play");
 	const [action, setAction] = useState("toggle");
 
 	const submit = () => {
@@ -234,12 +239,26 @@ export function TriggersPanel() {
 			<SectionTitle
 				title="Playback Triggers"
 				badge={
-					<StatusPill state="info">
-						{triggerBindings.length} trigger
-						{triggerBindings.length !== 1 ? "s" : ""}
+					<StatusPill state={state.audioTransientAutomation ? "live" : "info"}>
+						{state.audioTransientAutomation ? "Audio armed" : `${triggerBindings.length} trigger${triggerBindings.length !== 1 ? "s" : ""}`}
 					</StatusPill>
 				}
 			/>
+			<Flex gap={2} wrap="wrap" mb={3}>
+				<Button
+					size="lg"
+					variant={state.audioTransientAutomation ? "solid" : "surface"}
+					colorPalette="orange"
+					aria-pressed={state.audioTransientAutomation}
+					onClick={() =>
+						updateState({
+							audioTransientAutomation: !state.audioTransientAutomation,
+						})
+					}
+				>
+					Audio Trigger
+				</Button>
+			</Flex>
 			<Box aria-label="Trigger bindings list" mb={3}>
 				{!triggerBindings.length ? (
 					<Text color="whiteAlpha.700">

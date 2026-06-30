@@ -465,6 +465,7 @@ describe("schema migration preserves bundling intent", () => {
 		expect(migrated.activeShader).toBe(1);
 		expect(migrated.morph).toBe(0);
 		expect(migrated.audioControlMode).toBe(false);
+		expect(migrated.audioTransientAutomation).toBe(false);
 	});
 });
 

@@ -72,7 +72,7 @@ describe("buildRecording", () => {
 		expect(rec.frames[0]!.diff).toEqual({ crossfade: 0.3 });
 	});
 
-	test("RECORDING_EXCLUDED_FIELDS contains the six volatile keys", () => {
+	test("RECORDING_EXCLUDED_FIELDS contains volatile and arm-switch keys", () => {
 		for (const key of [
 			"schemaVersion",
 			"replaying",
@@ -80,6 +80,8 @@ describe("buildRecording", () => {
 			"resetVersion",
 			"cueVersion",
 			"strobeLockout",
+			"audioControlMode",
+			"audioTransientAutomation",
 		]) {
 			expect(RECORDING_EXCLUDED_FIELDS.has(key)).toBe(true);
 		}

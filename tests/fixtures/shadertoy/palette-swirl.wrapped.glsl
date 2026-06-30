@@ -38,16 +38,16 @@ const int iChannel1 = 1;
 const int iChannel2 = 2;
 const int iChannel3 = 3;
 
-vec4 _bevyosc_channel(int ch) {
+vec4 _aurora_channel(int ch) {
   if (ch == 0) return vec4(audio_uniforms.y, audio_uniforms.z, audio_uniforms.w, audio_uniforms.x);
   return vec4(0.0);
 }
 
-#define texture(ch, uv)            _bevyosc_channel(ch)
-#define texelFetch(ch, p, lod)     _bevyosc_channel(ch)
-#define textureLod(ch, uv, lod)    _bevyosc_channel(ch)
-#define texture2D(ch, uv)          _bevyosc_channel(ch)
-#define textureGrad(ch, uv, dx, dy) _bevyosc_channel(ch)
+#define texture(ch, uv)            _aurora_channel(ch)
+#define texelFetch(ch, p, lod)     _aurora_channel(ch)
+#define textureLod(ch, uv, lod)    _aurora_channel(ch)
+#define texture2D(ch, uv)          _aurora_channel(ch)
+#define textureGrad(ch, uv, dx, dy) _aurora_channel(ch)
 
 // === SHADERTOY USER CODE ===
 // Real Shadertoy Image-pass source, exactly as the Shadertoy API returns the
@@ -72,9 +72,9 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 // === END USER CODE ===
 
 
-layout(location = 0) out vec4 _bevyosc_frag_out;
+layout(location = 0) out vec4 _aurora_frag_out;
 void main() {
   vec4 color;
   mainImage(color, gl_FragCoord.xy);
-  _bevyosc_frag_out = color;
+  _aurora_frag_out = color;
 }
