@@ -7,7 +7,7 @@ import type { AudioFeatures } from "./audio-ema.ts";
 // Pure, DOM-free feature extraction for browser-native microphone capture.
 // The controls page wires `getUserMedia` → AudioContext → AnalyserNode and on
 // each tick hands the AnalyserNode's frequency-domain magnitudes here. The
-// resulting AudioFeatures are sent over the WS as `/bevyosc/audio/features`,
+// resulting AudioFeatures are sent over the WS as `/aurora/audio/features`,
 // feeding the same Phase-1 router contract (audio-control-router.ts) that the
 // demo loop and live AbletonOSC path already use.
 //

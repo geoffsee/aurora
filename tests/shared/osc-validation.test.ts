@@ -31,7 +31,7 @@ describe("validateLiveOscMsg", () => {
 	});
 
 	test("rejects address without /live/ prefix", () => {
-		expect(validateLiveOscMsg({ address: "/bevyosc/something" }, "test")).toBe(
+		expect(validateLiveOscMsg({ address: "/aurora/something" }, "test")).toBe(
 			false,
 		);
 	});
@@ -47,7 +47,7 @@ describe("validateVstOscMsg control branch", () => {
 	test("accepts known control with float arg", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/control/crossfade", args: [floatArg] },
+				{ address: "/aurora/vst/control/crossfade", args: [floatArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -57,7 +57,7 @@ describe("validateVstOscMsg control branch", () => {
 	test("accepts known control with plain number arg", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/control/bpm", args: [120] },
+				{ address: "/aurora/vst/control/bpm", args: [120] },
 				"test",
 				CUE_NAMES,
 			),
@@ -67,7 +67,7 @@ describe("validateVstOscMsg control branch", () => {
 	test("rejects unknown control name", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/control/unknown_param", args: [floatArg] },
+				{ address: "/aurora/vst/control/unknown_param", args: [floatArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -77,7 +77,7 @@ describe("validateVstOscMsg control branch", () => {
 	test("rejects control with zero args", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/control/crossfade", args: [] },
+				{ address: "/aurora/vst/control/crossfade", args: [] },
 				"test",
 				CUE_NAMES,
 			),
@@ -88,7 +88,7 @@ describe("validateVstOscMsg control branch", () => {
 		expect(
 			validateVstOscMsg(
 				{
-					address: "/bevyosc/vst/control/crossfade",
+					address: "/aurora/vst/control/crossfade",
 					args: [floatArg, floatArg],
 				},
 				"test",
@@ -100,7 +100,7 @@ describe("validateVstOscMsg control branch", () => {
 	test("rejects control with non-numeric arg", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/control/crossfade", args: [stringArg] },
+				{ address: "/aurora/vst/control/crossfade", args: [stringArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -114,7 +114,7 @@ describe("validateVstOscMsg trigger branch", () => {
 	test("accepts flash trigger", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/trigger/flash", args: [floatArg] },
+				{ address: "/aurora/vst/trigger/flash", args: [floatArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -124,7 +124,7 @@ describe("validateVstOscMsg trigger branch", () => {
 	test("accepts reset trigger", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/trigger/reset", args: [floatArg] },
+				{ address: "/aurora/vst/trigger/reset", args: [floatArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -134,7 +134,7 @@ describe("validateVstOscMsg trigger branch", () => {
 	test("rejects unknown trigger name", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/trigger/unknown", args: [floatArg] },
+				{ address: "/aurora/vst/trigger/unknown", args: [floatArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -144,7 +144,7 @@ describe("validateVstOscMsg trigger branch", () => {
 	test("rejects trigger with wrong arg count", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/trigger/flash", args: [] },
+				{ address: "/aurora/vst/trigger/flash", args: [] },
 				"test",
 				CUE_NAMES,
 			),
@@ -154,7 +154,7 @@ describe("validateVstOscMsg trigger branch", () => {
 	test("rejects trigger with non-numeric arg", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/trigger/flash", args: [stringArg] },
+				{ address: "/aurora/vst/trigger/flash", args: [stringArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -168,7 +168,7 @@ describe("validateVstOscMsg cue branch", () => {
 	test("accepts known cue with float arg", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/cue/drop", args: [floatArg] },
+				{ address: "/aurora/vst/cue/drop", args: [floatArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -178,7 +178,7 @@ describe("validateVstOscMsg cue branch", () => {
 	test("rejects unknown cue name", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/cue/unknown_cue", args: [floatArg] },
+				{ address: "/aurora/vst/cue/unknown_cue", args: [floatArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -188,7 +188,7 @@ describe("validateVstOscMsg cue branch", () => {
 	test("rejects cue with zero args", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/cue/drop", args: [] },
+				{ address: "/aurora/vst/cue/drop", args: [] },
 				"test",
 				CUE_NAMES,
 			),
@@ -198,7 +198,7 @@ describe("validateVstOscMsg cue branch", () => {
 	test("rejects cue with non-numeric arg", () => {
 		expect(
 			validateVstOscMsg(
-				{ address: "/bevyosc/vst/cue/drop", args: [stringArg] },
+				{ address: "/aurora/vst/cue/drop", args: [stringArg] },
 				"test",
 				CUE_NAMES,
 			),
@@ -211,49 +211,49 @@ describe("validateVstOscMsg cue branch", () => {
 describe("validatePresetOscMsg", () => {
 	test("accepts valid recall address for slot 1", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/preset/recall/1" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/preset/recall/1" }, "test"),
 		).toBe(true);
 	});
 
 	test("accepts valid recall address for slot 6", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/preset/recall/6" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/preset/recall/6" }, "test"),
 		).toBe(true);
 	});
 
 	test("accepts valid save address", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/preset/save/3" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/preset/save/3" }, "test"),
 		).toBe(true);
 	});
 
 	test("rejects slot 0 (below min)", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/preset/recall/0" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/preset/recall/0" }, "test"),
 		).toBe(false);
 	});
 
 	test("rejects slot 7 (above max)", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/preset/save/7" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/preset/save/7" }, "test"),
 		).toBe(false);
 	});
 
 	test("rejects non-integer slot", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/preset/recall/foo" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/preset/recall/foo" }, "test"),
 		).toBe(false);
 	});
 
 	test("rejects fractional slot", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/preset/recall/1.5" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/preset/recall/1.5" }, "test"),
 		).toBe(false);
 	});
 
-	test("rejects unrelated bevyosc address", () => {
+	test("rejects unrelated aurora address", () => {
 		expect(
-			validatePresetOscMsg({ address: "/bevyosc/control/state" }, "test"),
+			validatePresetOscMsg({ address: "/aurora/control/state" }, "test"),
 		).toBe(false);
 	});
 
@@ -313,7 +313,7 @@ describe("validatePresetMorphOscMsg", () => {
 	test("rejects wrong address", () => {
 		expect(
 			validatePresetMorphOscMsg(
-				{ address: "/bevyosc/preset/recall/1", args: ["warmup", "drop", 0.5] },
+				{ address: "/aurora/preset/recall/1", args: ["warmup", "drop", 0.5] },
 				"test",
 				CUE_NAMES,
 			),

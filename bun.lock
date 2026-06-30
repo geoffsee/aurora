@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bevyosc",
+      "name": "aurora",
       "dependencies": {
         "@chakra-ui/react": "^3.36.0",
         "@emotion/react": "^11.14.0",

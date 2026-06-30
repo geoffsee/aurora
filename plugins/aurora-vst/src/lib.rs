@@ -4,15 +4,15 @@ use nih_plug::prelude::*;
 use rosc::{encoder, OscMessage, OscPacket, OscType};
 
 const DEFAULT_TARGET: &str = "127.0.0.1:12000";
-struct BevyoscVst {
-    params: Arc<BevyoscParams>,
+struct AuroraVst {
+    params: Arc<AuroraParams>,
     sender: OscSender,
     cache: ParameterCache,
     sent_initial_state: bool,
 }
 
 #[derive(Params)]
-struct BevyoscParams {
+struct AuroraParams {
     #[id = "crossfade"]
     crossfade: FloatParam,
     #[id = "bpm"]
@@ -129,9 +129,9 @@ struct OscSender {
     target: String,
 }
 
-impl Default for BevyoscVst {
+impl Default for AuroraVst {
     fn default() -> Self {
-        let params = Arc::new(BevyoscParams::default());
+        let params = Arc::new(AuroraParams::default());
 
         Self {
             cache: ParameterCache::from_params(&params),
@@ -142,7 +142,7 @@ impl Default for BevyoscVst {
     }
 }
 
-impl Default for BevyoscParams {
+impl Default for AuroraParams {
     fn default() -> Self {
         Self {
             crossfade: float_param("Crossfade", 0.5, 0.0, 1.0),
@@ -184,9 +184,9 @@ impl Default for BevyoscParams {
     }
 }
 
-impl Plugin for BevyoscVst {
-    const NAME: &'static str = "bevyosc VJ Bridge";
-    const VENDOR: &'static str = "bevyosc";
+impl Plugin for AuroraVst {
+    const NAME: &'static str = "aurora VJ Bridge";
+    const VENDOR: &'static str = "aurora";
     const URL: &'static str = "https://localhost";
     const EMAIL: &'static str = "vj@localhost";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -230,13 +230,13 @@ impl Plugin for BevyoscVst {
     }
 }
 
-impl Vst3Plugin for BevyoscVst {
-    const VST3_CLASS_ID: [u8; 16] = *b"BevyoscVJBridge!";
+impl Vst3Plugin for AuroraVst {
+    const VST3_CLASS_ID: [u8; 16] = *b"AuroraVJBridge!!";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
         &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
-impl BevyoscVst {
+impl AuroraVst {
     fn send_full_state(&self, next: ParameterCache) {
         self.sender.send_f32("crossfade", next.crossfade);
         self.sender.send_f32("bpm", next.bpm);
@@ -388,7 +388,7 @@ impl BevyoscVst {
 }
 
 impl ParameterCache {
-    fn from_params(params: &BevyoscParams) -> Self {
+    fn from_params(params: &AuroraParams) -> Self {
         Self {
             crossfade: params.crossfade.value(),
             bpm: params.bpm.value(),
@@ -432,7 +432,7 @@ impl ParameterCache {
 impl OscSender {
     fn new() -> Self {
         let target =
-            std::env::var("BEVYOSC_VST_TARGET").unwrap_or_else(|_| DEFAULT_TARGET.to_string());
+            std::env::var("AURORA_VST_TARGET").unwrap_or_else(|_| DEFAULT_TARGET.to_string());
         let socket = UdpSocket::bind("127.0.0.1:0").ok();
         if let Some(socket) = &socket {
             let _ = socket.set_nonblocking(true);
@@ -443,28 +443,28 @@ impl OscSender {
 
     fn send_f32(&self, name: &str, value: f32) {
         self.send(
-            &format!("/bevyosc/vst/control/{name}"),
+            &format!("/aurora/vst/control/{name}"),
             OscType::Float(value),
         );
     }
 
     fn send_i32(&self, name: &str, value: i32) {
-        self.send(&format!("/bevyosc/vst/control/{name}"), OscType::Int(value));
+        self.send(&format!("/aurora/vst/control/{name}"), OscType::Int(value));
     }
 
     fn send_bool(&self, name: &str, value: bool) {
         self.send(
-            &format!("/bevyosc/vst/control/{name}"),
+            &format!("/aurora/vst/control/{name}"),
             OscType::Int(if value { 1 } else { 0 }),
         );
     }
 
     fn send_trigger(&self, name: &str) {
-        self.send(&format!("/bevyosc/vst/trigger/{name}"), OscType::Int(1));
+        self.send(&format!("/aurora/vst/trigger/{name}"), OscType::Int(1));
     }
 
     fn send_cue(&self, name: &str) {
-        self.send(&format!("/bevyosc/vst/cue/{name}"), OscType::Int(1));
+        self.send(&format!("/aurora/vst/cue/{name}"), OscType::Int(1));
     }
 
     fn send(&self, address: &str, arg: OscType) {
@@ -499,4 +499,4 @@ fn rising_edge(previous: f32, next: f32) -> bool {
     previous <= 0.5 && next > 0.5
 }
 
-nih_export_vst3!(BevyoscVst);
+nih_export_vst3!(AuroraVst);

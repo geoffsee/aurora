@@ -12,7 +12,7 @@ set -euo pipefail
 log() { printf '\n\033[1;36m[test-rust] %s\033[0m\n' "$*"; }
 
 # ---------------------------------------------------------------------------
-# xtask (plugins/bevyosc-vst/xtask)
+# xtask (plugins/aurora-vst/xtask)
 #
 # Pure-Rust bundler used by `bun run build:vst`. No external system deps,
 # so it builds and tests cleanly on any host that has the Rust toolchain.
@@ -21,7 +21,7 @@ log "cargo test -p xtask"
 cargo test -p xtask --verbose
 
 # ---------------------------------------------------------------------------
-# bevyosc (root crate)
+# aurora (root crate)
 #
 # Skipped: the crate targets `wasm32-unknown-unknown` and pulls in Bevy
 # with `bevy_winit` + `webgpu`. A native `cargo test` build would try to
@@ -30,11 +30,11 @@ cargo test -p xtask --verbose
 # build is verified separately by `bun run check:wasm` and the deploy/CI
 # workflows.
 # ---------------------------------------------------------------------------
-log "skipping bevyosc native tests (wasm-only crate)"
-# cargo test -p bevyosc --verbose
+log "skipping aurora native tests (wasm-only crate)"
+# cargo test -p aurora --verbose
 
 # ---------------------------------------------------------------------------
-# bevyosc-vst (plugins/bevyosc-vst)
+# aurora-vst (plugins/aurora-vst)
 #
 # Skipped: the plugin is a `cdylib` built on top of nih-plug, which links
 # against host audio/MIDI system libraries (alsa, xcb, ...) that are not
@@ -42,5 +42,5 @@ log "skipping bevyosc native tests (wasm-only crate)"
 # behavior is exercised manually via `bun run build:vst` +
 # `bun run install:vst:mac` on a workstation with the required libraries.
 # ---------------------------------------------------------------------------
-log "skipping bevyosc-vst tests (host audio/MIDI libs not provisioned)"
-# cargo test -p bevyosc-vst --verbose
+log "skipping aurora-vst tests (host audio/MIDI libs not provisioned)"
+# cargo test -p aurora-vst --verbose

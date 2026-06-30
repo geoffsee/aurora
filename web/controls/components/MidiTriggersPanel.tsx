@@ -208,7 +208,7 @@ export function TriggersPanel() {
 	const [cc, setCc] = useState(64);
 	const [threshold, setThreshold] = useState(64);
 	const [channel, setChannel] = useState(0);
-	const [oscAddress, setOscAddress] = useState("/bevyosc/automation/play");
+	const [oscAddress, setOscAddress] = useState("/aurora/automation/play");
 	const [action, setAction] = useState("toggle");
 
 	const submit = () => {

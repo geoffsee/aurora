@@ -36,7 +36,7 @@ function addBanner(
 }
 
 function applyFrame(container: Element, frame: Record<string, unknown> | null) {
-	if (frame?.address === "/bevyosc/error" && frame.error) {
+	if (frame?.address === "/aurora/error" && frame.error) {
 		addBanner(container, String(frame.error));
 	}
 }
@@ -56,10 +56,10 @@ test("addBanner caps at 10 and evicts the oldest", () => {
 	).toBe("Error 1");
 });
 
-test("applyFrame shows banner for /bevyosc/error frames", () => {
+test("applyFrame shows banner for /aurora/error frames", () => {
 	const container = makeContainer();
 	applyFrame(container, {
-		address: "/bevyosc/error",
+		address: "/aurora/error",
 		error: "something broke",
 		args: [],
 	});
@@ -68,7 +68,7 @@ test("applyFrame shows banner for /bevyosc/error frames", () => {
 		"something broke",
 	);
 	// unrelated frame must not add a banner
-	applyFrame(container, { address: "/bevyosc/control/state", args: [] });
+	applyFrame(container, { address: "/aurora/control/state", args: [] });
 	expect(container.querySelectorAll(".error-banner").length).toBe(1);
 });
 

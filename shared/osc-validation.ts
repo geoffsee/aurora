@@ -78,13 +78,13 @@ export const validateControlStateVersion = (
 	return true;
 };
 
-export const VST_CONTROL_PREFIX = "/bevyosc/vst/control/";
-export const VST_TRIGGER_PREFIX = "/bevyosc/vst/trigger/";
-export const VST_CUE_PREFIX = "/bevyosc/vst/cue/";
+export const VST_CONTROL_PREFIX = "/aurora/vst/control/";
+export const VST_TRIGGER_PREFIX = "/aurora/vst/trigger/";
+export const VST_CUE_PREFIX = "/aurora/vst/cue/";
 
-export const PRESET_SAVE_PREFIX = "/bevyosc/preset/save/";
-export const PRESET_RECALL_PREFIX = "/bevyosc/preset/recall/";
-export const PRESET_MORPH_ADDRESS = "/bevyosc/preset/morph";
+export const PRESET_SAVE_PREFIX = "/aurora/preset/save/";
+export const PRESET_RECALL_PREFIX = "/aurora/preset/recall/";
+export const PRESET_MORPH_ADDRESS = "/aurora/preset/morph";
 export const PRESET_SLOT_MIN = 1;
 export const PRESET_SLOT_MAX = 6;
 
@@ -152,7 +152,7 @@ export const validatePresetOscMsg = (msg: OscMsg, origin: string): boolean => {
 	return true;
 };
 
-// /bevyosc/preset/morph <from:s> <to:s> <position:f> [curve:s]
+// /aurora/preset/morph <from:s> <to:s> <position:f> [curve:s]
 // from/to must be known cue names; position is the morph fader value. The
 // optional curve string is validated leniently — an unknown value falls back to
 // linear in the handler rather than rejecting the whole message.

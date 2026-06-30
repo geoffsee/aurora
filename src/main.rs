@@ -15,104 +15,104 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 unsafe extern "C" {
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscConnected)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscConnected)]
     fn browser_osc_connected() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscPlaying)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscPlaying)]
     fn browser_osc_playing() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscTempo)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscTempo)]
     fn browser_osc_tempo() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscEnergy)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscEnergy)]
     fn browser_osc_energy() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscDeckA)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscDeckA)]
     fn browser_osc_deck_a() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscDeckB)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscDeckB)]
     fn browser_osc_deck_b() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscBass)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscBass)]
     fn browser_osc_bass() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscMid)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscMid)]
     fn browser_osc_mid() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscHigh)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscHigh)]
     fn browser_osc_high() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscOscPulse)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraOscPulse)]
     fn browser_osc_pulse() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlConnected)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlConnected)]
     fn browser_control_connected() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCrossfade)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCrossfade)]
     fn browser_control_crossfade() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlBpm)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlBpm)]
     fn browser_control_bpm() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlSpeed)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlSpeed)]
     fn browser_control_speed() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlIntensity)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlIntensity)]
     fn browser_control_intensity() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlFeedback)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFeedback)]
     fn browser_control_feedback() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlDepth)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDepth)]
     fn browser_control_depth() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPalette)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPalette)]
     fn browser_control_palette() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteR)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteR)]
     fn browser_control_palette_r() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteG)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteG)]
     fn browser_control_palette_g() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteB)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteB)]
     fn browser_control_palette_b() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlDeckAMode)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckAMode)]
     fn browser_control_deck_a_mode() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlDeckBMode)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBMode)]
     fn browser_control_deck_b_mode() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlRings)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlRings)]
     fn browser_control_rings() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlRingOpacity)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlRingOpacity)]
     fn browser_control_ring_opacity() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlStrobe)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlStrobe)]
     fn browser_control_strobe() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlStrobeLockout)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlStrobeLockout)]
     fn browser_control_strobe_lockout() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlBlackout)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlBlackout)]
     fn browser_control_blackout() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlFreeze)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFreeze)]
     fn browser_control_freeze() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlShowGpuPalette)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlShowGpuPalette)]
     fn browser_control_show_gpu_palette() -> bool;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlMaxBrightness)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlMaxBrightness)]
     fn browser_control_max_brightness() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlFlashVersion)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFlashVersion)]
     fn browser_control_flash_version() -> u32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlResetVersion)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlResetVersion)]
     fn browser_control_reset_version() -> u32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCueVersion)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueVersion)]
     fn browser_control_cue_version() -> u32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCueIntensity)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueIntensity)]
     fn browser_control_cue_intensity() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCuePalette)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCuePalette)]
     fn browser_control_cue_palette() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCueCrossfade)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueCrossfade)]
     fn browser_control_cue_crossfade() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCueDeckAMode)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueDeckAMode)]
     fn browser_control_cue_deck_a_mode() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlCueDeckBMode)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueDeckBMode)]
     fn browser_control_cue_deck_b_mode() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteSaturation)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteSaturation)]
     fn browser_control_palette_saturation() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlPaletteBrightness)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteBrightness)]
     fn browser_control_palette_brightness() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridDensity)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlGridDensity)]
     fn browser_control_grid_density() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridDiamond)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlGridDiamond)]
     fn browser_control_grid_diamond() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridLineWidth)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlGridLineWidth)]
     fn browser_control_grid_line_width() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlGridShapeMix)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlGridShapeMix)]
     fn browser_control_grid_shape_mix() -> f32;
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscControlActiveShader)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlActiveShader)]
     fn browser_control_active_shader() -> u32;
     /// Returns and consumes the pending imported-shader WGSL string, if any.
-    /// JS-side global `window.__bevyoscTakePendingImportedShader()` returns the
+    /// JS-side global `window.__auroraTakePendingImportedShader()` returns the
     /// WGSL source from the most recent /api/shadertoy/import response, or null.
     /// Calling it clears the JS-side slot so the same shader is not re-applied
     /// on subsequent frames.
-    #[wasm_bindgen(js_namespace = window, js_name = __bevyoscTakePendingImportedShader)]
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraTakePendingImportedShader)]
     fn browser_take_pending_imported_shader() -> Option<String>;
 }
 
@@ -239,7 +239,7 @@ fn main() {
         .insert_resource(VjState::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "bevyosc VJ".into(),
+                title: "aurora VJ".into(),
                 canvas: Some("#bevy-canvas".into()),
                 resolution: WindowResolution::new(1280, 720).with_scale_factor_override(1.0),
                 fit_canvas_to_parent: true,
