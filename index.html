@@ -15,6 +15,13 @@
 
     <script type="module">
       const boot = document.querySelector("#boot");
+      // Multi-output routing: a window opened with ?output=<id> renders the route
+      // matching that id from ControlState.outputs. No param (or an unconfigured
+      // id) falls back to "main" and renders the shared state unchanged.
+      const OUTPUT_ID = (() => {
+        const id = new URLSearchParams(location.search).get("output");
+        return id && /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(id) ? id : "main";
+      })();
       const OSC = {
         TEMPO: "/live/song/get/tempo",
         IS_PLAYING: "/live/song/get/is_playing",
@@ -319,6 +326,26 @@
             midTrack: clampInt(next.trackMapping.midTrack, 0, 31, controlState.trackMapping.midTrack),
             highTrack: clampInt(next.trackMapping.highTrack, 0, 31, controlState.trackMapping.highTrack),
           };
+        }
+        applyOutputRoute(next.outputs);
+      }
+
+      // Override the shared control state with this window's per-output route.
+      // outputs arrive already normalized from the bridge (coerceControlState →
+      // normalizeOutputRoutes); a null override means "inherit". A disabled output
+      // is blacked out. Mirrors resolveOutputView in output-routing.ts.
+      function applyOutputRoute(outputs) {
+        if (!Array.isArray(outputs)) return;
+        const route = outputs.find((o) => o && o.id === OUTPUT_ID);
+        if (!route) return;
+        if (route.enabled === false) {
+          controlState.blackout = true;
+          return;
+        }
+        if (typeof route.crossfade === "number") controlState.crossfade = clamp01(route.crossfade);
+        if (typeof route.palette === "number") controlState.palette = clamp01(route.palette);
+        if (typeof route.activeShader === "number") {
+          controlState.activeShader = clampInt(route.activeShader, 0, 9, controlState.activeShader);
         }
       }
 

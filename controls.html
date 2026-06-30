@@ -320,6 +320,21 @@
         </details>
       </section>
 
+      <section class="panel s-outputs" aria-label="Multi-Output Routing">
+        <div class="section-title">
+          <h2>Multi-Output Routing</h2>
+          <span id="outputs-status" class="badge">1 output</span>
+        </div>
+        <p class="outputs-hint">
+          Open one projector window per output. <code>main</code> renders the shared show; add outputs to route a different crossfade, colour, or shader to each projector.
+        </p>
+        <div id="outputs-list" class="outputs-list" aria-label="Configured outputs"></div>
+        <div class="outputs-actions">
+          <button id="output-add-btn">Add Output</button>
+          <button id="output-open-main">Open main ↗</button>
+        </div>
+      </section>
+
       <section class="panel s-audio-curves" aria-label="Audio Curve Shaping">
         <div class="section-title">
           <h2>Audio Curve Shaping</h2>
@@ -410,7 +425,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 6, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 7, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -460,6 +475,7 @@
         emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.22, pulse: 0.28 },
         morph: 0,
         audioControlMode: false,
+        outputs: [],
       });
       const state = defaultState();
       const osc = {
@@ -1394,6 +1410,7 @@
           const out = $(`#ema-${band}-value`);
           if (out) out.textContent = (state.emaAlphas?.[band] ?? 0.15).toFixed(2);
         }
+        renderOutputs();
       }
 
       function render() {
@@ -1711,11 +1728,182 @@
         transitionDurationMs = Math.max(0, Math.min(10000, Number(event.target.value) || 0));
       });
 
+      // ---------------------------------------------------------------------------
+      // Multi-output routing (multi-projector venues). Outputs live in
+      // state.outputs and round-trip through the bridge, which normalizes them via
+      // normalizeOutputRoutes. Each row maps to a projector window opened with
+      // ?output=<id>. A null override field means "inherit the shared state".
+      // ---------------------------------------------------------------------------
+      const OUTPUT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/; // mirror output-routing.ts
+      const MAX_OUTPUTS = 8; // mirror MAX_OUTPUTS in output-routing.ts
+
+      function projectorUrl(id) {
+        const port = diagnostics.visualPort || 3000;
+        const query = id && id !== "main" ? `?output=${encodeURIComponent(id)}` : "";
+        return `${location.protocol}//${location.hostname}:${port}/${query}`;
+      }
+
+      function openOutputWindow(id) {
+        window.open(projectorUrl(id), `bevyosc-output-${id}`, "noopener");
+      }
+
+      function publishOutputs() {
+        syncInputs();
+        publish();
+      }
+
+      function buildOverride(index, key, label, min, max, step) {
+        const route = state.outputs[index];
+        const active = typeof route[key] === "number";
+        const wrap = document.createElement("label");
+        wrap.className = "output-override";
+
+        const toggle = document.createElement("input");
+        toggle.type = "checkbox";
+        toggle.checked = active;
+        toggle.setAttribute("aria-label", `Override ${label}`);
+
+        const text = document.createElement("span");
+        text.textContent = label;
+
+        const num = document.createElement("input");
+        num.type = "number";
+        num.min = String(min);
+        num.max = String(max);
+        num.step = String(step);
+        num.disabled = !active;
+        num.value = active ? String(route[key]) : "";
+
+        toggle.addEventListener("change", () => {
+          const fallback = key === "activeShader" ? 0 : 0.5;
+          state.outputs[index] = { ...state.outputs[index], [key]: toggle.checked ? fallback : null };
+          publishOutputs();
+        });
+        num.addEventListener("change", () => {
+          const v = Number(num.value);
+          if (!Number.isFinite(v)) return;
+          const clamped = key === "activeShader"
+            ? Math.max(0, Math.min(9, Math.floor(v)))
+            : Math.max(min, Math.min(max, v));
+          state.outputs[index] = { ...state.outputs[index], [key]: clamped };
+          publishOutputs();
+        });
+
+        wrap.append(toggle, text, num);
+        return wrap;
+      }
+
+      function buildOutputRow(route, index) {
+        const row = document.createElement("div");
+        row.className = "output-row";
+
+        const head = document.createElement("div");
+        head.className = "output-row-head";
+
+        const idInput = document.createElement("input");
+        idInput.className = "out-id";
+        idInput.type = "text";
+        idInput.value = route.id;
+        idInput.setAttribute("aria-label", "Output id");
+        idInput.addEventListener("change", () => {
+          const v = idInput.value.trim();
+          const dup = state.outputs.some((o, j) => j !== index && o.id === v);
+          if (!OUTPUT_ID_RE.test(v) || dup) {
+            idInput.value = route.id;
+            return;
+          }
+          state.outputs[index] = { ...state.outputs[index], id: v };
+          publishOutputs();
+        });
+
+        const labelInput = document.createElement("input");
+        labelInput.className = "out-label";
+        labelInput.type = "text";
+        labelInput.value = route.label;
+        labelInput.setAttribute("aria-label", "Output label");
+        labelInput.addEventListener("change", () => {
+          const v = labelInput.value.trim().slice(0, 48) || route.id;
+          state.outputs[index] = { ...state.outputs[index], label: v };
+          publishOutputs();
+        });
+
+        const enabledBtn = document.createElement("button");
+        enabledBtn.className = "out-enabled";
+        const on = route.enabled !== false;
+        enabledBtn.setAttribute("aria-pressed", String(on));
+        enabledBtn.textContent = on ? "On" : "Off";
+        enabledBtn.addEventListener("click", () => {
+          state.outputs[index] = { ...state.outputs[index], enabled: route.enabled === false };
+          publishOutputs();
+        });
+
+        const openBtn = document.createElement("button");
+        openBtn.className = "out-open";
+        openBtn.textContent = "Open ↗";
+        openBtn.addEventListener("click", () => openOutputWindow(route.id));
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "out-remove";
+        removeBtn.setAttribute("aria-label", `Remove output ${route.id}`);
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", () => {
+          state.outputs.splice(index, 1);
+          publishOutputs();
+        });
+
+        head.append(idInput, labelInput, enabledBtn, openBtn, removeBtn);
+
+        const overrides = document.createElement("div");
+        overrides.className = "output-row-overrides";
+        overrides.append(
+          buildOverride(index, "crossfade", "XFade", 0, 1, 0.01),
+          buildOverride(index, "palette", "Color", 0, 1, 0.01),
+          buildOverride(index, "activeShader", "Shader", 0, 9, 1),
+        );
+
+        row.append(head, overrides);
+        return row;
+      }
+
+      function renderOutputs() {
+        const container = $("#outputs-list");
+        if (!container) return;
+        if (!Array.isArray(state.outputs)) state.outputs = [];
+        const outputs = state.outputs;
+        const badge = $("#outputs-status");
+        if (badge) badge.textContent = outputs.length ? `main + ${outputs.length}` : "main only";
+        // Don't rebuild while a field in this panel has focus — it would drop the
+        // caret mid-edit. The committed value re-renders on the next sync.
+        if (container.contains(document.activeElement)) return;
+        container.innerHTML = "";
+        if (!outputs.length) {
+          const empty = document.createElement("p");
+          empty.className = "outputs-empty";
+          empty.textContent = "No extra outputs — only main. Use Add Output for multi-projector venues.";
+          container.appendChild(empty);
+          return;
+        }
+        outputs.forEach((route, index) => container.appendChild(buildOutputRow(route, index)));
+      }
+
+      $("#output-add-btn")?.addEventListener("click", () => {
+        if (!Array.isArray(state.outputs)) state.outputs = [];
+        if (state.outputs.length >= MAX_OUTPUTS) return;
+        const taken = new Set(state.outputs.map((o) => o.id));
+        let n = state.outputs.length + 1;
+        let id = `out${n}`;
+        while (taken.has(id)) { n += 1; id = `out${n}`; }
+        state.outputs.push({ id, label: id, enabled: true, crossfade: null, palette: null, activeShader: null });
+        publishOutputs();
+      });
+      $("#output-open-main")?.addEventListener("click", () => openOutputWindow("main"));
+
       renderPresets();
       renderCurves();
       renderMidiBindings();
       renderMidiStatus();
       renderTriggerBindings();
+      renderOutputs();
       syncInputs();
       setInterval(publish, 500);
       setInterval(render, 500);

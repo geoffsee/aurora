@@ -42,6 +42,7 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "./control-state-schema.ts";
+import { type OutputRoute, normalizeOutputRoutes } from "./output-routing.ts";
 import {
 	type MorphCurve,
 	clampMorphPosition,
@@ -119,6 +120,7 @@ type ControlState = {
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
 	audioControlMode: boolean;
+	outputs: OutputRoute[];
 };
 
 const require = createRequire(import.meta.url);
@@ -328,6 +330,7 @@ const defaultControlState = (): ControlState => ({
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 	morph: 0,
 	audioControlMode: false,
+	outputs: [],
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -552,6 +555,7 @@ const coerceControlState = (state: unknown): ControlState => {
 			};
 		})(),
 		audioControlMode: Boolean(source.audioControlMode),
+		outputs: normalizeOutputRoutes(source.outputs),
 	};
 };
 
@@ -1650,7 +1654,10 @@ setInterval(() => {
 	// Drive the router from the demo feed only when no browser source is active;
 	// otherwise both streams would share the router's edge state and thrash.
 	const routerNowMs = Date.now();
-	if (routerNowMs - lastBrowserAudioFeaturesMs >= BROWSER_AUDIO_FEATURE_TTL_MS) {
+	if (
+		routerNowMs - lastBrowserAudioFeaturesMs >=
+		BROWSER_AUDIO_FEATURE_TTL_MS
+	) {
 		audioControlRouter.onFeatures(smoothed, routerNowMs);
 	}
 	const demo = {

@@ -52,7 +52,16 @@ export const migrateControlState = (state: unknown): unknown => {
 	}
 	// v5 → v6: add audioControlMode field (audio-control router global enable)
 	if (s.schemaVersion === 5) {
-		return { ...s, schemaVersion: 6, audioControlMode: false };
+		return migrateControlState({
+			...s,
+			schemaVersion: 6,
+			audioControlMode: false,
+		});
+	}
+	// v6 → v7: add outputs field (multi-output routing). Empty by default so the
+	// single-projector path stays a no-op.
+	if (s.schemaVersion === 6) {
+		return { ...s, schemaVersion: 7, outputs: [] };
 	}
 	return state;
 };
