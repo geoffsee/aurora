@@ -294,6 +294,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "aurora-vst"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+ "rosc",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1328,22 +1344,6 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "winit",
-]
-
-[[package]]
-name = "bevyosc"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "bevyosc-vst"
-version = "0.1.0"
-dependencies = [
- "nih_plug",
- "rosc",
 ]
 
 [[package]]

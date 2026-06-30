@@ -3,22 +3,36 @@
 		"source": "energy",
 		"target": "intensity",
 		"mode": "continuous",
-		"targetMin": 0.4,
+		"targetMin": 0.45,
 		"targetMax": 1.3
 	},
 	{
-		"source": "mid",
-		"target": "palette",
+		"source": "bass",
+		"target": "depth",
 		"mode": "continuous",
 		"targetMin": 0.1,
-		"targetMax": 0.9
+		"targetMax": 0.85
+	},
+	{
+		"source": "mid",
+		"target": "feedback",
+		"mode": "continuous",
+		"targetMin": 0.15,
+		"targetMax": 0.65
+	},
+	{
+		"source": "high",
+		"target": "paletteBrightness",
+		"mode": "continuous",
+		"targetMin": 0.65,
+		"targetMax": 1
 	},
 	{
 		"source": "pulse",
 		"target": "flashVersion",
 		"mode": "threshold",
-		"level": 0.75,
-		"offDelayMs": 200,
+		"level": 0.8,
+		"offDelayMs": 180,
 		"increment": true
 	}
 ]

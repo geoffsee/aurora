@@ -124,6 +124,7 @@ type ControlState = {
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
 	audioControlMode: boolean;
+	audioTransientAutomation: boolean;
 };
 
 const require = createRequire(import.meta.url);
@@ -351,6 +352,7 @@ const defaultControlState = (): ControlState => ({
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 	morph: 0,
 	audioControlMode: false,
+	audioTransientAutomation: false,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -473,15 +475,15 @@ const coerceControlState = (state: unknown): ControlState => {
 		gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
 		gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
 		gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
-		deckAMode: clampInt(source.deckAMode, 0, 9, defaults.deckAMode),
-		deckBMode: clampInt(source.deckBMode, 0, 9, defaults.deckBMode),
+		deckAMode: clampInt(source.deckAMode, 0, 15, defaults.deckAMode),
+		deckBMode: clampInt(source.deckBMode, 0, 15, defaults.deckBMode),
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
 		strobeLockout: Boolean(source.strobeLockout),
 		blackout: Boolean(source.blackout),
 		freeze: Boolean(source.freeze),
-		maxBrightness: clamp(source.maxBrightness, 0.1, 1, defaults.maxBrightness),
+		maxBrightness: clamp(source.maxBrightness, 0, 1, defaults.maxBrightness),
 		showGpuPalette: source.showGpuPalette === true,
 		beatSync: source.beatSync !== false,
 		barSync: Boolean(source.barSync),
@@ -508,8 +510,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		cueIntensity: clamp(source.cueIntensity, 0, 1, defaults.cueIntensity),
 		cuePalette: clamp(source.cuePalette, 0, 1, defaults.cuePalette),
 		cueCrossfade: clamp(source.cueCrossfade, 0, 1, defaults.cueCrossfade),
-		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 4, defaults.cueDeckAMode),
-		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 4, defaults.cueDeckBMode),
+		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 15, defaults.cueDeckAMode),
+		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 15, defaults.cueDeckBMode),
 		trackMapping: {
 			deckAStart: clampInt(
 				(mapping as Partial<TrackMapping>).deckAStart,
@@ -554,7 +556,7 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 9, defaults.activeShader),
+		activeShader: clampInt(source.activeShader, 0, 15, defaults.activeShader),
 		morph: clamp(source.morph, 0, 1, defaults.morph),
 		bandCurves: (() => {
 			const bc =
@@ -582,10 +584,19 @@ const coerceControlState = (state: unknown): ControlState => {
 			};
 		})(),
 		audioControlMode: Boolean(source.audioControlMode),
+		audioTransientAutomation: Boolean(source.audioTransientAutomation),
 	};
 };
 
 const currentControlState = () => latestControlState ?? defaultControlState();
+
+const maybeFeedAutomationAudio = (
+	features: AudioFeatures,
+	nowMs: number,
+): void => {
+	if (!currentControlState().audioTransientAutomation) return;
+	automationBridge.onAudioFeatures(features, nowMs);
+};
 const mergeControlState = (partial: Partial<ControlState>) => {
 	const current = currentControlState();
 	broadcastControl({
@@ -655,6 +666,9 @@ const automationBridge = makeAutomationBridge(
 // Inert until ControlState.audioControlMode is enabled (synced in
 // broadcastControl) and at least one mapping is loaded. coerceControlState
 // remains the clamp on whatever diffs the router emits.
+//
+// Audio→automation transient detector: inert until ControlState.audioTransientAutomation
+// is enabled (see maybeFeedAutomationAudio).
 const audioControlRouter = makeAudioControlRouter(
 	(diff) => mergeControlState(diff as Partial<ControlState>),
 	() => currentControlState() as unknown as Record<string, unknown>,
@@ -663,7 +677,7 @@ audioControlRouter.setMappings(parseAudioMappings(audioMappingsRaw));
 
 // The router has a single shared edge/continuous state, so only one audio
 // source may drive it at a time. A browser source (Phase 2) sending
-// /bevyosc/audio/features is authoritative while live; the synthetic demo-loop
+// /aurora/audio/features is authoritative while live; the synthetic demo-loop
 // feed is suppressed for this window so the two streams never interleave (which
 // would thrash rising-edge detection and no-op suppression). The demo feed
 // resumes once the browser source goes quiet.
@@ -708,7 +722,7 @@ const sendOsc = (address: string, args: OscArg[] = []) => {
 	udp.send({ address, args });
 };
 
-// Coerce an untrusted /bevyosc/audio/features payload into AudioFeatures.
+// Coerce an untrusted /aurora/audio/features payload into AudioFeatures.
 // Each band clamps to 0..1; missing/non-finite bands fall back to 0.
 const coerceAudioFeatures = (raw: unknown): AudioFeatures => {
 	const f =
@@ -727,7 +741,7 @@ function broadcastBrowserAudioFeatures(features: AudioFeatures, nowMs: number): 
 	// renderer-facing audio lane only while OSC has gone quiet.
 	if (nowMs - latestOscFrameAt < OSC_ACTIVE_TTL_MS) return;
 	const data = JSON.stringify({
-		address: "/bevyosc/audio/features",
+		address: "/aurora/audio/features",
 		args: [features],
 	});
 	sockets.forEach((ws) => ws.send(data));
@@ -769,12 +783,12 @@ function processLiveTrackData(args: unknown[]): void {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 		DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 	);
-	automationBridge.onAudioFeatures(smoothed, Date.now());
+	maybeFeedAutomationAudio(smoothed, Date.now());
 }
 
 // Apply a single transient-config OSC message. firstArg is the raw payload value.
 function applyTransientConfigMsg(address: string, firstArg: unknown): void {
-	const key = address.slice("/bevyosc/automation/transient/".length);
+	const key = address.slice("/aurora/automation/transient/".length);
 	switch (key) {
 		case "threshold":
 			automationBridge.updateTransientConfig({
@@ -861,14 +875,14 @@ const broadcastControl = (state: unknown) => {
 		latestControlState as unknown as Record<string, unknown>,
 	);
 	const data = JSON.stringify({
-		address: "/bevyosc/control/state",
+		address: "/aurora/control/state",
 		args: [latestControlState],
 	});
 	sockets.forEach((ws) => ws.send(data));
 };
 const broadcastError = (description: string) => {
 	const data = JSON.stringify({
-		address: "/bevyosc/error",
+		address: "/aurora/error",
 		error: description,
 		args: [],
 	});
@@ -880,7 +894,7 @@ const broadcastPresetCommand = (address: string) => {
 };
 const broadcastImportedShader = (wgsl: string, meta: unknown) => {
 	const data = JSON.stringify({
-		address: "/bevyosc/shader/imported",
+		address: "/aurora/shader/imported",
 		args: [{ wgsl, meta }],
 	});
 	sockets.forEach((ws) => ws.send(data));
@@ -967,7 +981,7 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				break;
 			case "active_shader":
 				mergeControlState({
-					activeShader: Math.max(0, Math.min(9, Math.floor(value))),
+					activeShader: Math.max(0, Math.min(15, Math.floor(value))),
 				});
 				break;
 			case "palette_saturation":
@@ -1325,14 +1339,14 @@ const visualServer = Bun.serve({
 			sockets.add(ws);
 			ws.send(
 				JSON.stringify({
-					address: "/bevyosc/osc/connected",
+					address: "/aurora/osc/connected",
 					args: [oscReady ? 1 : 0],
 				}),
 			);
 			if (latestControlState) {
 				ws.send(
 					JSON.stringify({
-						address: "/bevyosc/control/state",
+						address: "/aurora/control/state",
 						args: [latestControlState],
 					}),
 				);
@@ -1346,14 +1360,14 @@ const visualServer = Bun.serve({
 				const parsed = JSON.parse(raw.toString()) as Partial<OscMsg> &
 					Record<string, unknown>;
 				if (typeof parsed.address === "string") {
-					if (parsed.address === "/bevyosc/control/state") {
+					if (parsed.address === "/aurora/control/state") {
 						const rawState = migrateControlState(
 							Array.isArray(parsed.args) ? parsed.args[0] : null,
 						);
 						if (!validateControlStateVersion(rawState, "WebSocket client")) {
 							ws.send(
 								JSON.stringify({
-									address: "/bevyosc/error",
+									address: "/aurora/error",
 									error: `control_state_rejected: schema version mismatch (got ${(rawState as Record<string, unknown>)?.schemaVersion ?? null}, expected ${CONTROL_STATE_SCHEMA_VERSION})`,
 								}),
 							);
@@ -1361,7 +1375,7 @@ const visualServer = Bun.serve({
 						}
 						broadcastControl(rawState);
 					} else if (
-						parsed.address === "/bevyosc/error" &&
+						parsed.address === "/aurora/error" &&
 						typeof parsed.error === "string"
 					) {
 						broadcastError(parsed.error);
@@ -1373,20 +1387,20 @@ const visualServer = Bun.serve({
 						if (validatePresetMorphOscMsg(morphMsg, "WS client", cueNames)) {
 							applyPresetMorph(morphMsg);
 						}
-					} else if (parsed.address.startsWith("/bevyosc/preset/")) {
+					} else if (parsed.address.startsWith("/aurora/preset/")) {
 						if (
 							validatePresetOscMsg({ address: parsed.address }, "WS client")
 						) {
 							broadcastPresetCommand(parsed.address);
 						}
-					} else if (parsed.address === "/bevyosc/ping") {
+					} else if (parsed.address === "/aurora/ping") {
 						ws.send(
 							JSON.stringify({
-								address: "/bevyosc/pong",
+								address: "/aurora/pong",
 								id: typeof parsed.id === "number" ? parsed.id : 0,
 							}),
 						);
-					} else if (parsed.address === "/bevyosc/audio/features") {
+					} else if (parsed.address === "/aurora/audio/features") {
 						// Browser audio features fed back to the bridge. The router ignores
 						// these unless ControlState.audioControlMode is enabled. While this
 						// feed is live it is the authoritative router source and suppresses
@@ -1406,16 +1420,16 @@ const visualServer = Bun.serve({
 							DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 						);
 						audioControlRouter.onFeatures(smoothedBrowser, nowMs);
-						automationBridge.onAudioFeatures(smoothedBrowser, nowMs);
+						maybeFeedAutomationAudio(smoothedBrowser, nowMs);
 						broadcastBrowserAudioFeatures(smoothedBrowser, nowMs);
 					} else if (
-						parsed.address.startsWith("/bevyosc/automation/transient/")
+						parsed.address.startsWith("/aurora/automation/transient/")
 					) {
 						applyTransientConfigMsg(
 							parsed.address,
 							Array.isArray(parsed.args) ? parsed.args[0] : undefined,
 						);
-					} else if (parsed.address.startsWith("/bevyosc/automation/")) {
+					} else if (parsed.address.startsWith("/aurora/automation/")) {
 						automationBridge.onOscAddress(parsed.address);
 					} else {
 						sendOsc(
@@ -1588,7 +1602,7 @@ udp.on("ready", () => {
 		}
 	}, 50);
 
-	const data = JSON.stringify({ address: "/bevyosc/osc/connected", args: [1] });
+	const data = JSON.stringify({ address: "/aurora/osc/connected", args: [1] });
 	sockets.forEach((ws) => ws.send(data));
 });
 
@@ -1626,17 +1640,17 @@ vstControlUdp.on("message", (msg: OscMsg) => {
 		}
 		return;
 	}
-	if (msg.address.startsWith("/bevyosc/preset/")) {
+	if (msg.address.startsWith("/aurora/preset/")) {
 		if (validatePresetOscMsg(msg, `VST :${vstControlRecvPort}`)) {
 			broadcastPresetCommand(msg.address);
 		}
 		return;
 	}
-	if (msg.address.startsWith("/bevyosc/automation/transient/")) {
+	if (msg.address.startsWith("/aurora/automation/transient/")) {
 		applyTransientConfigMsg(msg.address, valueOf(msg.args?.[0]));
 		return;
 	}
-	if (msg.address.startsWith("/bevyosc/automation/")) {
+	if (msg.address.startsWith("/aurora/automation/")) {
 		automationBridge.onOscAddress(msg.address);
 		return;
 	}
@@ -1676,7 +1690,7 @@ setInterval(() => {
 		mappedTracks: latestControlState?.trackMapping ?? defaultTrackMapping(),
 	};
 	const data = JSON.stringify({
-		address: "/bevyosc/server/diagnostics",
+		address: "/aurora/server/diagnostics",
 		args: [diagnostics],
 	});
 	sockets.forEach((ws) => ws.send(data));
@@ -1703,7 +1717,7 @@ setInterval(() => {
 		latestControlState?.emaAlphas ?? audioEmaAlphas,
 		DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
 	);
-	automationBridge.onAudioFeatures(smoothed, Date.now());
+	maybeFeedAutomationAudio(smoothed, Date.now());
 	// Drive the router from the demo feed only when no browser source is active;
 	// otherwise both streams would share the router's edge state and thrash.
 	const routerNowMs = Date.now();
@@ -1721,12 +1735,12 @@ setInterval(() => {
 		high: smoothed.high,
 		pulse: smoothed.pulse,
 	};
-	const data = JSON.stringify({ address: "/bevyosc/demo/audio", args: [demo] });
+	const data = JSON.stringify({ address: "/aurora/demo/audio", args: [demo] });
 	sockets.forEach((ws) => ws.send(data));
 }, 50);
 
-console.log(`bevyosc VJ output listening on ${visualServer.url}`);
-console.log(`bevyosc controls listening on ${controlsServer.url}`);
+console.log(`aurora VJ output listening on ${visualServer.url}`);
+console.log(`aurora controls listening on ${controlsServer.url}`);
 
 if (midiClockDevice) {
 	openMidiClockDevice(midiClockDevice);
@@ -1745,7 +1759,7 @@ if (hotReload) {
 			reloadTimer = setTimeout(() => {
 				reloadTimer = null;
 				const data = JSON.stringify({
-					address: "/bevyosc/dev/reload",
+					address: "/aurora/dev/reload",
 					args: [],
 				});
 				sockets.forEach((ws) => ws.send(data));
@@ -1769,7 +1783,7 @@ if (hotReload) {
 			shaderReloadTimer = setTimeout(() => {
 				shaderReloadTimer = null;
 				const data = JSON.stringify({
-					address: "/bevyosc/dev/reload",
+					address: "/aurora/dev/reload",
 					args: [],
 				});
 				sockets.forEach((ws) => ws.send(data));

@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for the VST <-> bridge OSC contract. Invariant: vstEmitted is a subset of bridgeAccepts for each kind. The TS bridge (osc-validation.ts) consumes bridgeAccepts; the Rust VST (plugins/bevyosc-vst/src/lib.rs) is checked against vstEmitted by tests/vst-osc-contract.test.ts.",
+  "$comment": "Single source of truth for the VST <-> bridge OSC contract. Invariant: vstEmitted is a subset of bridgeAccepts for each kind. The TS bridge (osc-validation.ts) consumes bridgeAccepts; the Rust VST (plugins/aurora-vst/src/lib.rs) is checked against vstEmitted by tests/vst-osc-contract.test.ts.",
   "controls": {
     "vstEmitted": [
       "crossfade",

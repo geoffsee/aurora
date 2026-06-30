@@ -12,7 +12,7 @@ import type { AudioFeatures } from "./audio-ema.ts";
 //
 // PHASE 2 (browser-native audio capture, NOT implemented here): a future
 // `getUserMedia` + Web Audio source in the controls page can feed this same
-// router by sending `/bevyosc/audio/features`. That path has a hard
+// router by sending `/aurora/audio/features`. That path has a hard
 // deployment constraint — `getUserMedia` only resolves in a SECURE CONTEXT
 // (HTTPS origin or `localhost`). Serving the controls page from a bare LAN IP
 // (e.g. `192.168.x.x:3001`) over plain HTTP makes capture fail. Any
@@ -50,6 +50,12 @@ const SOURCES: ReadonlySet<string> = new Set([
 	"pulse",
 ]);
 
+// Audio must never drive its own arm/disarm switches — that creates feedback loops.
+const FORBIDDEN_MAPPING_TARGETS: ReadonlySet<string> = new Set([
+	"audioControlMode",
+	"audioTransientAutomation",
+]);
+
 // Continuous mappings only emit when the output moves more than this, so a
 // steady audio level does not spam mergeControlState with no-op broadcasts.
 const CONTINUOUS_EPSILON = 0.001;
@@ -74,6 +80,7 @@ export function parseAudioMappings(raw: unknown): AudioMapping[] {
 		const e = entry as Record<string, unknown>;
 		if (!SOURCES.has(String(e.source))) continue;
 		if (typeof e.target !== "string" || e.target.length === 0) continue;
+		if (FORBIDDEN_MAPPING_TARGETS.has(e.target)) continue;
 		const mode = e.mode === "threshold" ? "threshold" : "continuous";
 		out.push({
 			source: e.source as AudioMappingSource,

@@ -8,7 +8,7 @@ const VST_LIB_PATH = join(
 	"..",
 	"..",
 	"plugins",
-	"bevyosc-vst",
+	"aurora-vst",
 	"src",
 	"lib.rs",
 );

@@ -1,5 +1,5 @@
 // MIDI_CC_SCHEMA_VERSION tracks the MIDI CC binding persistence format stored
-// in localStorage under the "bevyosc.midi-cc-bindings" key.
+// in localStorage under the "aurora.midi-cc-bindings" key.
 // To bump: increment this integer, add a migration branch in migrateMidiBindings()
 // below for the previous version, and update MIDI_CC_SCHEMA_VERSION in web/controls if persisted format changes.
 export const MIDI_CC_SCHEMA_VERSION = 1;

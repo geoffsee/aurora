@@ -54,7 +54,7 @@ test("E2E pipeline P95 latency is under 100ms", async () => {
 							address: string;
 							args: unknown[];
 						};
-						if (msg.address === "/bevyosc/control/state") {
+						if (msg.address === "/aurora/control/state") {
 							const state = msg.args[0] as Record<string, unknown>;
 							if (state._benchmarkId === benchmarkId) {
 								latencies.push(performance.now() - start);
@@ -71,7 +71,7 @@ test("E2E pipeline P95 latency is under 100ms", async () => {
 				receiver.addEventListener("message", onMessage);
 				sender.send(
 					JSON.stringify({
-						address: "/bevyosc/control/state",
+						address: "/aurora/control/state",
 						args: [{ crossfade: 0.5, _benchmarkId: benchmarkId }],
 					}),
 				);
@@ -109,7 +109,7 @@ test("ping handler returns pong with matching id", async () => {
 							address: string;
 							id: number;
 						};
-						if (msg.address === "/bevyosc/pong") {
+						if (msg.address === "/aurora/pong") {
 							clearTimeout(timerId);
 							resolve(msg);
 						}
@@ -117,10 +117,10 @@ test("ping handler returns pong with matching id", async () => {
 						// ignore parse errors
 					}
 				});
-				ws.send(JSON.stringify({ address: "/bevyosc/ping", id: 42 }));
+				ws.send(JSON.stringify({ address: "/aurora/ping", id: 42 }));
 			},
 		);
-		expect(pong.address).toBe("/bevyosc/pong");
+		expect(pong.address).toBe("/aurora/pong");
 		expect(pong.id).toBe(42);
 	} finally {
 		ws.close();

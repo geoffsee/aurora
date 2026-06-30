@@ -64,6 +64,7 @@ export type ControlState = {
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
 	audioControlMode: boolean;
+	audioTransientAutomation: boolean;
 };
 
 export type OscMeters = {

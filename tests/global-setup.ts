@@ -32,7 +32,7 @@ export async function setup(): Promise<() => Promise<void>> {
 		if (latestControlState !== null) {
 			ws.send(
 				JSON.stringify({
-					address: "/bevyosc/control/state",
+					address: "/aurora/control/state",
 					args: [latestControlState],
 				}),
 			);
@@ -48,7 +48,7 @@ export async function setup(): Promise<() => Promise<void>> {
 				const parsed = JSON.parse(text) as Partial<OscMsg> &
 					Record<string, unknown>;
 				if (
-					parsed.address === "/bevyosc/control/state" &&
+					parsed.address === "/aurora/control/state" &&
 					Array.isArray(parsed.args)
 				) {
 					const arg = parsed.args[0];
@@ -65,19 +65,19 @@ export async function setup(): Promise<() => Promise<void>> {
 					}
 					// Broadcast the original payload so in-flight latency probes can correlate by id.
 					const data = JSON.stringify({
-						address: "/bevyosc/control/state",
+						address: "/aurora/control/state",
 						args: [arg],
 					});
 					sockets.forEach((s) => s.send(data));
 				} else if (
 					typeof parsed.address === "string" &&
-					parsed.address.startsWith("/bevyosc/preset/")
+					parsed.address.startsWith("/aurora/preset/")
 				) {
 					const data = JSON.stringify({ address: parsed.address, args: [] });
 					sockets.forEach((s) => s.send(data));
-				} else if (parsed.address === "/bevyosc/ping") {
+				} else if (parsed.address === "/aurora/ping") {
 					const id = typeof parsed.id === "number" ? parsed.id : 0;
-					ws.send(JSON.stringify({ address: "/bevyosc/pong", id }));
+					ws.send(JSON.stringify({ address: "/aurora/pong", id }));
 				}
 			} catch {
 				// ignore malformed messages

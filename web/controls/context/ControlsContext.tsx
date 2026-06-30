@@ -205,7 +205,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 		const current = stateRef.current;
 		if (ws?.readyState === WebSocket.OPEN) {
 			ws.send(
-				JSON.stringify({ address: "/bevyosc/control/state", args: [current] }),
+				JSON.stringify({ address: "/aurora/control/state", args: [current] }),
 			);
 		}
 		if (isRecordingRef.current && options.record !== false) {
@@ -270,13 +270,13 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 				next.cueDeckAMode = clampInt(
 					cue.deckAMode ?? prev.deckAMode,
 					0,
-					4,
+					15,
 					prev.deckAMode,
 				);
 				next.cueDeckBMode = clampInt(
 					cue.deckBMode ?? prev.deckBMode,
 					0,
-					4,
+					15,
 					prev.deckBMode,
 				);
 				next.flashVersion += name === "panic" ? 0 : 1;
@@ -644,7 +644,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			maxDecibels: MIC_MAX_DB,
 		});
 		ws.send(
-			JSON.stringify({ address: "/bevyosc/audio/features", args: [features] }),
+			JSON.stringify({ address: "/aurora/audio/features", args: [features] }),
 		);
 	}, []);
 
@@ -779,7 +779,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 		pingIdRef.current += 1;
 		const id = pingIdRef.current;
 		pendingPingsRef.current[id] = performance.now();
-		ws.send(JSON.stringify({ address: "/bevyosc/ping", id }));
+		ws.send(JSON.stringify({ address: "/aurora/ping", id }));
 	}, []);
 
 	const applyFrame = useCallback(
@@ -789,26 +789,26 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			error?: unknown;
 			id?: number;
 		}) => {
-			if (frame?.address === "/bevyosc/error" && frame.error) {
+			if (frame?.address === "/aurora/error" && frame.error) {
 				addBanner(String(frame.error));
 			}
 			const args = Array.isArray(frame?.args) ? frame.args : [];
 			if (
-				frame?.address === "/bevyosc/control/state" &&
+				frame?.address === "/aurora/control/state" &&
 				args[0] &&
 				typeof args[0] === "object"
 			) {
 				syncFromRemote(args[0] as Partial<ControlState>);
 			}
 			if (
-				frame?.address === "/bevyosc/server/diagnostics" &&
+				frame?.address === "/aurora/server/diagnostics" &&
 				args[0] &&
 				typeof args[0] === "object"
 			) {
 				setDiagnostics(args[0] as Diagnostics);
 			}
 			if (
-				frame?.address === "/bevyosc/demo/audio" &&
+				frame?.address === "/aurora/demo/audio" &&
 				stateRef.current.demoMode &&
 				args[0] &&
 				typeof args[0] === "object"
@@ -821,7 +821,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 				});
 			}
 			if (
-				frame?.address === "/bevyosc/audio/features" &&
+				frame?.address === "/aurora/audio/features" &&
 				args[0] &&
 				typeof args[0] === "object"
 			) {
@@ -860,11 +860,11 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 					return next;
 				});
 			}
-			if (frame?.address?.startsWith("/bevyosc/preset/recall/")) {
+			if (frame?.address?.startsWith("/aurora/preset/recall/")) {
 				const n = Number(frame.address.split("/").pop());
 				if (Number.isInteger(n) && n >= 1 && n <= 6) recallPreset(n);
 			}
-			if (frame?.address?.startsWith("/bevyosc/preset/save/")) {
+			if (frame?.address?.startsWith("/aurora/preset/save/")) {
 				const n = Number(frame.address.split("/").pop());
 				if (Number.isInteger(n) && n >= 1 && n <= 6) {
 					const presets = loadPresets();
@@ -880,7 +880,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 					refreshPresetGrid();
 				}
 			}
-			if (frame?.address === "/bevyosc/pong" && typeof frame.id === "number") {
+			if (frame?.address === "/aurora/pong" && typeof frame.id === "number") {
 				const sentAt = pendingPingsRef.current[frame.id];
 				if (sentAt !== undefined) {
 					delete pendingPingsRef.current[frame.id];

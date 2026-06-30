@@ -7,7 +7,7 @@
 // audio-control router (continuous + threshold mappings), the audio transient
 // detector → automation playback, OSC-controlled preset morph, and clock-source
 // arbitration. The harness connects as a headless WebSocket client (standing in
-// for the projector page) and only watches the broadcast `/bevyosc/control/state`
+// for the projector page) and only watches the broadcast `/aurora/control/state`
 // stream — proving the visuals would be driven without anyone touching a knob.
 //
 // This is the forcing function the subsystems have never had: each one is unit
@@ -141,7 +141,7 @@ async function main(): Promise<number> {
 			return;
 		}
 		switch (msg.address) {
-			case "/bevyosc/control/state": {
+			case "/aurora/control/state": {
 				const state = (msg.args?.[0] ?? {}) as Json;
 				controlBroadcasts++;
 				for (const k of changedKeys(prevState, state)) {
@@ -155,10 +155,10 @@ async function main(): Promise<number> {
 				}
 				break;
 			}
-			case "/bevyosc/demo/audio":
+			case "/aurora/demo/audio":
 				demoAudioCount++;
 				break;
-			case "/bevyosc/server/diagnostics": {
+			case "/aurora/server/diagnostics": {
 				diagnosticsCount++;
 				const d = (msg.args?.[0] ?? {}) as Json;
 				// Read the arbiter's actual selection, not a reconstruction of it.
@@ -171,11 +171,10 @@ async function main(): Promise<number> {
 	const send = (m: OscMsg) => ws.send(JSON.stringify(m));
 
 	// 1. Hand the set to the machine: enable demo audio (the single performer-less
-	//    audio source that drives BOTH the router and the transient detector) and
-	//    turn the audio-control router on. coerceControlState fills every other
-	//    field with its default.
+	//    audio source that drives the audio-control router when armed) and turn
+	//    the router on. coerceControlState fills every other field with its default.
 	send({
-		address: "/bevyosc/control/state",
+		address: "/aurora/control/state",
 		args: [
 			{
 				schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
@@ -197,7 +196,7 @@ async function main(): Promise<number> {
 
 	// 3. Start automation playback so the recorder/player path is live; the demo
 	//    audio also auto-fires it through the transient detector.
-	send({ address: "/bevyosc/automation/play-loop", args: [] });
+	send({ address: "/aurora/automation/play-loop", args: [] });
 
 	// 4. Sweep the preset morph continuously, as an absent performer's fader would.
 	let morphPhase = 0;
@@ -208,7 +207,7 @@ async function main(): Promise<number> {
 		const from = CUES[pairIndex]!;
 		const to = CUES[(pairIndex + 1) % CUES.length]!;
 		send({
-			address: "/bevyosc/preset/morph",
+			address: "/aurora/preset/morph",
 			args: [from, to, cyclePos, "ease"],
 		});
 	}, 200);
@@ -245,7 +244,7 @@ async function main(): Promise<number> {
 			name: "demo_audio",
 			ok: demoAudioCount > 0,
 			required: true,
-			detail: `${demoAudioCount} /bevyosc/demo/audio frames`,
+			detail: `${demoAudioCount} /aurora/demo/audio frames`,
 		},
 		{
 			name: "audio_router_continuous",

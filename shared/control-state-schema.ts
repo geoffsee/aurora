@@ -64,12 +64,20 @@ export const migrateControlState = (state: unknown): unknown => {
 	if (s.schemaVersion === 6) {
 		const palette = typeof s.palette === "number" ? s.palette : 0;
 		const rgb = hueToRgb(palette);
-		return {
+		return migrateControlState({
 			...s,
 			schemaVersion: 7,
 			paletteR: rgb.r,
 			paletteG: rgb.g,
 			paletteB: rgb.b,
+		});
+	}
+	// v7 → v8: add audioTransientAutomation field (opt-in audio→automation trigger)
+	if (s.schemaVersion === 7) {
+		return {
+			...s,
+			schemaVersion: 8,
+			audioTransientAutomation: false,
 		};
 	}
 	return state;

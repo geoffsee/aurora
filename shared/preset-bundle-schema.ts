@@ -13,7 +13,7 @@ export type BandCurves = {
 	high: AudioCurveShape;
 };
 
-// A versioned preset bundle as stored in localStorage under bevyosc.presets.
+// A versioned preset bundle as stored in localStorage under aurora.presets.
 export type PresetBundle = {
 	schemaVersion: number;
 	name: string;

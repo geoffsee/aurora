@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
 // Mirrors the inline controls.html MIDI CC load/save logic for unit testing.
-const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
+const MIDI_CC_BINDINGS_KEY = "aurora.midi-cc-bindings";
 const MIDI_CC_SCHEMA_VERSION = 1;
 
 type MidiCcBinding = {

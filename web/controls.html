@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bevyosc Controls</title>
+    <title>aurora Controls</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./controls.css" />
   </head>
@@ -11,7 +11,7 @@
     <main>
       <header>
         <div class="brand">
-          <p class="eyebrow">bevyosc</p>
+          <p class="eyebrow">aurora</p>
           <h1>VJ Controls</h1>
         </div>
         <div class="status" role="status" aria-live="polite">
@@ -89,6 +89,12 @@
             <option value="7">Orbit</option>
             <option value="8">Pulse</option>
             <option value="9">Spiral</option>
+            <option value="10">Ripple</option>
+            <option value="11">Shatter</option>
+            <option value="12">Flux</option>
+            <option value="13">Lattice</option>
+            <option value="14">Drift</option>
+            <option value="15">Storm</option>
           </select>
         </label>
         <label class="panel slot deck-slot" data-deck="b">
@@ -107,6 +113,12 @@
             <option value="7">Orbit</option>
             <option value="8">Pulse</option>
             <option value="9">Spiral</option>
+            <option value="10">Ripple</option>
+            <option value="11">Shatter</option>
+            <option value="12">Flux</option>
+            <option value="13">Lattice</option>
+            <option value="14">Drift</option>
+            <option value="15">Storm</option>
           </select>
         </label>
         <label class="panel slot">
@@ -122,6 +134,12 @@
             <option value="7">Fluid (Ambient)</option>
             <option value="8">Truchet (Geometric)</option>
             <option value="9">Imported (Shadertoy)</option>
+            <option value="10">Bass Reactor</option>
+            <option value="11">High Spark Field</option>
+            <option value="12">Kick Rings</option>
+            <option value="13">Laser Lattice</option>
+            <option value="14">Strobe Shards</option>
+            <option value="15">Vortex Bloom</option>
           </select>
         </label>
         <label class="panel slot">
@@ -208,7 +226,7 @@
             <span>Max Brightness</span>
             <output id="max-brightness-value">90%</output>
           </div>
-          <input id="max-brightness" type="range" min="0.1" max="1" step="0.01" value="0.9" />
+          <input id="max-brightness" type="range" min="0" max="1" step="0.01" value="0.9" />
         </label>
       </section>
 
@@ -316,7 +334,7 @@
             <label id="trigger-cc-label" style="display:none"><span>CC# (0–127)</span><input id="trigger-cc" type="number" min="0" max="127" step="1" value="64" /></label>
             <label id="trigger-threshold-label" style="display:none"><span>Threshold ≥</span><input id="trigger-threshold" type="number" min="0" max="127" step="1" value="64" /></label>
             <label id="trigger-channel-label"><span>Channel (0=any)</span><input id="trigger-channel" type="number" min="0" max="16" step="1" value="0" /></label>
-            <label id="trigger-osc-label" style="display:none"><span>OSC Address</span><input id="trigger-osc-address" type="text" value="/bevyosc/automation/play" /></label>
+            <label id="trigger-osc-label" style="display:none"><span>OSC Address</span><input id="trigger-osc-address" type="text" value="/aurora/automation/play" /></label>
             <label><span>Action</span>
               <select id="trigger-action">
                 <option value="toggle">Toggle play/stop</option>
@@ -457,7 +475,7 @@
         target.palette = rgbToHue(target.paletteR, target.paletteG, target.paletteB);
       };
 
-      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral"];
+      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral", "Ripple", "Shatter", "Flux", "Lattice", "Drift", "Storm"];
       const cuePresets = {
         warmup: { crossfade: 0.5, intensity: 0.62, feedback: 0.22, depth: 0.15, palette: 0.58, deckAMode: 4, deckBMode: 4 },
         drop: { crossfade: 1, intensity: 1.25, feedback: 0.42, depth: 0.58, palette: 0.9, deckAMode: 2, deckBMode: 2 },
@@ -467,7 +485,7 @@
         panic: { crossfade: 0.5, intensity: 0.22, feedback: 0.08, depth: 0, palette: 0.62, deckAMode: 4, deckBMode: 4, maxBrightness: 0.35, strobe: false, strobeLockout: true },
       };
       const defaultState = () => ({
-        schemaVersion: 7, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
+        schemaVersion: 8, // keep in sync with CONTROL_STATE_SCHEMA_VERSION in osc-validation.ts
         crossfade: 0.5,
         bpm: 124,
         speed: 1,
@@ -520,6 +538,7 @@
         emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 },
         morph: 0,
         audioControlMode: false,
+        audioTransientAutomation: false,
       });
       const state = defaultState();
       const osc = {
@@ -611,7 +630,7 @@
         if (ws?.readyState !== WebSocket.OPEN) return;
         pingId += 1;
         pendingPings[pingId] = performance.now();
-        ws.send(JSON.stringify({ address: "/bevyosc/ping", id: pingId }));
+        ws.send(JSON.stringify({ address: "/aurora/ping", id: pingId }));
       }
 
       function connect() {
@@ -649,7 +668,7 @@
 
       function publish(options = {}) {
         if (ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ address: "/bevyosc/control/state", args: [state] }));
+          ws.send(JSON.stringify({ address: "/aurora/control/state", args: [state] }));
         }
         if (isRecording && options.record !== false) {
           const now = performance.now();
@@ -681,20 +700,20 @@
       }
 
       function applyFrame(frame) {
-        if (frame?.address === "/bevyosc/error" && frame.error) {
+        if (frame?.address === "/aurora/error" && frame.error) {
           addBanner(String(frame.error));
         }
         const args = Array.isArray(frame?.args) ? frame.args : [];
-        if (frame?.address === "/bevyosc/control/state" && args[0] && typeof args[0] === "object") {
+        if (frame?.address === "/aurora/control/state" && args[0] && typeof args[0] === "object") {
           syncFromRemote(args[0]);
         }
-        if (frame?.address === "/bevyosc/server/diagnostics" && args[0] && typeof args[0] === "object") {
+        if (frame?.address === "/aurora/server/diagnostics" && args[0] && typeof args[0] === "object") {
           Object.assign(diagnostics, args[0]);
         }
-        if (frame?.address === "/bevyosc/demo/audio" && state.demoMode && args[0]) {
+        if (frame?.address === "/aurora/demo/audio" && state.demoMode && args[0]) {
           applyDemo(args[0]);
         }
-        if (frame?.address === "/bevyosc/audio/features" && args[0]) {
+        if (frame?.address === "/aurora/audio/features" && args[0]) {
           applyBrowserAudio(args[0]);
         }
         if (frame?.address === "/live/song/get/tempo" && Number.isFinite(Number(args[0]))) {
@@ -713,17 +732,17 @@
         if (frame?.address === "/live/song/get/track_data") {
           applyTrackData(args);
         }
-        if (frame?.address?.startsWith("/bevyosc/preset/recall/")) {
+        if (frame?.address?.startsWith("/aurora/preset/recall/")) {
           const n = Number(frame.address.split("/").pop());
           // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
           if (Number.isInteger(n) && n >= 1 && n <= 6) recallPreset(n);
         }
-        if (frame?.address?.startsWith("/bevyosc/preset/save/")) {
+        if (frame?.address?.startsWith("/aurora/preset/save/")) {
           const n = Number(frame.address.split("/").pop());
           // slot range must match PRESET_SLOT_MIN/MAX in osc-validation.ts
           if (Number.isInteger(n) && n >= 1 && n <= 6) savePresetSilent(n);
         }
-        if (frame?.address === "/bevyosc/pong" && typeof frame.id === "number") {
+        if (frame?.address === "/aurora/pong" && typeof frame.id === "number") {
           const sentAt = pendingPings[frame.id];
           if (sentAt !== undefined) {
             delete pendingPings[frame.id];
@@ -829,14 +848,14 @@
         state.cueIntensity = clamp01(cue.intensity ?? state.intensity);
         state.cuePalette = clamp01(cue.palette ?? state.palette);
         state.cueCrossfade = clamp01(cue.crossfade ?? state.crossfade);
-        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 4, state.deckAMode);
-        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 4, state.deckBMode);
+        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 15, state.deckAMode);
+        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 15, state.deckBMode);
         state.flashVersion += name === "panic" ? 0 : 1;
         syncInputs();
         publish();
       }
 
-      const PRESETS_KEY = "bevyosc.presets";
+      const PRESETS_KEY = "aurora.presets";
       const PRESET_BUNDLE_SCHEMA_VERSION = 1; // keep in sync with preset-bundle-schema.ts
       const loadPresets = () => {
         try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}"); } catch { return {}; }
@@ -1104,7 +1123,7 @@
         publish({ record: false });
       }
 
-      const MIDI_CC_BINDINGS_KEY = "bevyosc.midi-cc-bindings";
+      const MIDI_CC_BINDINGS_KEY = "aurora.midi-cc-bindings";
       const MIDI_CC_SCHEMA_VERSION = 1; // keep in sync with midi-cc-schema.ts
       const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);
       const MIDI_CC_PARAM_LABELS = {
@@ -1272,7 +1291,7 @@
       // Automation playback triggers (MIDI note, MIDI CC, OSC)
       // ---------------------------------------------------------------------------
 
-      const AUTOMATION_TRIGGERS_KEY = "bevyosc.automation-triggers";
+      const AUTOMATION_TRIGGERS_KEY = "aurora.automation-triggers";
       let _cachedTriggers = null;
 
       function loadTriggerBindings() {
@@ -1604,7 +1623,7 @@
       }
 
       $("#active-shader").addEventListener("change", (event) => {
-        state.activeShader = Math.max(0, Math.min(9, Number(event.target.value)));
+        state.activeShader = Math.max(0, Math.min(15, Number(event.target.value)));
         publish();
       });
 
@@ -1802,7 +1821,7 @@
 
       // ── Live Mic Capture (Phase 2: "Audio as the Only Controller") ──────────
       // Browser-native audio source: getUserMedia → AnalyserNode → AudioFeatures,
-      // sent as /bevyosc/audio/features so the bridge's Phase-1 router drives
+      // sent as /aurora/audio/features so the bridge's Phase-1 router drives
       // ControlState from a live mic with no Ableton or MIDI. The bridge router
       // is inert unless state.audioControlMode is enabled, but frames still feed
       // the projector as a renderer audio fallback when AbletonOSC is quiet.
@@ -1881,7 +1900,7 @@
           micContext.sampleRate,
           MIC_FFT_SIZE,
         );
-        ws.send(JSON.stringify({ address: "/bevyosc/audio/features", args: [features] }));
+        ws.send(JSON.stringify({ address: "/aurora/audio/features", args: [features] }));
       }
 
       async function startMicCapture() {

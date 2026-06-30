@@ -1,11 +1,11 @@
 {
   "problem": "Live VJ performances, especially for solo operator Geoff under stage pressure and time constraints, need a dependable browser-based visual rig that reacts reliably to Ableton tempo, beat, and track meter data without the fragility, latency, CPU spikes, codec incompatibilities, or frame drops common in real-time browser video decoding (which can lead to crashes, desync, and performance anxiety). The rig must be driven from both a separate clean controls UI and a MIDI controller mapped via Ableton, minimizing operator cognitive load, enabling quick safety interventions, and ensuring immersive, hazard-free visuals for the audience.",
   "stakeholders": "Solo developer/operator Geoff Seemueller (author, 2026) acting as VJ – requires zero-downtime reliability, low cognitive load during live cueing, quick rehearsal-to-show workflows, and confidence-inspiring safety controls while managing Ableton + bridge + dual browser pages on the same machine. An Ableton Live performer providing tempo and track meter data – needs seamless, low-latency sync and intuitive MIDI mapping without disrupting music flow. The audience viewing the projector output – expects beat-synced, engaging procedural visuals without technical glitches, HUD bleed, or health risks (e.g., unintended strobes/brightness triggering photosensitivity). No external team or customer surfaced in the repo.",
-  "evidence": "README.md describes 'Browser/WebAssembly Bevy app for live Video DJ performance' favoring 'dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.' Cargo.toml pins bevy 0.17 with webgpu; index.ts implements OSC<->WebSocket bridge to AbletonOSC (ports 11000/11001) plus VST OSC ingress (12000); plugins/bevyosc-vst exposes parameter list mirroring controls.html cues; package.json defines build:web/serve/build:vst/install:vst:mac scripts.",
-  "desired_outcome": "A first show build that can run a live set: projector page at :3000 renders clean procedural visuals (beams/tunnel/burst/mirror/wash) reacting to Ableton beat and meter data, while the operator drives cues, decks, BPM, and safety toggles from the controls app at :3001 or a MIDI controller through the bevyosc VJ Bridge VST3 plugin. Includes high operator confidence via clear diagnostics, persistent presets, in-memory record/replay for rehearsal, and zero audience-safety incidents.",
+  "evidence": "README.md describes 'Browser/WebAssembly Bevy app for live Video DJ performance' favoring 'dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.' Cargo.toml pins bevy 0.17 with webgpu; index.ts implements OSC<->WebSocket bridge to AbletonOSC (ports 11000/11001) plus VST OSC ingress (12000); plugins/aurora-vst exposes parameter list mirroring controls.html cues; package.json defines build:web/serve/build:vst/install:vst:mac scripts.",
+  "desired_outcome": "A first show build that can run a live set: projector page at :3000 renders clean procedural visuals (beams/tunnel/burst/mirror/wash) reacting to Ableton beat and meter data, while the operator drives cues, decks, BPM, and safety toggles from the controls app at :3001 or a MIDI controller through the aurora VJ Bridge VST3 plugin. Includes high operator confidence via clear diagnostics, persistent presets, in-memory record/replay for rehearsal, and zero audience-safety incidents.",
   "constraints": "Browser must support WebGPU (Chrome/Edge); requires Rust wasm32-unknown-unknown target and a pinned wasm-bindgen 0.2.122 matching the Rust build; Bun runtime for the bridge; AbletonOSC must listen on UDP 11000 with replies on 11001; macOS-only VST install script (install:vst:mac copies into ~/Library/Audio/Plug-Ins/VST3); release profile tuned for size (opt-level=z, lto=thin).",
-  "dependencies": "Bevy 0.17 (default-features off, webgpu feature on); wasm-bindgen 0.2.122; Bun + `osc` npm package; AbletonOSC inside Ableton Live; VST3 host (Ableton) for the bevyosc-vst plugin; browser WebGPU implementation; xtask crate for VST bundling.",
-  "existing_systems": "Single Rust binary in src/main.rs compiled to wasm; Bun server in index.ts hosting projector (index.html/styles.css) on :3000 and controls (controls.html/controls.css) on :3001 plus /ws WebSocket; VST3 plugin in plugins/bevyosc-vst that emits OSC to the Bun bridge on :12000; reserved GPU shader at assets/shaders/vj_palette.wgsl (not yet used). README notes the OSC bridge pattern is mirrored from a prior `ableton-osc-visualizer` project.",
+  "dependencies": "Bevy 0.17 (default-features off, webgpu feature on); wasm-bindgen 0.2.122; Bun + `osc` npm package; AbletonOSC inside Ableton Live; VST3 host (Ableton) for the aurora-vst plugin; browser WebGPU implementation; xtask crate for VST bundling.",
+  "existing_systems": "Single Rust binary in src/main.rs compiled to wasm; Bun server in index.ts hosting projector (index.html/styles.css) on :3000 and controls (controls.html/controls.css) on :3001 plus /ws WebSocket; VST3 plugin in plugins/aurora-vst that emits OSC to the Bun bridge on :12000; reserved GPU shader at assets/shaders/vj_palette.wgsl (not yet used). README notes the OSC bridge pattern is mirrored from a prior `ableton-osc-visualizer` project.",
   "hypotheses": "1) CPU-fed material parameters in Bevy are reliable enough for a live set without a custom WGSL palette pass. 2) Procedural visuals beat real-time browser video decoding for show reliability. 3) Routing MIDI through an Ableton-hosted VST3 that emits OSC is more dependable than direct Web MIDI in the browser. 4) Two separate browser pages (projector clean, controls rich) avoid HUD bleed onto the projection.",
   "success_metrics": "Explicit/show-oriented but now measurable for first show: projector renders without HUD and maintains stable 60+ FPS with zero dropouts/desyncs (>200ms latency) or crashes during 45–60 min set; cues (Warmup, Drop, Tunnel, Burst, Wash, Panic Dim) fire on beat/bar with <200ms end-to-end response via controls or MIDI; controls app shows `OSC live` plus energy bands, deck averages, viewer count and meter activity with no disconnects; safety toggles (max brightness, strobe lockout, blackout, freeze, reset) reachable in <2s; six preset slots persist in browser; in-memory record/replay works reliably for rehearsal; Geoff reports high post-rehearsal confidence with zero audience-safety incidents and setup/teardown <15 min.",
   "tradeoffs": "Procedural-only visuals trade creative ceiling (no live video sampling or asset variety) for stability and deterministic reactivity under live conditions; CPU-fed parameters trade GPU-driven richness for debuggability and lower crash risk before a set; WebGPU requirement trades broad browser support for modern rendering; routing MIDI via a VST3+OSC bridge trades setup complexity and single-machine dependency for deterministic Ableton-side mapping and reduced browser-side fragility; two-page split trades app cohesion for clean projector output but may increase operator cognitive load (mitigated by clear diagnostics and rehearsal practice).",
@@ -64,7 +64,7 @@
     {
       "frame": "Ableton-tight performance tool",
       "framing": "Treat the app as an Ableton accessory: tempo/meter/MIDI flow exclusively through Ableton + AbletonOSC + VST3.",
-      "evidence": "index.ts OSC bridge ports (11000/11001), plugins/bevyosc-vst, README 'Ableton MIDI Control Surface Bridge' section.",
+      "evidence": "index.ts OSC bridge ports (11000/11001), plugins/aurora-vst, README 'Ableton MIDI Control Surface Bridge' section.",
       "tradeoffs": "Requires Ableton on stage; deterministic mapping; excludes non-Ableton workflows.",
       "recommendation": "Consistent with current implementation; keep as default integration path."
     }
@@ -133,7 +133,7 @@
       "reason": "UDP OSC on 11000/11001 carries tempo/beat/meter frames into the bridge."
     },
     {
-      "from": "bevyosc-vst (VST3)",
+      "from": "aurora-vst (VST3)",
       "to": "Bun bridge (index.ts)",
       "reason": "Plugin emits parameter changes as OSC to VST_CONTROL_RECV_PORT (12000)."
     },
@@ -160,7 +160,7 @@
     {
       "from": "install:vst:mac",
       "to": "~/Library/Audio/Plug-Ins/VST3",
-      "reason": "Copies bundled `bevyosc VJ Bridge.vst3` to the macOS VST3 directory for Ableton to load."
+      "reason": "Copies bundled `aurora VJ Bridge.vst3` to the macOS VST3 directory for Ableton to load."
     }
   ]
 }
