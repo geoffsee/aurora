@@ -61,7 +61,7 @@ describe("normalizeOutputRoute", () => {
 			enabled: false,
 			crossfade: 1,
 			palette: 0,
-			activeShader: 9,
+			activeShader: 15,
 		});
 	});
 
