@@ -1,0 +1,14 @@
+[package]
+name = "aurora-vst"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "aurora_vst"
+crate-type = ["cdylib"]
+
+[dependencies]
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["vst3"] }
+rosc = "0.11"
+

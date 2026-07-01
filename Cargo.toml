@@ -1,10 +1,10 @@
 [package]
-name = "bevyosc"
+name = "aurora"
 version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = [".", "plugins/bevyosc-vst", "plugins/bevyosc-vst/xtask"]
+members = [".", "plugins/aurora-vst", "plugins/aurora-vst/xtask"]
 resolver = "2"
 
 [dependencies]

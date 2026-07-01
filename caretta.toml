@@ -1,4 +1,5 @@
-project_name = "bevy-osc-app"
+project_name = "aurora"
+geodynamo-url = "https://geoffsee.github.io/geodynamo/"
 
 [test]
 command = ["sh", "-c", "bun install && bun run test"]

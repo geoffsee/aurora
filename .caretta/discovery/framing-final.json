@@ -1,7 +1,7 @@
 {
   "artifact": "framing-final",
   "version": "1.0.0",
-  "project": "bevy-osc-app",
+  "project": "aurora",
   "date": "2026-05-24",
   "owner": "Geoff Seemueller",
   "status": "finalized",
@@ -22,7 +22,7 @@
       "Procedural visuals only: Beams, Tunnel, Burst, Mirror, Wash (CPU-fed material params).",
       "Two-page split: clean projector at :3000, rich controls at :3001.",
       "Ableton reactivity via Bun OSC bridge (ports 11000/11001) — tempo, beat, play state, track meters.",
-      "VST3 plugin (bevyosc VJ Bridge) on macOS for Ableton-mapped MIDI → OSC → bridge (port 12000).",
+      "VST3 plugin (aurora VJ Bridge) on macOS for Ableton-mapped MIDI → OSC → bridge (port 12000).",
       "Six cues: Warmup, Drop, Tunnel, Burst, Wash, Panic Dim — fireable on beat/bar.",
       "Safety controls: max brightness cap, strobe lockout, blackout, freeze, reset.",
       "Six in-browser preset slots (localStorage).",
@@ -81,7 +81,7 @@
     "summary": "Constraining v0.1.0 to procedural-only visuals + Ableton-tight integration + safety-first controls directly attacks the highest-impact risks (crashes, desync, audience-safety, operator cognitive load) for a solo operator under stage pressure. Every deferred feature trades real reliability for hypothetical creative ceiling; for a first show, reliability wins.",
     "supporting_evidence": [
       "README explicitly favors 'dependable procedural visuals... over risky real-time browser video decoding.'",
-      "Codebase already implements the full primary path: src/main.rs (Bevy WASM), index.ts (Bun OSC bridge), plugins/bevyosc-vst (VST3), controls.html (rich operator UI).",
+      "Codebase already implements the full primary path: src/main.rs (Bevy WASM), index.ts (Bun OSC bridge), plugins/aurora-vst (VST3), controls.html (rich operator UI).",
       "Safety surface (Panic Dim cue, strobe lockout, max brightness cap, blackout, freeze, reset) is already wired through controls and VST parameter list.",
       "Reserved vj_palette.wgsl signals an extension path that is intentionally not blocking v0.1.0."
     ],
@@ -180,7 +180,7 @@
 
   "handoff_pointers": {
     "primary_source": "README.md",
-    "code_entry_points": ["src/main.rs", "index.ts", "controls.html", "plugins/bevyosc-vst/"],
+    "code_entry_points": ["src/main.rs", "index.ts", "controls.html", "plugins/aurora-vst/"],
     "discovery_predecessor": ".caretta/discovery/workspace.json",
     "persona_reference": ".caretta/personas/persona-dj-jazzy-jeff.json",
     "next_artifact": "rehearsal-checklist (to be produced by downstream workflow)"
