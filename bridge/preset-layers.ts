@@ -99,6 +99,8 @@ export const moveLayer = (
 	to: number,
 ): PresetLayer[] => {
 	if (
+		!Number.isFinite(from) ||
+		!Number.isFinite(to) ||
 		from < 0 ||
 		from >= layers.length ||
 		to < 0 ||
@@ -127,4 +129,63 @@ export const pickLayerState = (
 		if (v !== undefined) out[key] = v;
 	}
 	return out;
+};
+
+export type LayerControllerDeps = {
+	// Snapshot the live underlying state to freeze as the composition floor,
+	// captured the moment the stack becomes non-empty.
+	captureFloor: () => LayerState;
+	// Merge a composited (or restored) state back into the live control state.
+	merge: (state: LayerState) => void;
+	// Notified when an add is dropped because the stack is already at max.
+	onFull: () => void;
+};
+
+// The stateful half of the feature: owns the frozen base and the layer stack,
+// and recomposites on every mutation. Extracted from the bridge so the
+// non-destructive round-trip (add → recompose → clear restores the floor) is
+// unit-testable against a fake merge/capture without booting the server.
+export const createLayerController = (deps: LayerControllerDeps) => {
+	let layerBase: LayerState | null = null;
+	let layerStack: PresetLayer[] = [];
+
+	const apply = () => {
+		if (layerStack.length === 0) {
+			if (layerBase) deps.merge({ ...layerBase });
+			layerBase = null;
+			return;
+		}
+		if (!layerBase) layerBase = deps.captureFloor();
+		deps.merge(composeLayers(layerBase, layerStack));
+	};
+
+	return {
+		add(layer: PresetLayer): void {
+			if (layerStack.length >= PRESET_LAYER_MAX) {
+				deps.onFull();
+				return;
+			}
+			layerStack = addLayer(layerStack, layer);
+			apply();
+		},
+		setWeight(index: number, weight: unknown): void {
+			layerStack = setLayerWeightAt(layerStack, index, weight);
+			apply();
+		},
+		remove(index: number): void {
+			layerStack = removeLayerAt(layerStack, index);
+			apply();
+		},
+		move(from: number, to: number): void {
+			layerStack = moveLayer(layerStack, from, to);
+			apply();
+		},
+		clear(): void {
+			layerStack = [];
+			apply();
+		},
+		get stack(): readonly PresetLayer[] {
+			return layerStack;
+		},
+	};
 };

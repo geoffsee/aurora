@@ -62,15 +62,9 @@ import {
 	morphPresetStates,
 } from "./preset-morph.ts";
 import {
-	type PresetLayer,
-	type LayerState,
 	PRESET_LAYER_MAX,
-	addLayer,
-	composeLayers,
-	moveLayer,
+	createLayerController,
 	pickLayerState,
-	removeLayerAt,
-	setLayerWeightAt,
 } from "./preset-layers.ts";
 import {
 	makeAutomationBridge,
@@ -1137,18 +1131,14 @@ const applyPresetMorph = (msg: OscMsg) => {
 // weight to 0, removing, or clearing recomputes the composition as if the layer
 // were never there. When the last layer goes, the base is merged back and
 // forgotten so future edits re-capture a fresh floor.
-let layerBase: LayerState | null = null;
-let layerStack: PresetLayer[] = [];
-
-const applyLayerStack = () => {
-	if (layerStack.length === 0) {
-		if (layerBase) mergeControlState({ ...layerBase });
-		layerBase = null;
-		return;
-	}
-	if (!layerBase) layerBase = pickLayerState(currentControlState());
-	mergeControlState(composeLayers(layerBase, layerStack));
-};
+const layerController = createLayerController({
+	captureFloor: () => pickLayerState(currentControlState()),
+	merge: (state) => mergeControlState(state),
+	onFull: () =>
+		console.error(
+			`[OSC] dropping preset layer add — stack already at max ${PRESET_LAYER_MAX}`,
+		),
+});
 
 const applyPresetLayer = (msg: OscMsg) => {
 	const args = msg.args ?? [];
@@ -1156,18 +1146,9 @@ const applyPresetLayer = (msg: OscMsg) => {
 
 	switch (msg.address) {
 		case PRESET_LAYER_ADD_ADDRESS: {
-			if (layerStack.length >= PRESET_LAYER_MAX) {
-				console.error(
-					`[OSC] dropping preset layer add — stack already at max ${PRESET_LAYER_MAX}`,
-				);
-				return;
-			}
-			if (layerStack.length === 0) {
-				layerBase = pickLayerState(currentControlState());
-			}
 			const name = String(valueOf(args[0]));
 			const weight = args.length > 1 ? Number(valueOf(args[1])) : 1;
-			layerStack = addLayer(layerStack, {
+			layerController.add({
 				name,
 				state: pickLayerState(cuePresets[name] as Record<string, unknown>),
 				weight,
@@ -1175,25 +1156,20 @@ const applyPresetLayer = (msg: OscMsg) => {
 			break;
 		}
 		case PRESET_LAYER_WEIGHT_ADDRESS:
-			layerStack = setLayerWeightAt(
-				layerStack,
-				intArg(0),
-				Number(valueOf(args[1])),
-			);
+			layerController.setWeight(intArg(0), Number(valueOf(args[1])));
 			break;
 		case PRESET_LAYER_REMOVE_ADDRESS:
-			layerStack = removeLayerAt(layerStack, intArg(0));
+			layerController.remove(intArg(0));
 			break;
 		case PRESET_LAYER_MOVE_ADDRESS:
-			layerStack = moveLayer(layerStack, intArg(0), intArg(1));
+			layerController.move(intArg(0), intArg(1));
 			break;
 		case PRESET_LAYER_CLEAR_ADDRESS:
-			layerStack = [];
+			layerController.clear();
 			break;
 		default:
 			return;
 	}
-	applyLayerStack();
 };
 
 const isMidiClockActive = (): boolean =>
@@ -1828,10 +1804,7 @@ setInterval(() => {
 	// Drive the router from the demo feed only when no browser source is active;
 	// otherwise both streams would share the router's edge state and thrash.
 	const routerNowMs = Date.now();
-	if (
-		routerNowMs - lastBrowserAudioFeaturesMs >=
-		BROWSER_AUDIO_FEATURE_TTL_MS
-	) {
+	if (routerNowMs - lastBrowserAudioFeaturesMs >= BROWSER_AUDIO_FEATURE_TTL_MS) {
 		audioControlRouter.onFeatures(smoothed, routerNowMs);
 	}
 	const demo = {

@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
 	LAYER_KEYS,
+	type LayerState,
 	PRESET_LAYER_MAX,
 	type PresetLayer,
 	addLayer,
 	clampLayerWeight,
 	composeLayers,
+	createLayerController,
 	moveLayer,
 	pickLayerState,
 	removeLayerAt,
@@ -301,4 +303,82 @@ describe("validatePresetLayerOscMsg", () => {
 test("PRESET_LAYER_MAX bounds the stack for the idle-memory budget", () => {
 	expect(PRESET_LAYER_MAX).toBeGreaterThan(0);
 	expect(PRESET_LAYER_MAX).toBeLessThanOrEqual(16);
+});
+
+describe("createLayerController (stateful round-trip)", () => {
+	const makeHarness = (initial: LayerState) => {
+		let live: LayerState = { ...initial };
+		const merges: LayerState[] = [];
+		let fullCount = 0;
+		const controller = createLayerController({
+			captureFloor: () => ({ ...live }),
+			merge: (state) => {
+				live = { ...live, ...state };
+				merges.push({ ...state });
+			},
+			onFull: () => {
+				fullCount += 1;
+			},
+		});
+		return {
+			controller,
+			merges,
+			live: () => live,
+			setLive: (state: LayerState) => {
+				live = { ...live, ...state };
+			},
+			fullCount: () => fullCount,
+		};
+	};
+
+	test("add then clear restores the original floor (non-destructive round-trip)", () => {
+		const h = makeHarness({ intensity: 0.2, feedback: 0.5 });
+		h.controller.add({ name: "a", state: { intensity: 1 }, weight: 1 });
+		expect(h.live().intensity).toBeCloseTo(1);
+		expect(h.live().feedback).toBeCloseTo(0.5);
+		h.controller.clear();
+		expect(h.live().intensity).toBeCloseTo(0.2);
+		expect(h.live().feedback).toBeCloseTo(0.5);
+	});
+
+	test("dropping a layer's weight to 0 recomposes back to the floor", () => {
+		const h = makeHarness({ intensity: 0.2 });
+		h.controller.add({ name: "a", state: { intensity: 1 }, weight: 1 });
+		expect(h.live().intensity).toBeCloseTo(1);
+		h.controller.setWeight(0, 0);
+		expect(h.live().intensity).toBeCloseTo(0.2);
+	});
+
+	test("removing every layer restores the frozen floor", () => {
+		const h = makeHarness({ intensity: 0.2 });
+		h.controller.add({ name: "a", state: { intensity: 0.9 }, weight: 1 });
+		h.controller.add({ name: "b", state: { intensity: 0.1 }, weight: 1 });
+		h.controller.remove(1);
+		h.controller.remove(0);
+		expect(h.live().intensity).toBeCloseTo(0.2);
+	});
+
+	test("the floor is re-captured fresh after the stack empties", () => {
+		const h = makeHarness({ intensity: 0.2 });
+		h.controller.add({ name: "a", state: { intensity: 1 }, weight: 1 });
+		h.controller.clear();
+		// The live state drifts before the next layer session begins.
+		h.setLive({ intensity: 0.7 });
+		// A weight-0 add captures the fresh floor and leaves it untouched.
+		h.controller.add({ name: "b", state: { intensity: 1 }, weight: 0 });
+		expect(h.live().intensity).toBeCloseTo(0.7);
+	});
+
+	test("add beyond PRESET_LAYER_MAX is dropped without recomposing", () => {
+		const h = makeHarness({ intensity: 0 });
+		for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+			h.controller.add({ name: `l${i}`, state: { intensity: 1 }, weight: 0 });
+		}
+		expect(h.controller.stack).toHaveLength(PRESET_LAYER_MAX);
+		const mergeCount = h.merges.length;
+		h.controller.add({ name: "overflow", state: { intensity: 1 }, weight: 1 });
+		expect(h.controller.stack).toHaveLength(PRESET_LAYER_MAX);
+		expect(h.fullCount()).toBe(1);
+		expect(h.merges.length).toBe(mergeCount);
+	});
 });
