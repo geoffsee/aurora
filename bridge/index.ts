@@ -45,6 +45,10 @@ import {
 } from "./audio-ema.ts";
 import { migrateControlState } from "../shared/control-state-schema.ts";
 import {
+	type OutputRoute,
+	normalizeOutputRoutes,
+} from "../shared/output-routing.ts";
+import {
 	type MorphCurve,
 	clampMorphPosition,
 	isMorphCurve,
@@ -124,6 +128,7 @@ type ControlState = {
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
 	audioControlMode: boolean;
+	outputs: OutputRoute[];
 	audioTransientAutomation: boolean;
 };
 
@@ -352,6 +357,7 @@ const defaultControlState = (): ControlState => ({
 	emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
 	morph: 0,
 	audioControlMode: false,
+	outputs: [],
 	audioTransientAutomation: false,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
@@ -584,6 +590,7 @@ const coerceControlState = (state: unknown): ControlState => {
 			};
 		})(),
 		audioControlMode: Boolean(source.audioControlMode),
+		outputs: normalizeOutputRoutes(source.outputs),
 		audioTransientAutomation: Boolean(source.audioTransientAutomation),
 	};
 };

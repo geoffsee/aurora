@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { DEFAULT_AUDIO_EMA_ALPHAS, type AudioEmaAlphas } from "../../bridge/audio-ema.ts";
-import { type AudioCurveShape } from "../../shared/osc-validation.ts";
+import {
+	DEFAULT_AUDIO_EMA_ALPHAS,
+	type AudioEmaAlphas,
+} from "../../bridge/audio-ema.ts";
+import {
+	type AudioCurveShape,
+	CONTROL_STATE_SCHEMA_VERSION,
+} from "../../shared/osc-validation.ts";
 import { migrateControlState } from "../../shared/control-state-schema.ts";
 import {
 	PRESET_BUNDLE_SCHEMA_VERSION,
@@ -453,7 +459,7 @@ describe("schema migration preserves bundling intent", () => {
 			},
 		};
 		const migrated = migrateControlState(v3State) as Record<string, unknown>;
-		expect(migrated.schemaVersion).toBe(8);
+		expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
 		expect(migrated.emaAlphas).toEqual(DEFAULT_AUDIO_EMA_ALPHAS);
 		expect(migrated.bandCurves).toEqual(v3State.bandCurves);
 		expect(migrated.activeShader).toBe(1);

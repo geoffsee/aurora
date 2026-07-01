@@ -65,6 +65,7 @@ main {
     "audc audc audc audc audc audc audc audc audc audc audc audc"
     "midi midi midi midi midi midi midi midi midi midi midi midi"
     "trig trig trig trig trig trig trig trig trig trig trig trig"
+    "outs outs outs outs outs outs outs outs outs outs outs outs"
     "curv curv curv curv curv curv curv curv curv curv curv curv"
     "mete mete mete mete mete mete mete mete mete mete mete mete";
   gap: 0.75rem;
@@ -79,6 +80,7 @@ header { grid-area: head; }
 .s-rehearsal { grid-area: reh; }
 .s-midi-cc { grid-area: midi; }
 .s-triggers { grid-area: trig; }
+.s-outputs { grid-area: outs; }
 .s-audio-curves { grid-area: curv; }
 .s-audio-control { grid-area: audc; }
 .s-meters { grid-area: mete; }
@@ -1031,6 +1033,7 @@ meter::-moz-meter-bar {
       "audc audc audc audc audc audc audc audc audc audc audc audc"
       "midi midi midi midi midi midi midi midi midi midi midi midi"
       "trig trig trig trig trig trig trig trig trig trig trig trig"
+      "outs outs outs outs outs outs outs outs outs outs outs outs"
       "curv curv curv curv curv curv curv curv curv curv curv curv"
       "mete mete mete mete mete mete mete mete mete mete mete mete";
   }
@@ -1063,6 +1066,7 @@ meter::-moz-meter-bar {
       "audc audc audc audc audc audc audc audc audc audc audc audc"
       "midi midi midi midi midi midi midi midi midi midi midi midi"
       "trig trig trig trig trig trig trig trig trig trig trig trig"
+      "outs outs outs outs outs outs outs outs outs outs outs outs"
       "curv curv curv curv curv curv curv curv curv curv curv curv"
       "mete mete mete mete mete mete mete mete mete mete mete mete";
   }
@@ -1372,5 +1376,115 @@ meter::-moz-meter-bar {
   }
   .trigger-form button {
     grid-column: span 2;
+  }
+}
+
+/* ============== Multi-Output Routing ============== */
+.s-outputs {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  gap: 0.45rem;
+}
+
+.outputs-hint {
+  margin: 0;
+  color: var(--text-mute);
+  font-size: 0.7rem;
+}
+
+.outputs-hint code {
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+.outputs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 1.4rem;
+}
+
+.outputs-empty {
+  margin: 0;
+  color: var(--text-mute);
+  font-size: 0.7rem;
+  padding: 0.2rem 0;
+}
+
+.output-row {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--panel-border);
+  background: rgba(8, 10, 20, 0.55);
+}
+
+.output-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.output-row-head .out-id,
+.output-row-head .out-label {
+  flex: 1 1 6rem;
+  min-width: 4rem;
+  font-size: 0.72rem;
+}
+
+.output-row-head .out-id {
+  font-family: var(--mono);
+}
+
+.output-row-head button {
+  min-height: 2rem;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.output-row-head .out-remove {
+  margin-left: auto;
+  width: 1.6rem;
+  padding: 0;
+  font-weight: 800;
+  color: var(--text-mute);
+}
+
+.output-row-overrides {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.output-override {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.output-override input[type="number"] {
+  width: 100%;
+  min-width: 2.5rem;
+  font-size: 0.7rem;
+}
+
+.outputs-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.outputs-actions button {
+  min-height: 2.4rem;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .output-row-overrides {
+    grid-template-columns: 1fr;
   }
 }

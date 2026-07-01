@@ -44,7 +44,8 @@ export const VST_OSC_CONTRACT = contract;
 // v6: added audioControlMode field (global enable for the audio-control router)
 // v7: added paletteR/G/B fields (color-picker duotone base; palette hue kept for VST/MIDI)
 // v8: added audioTransientAutomation field (opt-in audio→automation transient detector)
-export const CONTROL_STATE_SCHEMA_VERSION = 8;
+// v9: added outputs field (multi-output routing for multi-projector venues)
+export const CONTROL_STATE_SCHEMA_VERSION = 9;
 
 export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [

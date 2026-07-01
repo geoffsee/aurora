@@ -68,6 +68,7 @@ export function defaultState(): ControlState {
 		},
 		morph: 0,
 		audioControlMode: false,
+		outputs: [],
 		audioTransientAutomation: false,
 	};
 }

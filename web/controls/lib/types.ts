@@ -1,4 +1,5 @@
 import type { AudioCurveShape } from "../../../shared/osc-validation.ts";
+import type { OutputRoute } from "../../../shared/output-routing.ts";
 import type { AudioEmaAlphas } from "../../../bridge/audio-ema.ts";
 
 export type TrackMapping = {
@@ -64,6 +65,7 @@ export type ControlState = {
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
 	audioControlMode: boolean;
+	outputs: OutputRoute[];
 	audioTransientAutomation: boolean;
 };
 
