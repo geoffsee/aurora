@@ -1,16 +1,15 @@
 import { describe, expect, test } from "vitest";
 import {
-	DEFAULT_OUTPUT_ID,
 	MAX_OUTPUTS,
-	findOutputRoute,
 	isValidOutputId,
 	normalizeOutputRoute,
 	normalizeOutputRoutes,
 	resolveOutputView,
+	type OutputBaseView,
 	type OutputRoute,
 } from "../../shared/output-routing.ts";
 
-const base = () => ({
+const base = (): OutputBaseView => ({
 	crossfade: 0.5,
 	palette: 0.2,
 	activeShader: 1,
@@ -142,14 +141,75 @@ describe("resolveOutputView", () => {
 	});
 });
 
-describe("findOutputRoute", () => {
-	test("finds by id and returns undefined when absent", () => {
-		const routes = normalizeOutputRoutes([
-			{ id: "main" },
-			{ id: "left" },
-		]) as OutputRoute[];
-		expect(findOutputRoute(routes, "left")?.id).toBe("left");
-		expect(findOutputRoute(routes, DEFAULT_OUTPUT_ID)?.id).toBe("main");
-		expect(findOutputRoute(routes, "missing")).toBeUndefined();
+// The projector (web/index.html) resolves output routes inline in
+// applyOutputRoute rather than importing resolveOutputView, per the documented
+// mirror pattern (AGENTS.md). This replica is a line-for-line copy of that inline
+// logic; keep it in sync when editing web/index.html. The parity test below pins
+// the replica against resolveOutputView so the two can't drift.
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+const clampInt = (
+	value: number,
+	lo: number,
+	hi: number,
+	fallback: number,
+): number => {
+	const v = Math.floor(Number(value));
+	if (!Number.isFinite(v)) return fallback;
+	return Math.max(lo, Math.min(hi, v));
+};
+
+function applyOutputRouteReplica(
+	base: OutputBaseView,
+	route: OutputRoute | undefined,
+): OutputBaseView {
+	const controlState = { ...base };
+	if (!route) return controlState;
+	if (route.enabled === false) {
+		controlState.blackout = true;
+		return controlState;
+	}
+	if (typeof route.crossfade === "number")
+		controlState.crossfade = clamp01(route.crossfade);
+	if (typeof route.palette === "number")
+		controlState.palette = clamp01(route.palette);
+	if (typeof route.activeShader === "number") {
+		controlState.activeShader = clampInt(
+			route.activeShader,
+			0,
+			15,
+			controlState.activeShader,
+		);
+	}
+	return controlState;
+}
+
+describe("projector inline mirror parity", () => {
+	const cases: Array<{ name: string; route: unknown }> = [
+		{ name: "no override", route: { id: "left" } },
+		{ name: "disabled", route: { id: "left", enabled: false } },
+		{ name: "crossfade override", route: { id: "left", crossfade: 0 } },
+		{ name: "palette override", route: { id: "left", palette: 1 } },
+		{ name: "max shader override", route: { id: "left", activeShader: 15 } },
+		{
+			name: "all overrides",
+			route: { id: "left", crossfade: 0.3, palette: 0.7, activeShader: 12 },
+		},
+	];
+
+	for (const { name, route: raw } of cases) {
+		test(`applyOutputRoute matches resolveOutputView: ${name}`, () => {
+			const route = normalizeOutputRoute(raw)!;
+			for (const b of [base(), { ...base(), blackout: true }]) {
+				expect(applyOutputRouteReplica(b, route)).toEqual(
+					resolveOutputView(b, route),
+				);
+			}
+		});
+	}
+
+	test("no route: both pass the base through unchanged", () => {
+		expect(applyOutputRouteReplica(base(), undefined)).toEqual(
+			resolveOutputView(base(), undefined),
+		);
 	});
 });

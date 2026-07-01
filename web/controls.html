@@ -2062,7 +2062,7 @@
           const v = Number(num.value);
           if (!Number.isFinite(v)) return;
           const clamped = key === "activeShader"
-            ? Math.max(0, Math.min(9, Math.floor(v)))
+            ? Math.max(0, Math.min(15, Math.floor(v)))
             : Math.max(min, Math.min(max, v));
           state.outputs[index] = { ...state.outputs[index], [key]: clamped };
           publishOutputs();
@@ -2137,7 +2137,7 @@
         overrides.append(
           buildOverride(index, "crossfade", "XFade", 0, 1, 0.01),
           buildOverride(index, "palette", "Color", 0, 1, 0.01),
-          buildOverride(index, "activeShader", "Shader", 0, 9, 1),
+          buildOverride(index, "activeShader", "Shader", 0, 15, 1),
         );
 
         row.append(head, overrides);

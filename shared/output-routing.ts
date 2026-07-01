@@ -18,8 +18,6 @@
 // has no matching route, renders the shared state unchanged. This keeps the
 // single-projector path a pure no-op (empty `outputs` list, zero overhead).
 
-export const DEFAULT_OUTPUT_ID = "main";
-
 // Cap the configurable list so an untrusted control-state payload can't grow it
 // without bound. Eight is comfortably more projectors than any single bridge
 // process is expected to drive.
@@ -29,7 +27,7 @@ export const MAX_OUTPUTS = 8;
 // to a conservative, injection-safe character set.
 const OUTPUT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
 
-const MAX_SHADER_INDEX = 9;
+const MAX_SHADER_INDEX = 15;
 
 export type OutputOverride = number | null;
 
@@ -112,15 +110,11 @@ export const normalizeOutputRoutes = (raw: unknown): OutputRoute[] => {
 	return out;
 };
 
-export const findOutputRoute = (
-	routes: readonly OutputRoute[],
-	id: string,
-): OutputRoute | undefined => routes.find((route) => route.id === id);
-
 // Resolve the effective view for one output. With no route (the implicit "main"
 // output, or an unconfigured id) the shared base view passes through unchanged.
 // A disabled output is blacked out; otherwise each non-null override replaces its
-// base field.
+// base field. The projector (web/index.html applyOutputRoute) mirrors this inline;
+// tests/shared/output-routing.test.ts pins the mirror against this function.
 export const resolveOutputView = (
 	base: OutputBaseView,
 	route?: OutputRoute,

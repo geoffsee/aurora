@@ -1728,10 +1728,7 @@ setInterval(() => {
 	// Drive the router from the demo feed only when no browser source is active;
 	// otherwise both streams would share the router's edge state and thrash.
 	const routerNowMs = Date.now();
-	if (
-		routerNowMs - lastBrowserAudioFeaturesMs >=
-		BROWSER_AUDIO_FEATURE_TTL_MS
-	) {
+	if (routerNowMs - lastBrowserAudioFeaturesMs >= BROWSER_AUDIO_FEATURE_TTL_MS) {
 		audioControlRouter.onFeatures(smoothed, routerNowMs);
 	}
 	const demo = {

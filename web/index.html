@@ -374,7 +374,7 @@
         if (typeof route.crossfade === "number") controlState.crossfade = clamp01(route.crossfade);
         if (typeof route.palette === "number") controlState.palette = clamp01(route.palette);
         if (typeof route.activeShader === "number") {
-          controlState.activeShader = clampInt(route.activeShader, 0, 9, controlState.activeShader);
+          controlState.activeShader = clampInt(route.activeShader, 0, 15, controlState.activeShader);
         }
       }
 
