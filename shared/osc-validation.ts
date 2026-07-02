@@ -89,6 +89,14 @@ export const PRESET_MORPH_ADDRESS = "/aurora/preset/morph";
 export const PRESET_SLOT_MIN = 1;
 export const PRESET_SLOT_MAX = 6;
 
+// Composite preset layers: a non-destructive stack composited over live state.
+export const PRESET_LAYER_PREFIX = "/aurora/preset/layer/";
+export const PRESET_LAYER_ADD_ADDRESS = "/aurora/preset/layer/add";
+export const PRESET_LAYER_WEIGHT_ADDRESS = "/aurora/preset/layer/weight";
+export const PRESET_LAYER_REMOVE_ADDRESS = "/aurora/preset/layer/remove";
+export const PRESET_LAYER_MOVE_ADDRESS = "/aurora/preset/layer/move";
+export const PRESET_LAYER_CLEAR_ADDRESS = "/aurora/preset/layer/clear";
+
 export const VST_CONTROL_NAMES: ReadonlySet<string> = new Set(
 	contract.controls.bridgeAccepts,
 );
@@ -191,6 +199,67 @@ export const validatePresetMorphOscMsg = (
 		return false;
 	}
 	return true;
+};
+
+// Composite-layer control family. Each address carries a fixed arg shape:
+//   add    <cueName:s> [weight:num]   — push a layer sourced from a known cue
+//   weight <index:num> <weight:num>   — set a layer's contribution
+//   remove <index:num>                — drop a layer
+//   move   <from:num> <to:num>        — reorder a layer
+//   clear                             — remove all layers, restoring the base
+// Indices/weights are validated as numeric here and floored/clamped by the
+// handler; unknown addresses under the layer prefix are rejected.
+export const validatePresetLayerOscMsg = (
+	msg: OscMsg,
+	origin: string,
+	cueNames: ReadonlySet<string>,
+): boolean => {
+	const { address } = msg;
+	const args = msg.args ?? [];
+	const drop = (reason: string): boolean => {
+		console.error(`[OSC] dropping preset layer "${address}" from ${origin} — ${reason}`);
+		return false;
+	};
+
+	if (address === PRESET_LAYER_ADD_ADDRESS) {
+		if (args.length < 1 || args.length > 2) {
+			return drop(`expected 1–2 args (cueName, [weight]), got ${args.length}`);
+		}
+		if (!isStringOscArg(args[0])) return drop("cueName must be a string");
+		if (!cueNames.has(String(oscArgValue(args[0])))) {
+			return drop(`unknown cue "${String(oscArgValue(args[0]))}"`);
+		}
+		if (args.length === 2 && !isNumericOscArg(args[1])) {
+			return drop(`weight must be numeric, got type "${oscArgType(args[1])}"`);
+		}
+		return true;
+	}
+
+	if (address === PRESET_LAYER_WEIGHT_ADDRESS) {
+		if (args.length !== 2) return drop(`expected 2 args (index, weight), got ${args.length}`);
+		if (!isNumericOscArg(args[0]) || !isNumericOscArg(args[1])) {
+			return drop("index and weight must be numeric");
+		}
+		return true;
+	}
+
+	if (address === PRESET_LAYER_REMOVE_ADDRESS) {
+		if (args.length !== 1) return drop(`expected 1 arg (index), got ${args.length}`);
+		if (!isNumericOscArg(args[0])) return drop("index must be numeric");
+		return true;
+	}
+
+	if (address === PRESET_LAYER_MOVE_ADDRESS) {
+		if (args.length !== 2) return drop(`expected 2 args (from, to), got ${args.length}`);
+		if (!isNumericOscArg(args[0]) || !isNumericOscArg(args[1])) {
+			return drop("from and to must be numeric");
+		}
+		return true;
+	}
+
+	if (address === PRESET_LAYER_CLEAR_ADDRESS) return true;
+
+	return drop("unrecognised layer command");
 };
 
 export const validateVstOscMsg = (

@@ -8,6 +8,12 @@ import {
 	CONTROL_STATE_SCHEMA_VERSION,
 	isAudioCurveShape,
 	PRESET_MORPH_ADDRESS,
+	PRESET_LAYER_PREFIX,
+	PRESET_LAYER_ADD_ADDRESS,
+	PRESET_LAYER_WEIGHT_ADDRESS,
+	PRESET_LAYER_REMOVE_ADDRESS,
+	PRESET_LAYER_MOVE_ADDRESS,
+	PRESET_LAYER_CLEAR_ADDRESS,
 	VST_CONTROL_NAMES,
 	VST_CONTROL_PREFIX,
 	VST_CUE_PREFIX,
@@ -16,6 +22,7 @@ import {
 	validateControlStateVersion,
 	validateLiveOscMsg,
 	validatePresetMorphOscMsg,
+	validatePresetLayerOscMsg,
 	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "../shared/osc-validation.ts";
@@ -54,6 +61,11 @@ import {
 	isMorphCurve,
 	morphPresetStates,
 } from "./preset-morph.ts";
+import {
+	PRESET_LAYER_MAX,
+	createLayerController,
+	pickLayerState,
+} from "./preset-layers.ts";
 import {
 	makeAutomationBridge,
 	parseTriggerBindings,
@@ -1112,6 +1124,54 @@ const applyPresetMorph = (msg: OscMsg) => {
 	mergeControlState({ ...morphed, morph: position });
 };
 
+// Composite preset layers. The bridge holds the layer stack and a snapshot of
+// the underlying state (`layerBase`) captured the moment the stack becomes
+// non-empty. Every mutation recomposites the stack over that fixed base and
+// merges the result, so the underlying values are never destroyed: dropping a
+// weight to 0, removing, or clearing recomputes the composition as if the layer
+// were never there. When the last layer goes, the base is merged back and
+// forgotten so future edits re-capture a fresh floor.
+const layerController = createLayerController({
+	captureFloor: () => pickLayerState(currentControlState()),
+	merge: (state) => mergeControlState(state),
+	onFull: () =>
+		console.error(
+			`[OSC] dropping preset layer add — stack already at max ${PRESET_LAYER_MAX}`,
+		),
+});
+
+const applyPresetLayer = (msg: OscMsg) => {
+	const args = msg.args ?? [];
+	const intArg = (i: number) => Math.trunc(Number(valueOf(args[i])));
+
+	switch (msg.address) {
+		case PRESET_LAYER_ADD_ADDRESS: {
+			const name = String(valueOf(args[0]));
+			const weight = args.length > 1 ? Number(valueOf(args[1])) : 1;
+			layerController.add({
+				name,
+				state: pickLayerState(cuePresets[name] as Record<string, unknown>),
+				weight,
+			});
+			break;
+		}
+		case PRESET_LAYER_WEIGHT_ADDRESS:
+			layerController.setWeight(intArg(0), Number(valueOf(args[1])));
+			break;
+		case PRESET_LAYER_REMOVE_ADDRESS:
+			layerController.remove(intArg(0));
+			break;
+		case PRESET_LAYER_MOVE_ADDRESS:
+			layerController.move(intArg(0), intArg(1));
+			break;
+		case PRESET_LAYER_CLEAR_ADDRESS:
+			layerController.clear();
+			break;
+		default:
+			return;
+	}
+};
+
 const isMidiClockActive = (): boolean =>
 	lastMidiClockAt > 0 && Date.now() - lastMidiClockAt < MIDI_CLOCK_TIMEOUT_MS;
 
@@ -1394,6 +1454,14 @@ const visualServer = Bun.serve({
 						if (validatePresetMorphOscMsg(morphMsg, "WS client", cueNames)) {
 							applyPresetMorph(morphMsg);
 						}
+					} else if (parsed.address.startsWith(PRESET_LAYER_PREFIX)) {
+						const layerMsg = {
+							address: parsed.address,
+							args: Array.isArray(parsed.args) ? parsed.args : [],
+						};
+						if (validatePresetLayerOscMsg(layerMsg, "WS client", cueNames)) {
+							applyPresetLayer(layerMsg);
+						}
 					} else if (parsed.address.startsWith("/aurora/preset/")) {
 						if (
 							validatePresetOscMsg({ address: parsed.address }, "WS client")
@@ -1644,6 +1712,14 @@ vstControlUdp.on("message", (msg: OscMsg) => {
 			validatePresetMorphOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)
 		) {
 			applyPresetMorph(msg);
+		}
+		return;
+	}
+	if (msg.address.startsWith(PRESET_LAYER_PREFIX)) {
+		if (
+			validatePresetLayerOscMsg(msg, `VST :${vstControlRecvPort}`, cueNames)
+		) {
+			applyPresetLayer(msg);
 		}
 		return;
 	}
