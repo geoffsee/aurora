@@ -96,7 +96,7 @@ async function main(): Promise<number> {
 		`[dry-run] booting bridge on :${PORT} (controls :${CONTROLS_PORT}); window ${DURATION_MS}ms`,
 	);
 
-	const bridge = Bun.spawn(["bun", "run", "bridge/bridge/index.ts"], {
+	const bridge = Bun.spawn(["bun", "run", "bridge/index.ts"], {
 		cwd: new URL("..", import.meta.url).pathname,
 		env: {
 			...process.env,
