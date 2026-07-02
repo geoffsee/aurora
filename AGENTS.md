@@ -13,7 +13,8 @@ bun run serve        # bun run bridge/index.ts (projector :3000, controls :3001,
 bun run check:wasm   # fast cargo check against wasm32-unknown-unknown
 bun run clippy       # clippy:wasm + clippy:vst, both with -D warnings (pre-commit runs this)
 bun run typecheck    # tsc --noEmit (also runs as the pre-commit hook)
-bun run dry-run      # scripts/dry-run.ts — performer-less end-to-end bridge harness
+bun run dry-run      # scripts/dry-run.ts — performer-less end-to-end bridge harness (one-shot)
+DRY_RUN_SUSTAINED=1 bun run dry-run   # standing 60-min gate; passes only with zero GAP lines (#213, docs/dry-run.md)
 ```
 
 Tests:
