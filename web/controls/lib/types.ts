@@ -71,6 +71,16 @@ export type ControlState = {
 	audioControlMode: boolean;
 	outputs: OutputRoute[];
 	audioTransientAutomation: boolean;
+	// Per-layer composite weights mirrored from the bridge's live layer stack;
+	// addressable as automation/OSC/MIDI targets. One slot per bridge layer.
+	layerWeight0: number;
+	layerWeight1: number;
+	layerWeight2: number;
+	layerWeight3: number;
+	layerWeight4: number;
+	layerWeight5: number;
+	layerWeight6: number;
+	layerWeight7: number;
 };
 
 export type OscMeters = {

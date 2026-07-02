@@ -83,7 +83,15 @@ export const migrateControlState = (state: unknown): unknown => {
 	// v8 → v9: add outputs field (multi-output routing). Empty by default so the
 	// single-projector path stays a no-op.
 	if (s.schemaVersion === 8) {
-		return { ...s, schemaVersion: 9, outputs: [] };
+		return migrateControlState({ ...s, schemaVersion: 9, outputs: [] });
+	}
+	// v9 → v10: add per-layer weight fields (layerWeight0..7). Zero by default so
+	// an empty stack contributes nothing. Count mirrors PRESET_LAYER_MAX (8) in
+	// bridge/preset-layers.ts; shared/ can't import bridge/ without a cycle.
+	if (s.schemaVersion === 9) {
+		const layerWeights: Record<string, number> = {};
+		for (let i = 0; i < 8; i++) layerWeights[`layerWeight${i}`] = 0;
+		return { ...s, schemaVersion: 10, ...layerWeights };
 	}
 	return state;
 };
