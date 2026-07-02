@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // ──────────────────────────────────────────────────────────────────────────
-// Performer-Less Set Dry Run (issue #193)
+// Performer-Less Set Dry Run (issues #193, #213)
 //
 // Boots the real bridge (bridge/index.ts) on isolated ports and drives the full
 // autonomy stack end-to-end with NO human at the controls: demo audio →
@@ -14,18 +14,28 @@
 // tested in isolation, and the WS fan-out tests run against a stub server
 // (tests/global-setup.ts), so nothing exercises them wired together through the
 // real bridge. Integration gaps the run surfaces are reported as `gaps` and
-// should be filed as issues (see docs/dry-run.md).
+// (in one-shot mode) should be filed as issues (see docs/dry-run.md).
 //
-// Run:  bun run dry-run
-//       DRY_RUN_DURATION_MS=600000 bun run dry-run   # sustain across an afternoon
+// Two modes:
+//   Run (one-shot):  bun run dry-run
+//     A short forcing-function window. Only the acceptance-criteria "required"
+//     checks fail the run; soft per-subsystem gaps are reported (GAP) but do not.
 //
-// Exit code: 0 if visuals were driven performer-less for the whole window
-// (the acceptance-criteria core); 1 if the bridge never came up or the control
-// stream never moved. Soft per-subsystem gaps are reported but do not fail the
-// run — the first run is expected to surface known gaps.
+//   Standing gate (#213):  DRY_RUN_SUSTAINED=1 bun run dry-run
+//     A sustained 60-minute run with horizon stall-detection. EVERY check is
+//     gated: the run passes only with ZERO GAP lines. This is the reproducible
+//     graduation bar that keeps the performer-less autonomy stack honest
+//     cycle-over-cycle. Override the window with DRY_RUN_DURATION_MS for a
+//     faster same-logic smoke of the gate.
+//
+// Exit code: 0 if the run passed its gate, 1 otherwise (bridge never came up,
+// the control stream never moved, a required check failed, or — under
+// DRY_RUN_SUSTAINED — any gap at all was detected). The pass/fail is asserted
+// from the accumulated checks, not merely printed.
 // ──────────────────────────────────────────────────────────────────────────
 
 import { CONTROL_STATE_SCHEMA_VERSION } from "../shared/osc-validation.ts";
+import { type Check, evaluateRun } from "./dry-run-gate.ts";
 
 type Json = Record<string, unknown>;
 type OscMsg = { address: string; args?: unknown[] };
@@ -35,6 +45,11 @@ const numEnv = (name: string, fallback: number): number => {
 	return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback;
 };
 
+const boolEnv = (name: string): boolean => {
+	const v = (Bun.env[name] ?? "").trim().toLowerCase();
+	return v === "1" || v === "true" || v === "yes" || v === "on";
+};
+
 // Isolated from the dev defaults (3000/3001/11000/11001/12000) so a dry run can
 // sit alongside a running dev server without a port clash.
 const PORT = numEnv("DRY_RUN_PORT", 3900);
@@ -42,7 +57,25 @@ const CONTROLS_PORT = numEnv("DRY_RUN_CONTROLS_PORT", 3901);
 const LIVE_SEND_PORT = numEnv("DRY_RUN_LIVE_SEND_PORT", 11900);
 const LIVE_RECV_PORT = numEnv("DRY_RUN_LIVE_RECV_PORT", 11901);
 const VST_CONTROL_RECV_PORT = numEnv("DRY_RUN_VST_CONTROL_RECV_PORT", 12900);
-const DURATION_MS = numEnv("DRY_RUN_DURATION_MS", 30000);
+
+// The standing gate (#213): a sustained 60-minute run whose pass condition is
+// zero GAP lines. DRY_RUN_DURATION_MS still overrides the window (for a faster
+// same-logic smoke), but the default stretches to the full hour under sustain.
+const SUSTAINED = boolEnv("DRY_RUN_SUSTAINED");
+const SUSTAINED_DURATION_MS = 60 * 60 * 1000;
+const DURATION_MS = numEnv(
+	"DRY_RUN_DURATION_MS",
+	SUSTAINED ? SUSTAINED_DURATION_MS : 30000,
+);
+
+// Horizon stall-detection. A one-shot window can't catch a freeze at minute 45,
+// so the sustained gate watches for stalls in the two liveness signals: the
+// control-state broadcast cadence, and how long fields go without moving. A
+// stall longer than these thresholds is a GAP.
+const STALL_MS = numEnv("DRY_RUN_STALL_MS", 3000);
+const MOVEMENT_STALL_MS = numEnv("DRY_RUN_MOVEMENT_STALL_MS", 5000);
+const HEARTBEAT_MS = 5 * 60 * 1000;
+
 const WS_URL = `ws://127.0.0.1:${PORT}/ws`;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -93,7 +126,9 @@ function changedKeys(prev: Json | null, next: Json): string[] {
 async function main(): Promise<number> {
 	const runStart = Date.now();
 	console.log(
-		`[dry-run] booting bridge on :${PORT} (controls :${CONTROLS_PORT}); window ${DURATION_MS}ms`,
+		`[dry-run] booting bridge on :${PORT} (controls :${CONTROLS_PORT}); ` +
+			`${SUSTAINED ? "SUSTAINED gate" : "one-shot"} window ${DURATION_MS}ms` +
+			(SUSTAINED ? " (pass = zero GAP lines)" : ""),
 	);
 
 	const bridge = Bun.spawn(["bun", "run", "bridge/index.ts"], {
@@ -124,6 +159,14 @@ async function main(): Promise<number> {
 	let firstFlashVersion = -1;
 	let prevState: Json | null = null;
 
+	// Horizon stall-detection accumulators. Both track the longest gap between
+	// consecutive *observed* events, so the connect/warm-up delay before the
+	// first event is never counted as a stall.
+	let lastBroadcastAt = 0;
+	let maxBroadcastGapMs = 0;
+	let lastMovementAt = 0;
+	let maxMovementGapMs = 0;
+
 	let ws: WebSocket;
 	try {
 		ws = await connect(15000);
@@ -144,7 +187,22 @@ async function main(): Promise<number> {
 			case "/aurora/control/state": {
 				const state = (msg.args?.[0] ?? {}) as Json;
 				controlBroadcasts++;
-				for (const k of changedKeys(prevState, state)) {
+				const now = Date.now();
+				if (lastBroadcastAt > 0) {
+					maxBroadcastGapMs = Math.max(
+						maxBroadcastGapMs,
+						now - lastBroadcastAt,
+					);
+				}
+				lastBroadcastAt = now;
+				const moved = changedKeys(prevState, state);
+				if (moved.length > 0) {
+					if (lastMovementAt > 0) {
+						maxMovementGapMs = Math.max(maxMovementGapMs, now - lastMovementAt);
+					}
+					lastMovementAt = now;
+				}
+				for (const k of moved) {
 					fieldChanges.set(k, (fieldChanges.get(k) ?? 0) + 1);
 				}
 				prevState = state;
@@ -212,8 +270,20 @@ async function main(): Promise<number> {
 		});
 	}, 200);
 
+	// Sustained runs are otherwise silent for an hour; emit a heartbeat so an
+	// operator (or CI log) can see the gate is alive and watch the stalls stay
+	// flat. No-op in one-shot mode (the window is shorter than one interval).
+	const heartbeat = setInterval(() => {
+		const mins = ((Date.now() - runStart) / 60000).toFixed(1);
+		console.log(
+			`[dry-run] +${mins}min alive — ${controlBroadcasts} broadcasts, ` +
+				`max stall ${maxBroadcastGapMs}ms, max no-move ${maxMovementGapMs}ms`,
+		);
+	}, HEARTBEAT_MS);
+
 	await sleep(Math.max(0, DURATION_MS - 2000));
 	clearInterval(morphTimer);
+	clearInterval(heartbeat);
 
 	ws.close();
 	bridge.kill();
@@ -226,7 +296,6 @@ async function main(): Promise<number> {
 	const thresholdMoved = maxFlashVersion > firstFlashVersion;
 	const morphMoved = fc("morph") > 0;
 
-	type Check = { name: string; ok: boolean; required: boolean; detail: string };
 	const checks: Check[] = [
 		{
 			name: "bridge_boot",
@@ -280,23 +349,45 @@ async function main(): Promise<number> {
 			required: false,
 			detail: `clock sources observed: ${[...clockSources].join(",") || "none"}`,
 		},
+		{
+			name: "no_broadcast_stall",
+			ok: maxBroadcastGapMs <= STALL_MS,
+			required: false,
+			detail: `longest control-stream stall ${maxBroadcastGapMs}ms (threshold ${STALL_MS}ms)`,
+		},
+		{
+			name: "no_movement_stall",
+			ok: maxMovementGapMs <= MOVEMENT_STALL_MS,
+			required: false,
+			detail: `longest gap with no field movement ${maxMovementGapMs}ms (threshold ${MOVEMENT_STALL_MS}ms)`,
+		},
 	];
 
+	const { failures, gaps: gapChecks, pass } = evaluateRun(checks, SUSTAINED);
+
 	const report = {
-		issue: 193,
+		issue: 213,
+		mode: SUSTAINED ? "sustained" : "one-shot",
+		sustained: SUSTAINED,
 		durationMs: elapsedMs,
 		controlBroadcasts,
 		demoAudioCount,
 		diagnosticsCount,
 		distinctFieldsMoved,
+		maxBroadcastGapMs,
+		maxMovementGapMs,
 		fieldChanges: Object.fromEntries(fieldChanges),
 		checks,
-		gaps: checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`),
+		pass,
+		gaps: gapChecks.map((c) => `${c.name}: ${c.detail}`),
 	};
 
 	console.log("\n──────── Performer-Less Dry Run Report ────────");
 	for (const c of checks) {
-		const tag = c.ok ? "PASS" : c.required ? "FAIL" : "GAP ";
+		// Under the sustained gate every failing check is a hard FAIL (the pass
+		// condition is zero GAP lines); in one-shot mode only required checks do.
+		const gated = c.required || SUSTAINED;
+		const tag = c.ok ? "PASS" : gated ? "FAIL" : "GAP ";
 		console.log(`  [${tag}] ${c.name} — ${c.detail}`);
 	}
 	console.log(
@@ -304,7 +395,9 @@ async function main(): Promise<number> {
 	);
 	if (report.gaps.length > 0) {
 		console.log(
-			"\n  Integration gaps to file as issues (see docs/dry-run.md):",
+			SUSTAINED
+				? "\n  Gaps (each fails the sustained gate):"
+				: "\n  Integration gaps to file as issues (see docs/dry-run.md):",
 		);
 		for (const g of report.gaps) console.log(`    - ${g}`);
 	}
@@ -314,23 +407,30 @@ async function main(): Promise<number> {
 		console.log(`\n  JSON report written to ${Bun.env.DRY_RUN_REPORT}`);
 	}
 
-	const requiredFailures = checks.filter((c) => c.required && !c.ok);
-	if (requiredFailures.length > 0) {
+	if (!pass) {
 		console.log(
-			`\n[dry-run] FAIL: ${requiredFailures.length} required check(s) failed.`,
+			SUSTAINED
+				? `\n[dry-run] FAIL: sustained gate saw ${failures.length} gap(s) — a clean run needs zero.`
+				: `\n[dry-run] FAIL: ${failures.length} required check(s) failed.`,
 		);
 		return 1;
 	}
 	console.log(
-		"\n[dry-run] PASS: visuals were driven performer-less for the full window.",
+		SUSTAINED
+			? "\n[dry-run] PASS: sustained performer-less run stayed clean (zero GAP lines) for the full window."
+			: "\n[dry-run] PASS: visuals were driven performer-less for the full window.",
 	);
 	return 0;
 }
 
-main().then(
-	(code) => process.exit(code),
-	(err) => {
-		console.error("[dry-run] crashed:", err);
-		process.exit(1);
-	},
-);
+// Only boot the bridge when executed directly (bun run dry-run). Importing this
+// module for unit tests (evaluateRun) must not spawn a 60-minute run.
+if (import.meta.main) {
+	main().then(
+		(code) => process.exit(code),
+		(err) => {
+			console.error("[dry-run] crashed:", err);
+			process.exit(1);
+		},
+	);
+}
