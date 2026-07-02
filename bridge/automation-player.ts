@@ -16,6 +16,8 @@ export type AutomationRecording = {
 // Volatile/edge-trigger fields excluded from recordings per spike #57.
 // strobeLockout is a safety interlock and must never be automated.
 // audioControlMode / audioTransientAutomation are arm switches — replay must not toggle them.
+// crossfade / deck modes / activeShader are operator-chosen layout — automation replay
+// (including audio triggers) must not override them.
 export const RECORDING_EXCLUDED_FIELDS: ReadonlySet<string> = new Set([
 	"schemaVersion",
 	"replaying",
@@ -25,7 +27,33 @@ export const RECORDING_EXCLUDED_FIELDS: ReadonlySet<string> = new Set([
 	"strobeLockout",
 	"audioControlMode",
 	"audioTransientAutomation",
+	"crossfade",
+	"deckAMode",
+	"deckBMode",
+	"activeShader",
+	"deckAGpuShader",
+	"deckBGpuShader",
 ]);
+
+/** Operator-chosen mix/visual layout — preserved during browser-side replay too. */
+export const AUTOMATION_LAYOUT_PRESERVED_FIELDS: readonly string[] = [
+	"crossfade",
+	"deckAMode",
+	"deckBMode",
+	"activeShader",
+	"deckAGpuShader",
+	"deckBGpuShader",
+];
+
+export function filterAutomationDiff(
+	diff: Record<string, unknown>,
+): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(diff)) {
+		if (!RECORDING_EXCLUDED_FIELDS.has(key)) out[key] = value;
+	}
+	return out;
+}
 
 /**
  * Convert a StateLog entry array into a time-relative AutomationRecording.
@@ -50,15 +78,10 @@ export function buildRecording(
 	const frames: AutomationFrame[] = [];
 
 	for (const entry of entries) {
-		const diff: Record<string, unknown> = {};
-		let any = false;
-		for (const [k, v] of Object.entries(entry.diff)) {
-			if (!RECORDING_EXCLUDED_FIELDS.has(k)) {
-				diff[k] = v;
-				any = true;
-			}
+		const diff = filterAutomationDiff(entry.diff);
+		if (Object.keys(diff).length > 0) {
+			frames.push({ tMs: entry.ts - t0, diff });
 		}
-		if (any) frames.push({ tMs: entry.ts - t0, diff });
 	}
 
 	return {
@@ -97,7 +120,7 @@ export function makeAutomationPlayer(
 		while (cursor < recording.frames.length) {
 			const frame = recording.frames[cursor]!;
 			if (frame.tMs > elapsed) break;
-			mergeControlState(frame.diff);
+			mergeControlState(filterAutomationDiff(frame.diff));
 			cursor++;
 		}
 

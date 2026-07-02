@@ -7,7 +7,7 @@ import {
 	NativeSelect,
 	Text,
 } from "@chakra-ui/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useControls } from "../context/ControlsContext.tsx";
 import { SHADER_OPTIONS, VISUAL_MODES } from "../lib/constants.ts";
 import { Panel } from "./ui.tsx";
@@ -15,6 +15,20 @@ import { ParamSlider } from "./ParamSlider.tsx";
 
 export function SlidersPanel() {
 	const { state, updateState } = useControls();
+
+	// Stable callbacks + formatters so ParamSlider (memoized) can skip renders
+	// when only unrelated context (e.g. osc meters) changes while audio plays.
+	const setBpm = useCallback((bpm: number) => updateState({ bpm }), [updateState]);
+	const setSpeed = useCallback((speed: number) => updateState({ speed }), [updateState]);
+	const setIntensity = useCallback((intensity: number) => updateState({ intensity }), [updateState]);
+	const setFeedback = useCallback((feedback: number) => updateState({ feedback }), [updateState]);
+	const setDepth = useCallback((depth: number) => updateState({ depth }), [updateState]);
+	const setRingOpacity = useCallback((ringOpacity: number) => updateState({ ringOpacity }), [updateState]);
+
+	const fmt1 = useCallback((v: number) => v.toFixed(1), []);
+	const fmt2 = useCallback((v: number) => v.toFixed(2), []);
+	const fmtPct = useCallback((v: number) => `${Math.round(v * 100)}%`, []);
+
 	const [keyStatus, setKeyStatus] = useState("checking…");
 	const [importStatus, setImportStatus] = useState("idle");
 	const [importUrl, setImportUrl] = useState("");
@@ -173,14 +187,23 @@ export function SlidersPanel() {
 					<NativeSelect.Root size="lg">
 						<NativeSelect.Field
 							value={String(state.activeShader)}
-							onChange={(e) =>
-								updateState({
-									activeShader: Math.max(
-										0,
-										Math.min(SHADER_OPTIONS.length - 1, Number(e.target.value)),
-									),
-								})
-							}
+							onChange={(e) => {
+								const v = Math.max(
+									0,
+									Math.min(SHADER_OPTIONS.length - 1, Number(e.target.value)),
+								);
+								if (state.showGpuPalette) {
+									// Keep the single GPU Shader picker live even when
+									// "GPU Rehoboam" (per-deck GPU layers) is active.
+									updateState({
+										activeShader: v,
+										deckAGpuShader: v,
+										deckBGpuShader: v,
+									});
+								} else {
+									updateState({ activeShader: v });
+								}
+							}}
 						>
 							{SHADER_OPTIONS.map((label, i) => (
 								<option key={label} value={i}>
@@ -254,8 +277,8 @@ export function SlidersPanel() {
 					min={60}
 					max={190}
 					step={0.1}
-					onChange={(bpm) => updateState({ bpm })}
-					format={(v) => v.toFixed(1)}
+					onChange={setBpm}
+					format={fmt1}
 				/>
 			</Panel>
 			<Panel>
@@ -265,8 +288,8 @@ export function SlidersPanel() {
 					min={0.1}
 					max={3}
 					step={0.01}
-					onChange={(speed) => updateState({ speed })}
-					format={(v) => v.toFixed(2)}
+					onChange={setSpeed}
+					format={fmt2}
 				/>
 			</Panel>
 			<Panel>
@@ -276,8 +299,8 @@ export function SlidersPanel() {
 					min={0.05}
 					max={1.5}
 					step={0.01}
-					onChange={(intensity) => updateState({ intensity })}
-					format={(v) => v.toFixed(2)}
+					onChange={setIntensity}
+					format={fmt2}
 				/>
 			</Panel>
 			<Panel>
@@ -287,8 +310,8 @@ export function SlidersPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(feedback) => updateState({ feedback })}
-					format={(v) => v.toFixed(2)}
+					onChange={setFeedback}
+					format={fmt2}
 				/>
 			</Panel>
 			<Panel>
@@ -298,8 +321,8 @@ export function SlidersPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(depth) => updateState({ depth })}
-					format={(v) => v.toFixed(2)}
+					onChange={setDepth}
+					format={fmt2}
 				/>
 			</Panel>
 			<Panel>
@@ -309,8 +332,8 @@ export function SlidersPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(ringOpacity) => updateState({ ringOpacity })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setRingOpacity}
+					format={fmtPct}
 				/>
 			</Panel>
 			</Grid>

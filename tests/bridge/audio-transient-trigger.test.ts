@@ -217,7 +217,7 @@ describe("makeAudioTransientDetector — onset mode", () => {
 // ---------------------------------------------------------------------------
 
 describe("makeAudioTransientDetector — debounce", () => {
-	test("does not re-fire within the debounce window", () => {
+	test("does not re-fire while held above threshold within debounce window", () => {
 		const d = makeAudioTransientDetector({
 			mode: "beat",
 			band: "pulse",
@@ -229,7 +229,7 @@ describe("makeAudioTransientDetector — debounce", () => {
 		expect(d.step(features({ pulse: 0.8 }), 199)).toBe(false);
 	});
 
-	test("re-fires after the debounce window expires", () => {
+	test("re-fires after debounce once the band drops and rises again", () => {
 		const d = makeAudioTransientDetector({
 			mode: "beat",
 			band: "pulse",
@@ -237,10 +237,11 @@ describe("makeAudioTransientDetector — debounce", () => {
 			debounceMs: 200,
 		});
 		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(true);
-		expect(d.step(features({ pulse: 0.8 }), 200)).toBe(true);
+		expect(d.step(features({ pulse: 0.2 }), 100)).toBe(false);
+		expect(d.step(features({ pulse: 0.8 }), 250)).toBe(true);
 	});
 
-	test("debounce 0 fires every qualifying frame", () => {
+	test("debounce 0 still requires a rising edge each time", () => {
 		const d = makeAudioTransientDetector({
 			mode: "beat",
 			band: "pulse",
@@ -248,7 +249,28 @@ describe("makeAudioTransientDetector — debounce", () => {
 			debounceMs: 0,
 		});
 		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(true);
-		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(true);
+		expect(d.step(features({ pulse: 0.8 }), 0)).toBe(false);
+		expect(d.step(features({ pulse: 0.2 }), 1)).toBe(false);
+		expect(d.step(features({ pulse: 0.8 }), 2)).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Arm / reset
+// ---------------------------------------------------------------------------
+
+describe("makeAudioTransientDetector — reset", () => {
+	test("reset while already above threshold suppresses immediate fire on arm", () => {
+		const d = makeAudioTransientDetector({
+			mode: "beat",
+			band: "energy",
+			threshold: 0.5,
+			debounceMs: 0,
+		});
+		d.reset(features({ energy: 0.8 }));
+		expect(d.step(features({ energy: 0.8 }), 0)).toBe(false);
+		expect(d.step(features({ energy: 0.2 }), 1)).toBe(false);
+		expect(d.step(features({ energy: 0.8 }), 2)).toBe(true);
 	});
 });
 
@@ -288,11 +310,11 @@ describe("makeAudioTransientDetector — updateConfig / getConfig", () => {
 			debounceMs: 500,
 		});
 		d.step(features({ pulse: 0.8 }), 0);
-		// Still in old debounce window
-		expect(d.step(features({ pulse: 0.8 }), 300)).toBe(false);
-		// Reduce debounce to 100 ms
+		// Still held high — no re-fire even after debounce shrinks.
 		d.updateConfig({ debounceMs: 100 });
-		expect(d.step(features({ pulse: 0.8 }), 300)).toBe(true);
+		expect(d.step(features({ pulse: 0.8 }), 300)).toBe(false);
+		expect(d.step(features({ pulse: 0.2 }), 301)).toBe(false);
+		expect(d.step(features({ pulse: 0.8 }), 302)).toBe(true);
 	});
 
 	test("updateConfig can switch modes", () => {
@@ -302,12 +324,14 @@ describe("makeAudioTransientDetector — updateConfig / getConfig", () => {
 			threshold: 0.5,
 			debounceMs: 0,
 		});
-		// Fires in beat mode
+		// Fires in beat mode on rising edge
 		expect(d.step(features({ energy: 0.6 }), 0)).toBe(true);
-		// Switch to band-energy (identical logic, still fires)
+		// Switch to band-energy (identical logic, needs a new rise)
 		d.updateConfig({ mode: "band-energy" });
 		expect(d.getConfig().mode).toBe("band-energy");
-		expect(d.step(features({ energy: 0.6 }), 1)).toBe(true);
+		expect(d.step(features({ energy: 0.6 }), 1)).toBe(false);
+		expect(d.step(features({ energy: 0.2 }), 2)).toBe(false);
+		expect(d.step(features({ energy: 0.6 }), 3)).toBe(true);
 	});
 });
 
@@ -417,7 +441,8 @@ describe("audio transient trigger E2E via synthetic audio buffer", () => {
 		expect(bridge.onAudioFeatures(features({ pulse: 0.8 }), 0)).toBe(true);
 		expect(bridge.onAudioFeatures(features({ pulse: 0.8 }), 100)).toBe(false);
 		expect(bridge.onAudioFeatures(features({ pulse: 0.8 }), 299)).toBe(false);
-		expect(bridge.onAudioFeatures(features({ pulse: 0.8 }), 300)).toBe(true);
+		expect(bridge.onAudioFeatures(features({ pulse: 0.2 }), 300)).toBe(false);
+		expect(bridge.onAudioFeatures(features({ pulse: 0.8 }), 350)).toBe(true);
 	});
 
 	test("updateTransientConfig adjusts sensitivity at runtime", () => {

@@ -86,7 +86,7 @@ fn rehoboam_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy
   let angle = atan2(p.y, p.x);
 
   let breathe = 0.015 * sin(time * 0.55);
-  let ring_r = 0.52 + breathe + bass * 0.055 + pulse * 0.018;
+  let ring_r = 0.52 + breathe + bass * 0.055;
   let dist = abs(r - ring_r);
 
   // Sample the rim texture on the unit circle so it wraps seamlessly. Feeding
@@ -101,15 +101,38 @@ fn rehoboam_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy
 
   // Two concentric rings bracketing the main one (one inner, one outer). These
   // stay clean/continuous so they read as defined rings around the halo.
-  let ring_gap = 0.13 + pulse * 0.012;
+  let ring_gap = 0.13;
   let ring_inner = crisp_ring(r, ring_r - ring_gap, 0.008, 0.014);
   let ring_outer = crisp_ring(r, ring_r + ring_gap, 0.008, 0.014);
   let rings = ring_inner + ring_outer;
 
-  let halo = exp(-dist * (9.5 - pulse * 1.4)) * (0.12 + 0.12 * pulse);
-  let inner = exp(-r * r * 3.8) * (0.08 + 0.08 * energy);
-  let core = exp(-r * r * 12.0) * (0.08 + 0.16 * pulse);
-  let sweep = pow(0.5 + 0.5 * cos(angle - time * (0.18 + mid * 0.45)), 3.0);
+  // Keep animated fill inside the inner ring; fade out before the band.
+  let inner_edge = ring_r - ring_gap;
+  let inner_mask = 1.0 - smoothstep(inner_edge - 0.035, inner_edge + 0.008, r);
+
+  let halo = exp(-dist * 9.5) * (0.12 + 0.08 * bass);
+
+  // Audio-reactive drive only — no beat pulse or time-based sine breathing.
+  let audio_drive = bass * 0.5 + mid * 0.3 + high * 0.2;
+  let inner = exp(-r * r * 3.8) * (0.06 + 0.12 * energy * (0.35 + 0.65 * audio_drive));
+
+  // Slow envelope-driven core motion — no beat-frequency sine churn.
+  let spoke_count = 12.0 + floor(bass * 10.0);
+  let spoke_phase = fract(angle / TAU * spoke_count + mid * 0.45 + bass * 0.35);
+  let spokes = (1.0 - smoothstep(0.0, 0.055 + high * 0.035, abs(spoke_phase - 0.5) * 2.0))
+    * exp(-r * r * (4.5 - bass * 1.2))
+    * (0.12 + 0.22 * audio_drive);
+
+  let drift_uv = p * (2.6 + bass * 0.8) + vec2<f32>(mid * 0.25, high * 0.2);
+  let inner_texture = fbm(drift_uv + vec2<f32>(sin(bass * 3.0), cos(mid * 2.5)) * 0.2)
+    * exp(-r * r * 5.0)
+    * (0.15 + 0.25 * energy);
+
+  let core = exp(-r * r * (11.0 - audio_drive * 2.8)) * (0.08 + 0.24 * audio_drive);
+
+  let inner_anim = (inner + spokes + inner_texture + core) * inner_mask;
+  let sweep = pow(0.5 + 0.5 * cos(angle - time * (0.22 + mid * 0.5)), 3.0);
+  let sweep_inner = sweep * inner_mask * (0.35 + 0.35 * energy);
 
   let sat = clamp(palette_extra.x, 0.0, 1.0);
   let bri = clamp(palette_extra.y, 0.0, 1.0);
@@ -118,12 +141,12 @@ fn rehoboam_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy
   let hue_phase = sin(angle) * 0.06 + r * 0.38 + time * 0.012;
   let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.55 * sat, bri);
   let accent = vj_duotone(palette_rgb.xyz, hue_phase + 0.23, 0.78 * sat, bri);
-  let color = base * (halo + inner)
-    + accent * (band * (0.7 + 0.3 * sweep) + rings * (0.5 + 0.25 * sweep) + core);
+  let color = base * (halo + inner_anim * (0.7 + 0.3 * sweep_inner))
+    + accent * (band * (0.7 + 0.3 * sweep) + rings * (0.5 + 0.25 * sweep) + core * inner_mask);
 
   let enabled = select(1.0, 0.0, energy < 0.0);
   let alpha = clamp(
-    (halo * 0.42 + band * 0.78 + rings * 0.6 + inner * 0.32 + core * 0.38) * enabled,
+    (halo * 0.42 + band * 0.78 + rings * 0.6 + inner_anim * 0.55 + core * inner_mask * 0.38) * enabled,
     0.0,
     0.9
   );
@@ -347,7 +370,12 @@ fn kick_rings_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, ener
 
   let sat = clamp(palette_extra.x, 0.0, 1.0);
   let bri = clamp(palette_extra.y, 0.0, 1.0);
-  let color = vj_duotone(palette_rgb.xyz, r * 0.42 + time * 0.03 + drive * 0.18, sat, bri) * clamp(layer * (0.75 + drive), 0.0, 1.7);
+  let color = vj_duotone(
+    palette_rgb.xyz,
+    hue_shift * 0.3 + r * 0.42 + time * 0.03 + drive * 0.18,
+    sat,
+    bri,
+  ) * clamp(layer * (0.75 + drive), 0.0, 1.7);
   let enabled = select(1.0, 0.0, energy < 0.0);
   return vec4<f32>(color * vignette * enabled, clamp(layer * vignette * enabled, 0.0, 1.0));
 }
@@ -422,6 +450,339 @@ fn vortex_bloom_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, en
   return vec4<f32>(color * layer * enabled, clamp(layer * enabled, 0.0, 1.0));
 }
 
+// === Variant 16: Crystal Core ===
+// Faceted radial crystals. Highs carve more facets and sharpen rims; bass
+// swells the core and drives rotation speed. Fully audio-reactive.
+fn crystal_core_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let a = atan2(p.y, p.x);
+  let drive = clamp(max(bass, energy * 0.5 + pulse * 0.5), 0.0, 1.0);
+  let facets = 6.0 + floor(high * 18.0);
+  let fa = abs(fract(a / TAU * facets + time * (0.3 + drive * 0.6)) - 0.5) * 2.0;
+  let crystal = 1.0 - smoothstep(0.0, 0.06 + high * 0.05, fa);
+  let ring = crisp_ring(r, 0.38 + drive * 0.18 + sin(time * 0.7) * 0.02, 0.03 + drive * 0.02, 0.03);
+  let core = exp(-r * r * (7.0 - drive * 4.0)) * (0.3 + 1.1 * drive);
+  let layer = crystal * (0.45 + high * 0.7) + ring * (0.6 + drive) + core;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = a / TAU * 0.2 + r * 0.6 + time * 0.02 + drive * 0.15;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.9 * sat, bri);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(base * layer * enabled, clamp(layer * enabled, 0.0, 1.0));
+}
+
+// === Variant 17: Bass Portal ===
+// Receding ring throat. Bass accelerates depth travel and widens the maw;
+// highs etch sharp spokes; pulse throws impact rings. Heavy audio drive.
+fn bass_portal_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let r = max(length(uv), 0.001);
+  let a = atan2(uv.y, uv.x);
+  let depth = 1.0 / r + time * (0.9 + bass * 2.2);
+  let band = abs(fract(depth * (1.8 + bass * 1.6)) - 0.5) * 2.0;
+  let portal = 1.0 - smoothstep(0.0, 0.16 + bass * 0.1, band);
+  let spokes = 1.0 - smoothstep(0.0, 0.04 + high * 0.06, abs(fract(a / TAU * (8.0 + high * 20.0) + time * 0.5) - 0.5) * 2.0);
+  let pulse_ring = crisp_ring(r, fract(time * (1.2 + bass * 1.8)) * 0.9 + 0.08, 0.015 + pulse * 0.025, 0.02) * pulse;
+  let layer = portal * (0.55 + bass * 0.9) + spokes * (0.35 + high * 0.5) + pulse_ring * 1.6;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = depth * 0.04 + a * 0.3 + time * 0.03;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.8 * sat, bri);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(base * layer * enabled, clamp(layer * enabled * (1.0 - r * 0.3), 0.0, 1.0));
+}
+
+// === Variant 18: Mercury Lake ===
+// Liquid metal surface. Bass dents the mirror; mids/highs drive ripples and caustics.
+// Specular glints ride the wave crests; duotone keeps it moody.
+fn mercury_lake_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let a = atan2(p.y, p.x);
+
+  // Low-frequency surface displacement from bass
+  let surface = fbm(p * 1.6 + vec2<f32>(time * 0.11, -time * 0.07)) * (0.6 + bass * 1.4);
+  let dent = bass * 0.28 * sin(a * 3.0 + time * 1.2) + bass * 0.18 * cos(r * 7.0 - time * 0.9);
+  let h = 0.04 * surface + dent;
+
+  // Normal from height field for specular
+  let eps = 0.012;
+  let hx = fbm((p + vec2<f32>(eps, 0.0)) * 1.6 + vec2<f32>(time * 0.11, -time * 0.07)) * (0.6 + bass * 1.4) * 0.04 + dent;
+  let hy = fbm((p + vec2<f32>(0.0, eps)) * 1.6 + vec2<f32>(time * 0.11, -time * 0.07)) * (0.6 + bass * 1.4) * 0.04 + dent;
+  let n = normalize(vec3<f32>(-(hx - h) / eps, -(hy - h) / eps, 1.0));
+
+  // View direction (ortho-ish) + animated light
+  let view = normalize(vec3<f32>(p * 0.6, 1.4));
+  let lpos = vec3<f32>(cos(time * 0.7) * (0.6 + mid * 0.4), sin(time * 0.9) * 0.5 + high * 0.2, 1.2);
+  let ldir = normalize(lpos - vec3<f32>(p, 0.0));
+  let spec = pow(max(dot(reflect(-ldir, n), view), 0.0), 28.0 + high * 24.0);
+
+  // Ripples on top (highs)
+  let ripple = crisp_ring(r, fract(time * (1.6 + high * 2.2)) * 0.9 + 0.12, 0.008 + high * 0.012, 0.03);
+  let ripple2 = crisp_ring(r, fract(time * (2.3 + mid * 1.1) + 1.7) * 0.7 + 0.3, 0.006, 0.02);
+  let caustic = (ripple + ripple2 * 0.6) * (0.3 + high * 0.7);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = a * 0.06 + r * 0.2 + time * 0.015 + h * 3.2;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.7 * sat, bri);
+  let metal = mix(base, vec3<f32>(1.0), clamp(spec * (0.6 + pulse * 0.5) + caustic * 0.5, 0.0, 0.9));
+  let layer = (0.35 + 0.9 * (spec + caustic * 0.7)) * (0.6 + bass * 0.3);
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(metal * layer * enabled, clamp((layer * 0.9 + spec * 0.6) * enabled, 0.0, 1.0));
+}
+
+// === Variant 19: Iridescent Veil ===
+// Thin-film interference with view-dependent hue flips. Highs add micro-folds;
+// bass swells the veil depth. Soft fresnel rim.
+fn iridescent_veil_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let a = atan2(p.y, p.x);
+
+  let warp = fbm(p * 1.2 + vec2<f32>(time * 0.08, time * -0.05)) + mid * 0.3;
+  let folds = sin((p.y + p.x * 0.6) * (9.0 + high * 14.0) + time * 3.2) * (0.5 + high * 0.6);
+  let depth = 1.8 + bass * 1.4 + warp * 0.8;
+
+  // Thin film: oscillate hue by optical path difference
+  let film = sin(depth * 6.2 + a * 1.3 + time * 1.1) * 0.5 + 0.5;
+  let rim = pow(1.0 - clamp(r * 0.72, 0.0, 1.0), 1.6 + bass * 0.8);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  // Shift through three adjacent hues in the chosen palette family
+  let h0 = vj_duotone(palette_rgb.xyz, film * 0.6 + time * 0.01, sat, bri);
+  let h1 = vj_duotone(palette_rgb.xyz, film * 0.6 + 0.22, sat * 0.95, bri);
+  let h2 = vj_duotone(palette_rgb.xyz, film * 0.6 + 0.46, sat, bri * 0.95);
+  let irid = mix(mix(h0, h1, film), h2, clamp(folds * 0.5 + 0.5, 0.0, 1.0));
+
+  let veil = (0.45 + 0.55 * film) * (0.5 + 0.5 * rim) + pulse * 0.25;
+  let layer = veil * (0.7 + bass * 0.3) + folds * high * 0.2;
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(irid * layer * enabled, clamp(layer * 0.85 * enabled, 0.0, 1.0));
+}
+
+// === Variant 20: Starweb ===
+// Sparse bright points that connect into a dynamic constellation. Mids add links;
+// highs twinkle; bass gently warps the field.
+fn starweb_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y) * 1.6;
+  let t = time * 0.2;
+
+  let grid = floor(p * 1.8 + vec2<f32>(t * 0.3, -t * 0.2));
+  let local = fract(p * 1.8 + vec2<f32>(t * 0.3, -t * 0.2)) - 0.5;
+
+  // Each cell has a star if seed high enough; audio biases probability
+  let seed = hash21(grid);
+  let alive = step(0.72 - mid * 0.25 - energy * 0.1, seed);
+  let tw = sin(time * (3.0 + seed * 7.0) + seed * 19.0) * 0.5 + 0.5;
+  let star = (1.0 - smoothstep(0.02 + high * 0.02, 0.09 + pulse * 0.05, length(local))) * alive * (0.6 + 0.8 * tw);
+
+  // Connect to neighbors with faint lines when both alive
+  var links = 0.0;
+  for (var dx = -1; dx <= 1; dx++) {
+    for (var dy = -1; dy <= 1; dy++) {
+      if (dx == 0 && dy == 0) { continue; }
+      let ncell = grid + vec2<f32>(f32(dx), f32(dy));
+      let nseed = hash21(ncell);
+      let nlive = step(0.72 - mid * 0.25 - energy * 0.1, nseed);
+      let npos = (fract(p * 1.8 + vec2<f32>(t * 0.3, -t * 0.2) + vec2<f32>(f32(dx), f32(dy))) - 0.5);
+      let d = distance(local, npos);
+      let w = (1.0 - smoothstep(0.6, 1.4, d)) * alive * nlive * (0.25 + mid * 0.5);
+      links += w;
+    }
+  }
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue = hash21(grid) + time * 0.02 + bass * 0.1;
+  let col = vj_duotone(palette_rgb.xyz, hue, sat, bri);
+  let layer = star * (1.0 + pulse) + links * 0.6;
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(col * layer * enabled, clamp(layer * 0.85 * enabled, 0.0, 1.0));
+}
+
+// === Variant 21: Recursive Maw ===
+// Self-similar zoom tunnel. Bass pushes depth; high warps the fractal c seed.
+// Looks like flying into a living recursive iris.
+fn recursive_maw_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  var p = vec2<f32>(uv.x * aspect, uv.y);
+  let r0 = length(p);
+  var acc = 0.0;
+  var wsum = 0.0;
+  let cbase = vec2<f32>(-0.72, 0.18) + vec2<f32>(sin(time * 0.1) * 0.06, cos(time * 0.13) * 0.05);
+  let cmod = vec2<f32>(high * 0.18, mid * 0.12) * sin(time * 0.7);
+  let c = cbase + cmod;
+
+  for (var i = 0; i < 6; i++) {
+    let z = p * (1.6 + bass * 0.6);
+    let z2 = dot(z, z);
+    let inv = 1.0 / max(z2, 0.02);
+    p = vec2<f32>(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) * inv + c;
+    let contrib = exp(-z2 * (0.7 + f32(i) * 0.15)) * (0.8 + 0.4 * pulse);
+    acc += contrib;
+    wsum += 1.0;
+  }
+  let field = clamp(acc / wsum, 0.0, 2.0);
+
+  let depth = 1.0 / max(r0, 0.001) + time * (1.2 + bass * 2.0);
+  let ring = 1.0 - smoothstep(0.0, 0.14 + bass * 0.1, abs(fract(depth) - 0.5) * 2.0);
+  let spokes = 1.0 - smoothstep(0.0, 0.05 + high * 0.08, abs(fract(atan2(p.y, p.x) / TAU * (6.0 + mid * 8.0) + time * 0.3) - 0.5) * 2.0);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = atan2(p.y, p.x) * 0.3 + depth * 0.03 + field * 0.4;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.85 * sat, bri);
+  let layer = field * 0.9 + ring * (0.6 + bass * 0.6) + spokes * (0.35 + high * 0.5);
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(base * layer * enabled, clamp(layer * 0.75 * enabled, 0.0, 1.0));
+}
+
+// === Variant 22: Inkbloom ===
+// Turbulent ink in water. Bass stirs the pot; mids create rising plumes;
+// highs add fine sediment. Soft, organic, and moody.
+fn inkbloom_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let t = time * 0.35;
+
+  // Large scale flow
+  let flow = vec2<f32>(
+    fbm(p * 0.7 + vec2<f32>(t * 0.4, 0.0)) - 0.5,
+    fbm(p * 0.7 + vec2<f32>(0.0, t * 0.33)) - 0.5
+  ) * (0.6 + bass * 1.0);
+
+  // Mid-frequency plumes
+  let plume = fbm(p * 2.4 + flow * 1.5 + vec2<f32>(t * 0.6, -t * 0.5) + mid * 0.8);
+
+  // Fine sediment
+  let sediment = fbm(p * 7.0 + flow * 3.0 + vec2<f32>(-t * 1.1, t * 0.8)) * (0.4 + high * 0.9);
+
+  let density = clamp(plume * 1.1 + sediment * 0.6 - r * 0.3, 0.0, 1.6);
+  let edge = 1.0 - smoothstep(0.6, 1.1, density);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = density * 0.8 + time * 0.02 + flow.x * 0.5;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.9 * sat, bri);
+  let color = mix(base * 0.2, base, edge);
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  let alpha = clamp((0.55 + 0.45 * density) * (0.6 + bass * 0.3) * enabled, 0.0, 1.0);
+  return vec4<f32>(color * enabled, alpha);
+}
+
+// === Variant 23: Scanlab Holo ===
+// Holographic scanline + hold wobble. RGB split increases with highs; bass
+// modulates vertical phase slip. Retro-futurist monitor feel.
+fn scanlab_holo_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+
+  let wobble = sin(p.y * 22.0 + time * 6.0) * (0.003 + bass * 0.01);
+  let slip = sin(time * 0.8) * (0.02 + bass * 0.03);
+  let y = p.y + wobble + slip;
+
+  let scan = 0.6 + 0.4 * step(0.5, fract(y * 38.0 + time * 1.4));
+  let band = 0.7 + 0.3 * step(0.5, fract(y * 5.5 + time * 0.3));
+
+  // RGB split grows with highs
+  let split = (0.004 + high * 0.018) * (1.0 + pulse * 0.5);
+  let r = vj_duotone(palette_rgb.xyz, p.x * 0.1 + y * 0.6 + time * 0.02 - split, palette_extra.x, palette_extra.y).r;
+  let g = vj_duotone(palette_rgb.xyz, p.x * 0.1 + y * 0.6 + time * 0.02, palette_extra.x, palette_extra.y).g;
+  let b = vj_duotone(palette_rgb.xyz, p.x * 0.1 + y * 0.6 + time * 0.02 + split, palette_extra.x, palette_extra.y).b;
+
+  let glitch = step(0.82 - high * 0.35, hash21(floor(vec2<f32>(p.x * 9.0, y * 11.0) + floor(time * 7.0) * 0.07)));
+  let tear = (1.0 - smoothstep(0.0, 0.03, abs(y + 0.1 - fract(time * 1.7) * 2.2))) * glitch * high;
+
+  let col = vec3<f32>(r, g, b) * scan * band + vec3<f32>(tear * 0.8);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  let alpha = clamp((0.55 + 0.45 * scan) * enabled, 0.0, 1.0);
+  return vec4<f32>(col * enabled, alpha);
+}
+
+// === Variant 24: Lumen Coral ===
+// Branching luminous structures. Bass grows the colony; mids add side branches;
+// highs brighten the tips. Soft pulsing core.
+fn lumen_coral_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  var p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let a = atan2(p.y, p.x);
+
+  // Curved space for branching
+  let bend = 0.6 + bass * 0.8;
+  p = vec2<f32>(p.x * cos(p.y * bend), p.y);
+
+  var acc = 0.0;
+  var tip = 0.0;
+  var q = p * 1.8;
+  for (var i = 0; i < 5; i++) {
+    let ang = a * (1.0 + f32(i) * 0.3) + time * (0.2 + f32(i) * 0.07) + mid * 0.6;
+    let rad = 0.08 + f32(i) * 0.025 + bass * 0.02;
+    let d = abs(length(q - vec2<f32>(sin(ang) * 0.6, cos(ang * 1.3) * 0.3)) - rad);
+    acc += 1.0 - smoothstep(0.0, 0.035 + high * 0.02, d);
+    // Tip brightening
+    tip += (1.0 - smoothstep(0.0, 0.02 + high * 0.03, d)) * (0.6 + high * 0.8);
+    q = q * 1.6 + vec2<f32>(sin(time * 0.4 + f32(i)), cos(time * 0.5)) * 0.15;
+  }
+
+  let core = exp(-r * (3.2 - bass * 1.0)) * (0.4 + pulse * 0.6);
+  let layer = clamp(acc * 0.7 + tip * 0.9 + core, 0.0, 2.2);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = a * 0.15 + time * 0.03 + layer * 0.2;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.85 * sat, bri);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(base * layer * enabled, clamp((0.4 + 0.6 * layer) * enabled, 0.0, 1.0));
+}
+
+// === Variant 25: Polaris Petals ===
+// Radial petals that open/close with bass, shear with mids, and shatter on pulse.
+// Center corona reacts to highs.
+fn polaris_petals_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = max(length(p), 0.001);
+  let a = atan2(p.y, p.x);
+
+  let petals = 5.0 + floor(mid * 7.0);
+  let open = 0.6 + bass * 0.9 + pulse * 0.3;
+  let lobe = pow(abs(cos(a * petals + time * (0.6 + bass * 0.8))), 1.6 / open);
+  let petal = 1.0 - smoothstep(0.35, 0.95 + high * 0.2, r / (0.55 + lobe * 0.45));
+
+  // Shear / twist
+  let twist = sin(a * 2.0 + time * 1.1) * (0.2 + mid * 0.5);
+  let shear = 1.0 - smoothstep(0.0, 0.08 + high * 0.06, abs(fract((a + twist) / TAU * (petals * 2.0)) - 0.5) * 2.0);
+
+  // Shatter on pulse
+  let crack = step(0.6 - pulse * 0.7, hash21(floor(vec2<f32>(a * 9.0, r * 11.0) + floor(time * 4.0))));
+  let burst = crisp_ring(r, fract(time * 1.8) * 0.9 + 0.05, 0.01 + pulse * 0.04, 0.05) * pulse * 1.8;
+
+  let corona = exp(-r * (4.0 - high * 2.0)) * (0.4 + high * 0.8);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let hue_phase = a * 0.08 + time * 0.025 + r * 0.5;
+  let base = vj_duotone(palette_rgb.xyz, hue_phase, 0.9 * sat, bri);
+  let layer = petal * 0.9 + shear * 0.5 + corona + burst + crack * pulse * 0.6;
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(base * layer * enabled, clamp(layer * 0.7 * enabled, 0.0, 1.0));
+}
+
 fn geometry_field(
   uv: vec2<f32>,
   time: f32,
@@ -438,7 +799,7 @@ fn geometry_field(
   let angle = atan2(center.y, center.x);
 
   let grain = noise(center * 4.0 + vec2<f32>(time * 0.22, energy * 1.3));
-  let drift = fbm(center * 2.2 + vec2<f32>(grain, pulse * 1.5));
+  let drift = fbm(center * 2.2 + vec2<f32>(grain, bass * 0.35));
 
   // Variant: 1=Spokes, 2=Rings, 3=Plasma (domain-warped FBM). Variant 0
   // (Rehoboam ring) is dispatched in fragment() before reaching here; the v==0
@@ -448,7 +809,7 @@ fn geometry_field(
   // Kaleidoscope-folded sampling space for Web variant. Slice count rises with bass,
   // axis rotates slowly with time + pulse — a classic VJ symmetry move.
   let kal_slices = 6.0 + floor(bass * 8.0);
-  let kal_uv = select(center, kaleidoscope(center, kal_slices, time * 0.13 + pulse * 0.6), v == 0);
+  let kal_uv = select(center, kaleidoscope(center, kal_slices, time * 0.1 + bass * 0.15), v == 0);
   let kal_radius = length(kal_uv);
   let kal_angle = atan2(kal_uv.y, kal_uv.x);
 
@@ -471,8 +832,8 @@ fn geometry_field(
   let lattice_grid = abs(fract(lattice_uv) - vec2<f32>(0.5));
   let lattice = 1.0 - smoothstep(0.0, 0.06 + 0.02 * (1.0 - mid), min(lattice_grid.x, lattice_grid.y));
 
-  let core = exp(-pow(radius * 2.2, 2.0)) * (0.9 + 0.1 * pulse);
-  let pulse_wave = 1.0 + 0.45 * sin(time * 1.3 + ring_wave * 6.28318 + pulse * 5.0);
+  let core = exp(-pow(radius * 2.2, 2.0)) * (0.9 + 0.1 * bass);
+  let pulse_wave = 0.72 + 0.28 * pulse;
 
   // Inigo Quilez domain warping: two nested FBM passes feed each other to
   // produce organic, evolving cloud-like fields. The intermediate warp vector
@@ -490,7 +851,7 @@ fn geometry_field(
       fbm(dw_p + 4.0 * dw_q + vec2<f32>(1.7 + time * 0.15, 9.2)),
       fbm(dw_p + 4.0 * dw_q + vec2<f32>(8.3, 2.8 + time * 0.13))
     );
-    let plasma_field = fbm(dw_p + 4.0 * dw_r + 1.5 * pulse);
+    let plasma_field = fbm(dw_p + 4.0 * dw_r + bass * 0.8);
     plasma = clamp(plasma_field * 1.4 + dw_q.x * 0.4 + 0.2, 0.0, 1.4);
   }
 
@@ -522,7 +883,7 @@ fn geometry_field(
   let fill = mix(base, accent, 0.38 + 0.35 * energy);
   let color = fill * clamp(0.32 + layer, 0.0, 1.0) + vec3<f32>(line_glow) * accent + vec3<f32>(core * 0.45);
   let alpha = clamp(
-    (layer + core + pulse * 0.4 + 0.5 * line_glow) * (0.35 + 0.65 * layer) * vignette * enabled,
+    (layer + core + pulse * 0.15 + 0.5 * line_glow) * (0.35 + 0.65 * layer) * vignette * enabled,
     0.0,
     1.0
   );
@@ -546,17 +907,95 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let hue = params.x;
   let v = i32(round(params.z));
 
-  if (v == 0) { return rehoboam_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 5) { return tunnel_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 6) { return glitch_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 7) { return fluid_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 8) { return truchet_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 10) { return bass_reactor_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 11) { return high_spark_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 12) { return kick_rings_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 13) { return laser_lattice_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 14) { return strobe_shards_variant(uv, time, hue, pulse, energy, bass, mid, high); }
-  if (v == 15) { return vortex_bloom_variant(uv, time, hue, pulse, energy, bass, mid, high); }
+  // layer_alpha from palette_extra.w lets the deck-GPU crossfade fade each layer
+  // independently (legacy single-shader path passes 1.0).
+  let layer_alpha = max(palette_extra.w, 0.0);
 
-  return geometry_field(uv, time, hue, params.z, pulse, energy, bass, mid, high);
+  if (v == 0) {
+    let c = rehoboam_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 5) {
+    let c = tunnel_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 6) {
+    let c = glitch_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 7) {
+    let c = fluid_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 8) {
+    let c = truchet_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 10) {
+    let c = bass_reactor_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 11) {
+    let c = high_spark_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 12) {
+    let c = kick_rings_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 13) {
+    let c = laser_lattice_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 14) {
+    let c = strobe_shards_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 15) {
+    let c = vortex_bloom_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 16) {
+    let c = crystal_core_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 17) {
+    let c = bass_portal_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 18) {
+    let c = mercury_lake_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 19) {
+    let c = iridescent_veil_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 20) {
+    let c = starweb_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 21) {
+    let c = recursive_maw_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 22) {
+    let c = inkbloom_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 23) {
+    let c = scanlab_holo_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 24) {
+    let c = lumen_coral_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 25) {
+    let c = polaris_petals_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+
+  let c = geometry_field(uv, time, hue, params.z, pulse, energy, bass, mid, high);
+  return vec4<f32>(c.xyz, c.w * layer_alpha);
 }

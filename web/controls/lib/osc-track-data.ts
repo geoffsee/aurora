@@ -1,5 +1,5 @@
 import type { ControlState, OscMeters } from "./types.ts";
-import { average, clamp01, smoothSignal } from "./math.ts";
+import { average, clamp01 } from "./math.ts";
 
 export function trackDataValueStart(args: unknown[]): number {
 	const fieldIndex = args.findIndex(
@@ -52,61 +52,19 @@ export function applyTrackData(
 	const now = performance.now();
 	const dtMs = Math.max(16, Math.min(250, now - (osc.lastEnvelopeAt || now)));
 
-	const alphas = state.emaAlphas ?? {
-		energy: 0.12,
-		bass: 0.08,
-		mid: 0.15,
-		high: 0.65,
-		pulse: 0.85,
-	};
-	const emaMs = (alpha: number) =>
-		-dtMs / Math.log(Math.max(1e-9, 1 - Math.min(0.999, alpha)));
+	// Assign raw mapped meter values directly for a jagged, extremely responsive display.
+	// EMA smoothing is applied upstream (bridge automation) and for visual rendering;
+	// the meters panel should reflect the incoming signal without additional lag.
 	osc.lastFrameAt = now;
-	osc.energy = smoothSignal(
-		osc.energy,
-		energyTarget,
-		dtMs,
-		emaMs(alphas.energy),
-		emaMs(alphas.energy) * 2.3,
+	osc.energy = energyTarget;
+	osc.bass = mappedTrack(mapping.bassTrack, energyTarget);
+	osc.mid = mappedTrack(mapping.midTrack, avg);
+	osc.high = Math.max(
+		mappedTrack(mapping.highTrack, 0),
+		Math.min(1, transient * 2.2),
 	);
-	osc.bass = smoothSignal(
-		osc.bass,
-		mappedTrack(mapping.bassTrack, energyTarget),
-		dtMs,
-		emaMs(alphas.bass),
-		emaMs(alphas.bass) * 2.4,
-	);
-	osc.mid = smoothSignal(
-		osc.mid,
-		mappedTrack(mapping.midTrack, avg),
-		dtMs,
-		emaMs(alphas.mid),
-		emaMs(alphas.mid) * 2.4,
-	);
-	osc.high = smoothSignal(
-		osc.high,
-		Math.max(
-			mappedTrack(mapping.highTrack, 0),
-			Math.min(1, transient * 2.2),
-		),
-		dtMs,
-		emaMs(alphas.high),
-		emaMs(alphas.high) * 2.9,
-	);
-	osc.deckA = smoothSignal(
-		osc.deckA,
-		mappedAverage(mapping.deckAStart, mapping.deckACount) || avg,
-		dtMs,
-		emaMs(alphas.energy),
-		emaMs(alphas.energy) * 2.3,
-	);
-	osc.deckB = smoothSignal(
-		osc.deckB,
-		mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg,
-		dtMs,
-		emaMs(alphas.energy),
-		emaMs(alphas.energy) * 2.3,
-	);
+	osc.deckA = mappedAverage(mapping.deckAStart, mapping.deckACount) || avg;
+	osc.deckB = mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg;
 	osc.previousEnergy = energyTarget;
 	osc.lastEnvelopeAt = now;
 }

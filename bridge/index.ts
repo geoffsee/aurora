@@ -26,7 +26,7 @@ import {
 	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "../shared/osc-validation.ts";
-import { DEFAULT_PALETTE_RGB, resolvePaletteColor } from "../shared/palette-color.ts";
+import { DEFAULT_PALETTE_RGB, hueToRgb, resolvePaletteColor } from "../shared/palette-color.ts";
 import {
 	MIDI_CLOCK_TICK,
 	MIDI_CLOCK_WINDOW,
@@ -134,8 +134,12 @@ type ControlState = {
 	cueCrossfade: number;
 	cueDeckAMode: number;
 	cueDeckBMode: number;
+	cueDeckAGpuShader: number;
+	cueDeckBGpuShader: number;
 	trackMapping: TrackMapping;
 	activeShader: number;
+	deckAGpuShader: number;
+	deckBGpuShader: number;
 	bandCurves: BandCurves;
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
@@ -358,8 +362,12 @@ const defaultControlState = (): ControlState => ({
 	cueCrossfade: 0.5,
 	cueDeckAMode: 0,
 	cueDeckBMode: 1,
+	cueDeckAGpuShader: 0,
+	cueDeckBGpuShader: 5,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
+	deckAGpuShader: 0,
+	deckBGpuShader: 5,
 	bandCurves: {
 		energy: "linear",
 		bass: "linear",
@@ -493,8 +501,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
 		gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
 		gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
-		deckAMode: clampInt(source.deckAMode, 0, 15, defaults.deckAMode),
-		deckBMode: clampInt(source.deckBMode, 0, 15, defaults.deckBMode),
+		deckAMode: clampInt(source.deckAMode, 0, 19, defaults.deckAMode),
+		deckBMode: clampInt(source.deckBMode, 0, 19, defaults.deckBMode),
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
@@ -528,8 +536,10 @@ const coerceControlState = (state: unknown): ControlState => {
 		cueIntensity: clamp(source.cueIntensity, 0, 1, defaults.cueIntensity),
 		cuePalette: clamp(source.cuePalette, 0, 1, defaults.cuePalette),
 		cueCrossfade: clamp(source.cueCrossfade, 0, 1, defaults.cueCrossfade),
-		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 15, defaults.cueDeckAMode),
-		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 15, defaults.cueDeckBMode),
+		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 19, defaults.cueDeckAMode),
+		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 19, defaults.cueDeckBMode),
+		cueDeckAGpuShader: clampInt(source.cueDeckAGpuShader, 0, 25, defaults.cueDeckAGpuShader),
+		cueDeckBGpuShader: clampInt(source.cueDeckBGpuShader, 0, 25, defaults.cueDeckBGpuShader),
 		trackMapping: {
 			deckAStart: clampInt(
 				(mapping as Partial<TrackMapping>).deckAStart,
@@ -574,7 +584,9 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 15, defaults.activeShader),
+		activeShader: clampInt(source.activeShader, 0, 25, defaults.activeShader),
+		deckAGpuShader: clampInt(source.deckAGpuShader, 0, 25, defaults.deckAGpuShader),
+		deckBGpuShader: clampInt(source.deckBGpuShader, 0, 25, defaults.deckBGpuShader),
 		morph: clamp(source.morph, 0, 1, defaults.morph),
 		bandCurves: (() => {
 			const bc =
@@ -609,10 +621,19 @@ const coerceControlState = (state: unknown): ControlState => {
 
 const currentControlState = () => latestControlState ?? defaultControlState();
 
+let latestAutomationAudioFeatures: AudioFeatures = {
+	energy: 0,
+	bass: 0,
+	mid: 0,
+	high: 0,
+	pulse: 0,
+};
+
 const maybeFeedAutomationAudio = (
 	features: AudioFeatures,
 	nowMs: number,
 ): void => {
+	latestAutomationAudioFeatures = features;
 	if (!currentControlState().audioTransientAutomation) return;
 	automationBridge.onAudioFeatures(features, nowMs);
 };
@@ -625,6 +646,17 @@ const mergeControlState = (partial: Partial<ControlState>) => {
 			...current.trackMapping,
 			...(partial.trackMapping ?? {}),
 		},
+	});
+};
+
+const mergePaletteHue = (value: number) => {
+	const palette = clamp(value, 0, 1, currentControlState().palette);
+	const rgb = hueToRgb(palette);
+	mergeControlState({
+		palette,
+		paletteR: rgb.r,
+		paletteG: rgb.g,
+		paletteB: rgb.b,
 	});
 };
 
@@ -888,6 +920,16 @@ const broadcast = (msg: OscMsg) => {
 const broadcastControl = (state: unknown) => {
 	const prev = latestControlState;
 	latestControlState = coerceControlState(state);
+	if (
+		prev &&
+		prev.audioTransientAutomation !== latestControlState.audioTransientAutomation
+	) {
+		automationBridge.resetTransientDetector(
+			latestControlState.audioTransientAutomation
+				? latestAutomationAudioFeatures
+				: undefined,
+		);
+	}
 	audioControlRouter.setEnabled(latestControlState.audioControlMode);
 	controlStateLog.record(
 		prev as Record<string, unknown> | null,
@@ -953,8 +995,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			case "depth":
 				mergeControlState({ depth: value });
 				break;
+			case "hue":
 			case "palette":
-				mergeControlState({ palette: value });
+				mergePaletteHue(value);
 				break;
 			case "deck_a_mode":
 				mergeControlState({ deckAMode: value });
@@ -1000,7 +1043,17 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				break;
 			case "active_shader":
 				mergeControlState({
-					activeShader: Math.max(0, Math.min(15, Math.floor(value))),
+					activeShader: Math.max(0, Math.min(25, Math.floor(value))),
+				});
+				break;
+			case "deck_a_gpu_shader":
+				mergeControlState({
+					deckAGpuShader: Math.max(0, Math.min(25, Math.floor(value))),
+				});
+				break;
+			case "deck_b_gpu_shader":
+				mergeControlState({
+					deckBGpuShader: Math.max(0, Math.min(25, Math.floor(value))),
 				});
 				break;
 			case "palette_saturation":
@@ -1095,6 +1148,8 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			cueCrossfade: finiteNumber(cue.crossfade, current.crossfade),
 			cueDeckAMode: finiteNumber(cue.deckAMode, current.deckAMode),
 			cueDeckBMode: finiteNumber(cue.deckBMode, current.deckBMode),
+			cueDeckAGpuShader: finiteNumber(cue.deckAGpuShader, current.deckAGpuShader),
+			cueDeckBGpuShader: finiteNumber(cue.deckBGpuShader, current.deckBGpuShader),
 			flashVersion:
 				name === "panic" ? current.flashVersion : current.flashVersion + 1,
 		});
@@ -1194,10 +1249,16 @@ function onMidiClock(): void {
 
 	if (now - lastMidiClockBpmUpdate < MIDI_BPM_UPDATE_INTERVAL_MS) return;
 
-	const bpm = deriveBpmFromTimestamps(midiClockTimestamps);
-	if (bpm === null) return;
+	const rawBpm = deriveBpmFromTimestamps(midiClockTimestamps);
+	if (rawBpm === null) return;
 
 	lastMidiClockBpmUpdate = now;
+
+	const bpm = Math.round(rawBpm * 10) / 10;
+	// Drop sub-0.05 jitter so the BPM slider and beat phase stay steady while
+	// a MIDI clock source is active.
+	const currentBpm = latestControlState?.bpm ?? 0;
+	if (Math.abs(bpm - currentBpm) < 0.05) return;
 	// MIDI clock is lower priority than Ableton Link. Keep recording timestamps
 	// above so MIDI takes over instantly if Link drops, but stay silent on the
 	// tempo mirror while Link is the authoritative source — otherwise the mirror
@@ -1250,10 +1311,23 @@ type AbletonLinkSession = {
 	) => void;
 };
 
+let lastLinkTempoSent = 0;
+let lastLinkTempoValue = 0;
+
 function broadcastLinkTempo(tempo: number): void {
+	const rounded = Math.round(tempo * 10) / 10;
+	// Suppress tiny jitter from Link while still keeping beat phase updates live.
+	if (
+		Math.abs(rounded - lastLinkTempoValue) < 0.05 &&
+		Date.now() - lastLinkTempoSent < 200
+	) {
+		return;
+	}
+	lastLinkTempoValue = rounded;
+	lastLinkTempoSent = Date.now();
 	const tempoData = JSON.stringify({
 		address: OSC_ADDRESSES.TEMPO,
-		args: [tempo],
+		args: [rounded],
 	});
 	sockets.forEach((ws) => {
 		ws.send(tempoData);
@@ -1326,6 +1400,7 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"intensity",
 	"feedback",
 	"depth",
+	"hue",
 	"palette",
 	"deck_a_mode",
 	"deck_b_mode",
@@ -1341,6 +1416,8 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
 	"bar_sync",
 	"demo_mode",
 	"active_shader",
+	"deck_a_gpu_shader",
+	"deck_b_gpu_shader",
 	"palette_saturation",
 	"palette_brightness",
 	"grid_density",

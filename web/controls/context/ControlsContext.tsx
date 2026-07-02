@@ -9,6 +9,7 @@ import {
 	type ReactNode,
 } from "react";
 import { nextReconnectDelay } from "../../../src/reconnect.ts";
+import { AUTOMATION_LAYOUT_PRESERVED_FIELDS } from "../../../bridge/automation-player.ts";
 import { cuePresets } from "../lib/cues.ts";
 import {
 	defaultDiagnostics,
@@ -270,14 +271,26 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 				next.cueDeckAMode = clampInt(
 					cue.deckAMode ?? prev.deckAMode,
 					0,
-					15,
+					19,
 					prev.deckAMode,
 				);
 				next.cueDeckBMode = clampInt(
 					cue.deckBMode ?? prev.deckBMode,
 					0,
-					15,
+					19,
 					prev.deckBMode,
+				);
+				next.cueDeckAGpuShader = clampInt(
+					cue.deckAGpuShader ?? prev.deckAGpuShader ?? 0,
+					0,
+					25,
+					prev.deckAGpuShader ?? 0,
+				);
+				next.cueDeckBGpuShader = clampInt(
+					cue.deckBGpuShader ?? prev.deckBGpuShader ?? 5,
+					0,
+					25,
+					prev.deckBGpuShader ?? 5,
 				);
 				next.flashVersion += name === "panic" ? 0 : 1;
 				stateRef.current = next;
@@ -466,6 +479,11 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			const timer = setTimeout(() => {
 				setState((prev) => {
 					const next = { ...prev, ...item.state, replaying: true };
+					for (const key of AUTOMATION_LAYOUT_PRESERVED_FIELDS) {
+						(next as Record<string, unknown>)[key] = (
+							prev as Record<string, unknown>
+						)[key];
+					}
 					stateRef.current = next;
 					return next;
 				});
@@ -524,7 +542,9 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 				changed = true;
 				if (
 					binding.param === "deckAMode" ||
-					binding.param === "deckBMode"
+					binding.param === "deckBMode" ||
+					binding.param === "deckAGpuShader" ||
+					binding.param === "deckBGpuShader"
 				) {
 					bumpCue = true;
 				}
@@ -836,7 +856,13 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 				frame?.address === "/live/song/get/tempo" &&
 				Number.isFinite(Number(args[0]))
 			) {
-				updateState({ bpm: Number(args[0]) });
+				let bpm = Number(args[0]);
+				bpm = Math.round(bpm * 10) / 10;
+				// Ignore micro-jitter from live clock sources (Link, MIDI clock, Ableton)
+				// so the BPM slider (and renderer) do not twitch while audio is playing.
+				if (Math.abs(bpm - (stateRef.current.bpm ?? 0)) >= 0.05) {
+					updateState({ bpm });
+				}
 			}
 			if (frame?.address === "/live/song/get/beat") {
 				const nextBeat = Number(args[0]) || 0;

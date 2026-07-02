@@ -91,7 +91,7 @@ describe("parseAudioMappings", () => {
 		});
 	});
 
-	test("drops forbidden arm-switch targets", () => {
+	test("drops forbidden arm-switch and layout targets", () => {
 		const parsed = parseAudioMappings([
 			{
 				source: "energy",
@@ -103,6 +103,21 @@ describe("parseAudioMappings", () => {
 				target: "audioControlMode",
 				mode: "threshold",
 				level: 0.5,
+			},
+			{
+				source: "energy",
+				target: "crossfade",
+				mode: "continuous",
+			},
+			{
+				source: "bass",
+				target: "deckAMode",
+				mode: "continuous",
+			},
+			{
+				source: "mid",
+				target: "activeShader",
+				mode: "continuous",
 			},
 			{
 				source: "energy",

@@ -34,6 +34,16 @@ export const SHADER_OPTIONS = [
 	"Laser Lattice",
 	"Strobe Shards",
 	"Vortex Bloom",
+	"Crystal Core",
+	"Bass Portal",
+	"Mercury Lake",
+	"Iridescent Veil",
+	"Starweb",
+	"Recursive Maw",
+	"Inkbloom",
+	"Scanlab Holo",
+	"Lumen Coral",
+	"Polaris Petals",
 ] as const;
 
 export const CUE_NAMES = [

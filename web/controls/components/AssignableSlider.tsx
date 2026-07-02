@@ -1,5 +1,5 @@
 import { Box, Field, NativeSelect } from "@chakra-ui/react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useControls } from "../context/ControlsContext.tsx";
 import {
 	buildParamPatch,
@@ -18,6 +18,11 @@ export function AssignableSlider({
 	const [param, setParam] = useState<MappableParam>(defaultParam);
 	const meta = PARAM_META[param];
 	const value = Number(state[param]);
+
+	const onChange = useCallback(
+		(v: number) => updateState(buildParamPatch(param, v), { bumpCue: meta.bumpCue }),
+		[updateState, param, meta.bumpCue],
+	);
 
 	return (
 		<Box>
@@ -43,9 +48,7 @@ export function AssignableSlider({
 				min={meta.min}
 				max={meta.max}
 				step={meta.step}
-				onChange={(v) =>
-					updateState(buildParamPatch(param, v), { bumpCue: meta.bumpCue })
-				}
+				onChange={onChange}
 				format={meta.format}
 			/>
 		</Box>
