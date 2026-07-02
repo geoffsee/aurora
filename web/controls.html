@@ -95,6 +95,10 @@
             <option value="13">Lattice</option>
             <option value="14">Drift</option>
             <option value="15">Storm</option>
+            <option value="16">Echo</option>
+            <option value="17">Vortex</option>
+            <option value="18">Fracture</option>
+            <option value="19">Nebula</option>
           </select>
         </label>
         <label class="panel slot deck-slot" data-deck="b">
@@ -119,6 +123,78 @@
             <option value="13">Lattice</option>
             <option value="14">Drift</option>
             <option value="15">Storm</option>
+            <option value="16">Echo</option>
+            <option value="17">Vortex</option>
+            <option value="18">Fracture</option>
+            <option value="19">Nebula</option>
+          </select>
+        </label>
+        <label class="panel slot deck-slot" data-deck="a">
+          <div class="slot-head">
+            <span>Deck A GPU</span>
+            <span class="deck-chip deck-a">A</span>
+          </div>
+          <select id="deck-a-gpu-shader">
+            <option value="0">Rehoboam</option>
+            <option value="1">Spokes</option>
+            <option value="2">Rings</option>
+            <option value="3">Plasma</option>
+            <option value="4">Grid</option>
+            <option value="5">Tunnel</option>
+            <option value="6">Glitch</option>
+            <option value="7">Fluid</option>
+            <option value="8">Truchet</option>
+            <option value="9">Imported</option>
+            <option value="10">Bass Reactor</option>
+            <option value="11">High Spark</option>
+            <option value="12">Kick Rings</option>
+            <option value="13">Laser Lattice</option>
+            <option value="14">Strobe Shards</option>
+            <option value="15">Vortex Bloom</option>
+            <option value="16">Crystal Core</option>
+            <option value="17">Bass Portal</option>
+            <option value="18">Mercury Lake</option>
+            <option value="19">Iridescent Veil</option>
+            <option value="20">Starweb</option>
+            <option value="21">Recursive Maw</option>
+            <option value="22">Inkbloom</option>
+            <option value="23">Scanlab Holo</option>
+            <option value="24">Lumen Coral</option>
+            <option value="25">Polaris Petals</option>
+          </select>
+        </label>
+        <label class="panel slot deck-slot" data-deck="b">
+          <div class="slot-head">
+            <span>Deck B GPU</span>
+            <span class="deck-chip deck-b">B</span>
+          </div>
+          <select id="deck-b-gpu-shader">
+            <option value="0">Rehoboam</option>
+            <option value="1">Spokes</option>
+            <option value="2">Rings</option>
+            <option value="3">Plasma</option>
+            <option value="4">Grid</option>
+            <option value="5">Tunnel</option>
+            <option value="6">Glitch</option>
+            <option value="7">Fluid</option>
+            <option value="8">Truchet</option>
+            <option value="9">Imported</option>
+            <option value="10">Bass Reactor</option>
+            <option value="11">High Spark</option>
+            <option value="12">Kick Rings</option>
+            <option value="13">Laser Lattice</option>
+            <option value="14">Strobe Shards</option>
+            <option value="15">Vortex Bloom</option>
+            <option value="16">Crystal Core</option>
+            <option value="17">Bass Portal</option>
+            <option value="18">Mercury Lake</option>
+            <option value="19">Iridescent Veil</option>
+            <option value="20">Starweb</option>
+            <option value="21">Recursive Maw</option>
+            <option value="22">Inkbloom</option>
+            <option value="23">Scanlab Holo</option>
+            <option value="24">Lumen Coral</option>
+            <option value="25">Polaris Petals</option>
           </select>
         </label>
         <label class="panel slot">
@@ -140,6 +216,16 @@
             <option value="13">Laser Lattice</option>
             <option value="14">Strobe Shards</option>
             <option value="15">Vortex Bloom</option>
+            <option value="16">Crystal Core</option>
+            <option value="17">Bass Portal</option>
+            <option value="18">Mercury Lake</option>
+            <option value="19">Iridescent Veil</option>
+            <option value="20">Starweb</option>
+            <option value="21">Recursive Maw</option>
+            <option value="22">Inkbloom</option>
+            <option value="23">Scanlab Holo</option>
+            <option value="24">Lumen Coral</option>
+            <option value="25">Polaris Petals</option>
           </select>
         </label>
         <label class="panel slot">
@@ -490,7 +576,7 @@
         target.palette = rgbToHue(target.paletteR, target.paletteG, target.paletteB);
       };
 
-      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral", "Ripple", "Shatter", "Flux", "Lattice", "Drift", "Storm"];
+      const visualModes = ["Beams", "Tunnel", "Burst", "Mirror", "Wash", "Strobe", "Swarm", "Orbit", "Pulse", "Spiral", "Ripple", "Shatter", "Flux", "Lattice", "Drift", "Storm", "Echo", "Vortex", "Fracture", "Nebula"];
       const cuePresets = {
         warmup: { crossfade: 0.5, intensity: 0.62, feedback: 0.22, depth: 0.15, palette: 0.58, deckAMode: 4, deckBMode: 4 },
         drop: { crossfade: 1, intensity: 1.25, feedback: 0.42, depth: 0.58, palette: 0.9, deckAMode: 2, deckBMode: 2 },
@@ -539,6 +625,8 @@
         cueCrossfade: 0.5,
         cueDeckAMode: 0,
         cueDeckBMode: 1,
+        cueDeckAGpuShader: 0,
+        cueDeckBGpuShader: 5,
         trackMapping: {
           deckAStart: 0,
           deckACount: 8,
@@ -549,6 +637,8 @@
           highTrack: 2,
         },
         activeShader: 0,
+        deckAGpuShader: 0,
+        deckBGpuShader: 5,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
         emaAlphas: { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 },
         morph: 0,
@@ -635,11 +725,6 @@
       const clamp01 = (value) => clamp(value, 0, 1, 0);
       const clampInt = (value, min, max, fallback = min) => Math.floor(clamp(value, min, max, fallback));
       const average = (items) => (items.length ? items.reduce((sum, value) => sum + value, 0) / items.length : 0);
-      const smoothSignal = (current, target, dtMs, attackMs, releaseMs) => {
-        const timeMs = target > current ? attackMs : releaseMs;
-        const blend = 1 - Math.exp(-dtMs / Math.max(1, timeMs));
-        return current + (target - current) * blend;
-      };
       const cloneState = () => JSON.parse(JSON.stringify(state));
 
       function sendPing() {
@@ -792,21 +877,17 @@
         const avg = average(values);
         const peak = Math.max(avg, ...values);
         const energyTarget = peak * 0.72 + avg * 0.28;
-        const transient = Math.max(0, energyTarget - osc.previousEnergy);
+        // Assign raw mapped meter values directly for a jagged, extremely responsive display.
+        // EMA smoothing is applied upstream (bridge automation) and for visual rendering;
+        // the meters should reflect the incoming signal without additional lag.
         const now = performance.now();
-        const dtMs = Math.max(16, Math.min(250, now - (osc.lastEnvelopeAt || now)));
-
-        // Convert per-band EMA alpha to smoothSignal time constants.
-        // Attack uses the alpha directly; release is 2.4× slower for musical feel.
-        const alphas = state.emaAlphas ?? { energy: 0.12, bass: 0.08, mid: 0.15, high: 0.65, pulse: 0.85 };
-        const emaMs = (alpha) => -dtMs / Math.log(Math.max(1e-9, 1 - Math.min(0.999, alpha)));
         osc.lastFrameAt = now;
-        osc.energy = smoothSignal(osc.energy, energyTarget, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
-        osc.bass = smoothSignal(osc.bass, mappedTrack(mapping.bassTrack, energyTarget), dtMs, emaMs(alphas.bass), emaMs(alphas.bass) * 2.4);
-        osc.mid = smoothSignal(osc.mid, mappedTrack(mapping.midTrack, avg), dtMs, emaMs(alphas.mid), emaMs(alphas.mid) * 2.4);
-        osc.high = smoothSignal(osc.high, Math.max(mappedTrack(mapping.highTrack, 0), Math.min(1, transient * 2.2)), dtMs, emaMs(alphas.high), emaMs(alphas.high) * 2.9);
-        osc.deckA = smoothSignal(osc.deckA, mappedAverage(mapping.deckAStart, mapping.deckACount) || avg, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
-        osc.deckB = smoothSignal(osc.deckB, mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg, dtMs, emaMs(alphas.energy), emaMs(alphas.energy) * 2.3);
+        osc.energy = energyTarget;
+        osc.bass = mappedTrack(mapping.bassTrack, energyTarget);
+        osc.mid = mappedTrack(mapping.midTrack, avg);
+        osc.high = Math.max(mappedTrack(mapping.highTrack, 0), Math.min(1, transient * 2.2));
+        osc.deckA = mappedAverage(mapping.deckAStart, mapping.deckACount) || avg;
+        osc.deckB = mappedAverage(mapping.deckBStart, mapping.deckBCount) || avg;
         osc.previousEnergy = energyTarget;
         osc.lastEnvelopeAt = now;
       }
@@ -864,8 +945,10 @@
         state.cueIntensity = clamp01(cue.intensity ?? state.intensity);
         state.cuePalette = clamp01(cue.palette ?? state.palette);
         state.cueCrossfade = clamp01(cue.crossfade ?? state.crossfade);
-        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 15, state.deckAMode);
-        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 15, state.deckBMode);
+        state.cueDeckAMode = clampInt(cue.deckAMode ?? state.deckAMode, 0, 19, state.deckAMode);
+        state.cueDeckBMode = clampInt(cue.deckBMode ?? state.deckBMode, 0, 19, state.deckBMode);
+        state.cueDeckAGpuShader = clampInt(cue.deckAGpuShader ?? state.deckAGpuShader, 0, 25, state.deckAGpuShader);
+        state.cueDeckBGpuShader = clampInt(cue.deckBGpuShader ?? state.deckBGpuShader, 0, 25, state.deckBGpuShader);
         state.flashVersion += name === "panic" ? 0 : 1;
         syncInputs();
         publish();
@@ -1141,7 +1224,7 @@
 
       const MIDI_CC_BINDINGS_KEY = "aurora.midi-cc-bindings";
       const MIDI_CC_SCHEMA_VERSION = 1; // keep in sync with midi-cc-schema.ts
-      const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);
+      const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode", "deckAGpuShader", "deckBGpuShader"]);
       const MIDI_CC_PARAM_LABELS = {
         crossfade: "Crossfade", bpm: "BPM", speed: "Speed",
         intensity: "Intensity", feedback: "Trails", depth: "3D Lines",
@@ -1149,6 +1232,7 @@
         gridDensity: "Grid Density", gridDiamond: "Grid Diamond",
         gridLineWidth: "Grid Lines", gridShapeMix: "Grid Shape",
         deckAMode: "Deck A Mode", deckBMode: "Deck B Mode",
+        deckAGpuShader: "Deck A GPU", deckBGpuShader: "Deck B GPU",
         ringOpacity: "Ring Opc", maxBrightness: "Max Bright",
       };
 
@@ -1488,6 +1572,8 @@
           ["max-brightness", "maxBrightness"],
           ["deck-a-mode", "deckAMode"],
           ["deck-b-mode", "deckBMode"],
+          ["deck-a-gpu-shader", "deckAGpuShader"],
+          ["deck-b-gpu-shader", "deckBGpuShader"],
           ["active-shader", "activeShader"],
         ]) {
           $(`#${id}`).value = String(state[key]);
@@ -1535,6 +1621,9 @@
         $("#max-brightness-value").textContent = `${Math.round(state.maxBrightness * 100)}%`;
         $("#deck-a-mode").title = visualModes[state.deckAMode] || "Mode";
         $("#deck-b-mode").title = visualModes[state.deckBMode] || "Mode";
+        const gpuShaderNames = ["Rehoboam","Spokes","Rings","Plasma","Grid","Tunnel","Glitch","Fluid","Truchet","Imported","Bass Reactor","High Spark","Kick Rings","Laser Lattice","Strobe Shards","Vortex Bloom","Crystal Core","Bass Portal","Mercury","Iridescent","Starweb","Maw","Inkbloom","Scanlab","Coral","Polaris"];
+        const da = $("#deck-a-gpu-shader"); if (da) da.title = gpuShaderNames[state.deckAGpuShader] || "Shader";
+        const db = $("#deck-b-gpu-shader"); if (db) db.title = gpuShaderNames[state.deckBGpuShader] || "Shader";
         $("#rings").setAttribute("aria-pressed", String(state.rings));
         $("#strobe").setAttribute("aria-pressed", String(state.strobe));
         $("#strobe-lockout").setAttribute("aria-pressed", String(state.strobeLockout));
@@ -1631,6 +1720,8 @@
       for (const [id, key] of [
         ["deck-a-mode", "deckAMode"],
         ["deck-b-mode", "deckBMode"],
+        ["deck-a-gpu-shader", "deckAGpuShader"],
+        ["deck-b-gpu-shader", "deckBGpuShader"],
       ]) {
         $(`#${id}`).addEventListener("change", (event) => {
           state[key] = Number(event.target.value);
@@ -1640,7 +1731,7 @@
       }
 
       $("#active-shader").addEventListener("change", (event) => {
-        state.activeShader = Math.max(0, Math.min(15, Number(event.target.value)));
+        state.activeShader = Math.max(0, Math.min(25, Number(event.target.value)));
         publish();
       });
 
@@ -2137,7 +2228,7 @@
         overrides.append(
           buildOverride(index, "crossfade", "XFade", 0, 1, 0.01),
           buildOverride(index, "palette", "Color", 0, 1, 0.01),
-          buildOverride(index, "activeShader", "Shader", 0, 15, 1),
+          buildOverride(index, "activeShader", "Shader", 0, 25, 1),
         );
 
         row.append(head, overrides);

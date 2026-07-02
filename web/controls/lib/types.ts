@@ -59,8 +59,12 @@ export type ControlState = {
 	cueCrossfade: number;
 	cueDeckAMode: number;
 	cueDeckBMode: number;
+	cueDeckAGpuShader: number;
+	cueDeckBGpuShader: number;
 	trackMapping: TrackMapping;
 	activeShader: number;
+	deckAGpuShader: number;
+	deckBGpuShader: number;
 	bandCurves: BandCurves;
 	emaAlphas: AudioEmaAlphas;
 	morph: number;
@@ -107,6 +111,8 @@ export type CuePreset = Partial<
 		| "palette"
 		| "deckAMode"
 		| "deckBMode"
+		| "deckAGpuShader"
+		| "deckBGpuShader"
 		| "maxBrightness"
 		| "strobe"
 		| "strobeLockout"

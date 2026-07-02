@@ -1,10 +1,14 @@
 import { Badge, Box, Button, Flex, Text } from "@chakra-ui/react";
+import { useCallback } from "react";
 import { useControls } from "../context/ControlsContext.tsx";
 import { Panel } from "./ui.tsx";
 import { ParamSlider } from "./ParamSlider.tsx";
 
 export function CrossfadePanel() {
 	const { state, updateState } = useControls();
+
+	const setCrossfade = useCallback((crossfade: number) => updateState({ crossfade }), [updateState]);
+	const fmtPct = useCallback((v: number) => `${Math.round(v * 100)}%`, []);
 
 	return (
 		<Panel area="hero" aria-label="Crossfade">
@@ -30,8 +34,8 @@ export function CrossfadePanel() {
 				min={0}
 				max={1}
 				step={0.001}
-				onChange={(crossfade) => updateState({ crossfade })}
-				format={(v) => `${Math.round(v * 100)}%`}
+				onChange={setCrossfade}
+				format={fmtPct}
 			/>
 			<Flex gap={2} mt={4}>
 				<Button

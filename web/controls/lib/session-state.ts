@@ -15,6 +15,8 @@ const EPHEMERAL_CONTROL_FIELDS = {
 	cueCrossfade: 0.5,
 	cueDeckAMode: 0,
 	cueDeckBMode: 1,
+	cueDeckAGpuShader: 0,
+	cueDeckBGpuShader: 5,
 } as const satisfies Partial<ControlState>;
 
 export function toPersistedControlState(
@@ -30,6 +32,8 @@ export function toPersistedControlState(
 		cueCrossfade: _cueCrossfade,
 		cueDeckAMode: _cueDeckAMode,
 		cueDeckBMode: _cueDeckBMode,
+		cueDeckAGpuShader: _cueDeckAGpuShader,
+		cueDeckBGpuShader: _cueDeckBGpuShader,
 		...persisted
 	} = state;
 	return persisted;

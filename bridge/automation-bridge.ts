@@ -96,6 +96,7 @@ export function makeAutomationBridge(
 	onOscAddress(address: string): boolean;
 	onAudioFeatures(features: Readonly<AudioFeatures>, nowMs: number): boolean;
 	updateTransientConfig(patch: Partial<AudioTransientConfig>): void;
+	resetTransientDetector(features?: Readonly<AudioFeatures>): void;
 	getTransientConfig(): Readonly<AudioTransientConfig>;
 } {
 	const player = makeAutomationPlayer(mergeControlState);
@@ -143,6 +144,9 @@ export function makeAutomationBridge(
 		},
 		updateTransientConfig(patch) {
 			detector.updateConfig(patch);
+		},
+		resetTransientDetector(features) {
+			detector.reset(features);
 		},
 		getTransientConfig() {
 			return detector.getConfig();

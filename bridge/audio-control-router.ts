@@ -51,9 +51,17 @@ const SOURCES: ReadonlySet<string> = new Set([
 ]);
 
 // Audio must never drive its own arm/disarm switches — that creates feedback loops.
+// crossfade / deck modes / activeShader are operator-chosen layout — audio mappings
+// must not override them.
 const FORBIDDEN_MAPPING_TARGETS: ReadonlySet<string> = new Set([
 	"audioControlMode",
 	"audioTransientAutomation",
+	"crossfade",
+	"deckAMode",
+	"deckBMode",
+	"activeShader",
+	"deckAGpuShader",
+	"deckBGpuShader",
 ]);
 
 // Continuous mappings only emit when the output moves more than this, so a

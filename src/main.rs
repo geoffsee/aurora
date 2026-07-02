@@ -61,6 +61,10 @@ unsafe extern "C" {
     fn browser_control_deck_a_mode() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBMode)]
     fn browser_control_deck_b_mode() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckAGpuShader)]
+    fn browser_control_deck_a_gpu_shader() -> u32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBGpuShader)]
+    fn browser_control_deck_b_gpu_shader() -> u32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlRings)]
     fn browser_control_rings() -> bool;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlRingOpacity)]
@@ -93,6 +97,10 @@ unsafe extern "C" {
     fn browser_control_cue_deck_a_mode() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueDeckBMode)]
     fn browser_control_cue_deck_b_mode() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueDeckAGpuShader)]
+    fn browser_control_cue_deck_a_gpu_shader() -> u32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCueDeckBGpuShader)]
+    fn browser_control_cue_deck_b_gpu_shader() -> u32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteSaturation)]
     fn browser_control_palette_saturation() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteBrightness)]
@@ -107,6 +115,8 @@ unsafe extern "C" {
     fn browser_control_grid_shape_mix() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlActiveShader)]
     fn browser_control_active_shader() -> u32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlBeatSync)]
+    fn browser_control_beat_sync() -> bool;
     /// Returns and consumes the pending imported-shader WGSL string, if any.
     /// JS-side global `window.__auroraTakePendingImportedShader()` returns the
     /// WGSL source from the most recent /api/shadertoy/import response, or null.
@@ -212,6 +222,14 @@ struct VjGridHandle(Handle<VjGridMaterial>);
 #[derive(Resource)]
 struct VjImportedHandle(Handle<VjImportedMaterial>);
 
+/// Separate handles so Deck A and Deck B can each drive their own GPU shader
+/// instance while the crossfade blends the two fullscreen quads.
+#[derive(Resource)]
+struct VjDeckPaletteAHandle(Handle<VjPaletteMaterial>);
+
+#[derive(Resource)]
+struct VjDeckPaletteBHandle(Handle<VjPaletteMaterial>);
+
 #[derive(Resource)]
 struct VjImportedShaderHandle(Handle<Shader>);
 
@@ -225,10 +243,8 @@ const OSC_PULSE_GAIN: f32 = 0.08;
 const AUDIO_GEOMETRY_GAIN: f32 = 0.28;
 const TUNNEL_RING_COUNT: usize = 18;
 const TUNNEL_DEPTH: f32 = 32.0;
-const AUDIO_GATE_START: f32 = 0.02;
-const AUDIO_GATE_END: f32 = 0.08;
-const AUDIO_ATTACK_SPEED: f32 = 14.0;
-const AUDIO_RELEASE_SPEED: f32 = 5.0;
+const AUDIO_GATE_START: f32 = 0.001;
+const AUDIO_GATE_END: f32 = 0.025;
 const PULSE_ATTACK_SPEED: f32 = 24.0;
 const PULSE_RELEASE_SPEED: f32 = 7.0;
 
@@ -291,6 +307,8 @@ struct VjState {
     grid_shape_mix: f32,
     deck_a_mode: VisualMode,
     deck_b_mode: VisualMode,
+    deck_a_gpu_shader: u32,
+    deck_b_gpu_shader: u32,
     rings_enabled: bool,
     ring_opacity: f32,
     strobe: bool,
@@ -317,6 +335,7 @@ struct VjState {
     last_control_reset_version: u32,
     last_control_cue_version: u32,
     active_shader: u32,
+    beat_sync: bool,
 }
 
 impl Default for VjState {
@@ -340,6 +359,8 @@ impl Default for VjState {
             grid_shape_mix: 0.5,
             deck_a_mode: VisualMode::Beams,
             deck_b_mode: VisualMode::Tunnel,
+            deck_a_gpu_shader: 0,
+            deck_b_gpu_shader: 5,
             rings_enabled: true,
             ring_opacity: 1.0,
             strobe: false,
@@ -366,6 +387,7 @@ impl Default for VjState {
             last_control_reset_version: 0,
             last_control_cue_version: 0,
             active_shader: 0,
+            beat_sync: true,
         }
     }
 }
@@ -402,6 +424,10 @@ enum VisualMode {
     Lattice,
     Drift,
     Storm,
+    Echo,
+    Vortex,
+    Fracture,
+    Nebula,
 }
 
 impl VisualMode {
@@ -422,6 +448,10 @@ impl VisualMode {
             13 => Self::Lattice,
             14 => Self::Drift,
             15 => Self::Storm,
+            16 => Self::Echo,
+            17 => Self::Vortex,
+            18 => Self::Fracture,
+            19 => Self::Nebula,
             _ => Self::Beams,
         }
     }
@@ -614,6 +644,38 @@ fn setup(
         GpuShaderQuad { index: 2 },
     ));
 
+    // Deck A/B GPU layers: two independent palette quads so crossfade can blend
+    // two different GPU shaders (one per deck) just like the CPU geometry decks.
+    let deck_mat_a = palette_materials.add(VjPaletteMaterial {
+        params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 1.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
+    });
+    commands.insert_resource(VjDeckPaletteAHandle(deck_mat_a.clone()));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(deck_mat_a),
+        Transform::from_xyz(0.0, 0.0, -15.5).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Hidden,
+        GpuShaderQuad { index: 10 },
+    ));
+
+    let deck_mat_b = palette_materials.add(VjPaletteMaterial {
+        params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 1.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
+    });
+    commands.insert_resource(VjDeckPaletteBHandle(deck_mat_b.clone()));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(deck_mat_b),
+        Transform::from_xyz(0.0, 0.0, -15.6).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Hidden,
+        GpuShaderQuad { index: 11 },
+    ));
+
     // The control surface now lives on port 3001, so the projector output has no HUD.
 }
 
@@ -690,12 +752,15 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
     let bass_attack = (target_bass - previous_bass).max(0.0) * 2.4;
     let melodic_attack = (target_melodic - previous_melodic).max(0.0) * 2.0;
 
-    state.osc_energy = smooth_audio(state.osc_energy, target_energy, dt);
-    state.osc_deck_a = smooth_audio(state.osc_deck_a, target_deck_a, dt);
-    state.osc_deck_b = smooth_audio(state.osc_deck_b, target_deck_b, dt);
-    state.osc_bass = smooth_audio(state.osc_bass, target_bass, dt);
-    state.osc_mid = smooth_audio(state.osc_mid, target_mid, dt);
-    state.osc_high = smooth_audio(state.osc_high, target_high, dt);
+    // Assign audio band values directly from the (now raw) browser inputs so the
+    // signal remains jagged and extremely responsive. Derived activity envelopes
+    // and pulse keep light smoothing for visual polish.
+    state.osc_energy = target_energy;
+    state.osc_deck_a = target_deck_a;
+    state.osc_deck_b = target_deck_b;
+    state.osc_bass = target_bass;
+    state.osc_mid = target_mid;
+    state.osc_high = target_high;
     state.bass_activity = smooth_signal(
         state.bass_activity,
         (target_bass * 0.72 + bass_attack).clamp(0.0, 1.0),
@@ -750,9 +815,12 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.grid_diamond = browser_control_grid_diamond().clamp(0.0, 1.0);
         state.grid_line_width = browser_control_grid_line_width().clamp(0.0, 1.0);
         state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
-        state.active_shader = browser_control_active_shader().min(15);
+        state.active_shader = browser_control_active_shader().min(25);
+        state.beat_sync = browser_control_beat_sync();
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
+        state.deck_a_gpu_shader = browser_control_deck_a_gpu_shader().min(25);
+        state.deck_b_gpu_shader = browser_control_deck_b_gpu_shader().min(25);
         state.rings_enabled = browser_control_rings();
         state.ring_opacity = browser_control_ring_opacity().clamp(0.0, 1.0);
         state.strobe_lockout = browser_control_strobe_lockout();
@@ -775,6 +843,8 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
             state.crossfade = browser_control_cue_crossfade().clamp(0.0, 1.0);
             state.deck_a_mode = VisualMode::from_control(browser_control_cue_deck_a_mode());
             state.deck_b_mode = VisualMode::from_control(browser_control_cue_deck_b_mode());
+            // GPU deck shaders are not cued via dedicated cue* calls yet; fall back to live.
+            // If cue GPU getters are added later, wire here symmetrically.
             state.last_control_cue_version = cue_version;
         }
     }
@@ -956,7 +1026,7 @@ fn update_visuals(
     let manual_beat_hit = (1.0 - beat).powf(8.0);
     let cue_hit = state.cue_boost.powf(1.25);
     let beat_hit = (if state.osc_connected {
-        state.osc_pulse.powf(1.35) * (bass_activity * 0.82 + osc_drive * 0.18) * OSC_PULSE_GAIN
+        musical_pulse(&state) * OSC_PULSE_GAIN
     } else {
         manual_beat_hit
     }) + cue_hit * 0.38;
@@ -968,6 +1038,12 @@ fn update_visuals(
     } else {
         1.0
     };
+    // Trails slider — gates the ghost layer and echo-style deck modes.
+    let trail_gain = state.feedback.clamp(0.0, 1.0);
+    // Derive a transient-only signal for strobe: the excess of bass_activity over
+    // its level-follow component. This keeps strobe flashing on kicks/hits rather
+    // than staying solid during sustained bass.
+    let bass_transient = (bass_activity - bass * 0.65).max(0.0);
     let strobe_alpha = if state.strobe
         && if state.osc_connected {
             // Flash on audio transients: the bass-activity envelope spikes on
@@ -975,7 +1051,7 @@ fn update_visuals(
             // the strobe tracks the beat instead of sitting dark. The old
             // `osc_pulse > 0.45` gate was effectively unreachable because pulse
             // is scaled by energy/bass, so it never followed the music.
-            audio_active && (bass_activity > 0.5 || state.osc_pulse > 0.3)
+            audio_active && (bass_transient > 0.18 || state.osc_pulse > 0.28)
         } else {
             beat < 0.16
         } {
@@ -1084,10 +1160,12 @@ fn update_visuals(
                         hue += 30.0;
                     }
                     VisualMode::Strobe => {
-                        let gate = (bass + beat_hit * 1.4).clamp(0.0, 1.0);
-                        let on = if gate > 0.45 { 1.0 } else { 0.12 };
+                        // Use the transient envelope so the strobe flashes on hits
+                        // rather than staying solid during sustained bass energy.
+                        let gate = (bass_activity + beat_hit * 1.4).clamp(0.0, 1.0);
+                        let on = if gate > 0.38 { 1.0 } else { 0.12 };
                         alpha *= on;
-                        transform.scale.y *= 1.0 + bass * 0.7 + beat_hit * 0.6;
+                        transform.scale.y *= 1.0 + bass_activity * 0.7 + beat_hit * 0.6;
                         hue += beat_hit * 120.0 + fraction * 60.0;
                     }
                     VisualMode::Swarm => {
@@ -1184,6 +1262,65 @@ fn update_visuals(
                         alpha *= 0.35 + surge * 0.75;
                         hue += chaos * 90.0 + surge * 60.0;
                     }
+                    VisualMode::Echo if trail_gain > 0.0 => {
+                        // Echo: feedback lengthens the trail, highs add extra ghost copies,
+                        // bass widens the echo spacing. Multiple virtual positions per beam.
+                        let echo_count = 1.0 + trail_gain * (2.5 + high * 1.2);
+                        let echo_phase = (element.seed * 1.7 + t * (0.6 + mid * 0.8)).fract();
+                        let echo_off = (echo_phase * echo_count).floor();
+                        let echo_mix = (echo_phase * echo_count).fract();
+                        let lag = echo_off * trail_gain * (18.0 + 32.0 + bass * 24.0);
+                        let echo_x = (t * 0.4 + element.seed).sin() * lag * 0.6;
+                        let echo_y = (t * 0.3 + element.seed * 1.3).cos() * lag * 0.5;
+                        transform.translation.x += echo_x + (echo_mix - 0.5) * 22.0 * high * trail_gain;
+                        transform.translation.y += echo_y - lag * 0.03 * bass_activity;
+                        transform.scale.y *= 0.7 + echo_mix * 0.9 * trail_gain + state.osc_pulse * 0.6;
+                        transform.scale.x *= 0.85 + high * 0.6 * trail_gain;
+                        alpha *= (0.6 - echo_mix * 0.55) * (0.7 + trail_gain * 0.6) * trail_gain;
+                        hue += echo_off * 28.0 + high * 55.0 * trail_gain;
+                    }
+                    VisualMode::Echo => {}
+                    VisualMode::Vortex => {
+                        // Vortex: bass pulls inward and speeds spin; mids add arm count.
+                        let pull = bass * 1.6 + osc_drive * 0.6 + beat_hit * 0.8;
+                        let arms = 3.0 + mid * 7.0;
+                        let swirl = (fraction * arms + t * (1.8 + bass * 3.2 + pull * 1.4)) * TAU;
+                        let vr = 90.0 - pull * 70.0 + (element.seed - 0.5) * 30.0;
+                        transform.translation.x = swirl.cos() * vr + (high * 18.0) * (t * 2.0 + element.seed).sin();
+                        transform.translation.y = swirl.sin() * vr * 0.8 - pull * 12.0;
+                        transform.rotation = Quat::from_rotation_z(swirl * 1.6 + pull * 1.2);
+                        transform.scale.x *= 0.6 + (1.0 - pull * 0.6).max(0.2) + state.osc_pulse * 0.5;
+                        transform.scale.y *= 1.1 + pull * 0.9 + beat_hit;
+                        alpha *= 0.55 + pull * 0.5 + melodic_activity * 0.3;
+                        hue += swirl.to_degrees() * 0.6 + pull * 45.0;
+                    }
+                    VisualMode::Fracture => {
+                        // Fracture: high rips shards apart; pulse cracks scale on beat.
+                        let crack = (high * 2.8 + state.osc_pulse * 1.6 + beat_hit * 2.2).clamp(0.0, 3.5);
+                        let shard = (element.seed * 29.0 + t * 11.0 + high * 4.0).sin();
+                        let jx = shard * (12.0 + crack * 48.0);
+                        let jy = (shard * 0.7 + (t * 13.0 + element.seed).cos() * 0.3) * (10.0 + crack * 38.0);
+                        transform.translation.x += jx;
+                        transform.translation.y += jy;
+                        transform.scale.x *= 0.35 + (1.0 - shard.abs() * 0.6) * (0.9 + high * 0.8) + crack * 0.15;
+                        transform.scale.y *= 0.25 + (0.6 + shard.abs() * 0.7) * (0.8 + beat_hit);
+                        transform.rotation *= Quat::from_rotation_z(shard * 1.8 + crack * 0.7);
+                        alpha *= (0.35 + crack * 0.25).min(1.0) + high * 0.25;
+                        hue += shard * 160.0 + crack * 35.0 + high * 70.0;
+                    }
+                    VisualMode::Nebula => {
+                        // Nebula: large soft drifting forms; mid/high control density and glow.
+                        let drift = t * (0.07 + element.seed * 0.04) + element.seed * TAU * 0.6;
+                        let swell = wave(t * (0.6 + melodic_activity * 1.1) + element.seed * 2.0);
+                        let cx = drift.cos() * (42.0 + mid * 55.0);
+                        let cy = drift.sin() * (30.0 + high * 48.0);
+                        transform.translation.x += cx + (swell - 0.5) * 18.0;
+                        transform.translation.y += cy * 0.9;
+                        transform.scale.x *= 2.4 + swell * 1.8 + osc_drive * 1.1;
+                        transform.scale.y *= 1.6 + swell * 1.2 + bass_activity * 0.7;
+                        alpha *= 0.22 + swell * 0.55 + (mid + high) * 0.25 + state.feedback * 0.2;
+                        hue += drift.to_degrees() * 0.12 + mid * 30.0 + swell * 25.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1223,10 +1360,10 @@ fn update_visuals(
                     VisualMode::Mirror => (0.9, 0.65, 0.58 + mid * 0.28, 1.0),
                     VisualMode::Wash => (1.02 + state.feedback * 0.18, 1.4, 0.44, 1.0),
                     VisualMode::Strobe => (
-                        0.9 + bass * 0.22,
+                        0.9 + bass_activity * 0.22,
                         0.8,
                         0.75,
-                        if (bass + beat_hit * 1.2).clamp(0.0, 1.0) > 0.4 {
+                        if (bass_activity + beat_hit * 1.2).clamp(0.0, 1.0) > 0.35 {
                             1.0
                         } else {
                             0.0
@@ -1251,6 +1388,25 @@ fn update_visuals(
                             0.25
                         },
                     ),
+                    VisualMode::Echo => (
+                        0.95 + state.feedback * 0.25 + high * 0.12,
+                        1.25,
+                        0.48 + state.osc_pulse * 0.3,
+                        1.0,
+                    ),
+                    VisualMode::Vortex => (
+                        0.78 + bass * 0.32,
+                        0.85,
+                        0.52 + bass_activity * 0.2,
+                        if bass + beat_hit > 0.3 { 1.0 } else { 0.6 },
+                    ),
+                    VisualMode::Fracture => (
+                        0.88 + high * 0.18,
+                        0.7,
+                        0.42 + high * 0.38,
+                        if high > 0.38 { 1.0 } else { 0.45 },
+                    ),
+                    VisualMode::Nebula => (1.15 + mid * 0.2, 1.6, 0.32 + (mid + high) * 0.18, 1.0),
                     VisualMode::Beams => (0.9, 0.8, 0.55, 1.0),
                 };
 
@@ -1343,10 +1499,11 @@ fn update_visuals(
                         hue += 45.0;
                     }
                     VisualMode::Strobe => {
-                        let gate = (bass + beat_hit * 1.3).clamp(0.0, 1.0);
-                        let on = if gate > 0.4 { 1.0 } else { 0.1 };
+                        // Use transient envelope for flashing, not sustained bass level.
+                        let gate = (bass_activity + beat_hit * 1.3).clamp(0.0, 1.0);
+                        let on = if gate > 0.35 { 1.0 } else { 0.1 };
                         alpha *= on;
-                        transform.scale *= 1.0 + bass * 0.8;
+                        transform.scale *= 1.0 + bass_activity * 0.8;
                         if (t * 4.0).sin() > 0.0 && (element.col + element.row) % 2 == 0 {
                             hue += 180.0;
                         }
@@ -1423,6 +1580,40 @@ fn update_visuals(
                         transform.scale *= 0.55 + surge * 1.5;
                         alpha *= 0.35 + surge * 0.8;
                     }
+                    VisualMode::Echo if trail_gain > 0.0 => {
+                        let echo = wave(t * (1.4 + trail_gain * 1.8) + diagonal * 2.2);
+                        let lag = (echo * (1.0 + trail_gain * 1.5) + high * 0.4 * trail_gain) * 22.0;
+                        transform.translation.x += lag * (diagonal - 0.5);
+                        transform.translation.y -= lag * 0.6;
+                        transform.scale *= 0.7 + echo * 0.9 * trail_gain + high * 0.6 * trail_gain;
+                        alpha *= (0.4 + trail_gain * 0.5 + high * 0.25 * trail_gain) * trail_gain;
+                        hue += echo * 80.0 * trail_gain + high * 40.0 * trail_gain;
+                    }
+                    VisualMode::Echo => {}
+                    VisualMode::Vortex => {
+                        let pull = bass * 1.4 + beat_hit * 0.7;
+                        let va = diagonal * 2.8 + t * (2.2 + pull * 2.4);
+                        transform.translation.x = (x * 0.6 + pull * -18.0) + va.cos() * (16.0 + pull * 18.0);
+                        transform.translation.y = (y * 0.6 + pull * -14.0) + va.sin() * (12.0 + pull * 14.0);
+                        transform.rotation = Quat::from_rotation_z(va * 1.3);
+                        transform.scale *= 0.55 + pull * 1.1;
+                        alpha *= 0.5 + pull * 0.6;
+                    }
+                    VisualMode::Fracture => {
+                        let shard = (diagonal * 13.0 + t * 5.5 + high * 3.0).sin();
+                        transform.translation.x += shard * (16.0 + high * 36.0);
+                        transform.translation.y += (1.0 - shard.abs()) * high * -22.0;
+                        transform.scale *= 0.45 + shard.abs() * 0.7 + beat_hit * 1.1;
+                        alpha *= 0.4 + high * 0.45 + beat_hit * 0.3;
+                        hue += shard * 140.0;
+                    }
+                    VisualMode::Nebula => {
+                        let cloud = wave(t * 0.55 + diagonal * 1.3);
+                        transform.translation.x += cloud * 26.0 * mid;
+                        transform.translation.y += (cloud - 0.5) * 20.0 * high;
+                        transform.scale *= 1.8 + cloud * 2.2 + osc_drive * 0.9;
+                        alpha *= 0.18 + cloud * 0.5 + (mid + high) * 0.22;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1434,9 +1625,21 @@ fn update_visuals(
                 lightness += pulse * 0.12 + melodic_activity * 0.06;
             }
             VisualKind::Ghost => {
+                // Ghost streaks are the dedicated trails layer — fully silent at feedback 0
+                // (flash can still punch through briefly).
+                if trail_gain <= 0.0 && state.flash <= 0.0 {
+                    alpha = 0.0;
+                } else {
                 let fraction = element.index as f32 / 18.0;
                 let angle = t * (0.08 + fraction * 0.04) + fraction * TAU;
                 let sway = wave(t * 0.9 + element.seed * 4.0);
+
+                // Staggered life cycles so each streak brightens then fades out.
+                // Higher feedback stretches the tail; at zero the layer is silent.
+                let life_rate = 0.32 + trail_gain * 0.85 + state.speed * 0.1;
+                let life = (t * life_rate + element.seed * 4.1).fract();
+                let decay_power = (2.6 - trail_gain * 1.8).max(0.4);
+                let trail_fade = (1.0 - life).powf(decay_power);
 
                 transform.translation = Vec3::new(
                     angle.cos() * 120.0 * sway,
@@ -1445,10 +1648,15 @@ fn update_visuals(
                 );
                 transform.rotation = Quat::from_rotation_z(angle);
                 transform.scale = Vec3::new(
-                    STAGE_WIDTH * (0.22 + state.feedback * 0.9 + bass * 0.05),
-                    18.0 + 180.0 * state.feedback * wave(t + element.seed)
-                        + melodic_activity * 24.0
-                        + bass_activity * 22.0,
+                    STAGE_WIDTH
+                        * (0.22 + trail_gain * 0.9 + bass * 0.05 * trail_gain)
+                        * (0.3 + 0.7 * trail_fade)
+                        * trail_gain.max(state.flash * 0.5),
+                    (18.0 + 180.0 * trail_gain * wave(t + element.seed)
+                        + melodic_activity * 24.0 * trail_gain
+                        + bass_activity * 22.0 * trail_gain)
+                        * trail_fade
+                        * trail_gain.max(state.flash * 0.5),
                     1.0,
                 );
 
@@ -1478,10 +1686,11 @@ fn update_visuals(
                         alpha *= 1.35;
                     }
                     VisualMode::Strobe => {
-                        let gate = (bass + beat_hit).clamp(0.0, 1.0);
-                        let on = if gate > 0.3 { 1.0 } else { 0.0 };
+                        // Use transient envelope for flashing, not sustained bass level.
+                        let gate = (bass_activity + beat_hit).clamp(0.0, 1.0);
+                        let on = if gate > 0.28 { 1.0 } else { 0.0 };
                         alpha *= on;
-                        transform.scale.x *= 1.0 + bass * 0.6;
+                        transform.scale.x *= 1.0 + bass_activity * 0.6;
                     }
                     VisualMode::Swarm => {
                         let dx = (t * 1.0 + fraction * 17.0).sin() * 240.0;
@@ -1545,17 +1754,69 @@ fn update_visuals(
                         transform.translation.x *= 1.0 + chaos * surge * 0.5;
                         alpha *= 0.25 + surge * 0.7;
                     }
+                    VisualMode::Echo if trail_gain > 0.0 => {
+                        let life2 = (t * (0.45 + trail_gain * 1.1) + fraction * 1.6).fract();
+                        let trail2 = (1.0 - life2).powf(1.8 - trail_gain * 1.1);
+                        let ex = (t * 0.6 + fraction * 1.2).sin() * trail_gain * (70.0 + 90.0);
+                        transform.translation.x += ex;
+                        transform.scale.x *= 0.35 + trail_gain * 0.7 + high * 0.3 * trail_gain;
+                        transform.scale.y *= (0.6 + trail2 * 1.6) * (0.8 + high * 0.3 * trail_gain);
+                        alpha *= (trail2 * (0.7 + trail_gain * 0.5) + high * 0.15 * trail_gain) * trail_gain;
+                    }
+                    VisualMode::Echo => {}
+                    VisualMode::Vortex => {
+                        let va = fraction * TAU * 2.2 + t * (2.6 + bass * 3.4);
+                        let vr = 110.0 - bass * 55.0;
+                        transform.translation.x = va.cos() * vr;
+                        transform.translation.y = va.sin() * (vr * 0.65);
+                        transform.rotation = Quat::from_rotation_z(va * 2.0);
+                        transform.scale.x *= 0.45 + bass * 0.8;
+                        alpha *= 0.45 + bass * 0.5 + beat_hit * 0.4;
+                    }
+                    VisualMode::Fracture => {
+                        let fj = (fraction * 23.0 + t * 9.0 + high * 6.0).sin();
+                        transform.translation.x += fj * (55.0 + high * 85.0);
+                        transform.scale.x *= 0.3 + fj.abs() * 0.8 + beat_hit;
+                        alpha *= 0.25 + high * 0.5 + state.osc_pulse * 0.3;
+                        hue += fj * 110.0;
+                    }
+                    VisualMode::Nebula => {
+                        let nd = t * 0.09 + fraction * 1.1;
+                        transform.translation.x = nd.cos() * (95.0 + mid * 40.0);
+                        transform.translation.y = nd.sin() * (55.0 + high * 35.0);
+                        transform.scale.x *= 1.4 + wave(t + fraction) * 1.6 + osc_drive * 0.8;
+                        transform.scale.y *= 0.9 + (mid + high) * 0.5;
+                        alpha *= 0.2 + (mid * 0.4 + high * 0.3) + state.feedback * 0.15;
+                    }
                     VisualMode::Beams => {}
                 }
 
                 hue += fraction * 90.0;
-                alpha *= state.feedback * (0.025 + 0.12 * sway) + state.flash * 0.08;
+                alpha *= (trail_gain * (0.06 + 0.22 * sway) * trail_fade)
+                    .max(0.0)
+                    + state.flash * 0.08 * trail_fade;
                 lightness += 0.08;
+                }
             }
         }
 
-        let alpha = ((alpha + strobe_alpha * deck_alpha) * state.max_brightness).clamp(0.0, 1.0);
-        let lightness = lightness * (0.45 + state.max_brightness * 0.55);
+        let strobe_boost = if matches!(element.kind, VisualKind::Ring) && !state.rings_enabled {
+            0.0
+        } else {
+            strobe_alpha * deck_alpha
+        };
+        // Max brightness is a crossfade-deck master (beams/tiles only). Rings, ghosts,
+        // and the GPU shader layer have their own opacity/brightness controls.
+        let crossfade_master = match element.kind {
+            VisualKind::Beam | VisualKind::Tile => state.max_brightness,
+            _ => 1.0,
+        };
+        let alpha = ((alpha + strobe_boost) * crossfade_master).clamp(0.0, 1.0);
+        let lightness = lightness
+            * match element.kind {
+                VisualKind::Beam | VisualKind::Tile => 0.45 + state.max_brightness * 0.55,
+                _ => 1.0,
+            };
         if let Some(material) = materials.get_mut(&material_handle.0) {
             material.color = palette_color(
                 state.palette_r,
@@ -1625,7 +1886,7 @@ fn update_tunnel_rings(
             (0.45 + drive * 0.14 + melodic_activity * 0.24 + state.flash * 0.25).clamp(0.05, 0.85);
         let bell = (phase * TAU * 0.5).sin();
         let alpha =
-            (bell * (0.55 + beat_hit * 0.45) * deck_mix * state.max_brightness).clamp(0.0, 1.0);
+            (bell * (0.55 + beat_hit * 0.45) * deck_mix).clamp(0.0, 1.0);
 
         if let Some(material) = materials.get_mut(&material_handle.0) {
             material.base_color = palette_color(
@@ -1648,6 +1909,8 @@ fn update_palette_material(
     palette_handle: Res<VjPaletteHandle>,
     grid_handle: Res<VjGridHandle>,
     imported_handle: Res<VjImportedHandle>,
+    deck_a_handle: Option<Res<VjDeckPaletteAHandle>>,
+    deck_b_handle: Option<Res<VjDeckPaletteBHandle>>,
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
     mut grid_materials: ResMut<Assets<VjGridMaterial>>,
     mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
@@ -1664,17 +1927,95 @@ fn update_palette_material(
     let mid = if active { state.osc_mid.max(0.0) } else { 0.0 };
     let high = if active { state.osc_high.max(0.0) } else { 0.0 };
     let pulse = if active {
-        state.osc_pulse.clamp(0.0, 1.0)
+        musical_pulse(&state)
     } else {
         0.0
     };
 
+    let aspect = windows
+        .single()
+        .map(|window| window.width() / window.height().max(1.0))
+        .unwrap_or(STAGE_WIDTH / STAGE_HEIGHT);
+
+    // Color picker is the GPU duotone base; params.x carries a reactive hue offset
+    // (manual palette + mids/highs) for phase variation in shader variants.
+    let audio_hue = if active {
+        (mid * 0.62 + high * 0.38).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let display_hue = (state.palette * 0.35 + audio_hue * 0.65).rem_euclid(1.0);
+
+    let palette_rgb = Vec4::new(
+        state.palette_r,
+        state.palette_g,
+        state.palette_b,
+        0.0,
+    );
+    let audio_uniforms = Vec4::new(energy, bass, mid, high);
+    // GPU brightness is palette_brightness only — max_brightness is a CPU-geometry master.
+    let palette_extra_base = Vec4::new(
+        state.palette_saturation,
+        state.palette_brightness,
+        pulse,
+        0.0,
+    );
+
+    // GPU deck A/B layers: when show_gpu_palette is on we drive two fullscreen
+    // palette quads (indices 10/11) and crossfade their alphas via palette_extra.w.
+    // Max brightness scales that crossfade mix only — not palette_brightness.
+    if state.show_gpu_palette {
+        let a_var = state.deck_a_gpu_shader as f32;
+        let b_var = state.deck_b_gpu_shader as f32;
+        let cross = state.crossfade.clamp(0.0, 1.0);
+        let master = state.max_brightness.clamp(0.0, 1.0);
+        let alpha_a = ((1.0 - cross) * master).clamp(0.0, 1.0);
+        let alpha_b = (cross * master).clamp(0.0, 1.0);
+
+        let params_a = Vec4::new(display_hue, state.show_time, a_var, aspect);
+        let params_b = Vec4::new(display_hue, state.show_time, b_var, aspect);
+
+        // Master alpha lives in palette_extra.w for the deck layers so each can
+        // fade independently while sharing the same material type.
+        let extra_a = Vec4::new(palette_extra_base.x, palette_extra_base.y, palette_extra_base.z, alpha_a);
+        let extra_b = Vec4::new(palette_extra_base.x, palette_extra_base.y, palette_extra_base.z, alpha_b);
+
+        if let Some(ha) = deck_a_handle.as_ref()
+            && let Some(mat) = palette_materials.get_mut(&ha.0)
+        {
+            mat.params = params_a;
+            mat.palette_extra = extra_a;
+            mat.audio_uniforms = audio_uniforms;
+            mat.palette_rgb = palette_rgb;
+        }
+        if let Some(hb) = deck_b_handle.as_ref()
+            && let Some(mat) = palette_materials.get_mut(&hb.0)
+        {
+            mat.params = params_b;
+            mat.palette_extra = extra_b;
+            mat.audio_uniforms = audio_uniforms;
+            mat.palette_rgb = palette_rgb;
+        }
+
+        // Show only the deck layers; hide classic single-shader quads.
+        for (quad, mut vis) in &mut gpu_quads {
+            *vis = if quad.index == 10 || quad.index == 11 {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            };
+        }
+        return;
+    }
+
+    // Legacy single-shader picker path (active when GPU palette is not forced on).
     // active_shader routing:
-    //   0..=3 → palette quad with palette_variant set (Rehoboam/Spokes/Rings/Plasma)
+    //   0..=3 → palette quad (Rehoboam/Spokes/Rings/Plasma via geometry_field)
     //   4     → grid quad
-    //   5..=8 → palette quad with palette_variant set (Tunnel/Glitch/Fluid/Truchet)
+    //   5..=8 → palette quad (Tunnel/Glitch/Fluid/Truchet)
     //   9     → imported quad (Shadertoy hot-swap slot)
-    //   10..=15 → palette quad with newer audio-reactive variants
+    //   10..=17 → palette quad (Bass Reactor … Bass Portal)
+    //   18..=25 → palette quad (new creative variants)
     let (quad_index, palette_variant) = if state.active_shader == 4 {
         (1u32, 0.0)
     } else if state.active_shader == 9 {
@@ -1683,36 +2024,19 @@ fn update_palette_material(
         (0u32, state.active_shader as f32)
     };
 
-    let aspect = windows
-        .single()
-        .map(|window| window.width() / window.height().max(1.0))
-        .unwrap_or(STAGE_WIDTH / STAGE_HEIGHT);
-
-    // Color (hue): manual palette is the anchor; mids/highs sweep the wheel when
-    // audio is live. palette_rgb tracks the reactive hue so GPU duotone follows.
-    let audio_hue = if active {
-        (mid * 0.62 + high * 0.38).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    let display_hue = (state.palette * 0.35 + audio_hue * 0.65).rem_euclid(1.0);
-    let display_rgb = hue_to_rgb(display_hue);
-
     let params = Vec4::new(display_hue, state.show_time, palette_variant, aspect);
-    let palette_rgb = Vec4::new(display_rgb.x, display_rgb.y, display_rgb.z, 0.0);
     let grid_params = Vec4::new(
-        display_rgb.x,
-        display_rgb.y,
+        state.palette_r,
+        state.palette_g,
         state.show_time,
-        display_rgb.z,
+        state.palette_b,
     );
     let palette_extra = Vec4::new(
-        state.palette_saturation,
-        state.palette_brightness,
-        pulse,
-        0.0,
+        palette_extra_base.x,
+        palette_extra_base.y,
+        palette_extra_base.z,
+        1.0,
     );
-    let audio_uniforms = Vec4::new(energy, bass, mid, high);
 
     if let Some(mat) = palette_materials.get_mut(&palette_handle.0) {
         mat.params = params;
@@ -1751,6 +2075,20 @@ fn beat_phase(state: &VjState) -> f32 {
     (state.show_time * state.bpm / 60.0).fract()
 }
 
+/// Beat-aware pulse for GPU + geometry: bass-led swells when beat-sync is off,
+/// kick envelopes when it is on — avoids high-transient chatter.
+fn musical_pulse(state: &VjState) -> f32 {
+    let bass = state.bass_activity.clamp(0.0, 1.0);
+    if !state.osc_connected {
+        return (1.0 - beat_phase(state)).powf(6.0);
+    }
+    let pulse = state.osc_pulse.clamp(0.0, 1.0);
+    if state.beat_sync {
+        return (pulse * (0.55 + bass * 0.45)).clamp(0.0, 1.0);
+    }
+    (bass * 0.78 + pulse * 0.22).clamp(0.0, 1.0)
+}
+
 fn wave(value: f32) -> f32 {
     value.sin() * 0.5 + 0.5
 }
@@ -1761,10 +2099,6 @@ fn soft_audio_gate(value: f32) -> f32 {
     let eased_gate = gate * gate * (3.0 - 2.0 * gate);
 
     value * eased_gate
-}
-
-fn smooth_audio(current: f32, target: f32, dt: f32) -> f32 {
-    smooth_signal(current, target, dt, AUDIO_ATTACK_SPEED, AUDIO_RELEASE_SPEED)
 }
 
 fn smooth_signal(current: f32, target: f32, dt: f32, attack_speed: f32, release_speed: f32) -> f32 {

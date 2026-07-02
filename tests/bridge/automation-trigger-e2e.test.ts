@@ -299,7 +299,7 @@ describe("automation trigger E2E via MIDI note", () => {
 		log.record(s0 as Record<string, unknown>, s1 as Record<string, unknown>);
 
 		vi.setSystemTime(800);
-		const s2 = { crossfade: 0.6, intensity: 0.8 };
+		const s2 = { crossfade: 0.6, intensity: 0.8, palette: 0.5 };
 		log.record(s1 as Record<string, unknown>, s2 as Record<string, unknown>);
 
 		// Verify the recording will have the expected frames
@@ -308,7 +308,9 @@ describe("automation trigger E2E via MIDI note", () => {
 			CONTROL_STATE_SCHEMA_VERSION,
 		);
 		expect(previewRecording.durationMs).toBe(800);
+		// crossfade is operator layout — excluded from recordings; palette supplies the 3rd frame
 		expect(previewRecording.frames).toHaveLength(3);
+		expect(previewRecording.frames[2]!.diff).toEqual({ palette: 0.5 });
 
 		// --- set up bridge with MIDI note binding ---
 		const applied: Record<string, unknown>[] = [];
@@ -333,14 +335,15 @@ describe("automation trigger E2E via MIDI note", () => {
 		expect(bridge.player.isActive()).toBe(false);
 		expect(applied.at(-1)).toMatchObject({ replaying: false });
 
-		// All three data frames applied
+		// All three automatable data frames applied; crossfade changes are ignored
 		const dataFrames = applied.filter((d) =>
 			Object.keys(d).some((k) => k !== "replaying"),
 		);
 		expect(dataFrames.length).toBeGreaterThanOrEqual(3);
-		expect(dataFrames[0]).toMatchObject({ crossfade: 0.2, intensity: 0.6 });
+		expect(dataFrames[0]).toMatchObject({ intensity: 0.6 });
+		expect(dataFrames[0]).not.toHaveProperty("crossfade");
 		expect(dataFrames[1]).toMatchObject({ intensity: 0.8 });
-		expect(dataFrames[2]).toMatchObject({ crossfade: 0.6 });
+		expect(dataFrames[2]).toMatchObject({ palette: 0.5 });
 	});
 
 	test("MIDI CC trigger starts and stops playback on threshold crossing", () => {

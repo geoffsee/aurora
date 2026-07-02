@@ -55,11 +55,18 @@ const MIN_ABSOLUTE_ONSET_RISE = 0.1;
 export function makeAudioTransientDetector(initialConfig: Partial<AudioTransientConfig> = {}): {
 	step(features: Readonly<AudioFeatures>, nowMs: number): boolean;
 	updateConfig(patch: Partial<AudioTransientConfig>): void;
+	reset(features?: Readonly<AudioFeatures>): void;
 	getConfig(): Readonly<AudioTransientConfig>;
 } {
 	let config: AudioTransientConfig = { ...DEFAULT_TRANSIENT_CONFIG, ...initialConfig };
 	let baseline = 0;
 	let lastFiredMs = -Infinity;
+	let wasAbove = false;
+
+	const syncWasAbove = (features?: Readonly<AudioFeatures>) => {
+		wasAbove =
+			features !== undefined && features[config.band] >= config.threshold;
+	};
 
 	return {
 		step(features, nowMs) {
@@ -76,8 +83,10 @@ export function makeAudioTransientDetector(initialConfig: Partial<AudioTransient
 					band - baseline > MIN_ABSOLUTE_ONSET_RISE;
 				baseline = ONSET_BACKGROUND_ALPHA * band + (1 - ONSET_BACKGROUND_ALPHA) * baseline;
 			} else {
-				// beat and band-energy both use a direct threshold comparison.
-				triggered = band >= config.threshold;
+				// beat and band-energy fire on a rising edge above threshold, not while held.
+				const above = band >= config.threshold;
+				triggered = above && !wasAbove;
+				wasAbove = above;
 			}
 
 			if (!triggered) return false;
@@ -87,6 +96,11 @@ export function makeAudioTransientDetector(initialConfig: Partial<AudioTransient
 		},
 		updateConfig(patch) {
 			config = { ...config, ...patch };
+		},
+		reset(features) {
+			baseline = 0;
+			lastFiredMs = -Infinity;
+			syncWasAbove(features);
 		},
 		getConfig() {
 			return { ...config };

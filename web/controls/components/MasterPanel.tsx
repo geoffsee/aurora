@@ -1,4 +1,5 @@
 import { Box, Button, Flex, Grid, Input, Text } from "@chakra-ui/react";
+import { useCallback } from "react";
 import { useControls, updatePaletteFromHex } from "../context/ControlsContext.tsx";
 import { rgbToHex } from "../lib/palette.ts";
 import { Panel } from "./ui.tsx";
@@ -7,6 +8,17 @@ import { AssignableSlider } from "./AssignableSlider.tsx";
 
 export function MasterPanel() {
 	const { state, updateState, resetState } = useControls();
+
+	const setPaletteSaturation = useCallback((paletteSaturation: number) => updateState({ paletteSaturation }), [updateState]);
+	const setPaletteBrightness = useCallback((paletteBrightness: number) => updateState({ paletteBrightness }), [updateState]);
+	const setGridDensity = useCallback((gridDensity: number) => updateState({ gridDensity }), [updateState]);
+	const setGridDiamond = useCallback((gridDiamond: number) => updateState({ gridDiamond }), [updateState]);
+	const setGridLineWidth = useCallback((gridLineWidth: number) => updateState({ gridLineWidth }), [updateState]);
+	const setGridShapeMix = useCallback((gridShapeMix: number) => updateState({ gridShapeMix }), [updateState]);
+	const setMaxBrightness = useCallback((maxBrightness: number) => updateState({ maxBrightness }), [updateState]);
+
+	const fmtPct = useCallback((v: number) => `${Math.round(v * 100)}%`, []);
+
 	const paletteHex = rgbToHex(state.paletteR, state.paletteG, state.paletteB);
 
 	return (
@@ -35,8 +47,8 @@ export function MasterPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(paletteSaturation) => updateState({ paletteSaturation })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setPaletteSaturation}
+					format={fmtPct}
 				/>
 				<ParamSlider
 					label="GPU Brightness"
@@ -44,8 +56,8 @@ export function MasterPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(paletteBrightness) => updateState({ paletteBrightness })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setPaletteBrightness}
+					format={fmtPct}
 				/>
 				<ParamSlider
 					label="Grid Density"
@@ -53,8 +65,8 @@ export function MasterPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(gridDensity) => updateState({ gridDensity })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setGridDensity}
+					format={fmtPct}
 				/>
 				<ParamSlider
 					label="Grid Diamond"
@@ -62,8 +74,8 @@ export function MasterPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(gridDiamond) => updateState({ gridDiamond })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setGridDiamond}
+					format={fmtPct}
 				/>
 				<ParamSlider
 					label="Grid Lines"
@@ -71,8 +83,8 @@ export function MasterPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(gridLineWidth) => updateState({ gridLineWidth })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setGridLineWidth}
+					format={fmtPct}
 				/>
 				<ParamSlider
 					label="Grid Shape (◆↔+)"
@@ -80,8 +92,8 @@ export function MasterPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(gridShapeMix) => updateState({ gridShapeMix })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setGridShapeMix}
+					format={fmtPct}
 				/>
 			</Grid>
 			<Flex gap={2} wrap="wrap" mt={4}>
@@ -118,6 +130,22 @@ export function MasterPanel() {
 								});
 								return;
 							}
+							if (key === "showGpuPalette") {
+								const next = !state.showGpuPalette;
+								if (next) {
+									// Carry the current GPU Shader choice into the deck GPU slots
+									// so "GPU Rehoboam" makes the picked shader visible as the
+									// fullscreen GPU layer (matching the pre-per-deck behavior).
+									updateState({
+										showGpuPalette: true,
+										deckAGpuShader: state.activeShader,
+										deckBGpuShader: state.activeShader,
+									});
+								} else {
+									updateState({ showGpuPalette: false });
+								}
+								return;
+							}
 							updateState({ [key]: !state[key] } as Partial<typeof state>);
 						}}
 					>
@@ -135,8 +163,8 @@ export function MasterPanel() {
 					min={0}
 					max={1}
 					step={0.01}
-					onChange={(maxBrightness) => updateState({ maxBrightness })}
-					format={(v) => `${Math.round(v * 100)}%`}
+					onChange={setMaxBrightness}
+					format={fmtPct}
 				/>
 			</Box>
 		</Panel>

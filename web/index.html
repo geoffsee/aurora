@@ -98,6 +98,8 @@
         cueCrossfade: 0.5,
         cueDeckAMode: 0,
         cueDeckBMode: 1,
+        cueDeckAGpuShader: 0,
+        cueDeckBGpuShader: 5,
         trackMapping: {
           deckAStart: 0,
           deckACount: 8,
@@ -108,6 +110,8 @@
           highTrack: 2,
         },
         activeShader: 0,
+        deckAGpuShader: 0,
+        deckBGpuShader: 5,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
       };
       const diagnostics = {
@@ -118,7 +122,6 @@
         replaying: false,
       };
 
-      const METER_GAIN = 2.5;
       const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
       const clampInt = (value, min, max, fallback = min) => {
         const number = Number(value);
@@ -127,11 +130,6 @@
       const average = (values) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
       const mappedAverage = (meters, start, count) => average(meters.slice(start, start + Math.max(1, count)));
       const mappedTrack = (meters, index, fallback) => (Number.isFinite(meters[index]) ? meters[index] : fallback);
-      const smoothSignal = (current, target, dtMs, attackMs, releaseMs) => {
-        const timeMs = target > current ? attackMs : releaseMs;
-        const blend = 1 - Math.exp(-dtMs / Math.max(1, timeMs));
-        return current + (target - current) * blend;
-      };
       // Applies the selected curve shape to a [0,1] audio value.
       // exponential (x²): punchy — suppresses quiet signals, amplifies loud ones.
       // logarithmic (√x): ambient — lifts quiet signals, compresses loud ones.
@@ -175,9 +173,18 @@
       }
 
       function recomputeEnergy() {
+        // Ableton track meters are often small (0.01-0.3). Apply a soft boost here
+        // so they drive a good 0-1 range for the shaders without hard clipping
+        // the loud parts (which used to make everything "flat" and unresponsive).
+        const softBoost = (v) => {
+          const g = clamp01(v) * 3.2;
+          if (g <= 1) return g;
+          // soft approach to 1.0 so loud parts stay distinguishable
+          return 1 - 0.35 * Math.exp(-3 * (g - 1));
+        };
         const meters = oscState.meters
           .slice(0, oscState.meterCount)
-          .map((value) => clamp01(clamp01(value) * METER_GAIN));
+          .map((value) => softBoost(value));
         const mapping = controlState.trackMapping;
         const avg = average(meters);
         const peak = Math.max(avg, ...meters);
@@ -185,20 +192,25 @@
         const deckATarget = mappedAverage(meters, mapping.deckAStart, mapping.deckACount);
         const deckBTarget = mappedAverage(meters, mapping.deckBStart, mapping.deckBCount);
         const transient = Math.max(0, energyTarget - oscState.previousEnergy);
+        // Assign boosted mapped values directly — no per-band smoothing on the Ableton
+        // OSC path. High gets an extra transient spike for punchy onsets.
         const now = performance.now();
-        const dtMs = Math.max(16, Math.min(250, now - (oscState.lastEnvelopeAt || now)));
-
-        oscState.energy = smoothSignal(oscState.energy, energyTarget, dtMs, 120, 280);
-        oscState.deckA = smoothSignal(oscState.deckA, deckATarget || avg, dtMs, 140, 320);
-        oscState.deckB = smoothSignal(oscState.deckB, deckBTarget || avg, dtMs, 140, 320);
-        oscState.bass = smoothSignal(oscState.bass, mappedTrack(meters, mapping.bassTrack, energyTarget), dtMs, 260, 620);
-        oscState.mid = smoothSignal(oscState.mid, mappedTrack(meters, mapping.midTrack, avg), dtMs, 150, 360);
-        oscState.high = smoothSignal(
-          oscState.high,
-          Math.max(mappedTrack(meters, mapping.highTrack, 0), Math.min(1, transient * 2.2)),
-          dtMs,
-          90,
-          260,
+        const bassTarget = mappedTrack(meters, mapping.bassTrack, energyTarget);
+        if (
+          controlState.beatSync &&
+          bassTarget > oscState.bass + 0.14 &&
+          bassTarget > 0.22
+        ) {
+          oscState.lastBeatAt = now;
+        }
+        oscState.energy = energyTarget;
+        oscState.deckA = deckATarget || avg;
+        oscState.deckB = deckBTarget || avg;
+        oscState.bass = bassTarget;
+        oscState.mid = mappedTrack(meters, mapping.midTrack, avg);
+        oscState.high = Math.max(
+          mappedTrack(meters, mapping.highTrack, 0),
+          Math.min(1, transient * 2.8),
         );
         oscState.previousEnergy = energyTarget;
         oscState.lastEnvelopeAt = now;
@@ -277,15 +289,24 @@
 
         const now = performance.now();
         const energy = clamp01(frame.energy);
+        const pulse = clamp01(frame.pulse);
+        const bass = clamp01(frame.bass);
+        const prevBass = oscState.bass;
         oscState.lastFrameAt = now;
         oscState.lastMeterAt = now;
-        oscState.lastBeatAt = clamp01(frame.pulse) > 0.8 ? now : oscState.lastBeatAt;
+        if (controlState.beatSync) {
+          if (pulse > 0.55 || (bass > prevBass + 0.12 && bass > 0.2)) {
+            oscState.lastBeatAt = now;
+          }
+        } else if (pulse > 0.8) {
+          oscState.lastBeatAt = now;
+        }
         oscState.tempo = controlState.bpm;
         oscState.playing = 1;
         oscState.energy = energy;
         oscState.deckA = energy;
         oscState.deckB = energy;
-        oscState.bass = clamp01(frame.bass);
+        oscState.bass = bass;
         oscState.mid = clamp01(frame.mid);
         oscState.high = clamp01(frame.high);
         oscState.previousEnergy = energy;
@@ -313,15 +334,19 @@
         controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
-        controlState.deckAMode = clampInt(next.deckAMode, 0, 15, controlState.deckAMode);
-        controlState.deckBMode = clampInt(next.deckBMode, 0, 15, controlState.deckBMode);
+        controlState.deckAMode = clampInt(next.deckAMode, 0, 19, controlState.deckAMode);
+        controlState.deckBMode = clampInt(next.deckBMode, 0, 19, controlState.deckBMode);
+        controlState.deckAGpuShader = clampInt(next.deckAGpuShader, 0, 25, controlState.deckAGpuShader);
+        controlState.deckBGpuShader = clampInt(next.deckBGpuShader, 0, 25, controlState.deckBGpuShader);
         controlState.rings = next.rings !== false;
         controlState.ringOpacity = next.ringOpacity === undefined ? controlState.ringOpacity : clamp01(next.ringOpacity);
         controlState.strobe = Boolean(next.strobe);
         controlState.strobeLockout = Boolean(next.strobeLockout);
         controlState.blackout = Boolean(next.blackout);
         controlState.freeze = Boolean(next.freeze);
-        controlState.maxBrightness = Math.max(0, Math.min(1, Number(next.maxBrightness) || controlState.maxBrightness));
+        controlState.maxBrightness = next.maxBrightness === undefined
+          ? controlState.maxBrightness
+          : Math.max(0, Math.min(1, Number(next.maxBrightness)));
         controlState.showGpuPalette = Boolean(next.showGpuPalette);
         controlState.beatSync = next.beatSync !== false;
         controlState.barSync = Boolean(next.barSync);
@@ -334,8 +359,10 @@
         controlState.cuePalette = clamp01(next.cuePalette);
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
         controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 15, controlState.cueDeckAMode);
-        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 15, controlState.cueDeckBMode);
-        controlState.activeShader = clampInt(next.activeShader, 0, 15, controlState.activeShader);
+        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 19, controlState.cueDeckBMode);
+        controlState.cueDeckAGpuShader = clampInt(next.cueDeckAGpuShader, 0, 25, controlState.cueDeckAGpuShader);
+        controlState.cueDeckBGpuShader = clampInt(next.cueDeckBGpuShader, 0, 25, controlState.cueDeckBGpuShader);
+        controlState.activeShader = clampInt(next.activeShader, 0, 25, controlState.activeShader);
         if (next.bandCurves && typeof next.bandCurves === "object") {
           const bc = next.bandCurves;
           controlState.bandCurves = {
@@ -374,7 +401,7 @@
         if (typeof route.crossfade === "number") controlState.crossfade = clamp01(route.crossfade);
         if (typeof route.palette === "number") controlState.palette = clamp01(route.palette);
         if (typeof route.activeShader === "number") {
-          controlState.activeShader = clampInt(route.activeShader, 0, 15, controlState.activeShader);
+          controlState.activeShader = clampInt(route.activeShader, 0, 25, controlState.activeShader);
         }
       }
 
@@ -443,7 +470,13 @@
       window.__auroraOscPulse = () => {
         decayMeters();
         if (oscState.energy < 0.02) return 0;
-        return Math.max(0, 1 - (performance.now() - oscState.lastBeatAt) / 180);
+        if (controlState.beatSync) {
+          const beatMs = Math.max(200, (60 / Math.max(controlState.bpm, 40)) * 1000 * 0.38);
+          const age = performance.now() - oscState.lastBeatAt;
+          const t = Math.min(1, age / beatMs);
+          return Math.max(0, 1 - t * t);
+        }
+        return applyAudioCurve(oscState.bass, controlState.bandCurves.bass);
       };
       window.__auroraControlConnected = () => {
         controlState.connected = performance.now() - controlState.lastFrameAt < 3000;
@@ -486,6 +519,10 @@
       window.__auroraControlCueCrossfade = () => controlState.cueCrossfade;
       window.__auroraControlCueDeckAMode = () => controlState.cueDeckAMode;
       window.__auroraControlCueDeckBMode = () => controlState.cueDeckBMode;
+      window.__auroraControlCueDeckAGpuShader = () => controlState.cueDeckAGpuShader;
+      window.__auroraControlCueDeckBGpuShader = () => controlState.cueDeckBGpuShader;
+      window.__auroraControlDeckAGpuShader = () => controlState.deckAGpuShader;
+      window.__auroraControlDeckBGpuShader = () => controlState.deckBGpuShader;
       window.__auroraControlActiveShader = () => controlState.activeShader;
       window.__auroraTakePendingImportedShader = () => {
         const wgsl = pendingImportedShader;

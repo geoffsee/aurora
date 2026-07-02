@@ -25,8 +25,8 @@ struct AuroraParams {
     feedback: FloatParam,
     #[id = "depth"]
     depth: FloatParam,
-    #[id = "palette"]
-    palette: FloatParam,
+    #[id = "hue"]
+    hue: FloatParam,
     #[id = "deck_a_mode"]
     deck_a_mode: IntParam,
     #[id = "deck_b_mode"]
@@ -55,6 +55,10 @@ struct AuroraParams {
     show_gpu_palette: BoolParam,
     #[id = "active_shader"]
     active_shader: IntParam,
+    #[id = "deck_a_gpu_shader"]
+    deck_a_gpu_shader: IntParam,
+    #[id = "deck_b_gpu_shader"]
+    deck_b_gpu_shader: IntParam,
     #[id = "palette_saturation"]
     palette_saturation: FloatParam,
     #[id = "palette_brightness"]
@@ -93,7 +97,7 @@ struct ParameterCache {
     intensity: f32,
     feedback: f32,
     depth: f32,
-    palette: f32,
+    hue: f32,
     deck_a_mode: i32,
     deck_b_mode: i32,
     rings: bool,
@@ -108,6 +112,8 @@ struct ParameterCache {
     demo_mode: bool,
     show_gpu_palette: bool,
     active_shader: i32,
+    deck_a_gpu_shader: i32,
+    deck_b_gpu_shader: i32,
     palette_saturation: f32,
     palette_brightness: f32,
     grid_density: f32,
@@ -151,9 +157,9 @@ impl Default for AuroraParams {
             intensity: float_param("Intensity", 0.82, 0.05, 1.5),
             feedback: float_param("Trails", 0.35, 0.0, 1.0),
             depth: float_param("Depth", 0.0, 0.0, 1.0),
-            palette: float_param("Palette", 0.0, 0.0, 1.0),
-            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: 15 }),
-            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: 15 }),
+            hue: float_param("Hue", 0.0, 0.0, 1.0),
+            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: 19 }),
+            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: 19 }),
             rings: BoolParam::new("Rings", true),
             ring_opacity: float_param("Ring Opacity", 1.0, 0.0, 1.0),
             strobe: BoolParam::new("Strobe", false),
@@ -165,7 +171,9 @@ impl Default for AuroraParams {
             bar_sync: BoolParam::new("Bar Sync", false),
             demo_mode: BoolParam::new("Demo Mode", false),
             show_gpu_palette: BoolParam::new("Show GPU Palette", false),
-            active_shader: IntParam::new("Active Shader", 0, IntRange::Linear { min: 0, max: 15 }),
+            active_shader: IntParam::new("Active Shader", 0, IntRange::Linear { min: 0, max: 25 }),
+            deck_a_gpu_shader: IntParam::new("Deck A GPU Shader", 0, IntRange::Linear { min: 0, max: 25 }),
+            deck_b_gpu_shader: IntParam::new("Deck B GPU Shader", 5, IntRange::Linear { min: 0, max: 25 }),
             palette_saturation: float_param("Palette Saturation", 1.0, 0.0, 1.0),
             palette_brightness: float_param("Palette Brightness", 1.0, 0.0, 1.0),
             grid_density: float_param("Grid Density", 0.5, 0.0, 1.0),
@@ -244,7 +252,7 @@ impl AuroraVst {
         self.sender.send_f32("intensity", next.intensity);
         self.sender.send_f32("feedback", next.feedback);
         self.sender.send_f32("depth", next.depth);
-        self.sender.send_f32("palette", next.palette);
+        self.sender.send_f32("hue", next.hue);
         self.sender.send_i32("deck_a_mode", next.deck_a_mode);
         self.sender.send_i32("deck_b_mode", next.deck_b_mode);
         self.sender.send_bool("rings", next.rings);
@@ -260,6 +268,8 @@ impl AuroraVst {
         self.sender
             .send_bool("show_gpu_palette", next.show_gpu_palette);
         self.sender.send_i32("active_shader", next.active_shader);
+        self.sender.send_i32("deck_a_gpu_shader", next.deck_a_gpu_shader);
+        self.sender.send_i32("deck_b_gpu_shader", next.deck_b_gpu_shader);
         self.sender
             .send_f32("palette_saturation", next.palette_saturation);
         self.sender
@@ -290,8 +300,8 @@ impl AuroraVst {
         if changed(previous.depth, next.depth) {
             self.sender.send_f32("depth", next.depth);
         }
-        if changed(previous.palette, next.palette) {
-            self.sender.send_f32("palette", next.palette);
+        if changed(previous.hue, next.hue) {
+            self.sender.send_f32("hue", next.hue);
         }
         if previous.deck_a_mode != next.deck_a_mode {
             self.sender.send_i32("deck_a_mode", next.deck_a_mode);
@@ -335,6 +345,12 @@ impl AuroraVst {
         }
         if previous.active_shader != next.active_shader {
             self.sender.send_i32("active_shader", next.active_shader);
+        }
+        if previous.deck_a_gpu_shader != next.deck_a_gpu_shader {
+            self.sender.send_i32("deck_a_gpu_shader", next.deck_a_gpu_shader);
+        }
+        if previous.deck_b_gpu_shader != next.deck_b_gpu_shader {
+            self.sender.send_i32("deck_b_gpu_shader", next.deck_b_gpu_shader);
         }
         if changed(previous.palette_saturation, next.palette_saturation) {
             self.sender
@@ -396,7 +412,7 @@ impl ParameterCache {
             intensity: params.intensity.value(),
             feedback: params.feedback.value(),
             depth: params.depth.value(),
-            palette: params.palette.value(),
+            hue: params.hue.value(),
             deck_a_mode: params.deck_a_mode.value(),
             deck_b_mode: params.deck_b_mode.value(),
             rings: params.rings.value(),
@@ -411,6 +427,8 @@ impl ParameterCache {
             demo_mode: params.demo_mode.value(),
             show_gpu_palette: params.show_gpu_palette.value(),
             active_shader: params.active_shader.value(),
+            deck_a_gpu_shader: params.deck_a_gpu_shader.value(),
+            deck_b_gpu_shader: params.deck_b_gpu_shader.value(),
             palette_saturation: params.palette_saturation.value(),
             palette_brightness: params.palette_brightness.value(),
             grid_density: params.grid_density.value(),
