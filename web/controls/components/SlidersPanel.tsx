@@ -9,7 +9,11 @@ import {
 } from "@chakra-ui/react";
 import { useCallback, useEffect, useState } from "react";
 import { useControls } from "../context/ControlsContext.tsx";
-import { SHADER_OPTIONS, VISUAL_MODES } from "../lib/constants.ts";
+import {
+	MAX_GPU_SHADER_INDEX,
+	SHADER_OPTIONS,
+	VISUAL_MODES,
+} from "../lib/constants.ts";
 import { Panel } from "./ui.tsx";
 import { ParamSlider } from "./ParamSlider.tsx";
 
@@ -190,7 +194,7 @@ export function SlidersPanel() {
 							onChange={(e) => {
 								const v = Math.max(
 									0,
-									Math.min(SHADER_OPTIONS.length - 1, Number(e.target.value)),
+									Math.min(MAX_GPU_SHADER_INDEX, Number(e.target.value)),
 								);
 								if (state.showGpuPalette) {
 									// Keep the single GPU Shader picker live even when

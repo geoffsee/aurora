@@ -15,6 +15,14 @@ export const VISUAL_MODES = [
 	"Lattice",
 	"Drift",
 	"Storm",
+	"Echo",
+	"Vortex",
+	"Fracture",
+	"Nebula",
+	"Prism",
+	"Scanner",
+	"Comet",
+	"Bloom",
 ] as const;
 
 export const SHADER_OPTIONS = [
@@ -44,7 +52,19 @@ export const SHADER_OPTIONS = [
 	"Scanlab Holo",
 	"Lumen Coral",
 	"Polaris Petals",
+	"Aurora Curtains",
+	"Bass Monolith",
+	"Prism Tunnel",
+	"Data Rain",
+	"Solar Flare",
+	"Topo Lines",
+	"Glass Ribbons",
+	"Gummy Wire Bear",
+	"Fierce Walking Wolf",
+	"Spectral Ghost",
 ] as const;
+
+export const MAX_GPU_SHADER_INDEX = SHADER_OPTIONS.length - 1;
 
 export const CUE_NAMES = [
 	"warmup",
