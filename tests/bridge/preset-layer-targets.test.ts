@@ -19,6 +19,10 @@ import {
 	MIDI_CC_INTEGER_PARAMS,
 	MIDI_CC_PARAM_LABELS,
 } from "../../web/controls/lib/constants.ts";
+import {
+	MAPPABLE_PARAMS,
+	PARAM_META,
+} from "../../web/controls/lib/param-meta.ts";
 
 const layer = (
 	name: string,
@@ -156,6 +160,14 @@ describe("MIDI target", () => {
 			expect(MIDI_CC_PARAM_LABELS[key]).toBeTypeOf("string");
 			// Weights are continuous 0..1, never rounded to an integer mode index.
 			expect(MIDI_CC_INTEGER_PARAMS.has(key)).toBe(false);
+			// Selectability is governed by MAPPABLE_PARAMS (PARAM_META keys): the
+			// binding dropdown and assignable-slider selector iterate it, so a slot
+			// absent here is unreachable from the UI regardless of its label.
+			expect(MAPPABLE_PARAMS).toContain(key);
+			const meta = PARAM_META[key as (typeof MAPPABLE_PARAMS)[number]];
+			expect(meta.min).toBe(0);
+			expect(meta.max).toBe(1);
+			expect(meta.integer ?? false).toBe(false);
 		}
 	});
 });
