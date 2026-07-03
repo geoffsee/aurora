@@ -15,6 +15,12 @@ uncertain. This file is the durable, in-repo home for each longer-horizon
 frontier thread's **next-step entry point** so a later cycle can pick one up
 opportunistically without re-deriving where it lands in the tree.
 
+This file supersedes the purged `docs/backlog/longer-horizon-threads.md`, which was
+its previous incarnation: commit `ff5e771` ("Delete docs directory") deliberately
+removed the entire `docs/` tree. Reviving `docs/backlog/` here is a sanctioned
+exception under issue #216's mandate for a durable in-repo home — noted so a future
+reader who finds both in git history understands the lineage.
+
 **None of these threads blocks any higher-priority item.** They are additive and
 sit outside the live render / state-fan-out hot path. Pick one up only once the
 safety-net and audio-honesty work (#199, #200, and the sprint's dry-run /
@@ -39,7 +45,7 @@ intermediate states procedurally, rather than the current two-endpoint blend.
   `MorphCurve`).
 - Weighted N-layer compositing over a base state: `bridge/preset-layers.ts`
   (`PresetLayer`, `LAYER_KEYS`, `PRESET_LAYER_MAX`).
-- A wall-clock/automation source that can drive a position: `automation-player.ts`.
+- A wall-clock/automation source that can drive a position: `bridge/automation-player.ts`.
 
 **Next-step entry point.**
 1. Generalize `morphPresetStates` from two endpoints to an *ordered list* of
@@ -47,7 +53,7 @@ intermediate states procedurally, rather than the current two-endpoint blend.
    snap/linear/ease machinery already shapes each segment. Decide first whether a
    "generative" path means (a) interpolating a fixed sequence of saved presets or
    (b) synthesizing intermediates — that choice sets scope.
-2. Drive the position from `automation-player.ts` rather than only an OSC fader so
+2. Drive the position from `bridge/automation-player.ts` rather than only an OSC fader so
    a path can run unattended.
 
 **Non-blocking.** Reuses `MORPH_KEYS`, so discrete deck modes stay untouched and a
