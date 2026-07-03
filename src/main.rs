@@ -247,6 +247,7 @@ const AUDIO_GATE_START: f32 = 0.001;
 const AUDIO_GATE_END: f32 = 0.025;
 const PULSE_ATTACK_SPEED: f32 = 24.0;
 const PULSE_RELEASE_SPEED: f32 = 7.0;
+const MAX_GPU_SHADER_INDEX: u32 = 33;
 
 fn main() {
     App::new()
@@ -428,6 +429,10 @@ enum VisualMode {
     Vortex,
     Fracture,
     Nebula,
+    Prism,
+    Scanner,
+    Comet,
+    Bloom,
 }
 
 impl VisualMode {
@@ -452,6 +457,10 @@ impl VisualMode {
             17 => Self::Vortex,
             18 => Self::Fracture,
             19 => Self::Nebula,
+            20 => Self::Prism,
+            21 => Self::Scanner,
+            22 => Self::Comet,
+            23 => Self::Bloom,
             _ => Self::Beams,
         }
     }
@@ -815,12 +824,12 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.grid_diamond = browser_control_grid_diamond().clamp(0.0, 1.0);
         state.grid_line_width = browser_control_grid_line_width().clamp(0.0, 1.0);
         state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
-        state.active_shader = browser_control_active_shader().min(25);
+        state.active_shader = browser_control_active_shader().min(MAX_GPU_SHADER_INDEX);
         state.beat_sync = browser_control_beat_sync();
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
-        state.deck_a_gpu_shader = browser_control_deck_a_gpu_shader().min(25);
-        state.deck_b_gpu_shader = browser_control_deck_b_gpu_shader().min(25);
+        state.deck_a_gpu_shader = browser_control_deck_a_gpu_shader().min(MAX_GPU_SHADER_INDEX);
+        state.deck_b_gpu_shader = browser_control_deck_b_gpu_shader().min(MAX_GPU_SHADER_INDEX);
         state.rings_enabled = browser_control_rings();
         state.ring_opacity = browser_control_ring_opacity().clamp(0.0, 1.0);
         state.strobe_lockout = browser_control_strobe_lockout();
@@ -1059,7 +1068,8 @@ fn update_visuals(
     } else {
         0.0
     };
-    let blackout = if state.blackout { 0.0 } else { 1.0 };
+    let gpu_shader_solo = !state.show_gpu_palette && state.active_shader == 31;
+    let blackout = if state.blackout || gpu_shader_solo { 0.0 } else { 1.0 };
 
     for (element, mut transform, material_handle) in &mut query {
         let deck_alpha = match element.deck {
@@ -1321,11 +1331,60 @@ fn update_visuals(
                         alpha *= 0.22 + swell * 0.55 + (mid + high) * 0.25 + state.feedback * 0.2;
                         hue += drift.to_degrees() * 0.12 + mid * 30.0 + swell * 25.0;
                     }
+                    VisualMode::Prism => {
+                        let prism = wave(t * (0.9 + mid * 1.4) + fraction * TAU * 3.0 + element.seed);
+                        let split = (element.index % 3) as f32 - 1.0;
+                        transform.translation.x += split * (28.0 + high * 54.0) + prism * (18.0 + mid * 38.0);
+                        transform.translation.y += (prism - 0.5) * (22.0 + high * 34.0);
+                        transform.rotation *= Quat::from_rotation_z(split * 0.18 + high * 0.16);
+                        transform.scale.x *= 0.55 + prism * 0.9 + high * 0.35;
+                        transform.scale.y *= 0.9 + mid * 0.8 + beat_hit * 0.6;
+                        alpha *= 0.5 + prism * 0.45 + high * 0.35;
+                        hue += split * 82.0 + prism * 120.0 + high * 80.0;
+                    }
+                    VisualMode::Scanner => {
+                        let scan = ((t * (0.42 + state.speed * 0.12 + high * 0.65) + element.seed).fract()
+                            * 2.0)
+                            - 1.0;
+                        let stripe = if element.index % 2 == 0 { 0.0 } else { TAU * 0.25 };
+                        transform.translation.x = wave(t * 0.8 + fraction * 5.0) * STAGE_WIDTH * 0.18;
+                        transform.translation.y = scan * STAGE_HEIGHT * 0.42 + layer * 6.0;
+                        transform.rotation = Quat::from_rotation_z(stripe);
+                        transform.scale.x *= 0.75 + high * 0.55 + beat_hit * 0.35;
+                        transform.scale.y *= 0.5 + state.osc_pulse * 1.4 + beat_hit * 0.9;
+                        alpha *= 0.34 + high * 0.55 + state.osc_pulse * 0.45;
+                        hue += 175.0 + scan * 70.0 + high * 90.0;
+                    }
+                    VisualMode::Comet => {
+                        let comet_a = t * (1.0 + bass * 2.2 + state.speed * 0.25) + fraction * TAU;
+                        let comet_r = 52.0 + fraction * 430.0 + beat_hit * 82.0 + bass * 60.0;
+                        transform.translation.x = comet_a.cos() * comet_r;
+                        transform.translation.y = comet_a.sin() * comet_r * 0.58;
+                        transform.rotation = Quat::from_rotation_z(comet_a + TAU * 0.25);
+                        transform.scale.x *= 0.34 + high * 0.45 + beat_hit * 0.18;
+                        transform.scale.y *= 1.15 + bass * 1.5 + trail_gain * 0.85 + beat_hit;
+                        alpha *= 0.42 + bass * 0.65 + beat_hit * 0.5 + trail_gain * 0.25;
+                        hue += comet_a.to_degrees() * 0.35 + bass * 60.0;
+                    }
+                    VisualMode::Bloom => {
+                        let bloom = (wave(t * 0.42 + fraction * TAU) + beat_hit * 0.8 + cue_hit * 0.5)
+                            .clamp(0.0, 1.8);
+                        transform.translation.x *= 0.64 + bloom * 0.42;
+                        transform.translation.y *= 0.64 + bloom * 0.42;
+                        transform.scale.x *= 1.2 + bloom * 1.8 + state.feedback * 0.6;
+                        transform.scale.y *= 0.82 + bloom * 0.9 + mid * 0.5;
+                        alpha *= 0.24 + bloom * 0.55 + state.feedback * 0.35;
+                        hue += 25.0 + mid * 50.0 + bloom * 35.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
                 hue += match deck_mode {
                     VisualMode::Tunnel => fraction * 18.0,
+                    VisualMode::Prism => fraction * 260.0,
+                    VisualMode::Scanner => fraction * 42.0,
+                    VisualMode::Comet => fraction * 120.0,
+                    VisualMode::Bloom => fraction * 70.0,
                     _ => fraction * 180.0,
                 };
                 alpha *= 0.04
@@ -1407,6 +1466,24 @@ fn update_visuals(
                         if high > 0.38 { 1.0 } else { 0.45 },
                     ),
                     VisualMode::Nebula => (1.15 + mid * 0.2, 1.6, 0.32 + (mid + high) * 0.18, 1.0),
+                    VisualMode::Prism => (0.92 + high * 0.1, 0.78, 0.58 + high * 0.24, 1.0),
+                    VisualMode::Scanner => (
+                        0.84,
+                        0.72,
+                        0.45 + state.osc_pulse * 0.35,
+                        if high + state.osc_pulse > 0.32 {
+                            1.0
+                        } else {
+                            0.35
+                        },
+                    ),
+                    VisualMode::Comet => (0.86 + bass * 0.24, 0.9, 0.54 + bass * 0.22, 1.0),
+                    VisualMode::Bloom => (
+                        1.05 + beat_hit * 0.22 + cue_hit * 0.16,
+                        1.7,
+                        0.34 + state.feedback * 0.3 + beat_hit * 0.18,
+                        1.0,
+                    ),
                     VisualMode::Beams => (0.9, 0.8, 0.55, 1.0),
                 };
 
@@ -1614,6 +1691,53 @@ fn update_visuals(
                         transform.scale *= 1.8 + cloud * 2.2 + osc_drive * 0.9;
                         alpha *= 0.18 + cloud * 0.5 + (mid + high) * 0.22;
                     }
+                    VisualMode::Prism => {
+                        let prism = (element.col % 3) as f32 - 1.0;
+                        let shimmer = wave(t * (1.1 + mid) + diagonal * 2.4);
+                        transform.translation.x += prism * (12.0 + high * 28.0);
+                        transform.translation.y += (shimmer - 0.5) * (18.0 + high * 26.0);
+                        transform.rotation *= Quat::from_rotation_z(prism * 0.25 + shimmer * 0.35);
+                        transform.scale.x *= 0.7 + shimmer * 1.2 + high * 0.45;
+                        transform.scale.y *= 0.75 + mid * 0.85 + beat_hit * 0.35;
+                        alpha *= 0.42 + shimmer * 0.5 + high * 0.32;
+                        hue += prism * 88.0 + shimmer * 120.0;
+                    }
+                    VisualMode::Scanner => {
+                        let scan = wave(t * (1.35 + state.speed * 0.35 + high) - element.row as f32 * 0.42);
+                        let gate = if scan > 0.58 {
+                            1.0
+                        } else {
+                            0.18 + high * 0.32
+                        };
+                        transform.translation.x = x + (scan - 0.5) * 18.0;
+                        transform.translation.y += (scan - 0.5) * 22.0;
+                        transform.scale.x *= 1.8 + high * 1.1;
+                        transform.scale.y *= 0.42 + state.osc_pulse * 1.2 + beat_hit * 0.7;
+                        transform.rotation = Quat::from_rotation_z(if element.row % 2 == 0 { 0.0 } else { TAU * 0.25 });
+                        alpha *= gate * (0.42 + state.osc_pulse * 0.6 + beat_hit * 0.25);
+                        hue += 170.0 + scan * 80.0;
+                    }
+                    VisualMode::Comet => {
+                        let streak = (diagonal * 1.7 - t * (1.4 + bass * 2.2 + state.speed * 0.3)).sin();
+                        transform.translation.x += streak * (34.0 + bass * 62.0);
+                        transform.translation.y -= streak.abs() * (18.0 + bass_activity * 42.0);
+                        transform.rotation *= Quat::from_rotation_z(streak * 0.7);
+                        transform.scale.x *= 0.5 + high * 0.35 + beat_hit * 0.25;
+                        transform.scale.y *= 1.0 + streak.abs() * 1.4 + bass * 0.9 + trail_gain * 0.5;
+                        alpha *= 0.36 + streak.abs() * 0.5 + bass * 0.35 + beat_hit * 0.28;
+                        hue += streak * 90.0 + bass * 55.0;
+                    }
+                    VisualMode::Bloom => {
+                        let bloom = (wave(t * 0.38 + diagonal * 0.62) + beat_hit * 0.8 + cue_hit * 0.5)
+                            .clamp(0.0, 1.8);
+                        let centered_x = x / (STAGE_WIDTH * 0.5);
+                        let centered_y = y / (STAGE_HEIGHT * 0.5);
+                        transform.translation.x += centered_x * bloom * 16.0;
+                        transform.translation.y += centered_y * bloom * 16.0;
+                        transform.scale *= 1.05 + bloom * 2.0 + state.feedback * 0.65;
+                        alpha *= 0.16 + bloom * 0.58 + state.feedback * 0.22;
+                        hue += 32.0 + bloom * 42.0 + mid * 35.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1787,6 +1911,48 @@ fn update_visuals(
                         transform.scale.x *= 1.4 + wave(t + fraction) * 1.6 + osc_drive * 0.8;
                         transform.scale.y *= 0.9 + (mid + high) * 0.5;
                         alpha *= 0.2 + (mid * 0.4 + high * 0.3) + state.feedback * 0.15;
+                    }
+                    VisualMode::Prism => {
+                        let split = (element.index % 3) as f32 - 1.0;
+                        let shimmer = wave(t * (0.8 + mid) + fraction * TAU * 2.0);
+                        transform.translation.x += split * (44.0 + high * 72.0);
+                        transform.translation.y += (shimmer - 0.5) * (34.0 + high * 44.0);
+                        transform.rotation *= Quat::from_rotation_z(split * 0.35 + shimmer * 0.28);
+                        transform.scale.x *= 0.7 + shimmer * 1.2 + high * 0.45;
+                        alpha *= 0.36 + shimmer * 0.45 + high * 0.25;
+                        hue += split * 90.0 + shimmer * 110.0;
+                    }
+                    VisualMode::Scanner => {
+                        let scan = ((t * (0.5 + state.speed * 0.16 + high * 0.6) + fraction).fract() * 2.0)
+                            - 1.0;
+                        transform.translation.x = wave(t * 0.7 + fraction * 4.0) * STAGE_WIDTH * 0.16;
+                        transform.translation.y = scan * STAGE_HEIGHT * 0.42;
+                        transform.rotation = Quat::from_rotation_z(0.0);
+                        transform.scale.x *= 1.55 + high * 0.9;
+                        transform.scale.y *= 0.38 + state.osc_pulse * 1.4 + beat_hit * 0.6;
+                        alpha *= 0.28 + state.osc_pulse * 0.65 + high * 0.28;
+                        hue += 175.0 + scan * 65.0;
+                    }
+                    VisualMode::Comet => {
+                        let ca = t * (1.2 + bass * 2.6) + fraction * TAU * 1.4;
+                        let cr = 90.0 + fraction * 260.0 + bass * 55.0;
+                        transform.translation.x = ca.cos() * cr;
+                        transform.translation.y = ca.sin() * cr * 0.55;
+                        transform.rotation = Quat::from_rotation_z(ca + TAU * 0.25);
+                        transform.scale.x *= 0.38 + trail_gain * 0.8 + high * 0.3;
+                        transform.scale.y *= 1.15 + bass * 1.2 + beat_hit * 0.7;
+                        alpha *= 0.34 + bass * 0.48 + trail_gain * 0.36;
+                        hue += ca.to_degrees() * 0.28 + bass * 55.0;
+                    }
+                    VisualMode::Bloom => {
+                        let bloom = (wave(t * 0.32 + fraction * TAU) + beat_hit * 0.7 + cue_hit * 0.45)
+                            .clamp(0.0, 1.7);
+                        transform.translation.x *= 0.75 + bloom * 0.35;
+                        transform.translation.y *= 0.75 + bloom * 0.35;
+                        transform.scale.x *= 1.25 + bloom * 1.5 + state.feedback * 0.8;
+                        transform.scale.y *= 0.9 + bloom * 0.9 + mid * 0.35;
+                        alpha *= 0.18 + bloom * 0.45 + state.feedback * 0.3;
+                        hue += 30.0 + bloom * 35.0;
                     }
                     VisualMode::Beams => {}
                 }
@@ -2015,7 +2181,7 @@ fn update_palette_material(
     //   5..=8 → palette quad (Tunnel/Glitch/Fluid/Truchet)
     //   9     → imported quad (Shadertoy hot-swap slot)
     //   10..=17 → palette quad (Bass Reactor … Bass Portal)
-    //   18..=25 → palette quad (new creative variants)
+    //   18..=33 → palette quad (new creative variants)
     let (quad_index, palette_variant) = if state.active_shader == 4 {
         (1u32, 0.0)
     } else if state.active_shader == 9 {

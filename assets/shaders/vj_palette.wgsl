@@ -783,6 +783,368 @@ fn polaris_petals_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, 
   return vec4<f32>(base * layer * enabled, clamp(layer * 0.7 * enabled, 0.0, 1.0));
 }
 
+// === Variant 26: Aurora Curtains ===
+// Vertical spectral ribbons with smooth mid/high movement and soft bass billow.
+fn aurora_curtains_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let flow = fbm(p * 0.72 + vec2<f32>(time * 0.035, -time * 0.028));
+  let fold = sin(p.y * (2.2 + mid * 2.6) + time * (0.32 + high * 0.55) + flow * 2.8)
+    * (0.18 + bass * 0.16 + mid * 0.08);
+  let sheet_phase = (p.x + fold + flow * 0.24) * (2.7 + mid * 2.8);
+  let sheets = pow(0.5 + 0.5 * cos(sheet_phase * TAU), 2.2 + high * 1.6);
+  let lower_glow = smoothstep(-1.1, -0.15, p.y) * (1.0 - smoothstep(0.35, 1.25, p.y));
+  let edge_light = 1.0 - smoothstep(0.0, 0.22 + high * 0.08, abs(fract(sheet_phase + 0.18 * flow) - 0.5) * 2.0);
+  let silk = fbm(vec2<f32>(sheet_phase * 0.35, p.y * 1.8 - time * 0.05));
+  let layer = (sheets * (0.42 + energy * 0.5) + edge_light * high * 0.18 + silk * 0.16) *
+    lower_glow * (0.7 + pulse * 0.25);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, hue_shift * 0.18 + sheet_phase * 0.08 + flow * 0.48 + time * 0.012, 0.74 * sat, bri);
+  let accent = vj_duotone(palette_rgb.xyz, hue_shift * 0.18 + p.y * 0.16 + flow * 0.62 + 0.24, sat, bri);
+  let color = mix(base * 0.55, accent, clamp(sheets + edge_light * 0.25, 0.0, 1.0)) *
+    clamp(0.42 + layer * 1.35, 0.0, 1.58);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * 0.82 * enabled, 0.0, 1.0));
+}
+
+// === Variant 27: Bass Monolith ===
+// Heavy central slabs with low-end bloom, pressure waves, and blocky strata.
+fn bass_monolith_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = length(p);
+  let drive = clamp(max(bass, energy * 0.55 + pulse * 0.45), 0.0, 1.0);
+  let wobble = fbm(vec2<f32>(p.y * 0.8, time * 0.08)) * (0.08 + drive * 0.14);
+  let center_width = 0.22 + drive * 0.16 + wobble;
+  let core_slab = 1.0 - smoothstep(center_width, center_width + 0.055 + high * 0.04, abs(p.x));
+  let side_dist = abs(abs(p.x) - (0.42 + drive * 0.14));
+  let side_slab = 1.0 - smoothstep(0.06 + drive * 0.03, 0.16 + high * 0.05, side_dist);
+  let strata_wave = abs(fract((p.y + time * (0.18 + drive * 0.42)) * (4.0 + drive * 9.0)) - 0.5) * 2.0;
+  let strata = 1.0 - smoothstep(0.0, 0.16 + drive * 0.1, strata_wave);
+  let impact = crisp_ring(r, fract(time * (0.75 + drive * 1.55)) * 0.92 + 0.04, 0.018 + drive * 0.035, 0.045) * pulse * 1.65;
+  let glow = exp(-r * (2.1 - drive * 0.9)) * (0.18 + drive * 0.72);
+  let layer = core_slab * (0.78 + drive * 1.1) + side_slab * (0.35 + drive * 0.55) + strata * core_slab * 0.42 + impact + glow;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, hue_shift * 0.12 + p.y * 0.17 + drive * 0.18, 0.78 * sat, bri);
+  let edge = vj_duotone(palette_rgb.xyz, hue_shift * 0.12 + r * 0.42 + 0.25 + high * 0.1, sat, bri);
+  let color = mix(base * 0.55, edge, clamp(strata + side_slab + impact, 0.0, 1.0)) * clamp(layer, 0.0, 1.85);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * 0.68 * enabled, 0.0, 1.0));
+}
+
+// === Variant 28: Prism Tunnel ===
+// Kaleidoscopic tunnel with faceted spokes and crossfade-friendly forward motion.
+fn prism_tunnel_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p0 = vec2<f32>(uv.x * aspect, uv.y);
+  let slices = 5.0 + floor(mid * 9.0);
+  let p = kaleidoscope(p0, slices, time * (0.08 + bass * 0.12));
+  let r = max(length(p), 0.001);
+  let a = atan2(p.y, p.x);
+  let depth = 1.0 / r + time * (0.55 + bass * 1.15);
+  let facet = 1.0 - smoothstep(0.0, 0.08 + high * 0.05, abs(fract(a / TAU * slices + depth * 0.16) - 0.5) * 2.0);
+  let rings = 1.0 - smoothstep(0.0, 0.17 + bass * 0.08, abs(fract(depth * (1.45 + mid * 0.8)) - 0.5) * 2.0);
+  let prism = 1.0 - smoothstep(0.0, 0.12 + high * 0.07, abs(fract((p.x - p.y) * (4.0 + high * 8.0) + time * 0.16) - 0.5) * 2.0);
+  let core = exp(-r * (1.25 - bass * 0.35)) * (0.22 + pulse * 0.55 + energy * 0.25);
+  let layer = max(facet * 0.85, rings) * (0.65 + bass * 0.75) + prism * high * 0.42 + core;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, hue_shift * 0.16 + depth * 0.045 + a * 0.18, 0.88 * sat, bri);
+  let accent = vj_duotone(palette_rgb.xyz, hue_shift * 0.16 + depth * 0.055 + 0.33 + high * 0.12, sat, bri);
+  let color = mix(base, accent, clamp(prism + facet * 0.45, 0.0, 1.0)) * clamp(layer * (0.75 + energy * 0.35), 0.0, 1.8);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * (1.0 - r * 0.22) * enabled, 0.0, 1.0));
+}
+
+// === Variant 29: Data Rain ===
+// Falling scan-glyph cells with high-frequency sparkle and bass-driven speed.
+fn data_rain_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect * 0.72 + 0.5, uv.y * 0.5 + 0.5);
+  let columns = 24.0 + floor(high * 22.0);
+  let rows = 30.0 + floor(mid * 18.0);
+  let column = floor(p.x * columns);
+  let column_seed = hash21(vec2<f32>(column, 3.7));
+  let speed = 0.8 + bass * 3.8 + column_seed * 1.4;
+  let fall = time * speed + column_seed * rows;
+  let grid = vec2<f32>(p.x * columns, p.y * rows + fall);
+  let cell = floor(grid);
+  let local = fract(grid) - vec2<f32>(0.5);
+  let seed = hash21(cell + vec2<f32>(0.0, floor(time * 0.75)));
+  let live = step(0.57 - energy * 0.18 - high * 0.2, seed);
+  let head_pos = fract(p.y * 0.18 + time * (0.18 + bass * 0.42) + column_seed);
+  let row_phase = fract(grid.y / rows);
+  let head_band = 1.0 - smoothstep(0.0, 0.065 + pulse * 0.035, abs(row_phase - head_pos));
+  let trail = exp(-fract(row_phase - head_pos + 1.0) * (5.0 - bass * 1.8)) * (0.3 + energy * 0.45);
+  let box_mask = (1.0 - smoothstep(0.34, 0.47, abs(local.x))) *
+    (1.0 - smoothstep(0.34, 0.47, abs(local.y)));
+  let vertical = (1.0 - smoothstep(0.04, 0.09 + high * 0.03, abs(local.x))) *
+    (1.0 - smoothstep(0.12, 0.44, abs(local.y)));
+  let horizontal = (1.0 - smoothstep(0.04, 0.09 + high * 0.03, abs(local.y - (seed - 0.5) * 0.36))) *
+    (1.0 - smoothstep(0.1, 0.4, abs(local.x)));
+  let corner = step(0.86 - high * 0.18, seed) *
+    (1.0 - smoothstep(0.08, 0.22, length(abs(local) - vec2<f32>(0.32))));
+  let glyph = box_mask * (vertical * 0.5 + horizontal * 0.55 + corner * 0.45);
+  let sparkle = step(0.96 - high * 0.24 - pulse * 0.16, hash21(cell + vec2<f32>(floor(time * 12.0) * 0.07, 4.2)));
+  let scanline = 0.76 + 0.24 * step(0.5, fract((p.y + time * 0.05) * 90.0));
+  let layer = live * glyph * (trail + head_band * (0.95 + pulse * 0.7)) * scanline + sparkle * (0.65 + pulse);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, hue_shift * 0.14 + column_seed * 0.22 + p.y * 0.18, 0.78 * sat, bri);
+  let hot = vj_duotone(palette_rgb.xyz, hue_shift * 0.14 + seed * 0.34 + 0.31, sat, bri);
+  let color = mix(base * 0.32, hot, clamp(head_band + sparkle, 0.0, 1.0)) *
+    clamp(layer * 1.35, 0.0, 1.85);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * 0.8 * enabled, 0.0, 1.0));
+}
+
+// === Variant 30: Solar Flare ===
+// Radial arcs, coronal rays, and pulse bloom for drops and big transitions.
+fn solar_flare_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let r = max(length(p), 0.001);
+  let a = atan2(p.y, p.x);
+  let drive = clamp(max(pulse, energy * 0.45 + bass * 0.45), 0.0, 1.0);
+  let arms = 4.0 + floor(mid * 8.0);
+  let arc_phase = a / TAU * arms + r * (2.2 + bass * 2.8) - time * (0.22 + drive * 0.75);
+  let arcs = 1.0 - smoothstep(0.0, 0.12 + high * 0.06, abs(fract(arc_phase) - 0.5) * 2.0);
+  let rays = pow(0.5 + 0.5 * cos(a * (10.0 + high * 18.0) + time * (0.8 + bass * 1.5)), 4.0 - high * 1.6);
+  let corona = exp(-r * (1.9 - drive * 0.7)) * (0.28 + drive * 1.05);
+  let bloom = crisp_ring(r, fract(time * (0.55 + drive * 1.1)) * 0.75 + 0.1, 0.022 + pulse * 0.045, 0.055) * pulse * 1.9;
+  let granules = fbm(p * (4.0 + high * 5.0) + vec2<f32>(time * 0.12, -time * 0.08));
+  let layer = corona + arcs * (0.5 + drive * 0.8) + rays * (0.22 + high * 0.55) + bloom + granules * drive * 0.18;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let core = vj_duotone(palette_rgb.xyz, hue_shift * 0.2 + r * 0.35 + time * 0.02, 0.82 * sat, bri);
+  let hot = clamp(core * 1.35 + vec3<f32>(0.22, 0.18, 0.1), vec3<f32>(0.0), vec3<f32>(1.0));
+  let color = mix(core, hot, clamp(corona + bloom, 0.0, 1.0)) * clamp(layer, 0.0, 1.95);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * (1.0 - smoothstep(0.95, 1.45, r)) * enabled, 0.0, 1.0));
+}
+
+// === Variant 31: Topo Lines ===
+// Oblique contour-map bands over a terrain field; no central organic symmetry.
+fn topo_lines_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let q = vec2<f32>(p.x * 1.12 + p.y * 0.28, p.y * 0.92 - p.x * 0.18);
+  let drift = vec2<f32>(time * 0.032 + bass * 0.12, -time * 0.026 + mid * 0.08);
+  let large = fbm(q * (1.18 + mid * 0.35) + drift);
+  let detail = fbm(q * (3.4 + high * 1.7) - drift * 1.6) * (0.22 + high * 0.16);
+  let slope = q.x * (0.18 + bass * 0.08) - q.y * 0.11;
+  let terrace = sin((q.x * 2.7 + q.y * 1.4) + time * (0.14 + mid * 0.22)) * 0.055;
+  let elevation = large * 0.78 + detail + slope + terrace + pulse * 0.045;
+  let bands = 11.0 + floor(mid * 16.0);
+  let contour_wave = abs(fract(elevation * bands + time * (0.018 + bass * 0.035)) - 0.5) * 2.0;
+  let contour = 1.0 - smoothstep(0.0, 0.055 + high * 0.045, contour_wave);
+  let major_wave = abs(fract(elevation * (bands * 0.25)) - 0.5) * 2.0;
+  let major = 1.0 - smoothstep(0.0, 0.045 + pulse * 0.055, major_wave);
+  let grid_x = 1.0 - smoothstep(0.0, 0.012, abs(fract((q.x + 1.2) * 4.0) - 0.5) * 2.0);
+  let grid_y = 1.0 - smoothstep(0.0, 0.012, abs(fract((q.y + 1.0) * 3.5) - 0.5) * 2.0);
+  let tick_cells = floor(q * vec2<f32>(5.0, 4.0));
+  let tick_seed = hash21(tick_cells);
+  let tick_local = fract(q * vec2<f32>(5.0, 4.0)) - vec2<f32>(0.5);
+  let tick = step(0.82 - high * 0.12, tick_seed) *
+    (1.0 - smoothstep(0.0, 0.025 + pulse * 0.015, abs(tick_local.y))) *
+    (1.0 - smoothstep(0.18, 0.42, abs(tick_local.x)));
+  let fill = smoothstep(0.18, 1.12, elevation) * 0.22;
+  let layer = fill + contour * (0.58 + high * 0.42) + major * (0.55 + pulse * 0.5) +
+    (grid_x + grid_y) * 0.08 * energy + tick * 0.35;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, hue_shift * 0.12 + elevation * 0.28 + time * 0.008, 0.6 * sat, 0.72 * bri);
+  let line = vj_duotone(palette_rgb.xyz, hue_shift * 0.12 + elevation * 0.42 + 0.22, sat, bri);
+  let map_fill = mix(base * 0.32, base, smoothstep(0.08, 0.9, elevation));
+  let color = mix(map_fill, line, clamp(contour + major + tick, 0.0, 1.0)) *
+    clamp(0.48 + layer, 0.0, 1.58);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * 0.78 * enabled, 0.0, 1.0));
+}
+
+// === Variant 32: Glass Ribbons ===
+// Flowing translucent ribbons with moire interference and glossy high glints.
+fn glass_ribbons_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 0.1);
+  let p = vec2<f32>(uv.x * aspect, uv.y);
+  let warp = fbm(p * 1.35 + vec2<f32>(time * 0.055, -time * 0.04));
+  let wave_a = sin(p.y * (2.4 + mid * 4.5) + time * (0.5 + bass * 0.8) + warp * 2.6) * (0.24 + bass * 0.12);
+  let wave_b = cos((p.y + p.x * 0.35) * (3.4 + high * 5.0) - time * (0.4 + mid * 0.7) + warp * 1.8) * (0.18 + mid * 0.1);
+  let width = 0.08 + bass * 0.055 + pulse * 0.035;
+  let ribbon_a = 1.0 - smoothstep(0.0, width, abs(p.x - wave_a));
+  let ribbon_b = 1.0 - smoothstep(0.0, width * 0.85, abs(p.x + wave_b));
+  let moire = 1.0 - smoothstep(0.0, 0.13 + high * 0.06, abs(fract((p.x + p.y + warp * 0.35) * (9.0 + mid * 8.0) + time * 0.1) - 0.5) * 2.0);
+  let glint = pow(max(0.0, 1.0 - abs(p.x - wave_a) / max(width, 0.001)), 3.0 + high * 4.0) * (0.35 + high * 1.1);
+  let depth = exp(-abs(p.y) * 0.45) * (0.18 + energy * 0.35);
+  let layer = ribbon_a * (0.55 + glint) + ribbon_b * (0.42 + mid * 0.45) + moire * (ribbon_a + ribbon_b) * 0.24 + depth;
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, hue_shift * 0.15 + warp * 0.5 + p.y * 0.12 + time * 0.015, 0.68 * sat, bri);
+  let highlight = clamp(vj_duotone(palette_rgb.xyz, hue_shift * 0.15 + warp * 0.5 + 0.28, sat, bri) * 1.28 + vec3<f32>(0.12), vec3<f32>(0.0), vec3<f32>(1.0));
+  let color = mix(base, highlight, clamp(glint + moire * 0.3, 0.0, 1.0)) * clamp(layer, 0.0, 1.75);
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, clamp(layer * 0.72 * enabled, 0.0, 1.0));
+}
+
+fn bear_rot_y(p: vec3<f32>, a: f32) -> vec3<f32> {
+  let c = cos(a);
+  let s = sin(a);
+  return vec3<f32>(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+}
+
+fn bear_smin(a: f32, b: f32, k: f32) -> f32 {
+  let h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+
+fn bear_ellipsoid(p: vec3<f32>, center: vec3<f32>, radius: vec3<f32>) -> f32 {
+  let q = (p - center) / radius;
+  return (length(q) - 1.0) * min(radius.x, min(radius.y, radius.z));
+}
+
+fn bear_model_sdf(p: vec3<f32>) -> f32 {
+  var d = bear_ellipsoid(p, vec3<f32>(0.0, -0.26, 0.0), vec3<f32>(0.48, 0.68, 0.34));
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.0, 0.55, 0.0), vec3<f32>(0.37, 0.34, 0.31)), 0.18);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(-0.26, 0.86, 0.0), vec3<f32>(0.17, 0.17, 0.14)), 0.10);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.26, 0.86, 0.0), vec3<f32>(0.17, 0.17, 0.14)), 0.10);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.0, 0.47, 0.28), vec3<f32>(0.18, 0.12, 0.14)), 0.08);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.0, -0.22, 0.25), vec3<f32>(0.34, 0.45, 0.13)), 0.12);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(-0.46, -0.13, 0.03), vec3<f32>(0.15, 0.42, 0.16)), 0.12);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.46, -0.13, 0.03), vec3<f32>(0.15, 0.42, 0.16)), 0.12);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(-0.50, -0.46, 0.12), vec3<f32>(0.15, 0.13, 0.15)), 0.08);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.50, -0.46, 0.12), vec3<f32>(0.15, 0.13, 0.15)), 0.08);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(-0.22, -0.83, 0.02), vec3<f32>(0.19, 0.30, 0.18)), 0.13);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.22, -0.83, 0.02), vec3<f32>(0.19, 0.30, 0.18)), 0.13);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(-0.22, -1.05, 0.18), vec3<f32>(0.24, 0.13, 0.20)), 0.10);
+  d = bear_smin(d, bear_ellipsoid(p, vec3<f32>(0.22, -1.05, 0.18), vec3<f32>(0.24, 0.13, 0.20)), 0.10);
+  return d;
+}
+
+fn bear_normal(p: vec3<f32>) -> vec3<f32> {
+  let e = 0.003;
+  return normalize(vec3<f32>(
+    bear_model_sdf(p + vec3<f32>(e, 0.0, 0.0)) - bear_model_sdf(p - vec3<f32>(e, 0.0, 0.0)),
+    bear_model_sdf(p + vec3<f32>(0.0, e, 0.0)) - bear_model_sdf(p - vec3<f32>(0.0, e, 0.0)),
+    bear_model_sdf(p + vec3<f32>(0.0, 0.0, e)) - bear_model_sdf(p - vec3<f32>(0.0, 0.0, e))
+  ));
+}
+
+fn bear_line_distance(x: f32) -> f32 {
+  let f = fract(x);
+  return min(f, 1.0 - f);
+}
+
+fn bear_tri_wire_2d(uv: vec2<f32>, freq: f32, thickness: f32, softness: f32) -> f32 {
+  let s = vec3<f32>(
+    uv.x,
+    uv.x * 0.5 + uv.y * 0.8660254,
+    -uv.x * 0.5 + uv.y * 0.8660254
+  ) * freq;
+  let d = min(
+    bear_line_distance(s.x),
+    min(bear_line_distance(s.y), bear_line_distance(s.z))
+  );
+  return 1.0 - smoothstep(thickness, thickness + softness, d);
+}
+
+fn bear_surface_mesh(p: vec3<f32>, n: vec3<f32>, pulse: f32, high: f32) -> f32 {
+  let freq = 13.0 + floor(high * 9.0);
+  let thin = 0.018 + pulse * 0.004;
+  let soft = 0.018;
+  let weights_raw = pow(abs(n) + vec3<f32>(0.025), vec3<f32>(3.0));
+  let weights = weights_raw / max(dot(weights_raw, vec3<f32>(1.0)), 0.001);
+
+  let xy = bear_tri_wire_2d(p.xy + vec2<f32>(0.03 * sin(p.z * 2.1), 0.0), freq, thin, soft);
+  let yz = bear_tri_wire_2d(p.yz + vec2<f32>(0.0, 0.025 * sin(p.x * 2.6)), freq * 0.95, thin, soft);
+  let xz = bear_tri_wire_2d(p.xz + vec2<f32>(0.02 * sin(p.y * 2.9), 0.0), freq * 1.05, thin, soft);
+  let fine = clamp(xy * weights.z + yz * weights.x + xz * weights.y, 0.0, 1.0);
+
+  let major_xy = bear_tri_wire_2d(p.xy, freq * 0.34, 0.015, 0.012);
+  let major_yz = bear_tri_wire_2d(p.yz, freq * 0.32, 0.015, 0.012);
+  let major_xz = bear_tri_wire_2d(p.xz, freq * 0.36, 0.015, 0.012);
+  let major = clamp(major_xy * weights.z + major_yz * weights.x + major_xz * weights.y, 0.0, 1.0);
+
+  let silhouette = pow(1.0 - clamp(abs(dot(n, normalize(-p + vec3<f32>(0.0, 0.0, 3.0)))), 0.0, 1.0), 4.0);
+  return clamp(fine * 0.95 + major * 0.28 + silhouette * 0.35, 0.0, 1.0);
+}
+
+// === Variant 33: Gummy Wire Bear ===
+// Full-body 3D gummy-bear SDF with translucent gel shading and wrapped wireframe.
+fn gummy_wire_bear_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 1.0);
+  let wobble = sin(time * 1.15 + bass * 2.4) * 0.025;
+  let spin = sin(time * 0.24) * 0.42 + (bass - 0.5) * 0.16;
+  let ro_world = vec3<f32>(0.0, -0.04 + wobble, 3.45);
+  let rd_world = normalize(vec3<f32>(uv.x * aspect * 1.02, -uv.y * 1.08 + 0.02, -2.52));
+  let ro = bear_rot_y(ro_world, -spin);
+  let rd = bear_rot_y(rd_world, -spin);
+
+  var t = 0.0;
+  var hit = false;
+  var p = ro;
+  for (var i = 0; i < 72; i = i + 1) {
+    p = ro + rd * t;
+    let d = bear_model_sdf(p);
+    if (d < 0.0035) {
+      hit = true;
+      break;
+    }
+    t = t + max(d * 0.72, 0.006);
+    if (t > 6.0) {
+      break;
+    }
+  }
+
+  let floor_shadow = exp(-pow((uv.x * aspect) / 0.72, 2.0) - pow((uv.y + 0.78) / 0.16, 2.0)) * (0.16 + bass * 0.18);
+  if (!hit) {
+    let bg_line = 1.0 - smoothstep(0.0, 0.018, abs(fract((uv.y + time * 0.04) * 10.0) - 0.5) * 2.0);
+    let bg = vj_duotone(palette_rgb.xyz, hue_shift * 0.16 + uv.y * 0.12, 0.45 * palette_extra.x, 0.35 * palette_extra.y);
+    let enabled = select(1.0, 0.0, energy < 0.0);
+    return vec4<f32>(bg * (floor_shadow + bg_line * 0.03) * enabled, enabled);
+  }
+
+  let n = bear_normal(p);
+  let view = normalize(-rd);
+  let light = normalize(vec3<f32>(-0.42, 0.72, 0.68));
+  let half_v = normalize(light + view);
+  let diff = max(dot(n, light), 0.0);
+  let spec = pow(max(dot(n, half_v), 0.0), 44.0 + high * 38.0);
+  let fresnel = pow(1.0 - clamp(dot(n, view), 0.0, 1.0), 2.7);
+  let wire = bear_surface_mesh(p, n, pulse, high);
+
+  let front = smoothstep(0.08, 0.28, p.z);
+  let eye_l = exp(-dot((p.xy - vec2<f32>(-0.115, 0.61)) * vec2<f32>(14.0, 18.0), (p.xy - vec2<f32>(-0.115, 0.61)) * vec2<f32>(14.0, 18.0))) * front;
+  let eye_r = exp(-dot((p.xy - vec2<f32>(0.115, 0.61)) * vec2<f32>(14.0, 18.0), (p.xy - vec2<f32>(0.115, 0.61)) * vec2<f32>(14.0, 18.0))) * front;
+  let nose = exp(-dot((p.xy - vec2<f32>(0.0, 0.49)) * vec2<f32>(12.0, 20.0), (p.xy - vec2<f32>(0.0, 0.49)) * vec2<f32>(12.0, 20.0))) * smoothstep(0.18, 0.33, p.z);
+  let mouth_curve = abs(length((p.xy - vec2<f32>(0.0, 0.42)) * vec2<f32>(2.2, 4.0)) - 0.18);
+  let mouth = (1.0 - smoothstep(0.015, 0.035, mouth_curve)) * smoothstep(-0.02, 0.09, p.y - 0.34) * smoothstep(0.18, 0.33, p.z);
+  let belly = exp(-dot((p.xy - vec2<f32>(0.0, -0.22)) * vec2<f32>(2.1, 1.45), (p.xy - vec2<f32>(0.0, -0.22)) * vec2<f32>(2.1, 1.45))) * smoothstep(0.08, 0.28, p.z);
+  let toe_l = exp(-dot((p.xy - vec2<f32>(-0.22, -1.05)) * vec2<f32>(7.0, 13.0), (p.xy - vec2<f32>(-0.22, -1.05)) * vec2<f32>(7.0, 13.0))) * smoothstep(0.12, 0.28, p.z);
+  let toe_r = exp(-dot((p.xy - vec2<f32>(0.22, -1.05)) * vec2<f32>(7.0, 13.0), (p.xy - vec2<f32>(0.22, -1.05)) * vec2<f32>(7.0, 13.0))) * smoothstep(0.12, 0.28, p.z);
+  let face = clamp(eye_l + eye_r + nose + mouth * 0.75 + (toe_l + toe_r) * 0.32, 0.0, 1.0);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let gel_base = vj_duotone(palette_rgb.xyz, hue_shift * 0.16 + p.y * 0.16 + p.z * 0.18 + time * 0.01, 0.84 * sat, bri);
+  let gel_accent = clamp(duotone_accent(gel_base) + vec3<f32>(0.07, 0.06, 0.05), vec3<f32>(0.0), vec3<f32>(1.0));
+  let inner = 0.22 + 0.35 * exp(-t * 0.22) + belly * 0.18 + pulse * 0.08;
+  var color = gel_base * (inner + diff * 0.62) + gel_accent * (spec * 1.8 + fresnel * 0.88 + belly * 0.2);
+  color = mix(color, gel_accent * (1.08 + pulse * 0.22), wire);
+  color = mix(color, vec3<f32>(0.04, 0.03, 0.05) * bri, face);
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  return vec4<f32>(color * enabled, enabled);
+}
+
 fn geometry_field(
   uv: vec2<f32>,
   time: f32,
@@ -993,6 +1355,38 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   }
   if (v == 25) {
     let c = polaris_petals_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 26) {
+    let c = aurora_curtains_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 27) {
+    let c = bass_monolith_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 28) {
+    let c = prism_tunnel_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 29) {
+    let c = data_rain_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 30) {
+    let c = solar_flare_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 31) {
+    let c = topo_lines_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 32) {
+    let c = glass_ribbons_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 33) {
+    let c = gummy_wire_bear_variant(uv, time, hue, pulse, energy, bass, mid, high);
     return vec4<f32>(c.xyz, c.w * layer_alpha);
   }
 

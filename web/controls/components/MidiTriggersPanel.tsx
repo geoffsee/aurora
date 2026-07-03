@@ -12,6 +12,11 @@ import { useState } from "react";
 import { useControls } from "../context/ControlsContext.tsx";
 import { MIDI_CC_PARAM_LABELS } from "../lib/constants.ts";
 import type { MidiCcBinding } from "../lib/midi.ts";
+import {
+	MAPPABLE_PARAMS,
+	PARAM_META,
+	type MappableParam,
+} from "../lib/param-meta.ts";
 import type { TriggerBinding } from "../lib/types.ts";
 import { Panel, SectionTitle, StatusPill } from "./ui.tsx";
 
@@ -27,11 +32,11 @@ export function MidiCcPanel() {
 
 	const [cc, setCc] = useState(74);
 	const [channel, setChannel] = useState(0);
-	const [param, setParam] = useState("intensity");
+	const [param, setParam] = useState<MappableParam>("intensity");
 	const [ccMin, setCcMin] = useState(0);
 	const [ccMax, setCcMax] = useState(127);
-	const [paramMin, setParamMin] = useState(0);
-	const [paramMax, setParamMax] = useState(1);
+	const [paramMin, setParamMin] = useState(PARAM_META.intensity.min);
+	const [paramMax, setParamMax] = useState(PARAM_META.intensity.max);
 
 	const midiStatus =
 		!midiEnabled
@@ -54,6 +59,12 @@ export function MidiCcPanel() {
 			paramMax,
 		};
 		addMidiBinding(binding);
+	};
+	const selectParam = (next: MappableParam) => {
+		const meta = PARAM_META[next];
+		setParam(next);
+		setParamMin(meta.min);
+		setParamMax(meta.max);
 	};
 
 	return (
@@ -138,11 +149,11 @@ export function MidiCcPanel() {
 						<NativeSelect.Root>
 							<NativeSelect.Field
 								value={param}
-								onChange={(e) => setParam(e.target.value)}
+								onChange={(e) => selectParam(e.target.value as MappableParam)}
 							>
-								{Object.entries(MIDI_CC_PARAM_LABELS).map(([value, label]) => (
+								{MAPPABLE_PARAMS.map((value) => (
 									<option key={value} value={value}>
-										{label}
+										{MIDI_CC_PARAM_LABELS[value] ?? PARAM_META[value].label}
 									</option>
 								))}
 							</NativeSelect.Field>

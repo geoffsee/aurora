@@ -36,7 +36,7 @@ export const VST_OSC_CONTRACT = contract;
 // control-state-schema.ts, and update defaultState() in web/controls/lib/default-state.ts
 // to emit the new version number.
 // v2: added activeShader field (0..3 = palette variants, 4 = grid,
-//      5..8 = tunnel/glitch/fluid/truchet, 9 = imported, 10..15 = newer
+//      5..8 = tunnel/glitch/fluid/truchet, 9 = imported, 10..33 = newer
 //      audio-reactive palette variants — packed into vj_palette.wgsl)
 // v3: added bandCurves field (per-band audio-reactive curve shaping)
 // v4: added emaAlphas field (per-band EMA decay constants for preset bundling)

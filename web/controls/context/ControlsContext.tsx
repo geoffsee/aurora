@@ -69,7 +69,10 @@ import {
 	MIC_SEND_INTERVAL_MS,
 	micSecureContextError,
 } from "../lib/mic.ts";
-import { MIDI_CC_INTEGER_PARAMS } from "../lib/constants.ts";
+import {
+	MAX_GPU_SHADER_INDEX,
+	MIDI_CC_INTEGER_PARAMS,
+} from "../lib/constants.ts";
 import type {
 	BridgeStatus,
 	ControlState,
@@ -271,25 +274,25 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 				next.cueDeckAMode = clampInt(
 					cue.deckAMode ?? prev.deckAMode,
 					0,
-					19,
+					23,
 					prev.deckAMode,
 				);
 				next.cueDeckBMode = clampInt(
 					cue.deckBMode ?? prev.deckBMode,
 					0,
-					19,
+					23,
 					prev.deckBMode,
 				);
 				next.cueDeckAGpuShader = clampInt(
 					cue.deckAGpuShader ?? prev.deckAGpuShader ?? 0,
 					0,
-					25,
+					MAX_GPU_SHADER_INDEX,
 					prev.deckAGpuShader ?? 0,
 				);
 				next.cueDeckBGpuShader = clampInt(
 					cue.deckBGpuShader ?? prev.deckBGpuShader ?? 5,
 					0,
-					25,
+					MAX_GPU_SHADER_INDEX,
 					prev.deckBGpuShader ?? 5,
 				);
 				next.flashVersion += name === "panic" ? 0 : 1;

@@ -4,6 +4,7 @@ use nih_plug::prelude::*;
 use rosc::{encoder, OscMessage, OscPacket, OscType};
 
 const DEFAULT_TARGET: &str = "127.0.0.1:12000";
+const MAX_GPU_SHADER_INDEX: i32 = 33;
 struct AuroraVst {
     params: Arc<AuroraParams>,
     sender: OscSender,
@@ -158,8 +159,8 @@ impl Default for AuroraParams {
             feedback: float_param("Trails", 0.35, 0.0, 1.0),
             depth: float_param("Depth", 0.0, 0.0, 1.0),
             hue: float_param("Hue", 0.0, 0.0, 1.0),
-            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: 19 }),
-            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: 19 }),
+            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: 23 }),
+            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: 23 }),
             rings: BoolParam::new("Rings", true),
             ring_opacity: float_param("Ring Opacity", 1.0, 0.0, 1.0),
             strobe: BoolParam::new("Strobe", false),
@@ -171,9 +172,9 @@ impl Default for AuroraParams {
             bar_sync: BoolParam::new("Bar Sync", false),
             demo_mode: BoolParam::new("Demo Mode", false),
             show_gpu_palette: BoolParam::new("Show GPU Palette", false),
-            active_shader: IntParam::new("Active Shader", 0, IntRange::Linear { min: 0, max: 25 }),
-            deck_a_gpu_shader: IntParam::new("Deck A GPU Shader", 0, IntRange::Linear { min: 0, max: 25 }),
-            deck_b_gpu_shader: IntParam::new("Deck B GPU Shader", 5, IntRange::Linear { min: 0, max: 25 }),
+            active_shader: IntParam::new("Active Shader", 0, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
+            deck_a_gpu_shader: IntParam::new("Deck A GPU Shader", 0, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
+            deck_b_gpu_shader: IntParam::new("Deck B GPU Shader", 5, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
             palette_saturation: float_param("Palette Saturation", 1.0, 0.0, 1.0),
             palette_brightness: float_param("Palette Brightness", 1.0, 0.0, 1.0),
             grid_density: float_param("Grid Density", 0.5, 0.0, 1.0),

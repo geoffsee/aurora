@@ -37,6 +37,7 @@
       const CONTROL = {
         STATE: "/aurora/control/state",
       };
+      const MAX_GPU_SHADER_INDEX = 33;
       const oscState = {
         connected: false,
         bridgeReady: false,
@@ -334,10 +335,10 @@
         controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
-        controlState.deckAMode = clampInt(next.deckAMode, 0, 19, controlState.deckAMode);
-        controlState.deckBMode = clampInt(next.deckBMode, 0, 19, controlState.deckBMode);
-        controlState.deckAGpuShader = clampInt(next.deckAGpuShader, 0, 25, controlState.deckAGpuShader);
-        controlState.deckBGpuShader = clampInt(next.deckBGpuShader, 0, 25, controlState.deckBGpuShader);
+        controlState.deckAMode = clampInt(next.deckAMode, 0, 23, controlState.deckAMode);
+        controlState.deckBMode = clampInt(next.deckBMode, 0, 23, controlState.deckBMode);
+        controlState.deckAGpuShader = clampInt(next.deckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckAGpuShader);
+        controlState.deckBGpuShader = clampInt(next.deckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckBGpuShader);
         controlState.rings = next.rings !== false;
         controlState.ringOpacity = next.ringOpacity === undefined ? controlState.ringOpacity : clamp01(next.ringOpacity);
         controlState.strobe = Boolean(next.strobe);
@@ -358,11 +359,11 @@
         controlState.cueIntensity = clamp01(next.cueIntensity);
         controlState.cuePalette = clamp01(next.cuePalette);
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
-        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 15, controlState.cueDeckAMode);
-        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 19, controlState.cueDeckBMode);
-        controlState.cueDeckAGpuShader = clampInt(next.cueDeckAGpuShader, 0, 25, controlState.cueDeckAGpuShader);
-        controlState.cueDeckBGpuShader = clampInt(next.cueDeckBGpuShader, 0, 25, controlState.cueDeckBGpuShader);
-        controlState.activeShader = clampInt(next.activeShader, 0, 25, controlState.activeShader);
+        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 23, controlState.cueDeckAMode);
+        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 23, controlState.cueDeckBMode);
+        controlState.cueDeckAGpuShader = clampInt(next.cueDeckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.cueDeckAGpuShader);
+        controlState.cueDeckBGpuShader = clampInt(next.cueDeckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.cueDeckBGpuShader);
+        controlState.activeShader = clampInt(next.activeShader, 0, MAX_GPU_SHADER_INDEX, controlState.activeShader);
         if (next.bandCurves && typeof next.bandCurves === "object") {
           const bc = next.bandCurves;
           controlState.bandCurves = {
@@ -401,7 +402,7 @@
         if (typeof route.crossfade === "number") controlState.crossfade = clamp01(route.crossfade);
         if (typeof route.palette === "number") controlState.palette = clamp01(route.palette);
         if (typeof route.activeShader === "number") {
-          controlState.activeShader = clampInt(route.activeShader, 0, 25, controlState.activeShader);
+          controlState.activeShader = clampInt(route.activeShader, 0, MAX_GPU_SHADER_INDEX, controlState.activeShader);
         }
       }
 
