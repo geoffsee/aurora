@@ -241,7 +241,10 @@ export const applyLayerWeightControl = (
 	prev: Record<string, unknown>,
 	next: Record<string, unknown>,
 ): void => {
-	for (const index of changedLayerWeightIndices(prev, next)) {
-		controller.setWeight(index, (next as Record<string, unknown>)[LAYER_WEIGHT_KEYS[index]!]);
+	// Iterate the slots directly rather than through changedLayerWeightIndices so
+	// the common no-change broadcast doesn't allocate an indices array.
+	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+		const key = LAYER_WEIGHT_KEYS[i]!;
+		if (prev[key] !== next[key]) controller.setWeight(i, next[key]);
 	}
 };
