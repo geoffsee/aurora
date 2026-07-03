@@ -56,6 +56,7 @@ import {
 } from "./audio-ema.ts";
 import { migrateControlState } from "../shared/control-state-schema.ts";
 import {
+	MAX_SHADER_INDEX,
 	type OutputRoute,
 	normalizeOutputRoutes,
 } from "../shared/output-routing.ts";
@@ -531,8 +532,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
 		gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
 		gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
-		deckAMode: clampInt(source.deckAMode, 0, 19, defaults.deckAMode),
-		deckBMode: clampInt(source.deckBMode, 0, 19, defaults.deckBMode),
+		deckAMode: clampInt(source.deckAMode, 0, 23, defaults.deckAMode),
+		deckBMode: clampInt(source.deckBMode, 0, 23, defaults.deckBMode),
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
@@ -566,18 +567,18 @@ const coerceControlState = (state: unknown): ControlState => {
 		cueIntensity: clamp(source.cueIntensity, 0, 1, defaults.cueIntensity),
 		cuePalette: clamp(source.cuePalette, 0, 1, defaults.cuePalette),
 		cueCrossfade: clamp(source.cueCrossfade, 0, 1, defaults.cueCrossfade),
-		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 19, defaults.cueDeckAMode),
-		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 19, defaults.cueDeckBMode),
+		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 23, defaults.cueDeckAMode),
+		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 23, defaults.cueDeckBMode),
 		cueDeckAGpuShader: clampInt(
 			source.cueDeckAGpuShader,
 			0,
-			25,
+			MAX_SHADER_INDEX,
 			defaults.cueDeckAGpuShader,
 		),
 		cueDeckBGpuShader: clampInt(
 			source.cueDeckBGpuShader,
 			0,
-			25,
+			MAX_SHADER_INDEX,
 			defaults.cueDeckBGpuShader,
 		),
 		trackMapping: {
@@ -624,17 +625,22 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, 25, defaults.activeShader),
+		activeShader: clampInt(
+			source.activeShader,
+			0,
+			MAX_SHADER_INDEX,
+			defaults.activeShader,
+		),
 		deckAGpuShader: clampInt(
 			source.deckAGpuShader,
 			0,
-			25,
+			MAX_SHADER_INDEX,
 			defaults.deckAGpuShader,
 		),
 		deckBGpuShader: clampInt(
 			source.deckBGpuShader,
 			0,
-			25,
+			MAX_SHADER_INDEX,
 			defaults.deckBGpuShader,
 		),
 		morph: clamp(source.morph, 0, 1, defaults.morph),
@@ -1158,17 +1164,17 @@ const applyVstControlMessage = (msg: OscMsg) => {
 				break;
 			case "active_shader":
 				mergeControlState({
-					activeShader: Math.max(0, Math.min(25, Math.floor(value))),
+					activeShader: Math.max(0, Math.min(MAX_SHADER_INDEX, Math.floor(value))),
 				});
 				break;
 			case "deck_a_gpu_shader":
 				mergeControlState({
-					deckAGpuShader: Math.max(0, Math.min(25, Math.floor(value))),
+					deckAGpuShader: Math.max(0, Math.min(MAX_SHADER_INDEX, Math.floor(value))),
 				});
 				break;
 			case "deck_b_gpu_shader":
 				mergeControlState({
-					deckBGpuShader: Math.max(0, Math.min(25, Math.floor(value))),
+					deckBGpuShader: Math.max(0, Math.min(MAX_SHADER_INDEX, Math.floor(value))),
 				});
 				break;
 			case "palette_saturation":

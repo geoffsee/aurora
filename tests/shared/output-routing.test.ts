@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	MAX_SHADER_INDEX,
 	MAX_OUTPUTS,
 	isValidOutputId,
 	normalizeOutputRoute,
@@ -61,7 +62,7 @@ describe("normalizeOutputRoute", () => {
 			enabled: false,
 			crossfade: 1,
 			palette: 0,
-			activeShader: 15,
+			activeShader: MAX_SHADER_INDEX,
 		});
 	});
 
@@ -176,7 +177,7 @@ function applyOutputRouteReplica(
 		controlState.activeShader = clampInt(
 			route.activeShader,
 			0,
-			15,
+			MAX_SHADER_INDEX,
 			controlState.activeShader,
 		);
 	}
@@ -189,7 +190,10 @@ describe("projector inline mirror parity", () => {
 		{ name: "disabled", route: { id: "left", enabled: false } },
 		{ name: "crossfade override", route: { id: "left", crossfade: 0 } },
 		{ name: "palette override", route: { id: "left", palette: 1 } },
-		{ name: "max shader override", route: { id: "left", activeShader: 15 } },
+		{
+			name: "max shader override",
+			route: { id: "left", activeShader: MAX_SHADER_INDEX },
+		},
 		{
 			name: "all overrides",
 			route: { id: "left", crossfade: 0.3, palette: 0.7, activeShader: 12 },
