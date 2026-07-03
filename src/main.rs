@@ -247,7 +247,7 @@ const AUDIO_GATE_START: f32 = 0.001;
 const AUDIO_GATE_END: f32 = 0.025;
 const PULSE_ATTACK_SPEED: f32 = 24.0;
 const PULSE_RELEASE_SPEED: f32 = 7.0;
-const MAX_GPU_SHADER_INDEX: u32 = 33;
+const MAX_GPU_SHADER_INDEX: u32 = 35;
 
 fn main() {
     App::new()
@@ -2181,7 +2181,7 @@ fn update_palette_material(
     //   5..=8 → palette quad (Tunnel/Glitch/Fluid/Truchet)
     //   9     → imported quad (Shadertoy hot-swap slot)
     //   10..=17 → palette quad (Bass Reactor … Bass Portal)
-    //   18..=33 → palette quad (new creative variants)
+    //   18..=35 → palette quad (new creative variants)
     let (quad_index, palette_variant) = if state.active_shader == 4 {
         (1u32, 0.0)
     } else if state.active_shader == 9 {

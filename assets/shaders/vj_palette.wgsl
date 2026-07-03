@@ -1145,6 +1145,186 @@ fn gummy_wire_bear_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32,
   return vec4<f32>(color * enabled, enabled);
 }
 
+fn wolf_ellipse_2d(p: vec2<f32>, center: vec2<f32>, radius: vec2<f32>) -> f32 {
+  return (length((p - center) / radius) - 1.0) * min(radius.x, radius.y);
+}
+
+fn wolf_capsule_2d(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
+  let pa = p - a;
+  let ba = b - a;
+  let h = clamp(dot(pa, ba) / max(dot(ba, ba), 0.0001), 0.0, 1.0);
+  return length(pa - ba * h) - r;
+}
+
+fn wolf_triangle_2d(p: vec2<f32>, base: vec2<f32>, tip: vec2<f32>, width: f32) -> f32 {
+  let axis = normalize(tip - base);
+  let perp = vec2<f32>(-axis.y, axis.x);
+  let len = max(length(tip - base), 0.001);
+  let q = p - base;
+  let along = dot(q, axis);
+  let lateral = abs(dot(q, perp));
+  let taper = width * (1.0 - along / len);
+  return max(max(-along, along - len), lateral - taper);
+}
+
+fn wolf_leg_2d_sdf(p: vec2<f32>, hip: vec2<f32>, phase: f32, stride: f32) -> f32 {
+  let swing = sin(phase);
+  let lift = max(cos(phase), 0.0);
+  let knee = hip + vec2<f32>(0.11 * swing * stride, -0.32 + lift * 0.05);
+  let ankle = hip + vec2<f32>(-0.11 * swing * stride, -0.62 + lift * 0.08);
+  let paw = hip + vec2<f32>(-0.21 * swing * stride, -0.76 + lift * 0.10);
+  var d = wolf_capsule_2d(p, hip, knee, 0.055);
+  d = min(d, wolf_capsule_2d(p, knee, ankle, 0.047));
+  d = min(d, wolf_capsule_2d(p, ankle, paw, 0.038));
+  d = min(d, wolf_ellipse_2d(p, paw + vec2<f32>(0.055, -0.008), vec2<f32>(0.13, 0.045)));
+  return d;
+}
+
+// === Variant 34: Fierce Walking Wolf ===
+// Graphic side-profile wolf with animated stride, pointed ears, raised hackles, and snarl details.
+fn fierce_walking_wolf_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 1.0);
+  let audio = max(energy, 0.0);
+  let gait = time * (2.45 + bass * 1.15) + pulse * 0.45;
+  let stride = 1.0 + bass * 0.45;
+  let p = vec2<f32>(uv.x * aspect, -uv.y);
+  let shift = vec2<f32>(sin(time * 0.16) * 0.075, sin(gait * 2.0) * (0.026 + bass * 0.016));
+  let q = p * 1.58 - shift;
+
+  let leg_front_a = wolf_leg_2d_sdf(q, vec2<f32>(0.44, -0.33), gait, stride);
+  let leg_front_b = wolf_leg_2d_sdf(q, vec2<f32>(0.26, -0.34), gait + TAU * 0.50, stride);
+  let leg_hind_a = wolf_leg_2d_sdf(q, vec2<f32>(-0.45, -0.34), gait + TAU * 0.52, stride);
+  let leg_hind_b = wolf_leg_2d_sdf(q, vec2<f32>(-0.62, -0.33), gait + TAU * 0.02, stride);
+
+  var wolf_d = wolf_ellipse_2d(q, vec2<f32>(-0.18, -0.12), vec2<f32>(0.72, 0.25));
+  wolf_d = min(wolf_d, wolf_ellipse_2d(q, vec2<f32>(0.40, -0.07), vec2<f32>(0.34, 0.31)));
+  wolf_d = min(wolf_d, wolf_capsule_2d(q, vec2<f32>(0.48, 0.06), vec2<f32>(0.80, 0.24), 0.13));
+  wolf_d = min(wolf_d, wolf_ellipse_2d(q, vec2<f32>(0.97, 0.25), vec2<f32>(0.25, 0.16)));
+  wolf_d = min(wolf_d, wolf_triangle_2d(q, vec2<f32>(1.03, 0.19), vec2<f32>(1.40, 0.23), 0.105));
+  wolf_d = min(wolf_d, wolf_ellipse_2d(q, vec2<f32>(1.14, 0.10), vec2<f32>(0.13, 0.07)));
+  wolf_d = min(wolf_d, wolf_triangle_2d(q, vec2<f32>(0.78, 0.36), vec2<f32>(0.70, 0.67), 0.085));
+  wolf_d = min(wolf_d, wolf_triangle_2d(q, vec2<f32>(0.92, 0.35), vec2<f32>(1.03, 0.62), 0.078));
+  wolf_d = min(wolf_d, wolf_capsule_2d(q, vec2<f32>(-0.78, -0.07), vec2<f32>(-1.35, 0.22), 0.125));
+  wolf_d = min(wolf_d, wolf_ellipse_2d(q, vec2<f32>(-1.42, 0.26), vec2<f32>(0.17, 0.105)));
+  wolf_d = min(wolf_d, leg_front_a);
+  wolf_d = min(wolf_d, leg_front_b);
+  wolf_d = min(wolf_d, leg_hind_a);
+  wolf_d = min(wolf_d, leg_hind_b);
+
+  let silhouette = 1.0 - smoothstep(0.0, 0.028, wolf_d);
+  let outline = (1.0 - smoothstep(0.0, 0.028, abs(wolf_d))) * (0.55 + pulse * 0.28);
+
+  let floor_y = uv.y - 0.77;
+  let floor_shadow = exp(-pow((uv.x * aspect - shift.x) / 1.18, 2.0) - pow(floor_y / 0.15, 2.0)) * (0.18 + bass * 0.20);
+  let ground_line = (1.0 - smoothstep(0.0, 0.018, abs(floor_y + sin(uv.x * 7.0 + time * 0.8) * 0.008))) * (0.14 + audio * 0.18);
+  let track = (1.0 - smoothstep(0.0, 0.022, abs(fract((uv.x * aspect + time * (0.22 + bass * 0.35)) * 5.6) - 0.5) * 2.0)) *
+    smoothstep(0.66, 0.95, uv.y) * (0.12 + pulse * 0.16);
+  let wire = bear_tri_wire_2d(q * vec2<f32>(1.12, 1.0) + vec2<f32>(time * 0.015, sin(q.x * 3.0) * 0.02), 15.0 + floor(high * 8.0), 0.018, 0.018) * silhouette;
+  let back_y = 0.19 + sin(q.x * 17.0 + time * 1.1) * (0.018 + high * 0.016);
+  let hackle = (1.0 - smoothstep(0.0, 0.034, abs(q.y - back_y))) *
+    smoothstep(-0.62, -0.42, q.x) * (1.0 - smoothstep(0.26, 0.48, q.x)) * silhouette;
+  let chest_ruff = (1.0 - smoothstep(0.0, 0.045, abs(q.x - (0.50 + sin(q.y * 12.0) * 0.025)))) *
+    smoothstep(-0.34, 0.16, q.y) * (1.0 - smoothstep(0.16, 0.38, q.y)) * silhouette;
+
+  let eye_v = (q - vec2<f32>(1.02, 0.30)) * vec2<f32>(28.0, 32.0);
+  let eye = exp(-dot(eye_v, eye_v)) * silhouette;
+  let mouth_span = smoothstep(1.03, 1.10, q.x) * (1.0 - smoothstep(1.34, 1.43, q.x)) * silhouette;
+  let mouth_y = 0.14 - (q.x - 1.04) * 0.09;
+  let snarl = (1.0 - smoothstep(0.0, 0.018, abs(q.y - mouth_y))) * mouth_span;
+  let fang_a = (1.0 - smoothstep(0.0, 0.018, wolf_triangle_2d(q, vec2<f32>(1.13, 0.11), vec2<f32>(1.16, 0.005), 0.026))) * mouth_span;
+  let fang_b = (1.0 - smoothstep(0.0, 0.018, wolf_triangle_2d(q, vec2<f32>(1.24, 0.105), vec2<f32>(1.27, 0.015), 0.023))) * mouth_span;
+  let teeth = clamp(fang_a + fang_b, 0.0, 1.0);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let fur_base = vj_duotone(palette_rgb.xyz, hue_shift * 0.15 + q.x * 0.12 + q.y * 0.16 + time * 0.009, 0.74 * sat, bri);
+  let fur_hot = clamp(duotone_accent(fur_base) + vec3<f32>(0.05, 0.045, 0.055), vec3<f32>(0.0), vec3<f32>(1.0));
+  let flank = smoothstep(-0.72, 0.42, q.x) * (1.0 - smoothstep(0.18, 0.56, q.y)) * silhouette;
+  var color = fur_base * (floor_shadow + ground_line + track + silhouette * (0.34 + audio * 0.18) + flank * 0.18);
+  color = color + fur_hot * (wire * 0.95 + outline * 0.62 + hackle * 0.68 + chest_ruff * 0.35 + pulse * silhouette * 0.08);
+  color = mix(color, vec3<f32>(0.96, 0.94, 0.78) * bri, teeth * 0.86);
+  color = mix(color, vec3<f32>(0.035, 0.025, 0.035) * bri, clamp(snarl * 0.82, 0.0, 1.0));
+  color = mix(color, vec3<f32>(1.0, 0.08 + high * 0.16, 0.025) * bri, clamp(eye * (1.2 + pulse * 0.9 + high * 0.8), 0.0, 1.0));
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  let alpha = clamp((silhouette * 0.76 + outline * 0.34 + floor_shadow * 0.35 + ground_line * 0.22 + track * 0.18) * enabled, 0.0, 1.0);
+  return vec4<f32>(color * enabled, alpha);
+}
+
+fn ghost_capsule_2d(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
+  let pa = p - a;
+  let ba = b - a;
+  let h = clamp(dot(pa, ba) / max(dot(ba, ba), 0.0001), 0.0, 1.0);
+  return length(pa - ba * h) - r;
+}
+
+// === Variant 35: Spectral Ghost ===
+// Floating translucent apparition with torn cloth, drifting fog, and hollow face cavities.
+fn spectral_ghost_variant(uv: vec2<f32>, time: f32, hue_shift: f32, pulse: f32, energy: f32, bass: f32, mid: f32, high: f32) -> vec4<f32> {
+  let aspect = max(params.w, 1.0);
+  let p = vec2<f32>(uv.x * aspect, -uv.y);
+  let hover = vec2<f32>(sin(time * 0.19) * 0.12, sin(time * (0.74 + bass * 0.45)) * 0.065);
+  var q = p - hover;
+  let flow = vec2<f32>(
+    fbm(q * 1.7 + vec2<f32>(time * 0.05, -time * 0.03)),
+    fbm(q.yx * 1.55 + vec2<f32>(-time * 0.04, time * 0.06))
+  ) - vec2<f32>(0.5);
+  let w = q + flow * (0.075 + energy * 0.075);
+
+  let head = 1.0 - smoothstep(0.43, 0.49, length((w - vec2<f32>(0.0, 0.34)) * vec2<f32>(0.92, 1.08)));
+  let bottom_swell = 1.0 - smoothstep(-0.72, 0.42, w.y);
+  let body_width = 0.27 + bottom_swell * 0.38 + sin(w.y * 8.0 + time * 0.7) * 0.025;
+  let side = 1.0 - smoothstep(body_width, body_width + 0.055, abs(w.x));
+  let top_gate = 1.0 - smoothstep(0.16, 0.38, w.y);
+  let hem_wave = sin(w.x * 17.0 + time * (1.1 + mid * 0.8)) * (0.055 + high * 0.035);
+  let bottom_gate = smoothstep(-0.88 + hem_wave, -0.69 + hem_wave, w.y);
+  let sheet = side * top_gate * bottom_gate;
+
+  let left_arm = 1.0 - smoothstep(0.0, 0.085, ghost_capsule_2d(
+    w,
+    vec2<f32>(-0.26, 0.03),
+    vec2<f32>(-0.76, -0.05 + sin(time * 1.0) * 0.065),
+    0.075 + pulse * 0.012
+  ));
+  let right_arm = 1.0 - smoothstep(0.0, 0.085, ghost_capsule_2d(
+    w,
+    vec2<f32>(0.26, 0.02),
+    vec2<f32>(0.70, 0.10 + cos(time * 0.92) * 0.07),
+    0.068 + pulse * 0.012
+  ));
+  let silhouette = clamp(max(head, max(sheet, max(left_arm * 0.72, right_arm * 0.68))), 0.0, 1.0);
+
+  let eye_l_v = (w - vec2<f32>(-0.12, 0.38)) * vec2<f32>(13.0, 18.0);
+  let eye_r_v = (w - vec2<f32>(0.12, 0.38)) * vec2<f32>(13.0, 18.0);
+  let mouth_v = (w - vec2<f32>(0.0, 0.16 + sin(time * 1.1) * 0.02)) * vec2<f32>(7.0, 12.0);
+  let eyes = clamp(exp(-dot(eye_l_v, eye_l_v)) + exp(-dot(eye_r_v, eye_r_v)), 0.0, 1.0) * head;
+  let mouth = exp(-dot(mouth_v, mouth_v)) * head;
+  let face_void = clamp(eyes + mouth * 0.88, 0.0, 1.0);
+
+  let rib_phase = abs(fract((w.y + flow.x * 0.13 + time * 0.045) * (7.5 + mid * 7.0)) - 0.5) * 2.0;
+  let rib = (1.0 - smoothstep(0.0, 0.18 + high * 0.08, rib_phase)) * silhouette * (0.16 + energy * 0.22);
+  let edge = pow(1.0 - smoothstep(0.0, 0.11, abs(abs(w.x) - body_width)), 1.6) * sheet;
+  let aura = exp(-length((q + flow * 0.2) * vec2<f32>(0.72, 0.92)) * (1.25 - energy * 0.25)) * (0.24 + pulse * 0.22);
+  let vapor = fbm((p + flow * 0.42) * vec2<f32>(2.4, 2.0) + vec2<f32>(time * 0.09, -time * 0.12));
+  let fog = smoothstep(0.42, 0.86, vapor) * aura * (0.26 + high * 0.2);
+  let floor_mist = exp(-pow((uv.y + 0.82) / 0.13, 2.0)) *
+    (0.12 + bass * 0.24) *
+    (0.55 + 0.45 * sin(uv.x * aspect * 7.0 - time * 1.1));
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.0);
+  let base = vj_duotone(palette_rgb.xyz, hue_shift * 0.14 + w.y * 0.12 + flow.x * 0.5 + time * 0.01, 0.56 * sat, bri);
+  let spectral = clamp(duotone_accent(base) + vec3<f32>(0.09, 0.11, 0.14), vec3<f32>(0.0), vec3<f32>(1.0));
+  var color = mix(base * 0.38, spectral, clamp(silhouette * 0.58 + edge * 0.34 + rib, 0.0, 1.0));
+  color = color * (0.18 + silhouette * 0.74 + aura * 0.58 + rib + fog);
+  color = mix(color, vec3<f32>(0.015, 0.018, 0.026) * bri, face_void * 0.92);
+  color = color + spectral * (fog + floor_mist) * 0.72;
+
+  let enabled = select(1.0, 0.0, energy < 0.0);
+  let alpha = clamp((silhouette * 0.58 + edge * 0.24 + aura * 0.30 + fog + floor_mist * 0.55) * enabled, 0.0, 0.88);
+  return vec4<f32>(color * enabled, alpha);
+}
+
 fn geometry_field(
   uv: vec2<f32>,
   time: f32,
@@ -1387,6 +1567,14 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   }
   if (v == 33) {
     let c = gummy_wire_bear_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 34) {
+    let c = fierce_walking_wolf_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
+  if (v == 35) {
+    let c = spectral_ghost_variant(uv, time, hue, pulse, energy, bass, mid, high);
     return vec4<f32>(c.xyz, c.w * layer_alpha);
   }
 

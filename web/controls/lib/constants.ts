@@ -60,6 +60,8 @@ export const SHADER_OPTIONS = [
 	"Topo Lines",
 	"Glass Ribbons",
 	"Gummy Wire Bear",
+	"Fierce Walking Wolf",
+	"Spectral Ghost",
 ] as const;
 
 export const MAX_GPU_SHADER_INDEX = SHADER_OPTIONS.length - 1;

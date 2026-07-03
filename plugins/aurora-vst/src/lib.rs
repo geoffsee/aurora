@@ -4,7 +4,7 @@ use nih_plug::prelude::*;
 use rosc::{encoder, OscMessage, OscPacket, OscType};
 
 const DEFAULT_TARGET: &str = "127.0.0.1:12000";
-const MAX_GPU_SHADER_INDEX: i32 = 33;
+const MAX_GPU_SHADER_INDEX: i32 = 35;
 struct AuroraVst {
     params: Arc<AuroraParams>,
     sender: OscSender,

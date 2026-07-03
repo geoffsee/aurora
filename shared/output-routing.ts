@@ -27,7 +27,7 @@ export const MAX_OUTPUTS = 8;
 // to a conservative, injection-safe character set.
 const OUTPUT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
 
-export const MAX_SHADER_INDEX = 33;
+export const MAX_SHADER_INDEX = 35;
 
 export type OutputOverride = number | null;
 
