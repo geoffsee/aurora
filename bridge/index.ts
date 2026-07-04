@@ -1046,13 +1046,11 @@ const broadcastControl = (state: unknown) => {
 		prev as Record<string, unknown> | null,
 		latestControlState as unknown as Record<string, unknown>,
 	);
-	const data = JSON.stringify({
-		address: "/aurora/control/state",
-		args: [latestControlState],
-	});
-	sockets.forEach((ws) => ws.send(data));
 	// An external weight edit (automation replay, OSC, or MIDI) lands on a
-	// layerWeight slot; forward it into the stack so the composition follows. Skip
+	// layerWeight slot; forward it into the stack *before* the fan-out so the
+	// recomposite (and its corrected frame from the guarded merge) precedes this
+	// broadcast — clients then receive a single already-consistent frame rather
+	// than a stale-composite frame followed by the correction. Skip
 	// controller-driven writes (guarded) and the very first state (no prev).
 	if (!applyingLayerWeights && prev) {
 		applyLayerWeightControl(
@@ -1061,6 +1059,11 @@ const broadcastControl = (state: unknown) => {
 			latestControlState as unknown as Record<string, unknown>,
 		);
 	}
+	const data = JSON.stringify({
+		address: "/aurora/control/state",
+		args: [latestControlState],
+	});
+	sockets.forEach((ws) => ws.send(data));
 };
 const broadcastError = (description: string) => {
 	const data = JSON.stringify({
