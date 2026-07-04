@@ -22,7 +22,15 @@ export type MappableParam =
 	| "ringOpacity"
 	| "maxBrightness"
 	| "deckAMode"
-	| "deckBMode";
+	| "deckBMode"
+	| "layerWeight0"
+	| "layerWeight1"
+	| "layerWeight2"
+	| "layerWeight3"
+	| "layerWeight4"
+	| "layerWeight5"
+	| "layerWeight6"
+	| "layerWeight7";
 
 export type ParamMeta = {
 	key: MappableParam;
@@ -74,6 +82,14 @@ export const PARAM_META: Record<MappableParam, ParamMeta> = {
 		bumpCue: true,
 		format: (v) => VISUAL_MODES[Math.round(v)] ?? String(Math.round(v)),
 	},
+	layerWeight0: { key: "layerWeight0", label: "Layer 1 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	layerWeight1: { key: "layerWeight1", label: "Layer 2 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	layerWeight2: { key: "layerWeight2", label: "Layer 3 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	layerWeight3: { key: "layerWeight3", label: "Layer 4 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	layerWeight4: { key: "layerWeight4", label: "Layer 5 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	layerWeight5: { key: "layerWeight5", label: "Layer 6 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	layerWeight6: { key: "layerWeight6", label: "Layer 7 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	layerWeight7: { key: "layerWeight7", label: "Layer 8 Opacity", min: 0, max: 1, step: 0.01, format: pct },
 };
 
 export const MAPPABLE_PARAMS = Object.keys(PARAM_META) as MappableParam[];

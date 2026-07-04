@@ -74,6 +74,14 @@ export function defaultState(): ControlState {
 		audioControlMode: false,
 		outputs: [],
 		audioTransientAutomation: false,
+		layerWeight0: 0,
+		layerWeight1: 0,
+		layerWeight2: 0,
+		layerWeight3: 0,
+		layerWeight4: 0,
+		layerWeight5: 0,
+		layerWeight6: 0,
+		layerWeight7: 0,
 	};
 }
 
