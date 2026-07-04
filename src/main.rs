@@ -248,6 +248,34 @@ const AUDIO_GATE_END: f32 = 0.025;
 const PULSE_ATTACK_SPEED: f32 = 24.0;
 const PULSE_RELEASE_SPEED: f32 = 7.0;
 const MAX_GPU_SHADER_INDEX: u32 = 35;
+/// UI picker index for the Shadertoy imported slot (prepended to SHADER_OPTIONS).
+const GPU_SHADER_IMPORTED_UI_INDEX: u32 = 0;
+/// UI picker index for the grid material slot.
+const GPU_SHADER_GRID_UI_INDEX: u32 = 5;
+/// UI picker index for Topo Lines (solo GPU path hides CPU geometry).
+const GPU_SHADER_TOPO_LINES_UI_INDEX: u32 = 31;
+
+/// Map control-state picker index → palette shader `params.z` variant id.
+fn palette_variant_from_ui(ui: u32) -> f32 {
+    if ui == GPU_SHADER_IMPORTED_UI_INDEX {
+        return 0.0;
+    }
+    if ui >= 10 {
+        return ui as f32;
+    }
+    (ui - 1) as f32
+}
+
+/// Route a UI picker index to a GPU quad (0=palette, 1=grid, 2=imported) and palette variant.
+fn resolve_gpu_shader(ui: u32) -> (u32, f32) {
+    if ui == GPU_SHADER_IMPORTED_UI_INDEX {
+        (2, 0.0)
+    } else if ui == GPU_SHADER_GRID_UI_INDEX {
+        (1, 0.0)
+    } else {
+        (0, palette_variant_from_ui(ui))
+    }
+}
 
 fn main() {
     App::new()
@@ -360,8 +388,8 @@ impl Default for VjState {
             grid_shape_mix: 0.5,
             deck_a_mode: VisualMode::Beams,
             deck_b_mode: VisualMode::Tunnel,
-            deck_a_gpu_shader: 0,
-            deck_b_gpu_shader: 5,
+            deck_a_gpu_shader: 1,
+            deck_b_gpu_shader: 6,
             rings_enabled: true,
             ring_opacity: 1.0,
             strobe: false,
@@ -886,7 +914,7 @@ fn consume_pending_imported_shader(
 /// Dev sanity check: press F10 to inject a known-good WGSL into the imported
 /// shader slot without going through the bridge. Useful when verifying that
 /// the asset hot-swap path is alive (e.g. after Bevy upgrades) even when the
-/// Shadertoy API is unreachable. Also forces `active_shader = 9` so the
+/// Shadertoy API is unreachable. Also forces `active_shader = 0` so the
 /// imported quad is visible.
 ///
 /// Gated to debug builds so neither the keybind nor the embedded WGSL ship in
@@ -924,7 +952,7 @@ fn debug_inject_imported_shader(
             "shaders/imported.wgsl".to_string(),
         );
         let _ = shaders.insert(&handle.0, shader);
-        state.active_shader = 9;
+        state.active_shader = GPU_SHADER_IMPORTED_UI_INDEX;
         state.show_gpu_palette = true;
     }
 }
@@ -1068,7 +1096,8 @@ fn update_visuals(
     } else {
         0.0
     };
-    let gpu_shader_solo = !state.show_gpu_palette && state.active_shader == 31;
+    let gpu_shader_solo =
+        !state.show_gpu_palette && state.active_shader == GPU_SHADER_TOPO_LINES_UI_INDEX;
     let blackout = if state.blackout || gpu_shader_solo { 0.0 } else { 1.0 };
 
     for (element, mut transform, material_handle) in &mut query {
@@ -2131,8 +2160,8 @@ fn update_palette_material(
     // palette quads (indices 10/11) and crossfade their alphas via palette_extra.w.
     // Max brightness scales that crossfade mix only — not palette_brightness.
     if state.show_gpu_palette {
-        let a_var = state.deck_a_gpu_shader as f32;
-        let b_var = state.deck_b_gpu_shader as f32;
+        let a_var = palette_variant_from_ui(state.deck_a_gpu_shader);
+        let b_var = palette_variant_from_ui(state.deck_b_gpu_shader);
         let cross = state.crossfade.clamp(0.0, 1.0);
         let master = state.max_brightness.clamp(0.0, 1.0);
         let alpha_a = ((1.0 - cross) * master).clamp(0.0, 1.0);
@@ -2175,20 +2204,9 @@ fn update_palette_material(
     }
 
     // Legacy single-shader picker path (active when GPU palette is not forced on).
-    // active_shader routing:
-    //   0..=3 → palette quad (Rehoboam/Spokes/Rings/Plasma via geometry_field)
-    //   4     → grid quad
-    //   5..=8 → palette quad (Tunnel/Glitch/Fluid/Truchet)
-    //   9     → imported quad (Shadertoy hot-swap slot)
-    //   10..=17 → palette quad (Bass Reactor … Bass Portal)
-    //   18..=35 → palette quad (new creative variants)
-    let (quad_index, palette_variant) = if state.active_shader == 4 {
-        (1u32, 0.0)
-    } else if state.active_shader == 9 {
-        (2u32, 0.0)
-    } else {
-        (0u32, state.active_shader as f32)
-    };
+    // UI indices follow SHADER_OPTIONS (Shadertoy at 0, grid at 5); palette variant
+    // ids keep their legacy numbering via palette_variant_from_ui().
+    let (quad_index, palette_variant) = resolve_gpu_shader(state.active_shader);
 
     let params = Vec4::new(display_hue, state.show_time, palette_variant, aspect);
     let grid_params = Vec4::new(
