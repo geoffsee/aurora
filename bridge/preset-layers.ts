@@ -234,17 +234,34 @@ export const changedLayerWeightIndices = (
 };
 
 // Forward externally-set weight-slot fields into the controller so the stack
-// re-composites. Only changed slots are pushed; a slot with no live layer is a
-// no-op that the next projection resets to 0.
+// re-composites. Returns whether any edit reached a live layer (i.e. a
+// recomposite/merge ran) so the caller can tell an effective edit apart from a
+// pure no-op. A slot with no live layer behind it never recomposites — its
+// `setWeight` early-returns without reprojecting — so instead of leaving the
+// phantom weight to linger in `next` (broadcast + recorded as a stale value),
+// zero it in place here. `next` is the caller's live control-state record, so
+// the zero lands on the field it will emit.
 export const applyLayerWeightControl = (
 	controller: LayerWeightController,
 	prev: Record<string, unknown>,
 	next: Record<string, unknown>,
-): void => {
+): boolean => {
 	// Iterate the slots directly rather than through changedLayerWeightIndices so
 	// the common no-change broadcast doesn't allocate an indices array.
+	let recomposited = false;
 	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
 		const key = LAYER_WEIGHT_KEYS[i]!;
-		if (prev[key] !== next[key]) controller.setWeight(i, next[key]);
+		if (prev[key] === next[key]) continue;
+		if (controller.stack[i]) {
+			// A live layer backs this slot: forwarding recomposites the stack, and
+			// the controller's merge reprojects every slot back onto the state.
+			controller.setWeight(i, next[key]);
+			recomposited = true;
+		} else {
+			// No layer behind this slot, so setWeight wouldn't reproject. Snap the
+			// phantom weight back to 0 so it isn't broadcast or recorded.
+			next[key] = 0;
+		}
 	}
+	return recomposited;
 };

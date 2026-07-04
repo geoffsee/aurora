@@ -1042,23 +1042,33 @@ const broadcastControl = (state: unknown) => {
 		);
 	}
 	audioControlRouter.setEnabled(latestControlState.audioControlMode);
-	controlStateLog.record(
-		prev as Record<string, unknown> | null,
-		latestControlState as unknown as Record<string, unknown>,
-	);
 	// An external weight edit (automation replay, OSC, or MIDI) lands on a
-	// layerWeight slot; forward it into the stack *before* the fan-out so the
-	// recomposite (and its corrected frame from the guarded merge) precedes this
-	// broadcast — clients then receive a single already-consistent frame rather
-	// than a stale-composite frame followed by the correction. Skip
+	// layerWeight slot; forward it into the stack *before* the fan-out/log so both
+	// see the corrected composite. A live layer's slot recomposites through the
+	// guarded merge, which reassigns latestControlState and already broadcast the
+	// corrected frame; an absent slot's phantom weight is zeroed in place. Skip
 	// controller-driven writes (guarded) and the very first state (no prev).
-	if (!applyingLayerWeights && prev) {
-		applyLayerWeightControl(
-			layerController,
-			prev as unknown as Record<string, unknown>,
+	const recomposited =
+		!applyingLayerWeights && prev
+			? applyLayerWeightControl(
+					layerController,
+					prev as unknown as Record<string, unknown>,
+					latestControlState as unknown as Record<string, unknown>,
+				)
+			: false;
+	// Log once, from the outer pass, against the recomposited state — so a weight
+	// sweep records a single entry (the weight edit and its composited result)
+	// instead of the guarded merge doubling it. The guarded pass suppresses its
+	// own record here.
+	if (!applyingLayerWeights) {
+		controlStateLog.record(
+			prev as Record<string, unknown> | null,
 			latestControlState as unknown as Record<string, unknown>,
 		);
 	}
+	// The guarded recomposite already fanned the corrected frame out; skip the
+	// outer send so clients receive exactly one frame per weight edit.
+	if (recomposited) return;
 	const data = JSON.stringify({
 		address: "/aurora/control/state",
 		args: [latestControlState],
