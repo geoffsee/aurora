@@ -5,7 +5,9 @@
   "author": "Geoff Seemueller 2026",
   "private": true,
   "scripts": {
-    "build:web": "CARGO_TARGET_DIR=target cargo build --release -p aurora --target wasm32-unknown-unknown && wasm-bindgen --out-dir dist/pkg --out-name aurora --target web target/wasm32-unknown-unknown/release/aurora.wasm",
+    "build:shaders": "bun run scripts/build-shaders.ts",
+    "convert:variants": "bun run scripts/wgsl-to-typegpu-variant.ts",
+    "build:web": "bun run build:shaders && CARGO_TARGET_DIR=target cargo build --release -p aurora --target wasm32-unknown-unknown && wasm-bindgen --out-dir dist/pkg --out-name aurora --target web target/wasm32-unknown-unknown/release/aurora.wasm",
     "build:controls": "bun build web/controls/index.html --outdir dist/controls --minify",
     "check:wasm": "CARGO_TARGET_DIR=target cargo check -p aurora --target wasm32-unknown-unknown",
     "check:vst": "cargo check -p aurora-vst",
@@ -40,8 +42,12 @@
   "dependencies": {
     "@chakra-ui/react": "^3.36.0",
     "@emotion/react": "^11.14.0",
+    "@webgpu/types": "^0.1.71",
     "osc": "^2.4.5",
+    "picomatch": "^4.0.5",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "typegpu": "^0.11.9",
+    "unplugin-typegpu": "^0.11.6"
   }
 }

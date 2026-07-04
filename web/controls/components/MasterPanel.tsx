@@ -102,7 +102,7 @@ export function MasterPanel() {
 						["rings", "Rings", state.rings],
 						["strobe", "Strobe", state.strobe],
 						["strobeLockout", "Strobe Lock", state.strobeLockout],
-						["showGpuPalette", "GPU Rehoboam", state.showGpuPalette],
+						["showGpuPalette", "Toggle GPU Shaders", state.showGpuPalette],
 						["freeze", "Freeze", state.freeze],
 						["blackout", "Blackout", state.blackout],
 					] as const
