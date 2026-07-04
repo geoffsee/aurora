@@ -284,16 +284,16 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 					prev.deckBMode,
 				);
 				next.cueDeckAGpuShader = clampInt(
-					cue.deckAGpuShader ?? prev.deckAGpuShader ?? 0,
+					cue.deckAGpuShader ?? prev.deckAGpuShader ?? 1,
 					0,
 					MAX_GPU_SHADER_INDEX,
-					prev.deckAGpuShader ?? 0,
+					prev.deckAGpuShader ?? 1,
 				);
 				next.cueDeckBGpuShader = clampInt(
-					cue.deckBGpuShader ?? prev.deckBGpuShader ?? 5,
+					cue.deckBGpuShader ?? prev.deckBGpuShader ?? 6,
 					0,
 					MAX_GPU_SHADER_INDEX,
-					prev.deckBGpuShader ?? 5,
+					prev.deckBGpuShader ?? 6,
 				);
 				next.flashVersion += name === "panic" ? 0 : 1;
 				stateRef.current = next;

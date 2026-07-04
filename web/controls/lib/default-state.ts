@@ -43,8 +43,8 @@ export function defaultState(): ControlState {
 		cueCrossfade: 0.5,
 		cueDeckAMode: 0,
 		cueDeckBMode: 1,
-		cueDeckAGpuShader: 0,
-		cueDeckBGpuShader: 5,
+		cueDeckAGpuShader: 1,
+		cueDeckBGpuShader: 6,
 		trackMapping: {
 			deckAStart: 0,
 			deckACount: 8,
@@ -55,8 +55,8 @@ export function defaultState(): ControlState {
 			highTrack: 2,
 		},
 		activeShader: 0,
-		deckAGpuShader: 0,
-		deckBGpuShader: 5,
+		deckAGpuShader: 1,
+		deckBGpuShader: 6,
 		bandCurves: {
 			energy: "linear",
 			bass: "linear",
@@ -74,6 +74,14 @@ export function defaultState(): ControlState {
 		audioControlMode: false,
 		outputs: [],
 		audioTransientAutomation: false,
+		layerWeight0: 0,
+		layerWeight1: 0,
+		layerWeight2: 0,
+		layerWeight3: 0,
+		layerWeight4: 0,
+		layerWeight5: 0,
+		layerWeight6: 0,
+		layerWeight7: 0,
 	};
 }
 

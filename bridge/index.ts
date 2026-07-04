@@ -26,7 +26,11 @@ import {
 	validatePresetOscMsg,
 	validateVstOscMsg,
 } from "../shared/osc-validation.ts";
-import { DEFAULT_PALETTE_RGB, hueToRgb, resolvePaletteColor } from "../shared/palette-color.ts";
+import {
+	DEFAULT_PALETTE_RGB,
+	hueToRgb,
+	resolvePaletteColor,
+} from "../shared/palette-color.ts";
 import {
 	MIDI_CLOCK_TICK,
 	MIDI_CLOCK_WINDOW,
@@ -64,7 +68,9 @@ import {
 } from "./preset-morph.ts";
 import {
 	PRESET_LAYER_MAX,
+	applyLayerWeightControl,
 	createLayerController,
+	layerWeightFields,
 	pickLayerState,
 } from "./preset-layers.ts";
 import {
@@ -147,6 +153,18 @@ type ControlState = {
 	audioControlMode: boolean;
 	outputs: OutputRoute[];
 	audioTransientAutomation: boolean;
+	// Per-layer composite weights, one slot per PRESET_LAYER_MAX layer, mirrored
+	// from the live layer stack so per-layer opacity is an automation/OSC/MIDI
+	// target. Kept as fixed scalar fields (not an array) so each addresses one
+	// morph/MIDI/automation param.
+	layerWeight0: number;
+	layerWeight1: number;
+	layerWeight2: number;
+	layerWeight3: number;
+	layerWeight4: number;
+	layerWeight5: number;
+	layerWeight6: number;
+	layerWeight7: number;
 };
 
 const require = createRequire(import.meta.url);
@@ -192,6 +210,10 @@ const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
 let oscReady = false;
 let latestControlState: ControlState | null = null;
+// Guards the layer-weight mirror against reentrancy: set while the layer
+// controller writes its recomposited state (which carries the weight slots) so
+// broadcastControl doesn't treat that write as a fresh external weight edit.
+let applyingLayerWeights = false;
 let latestOscFrameAt = 0;
 let latestVstControlAt = 0;
 let midiClockTimestamps: number[] = [];
@@ -363,12 +385,12 @@ const defaultControlState = (): ControlState => ({
 	cueCrossfade: 0.5,
 	cueDeckAMode: 0,
 	cueDeckBMode: 1,
-	cueDeckAGpuShader: 0,
-	cueDeckBGpuShader: 5,
+	cueDeckAGpuShader: 1,
+	cueDeckBGpuShader: 6,
 	trackMapping: defaultTrackMapping(),
 	activeShader: 0,
-	deckAGpuShader: 0,
-	deckBGpuShader: 5,
+	deckAGpuShader: 1,
+	deckBGpuShader: 6,
 	bandCurves: {
 		energy: "linear",
 		bass: "linear",
@@ -380,6 +402,14 @@ const defaultControlState = (): ControlState => ({
 	audioControlMode: false,
 	outputs: [],
 	audioTransientAutomation: false,
+	layerWeight0: 0,
+	layerWeight1: 0,
+	layerWeight2: 0,
+	layerWeight3: 0,
+	layerWeight4: 0,
+	layerWeight5: 0,
+	layerWeight6: 0,
+	layerWeight7: 0,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -539,8 +569,18 @@ const coerceControlState = (state: unknown): ControlState => {
 		cueCrossfade: clamp(source.cueCrossfade, 0, 1, defaults.cueCrossfade),
 		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 23, defaults.cueDeckAMode),
 		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 23, defaults.cueDeckBMode),
-		cueDeckAGpuShader: clampInt(source.cueDeckAGpuShader, 0, MAX_SHADER_INDEX, defaults.cueDeckAGpuShader),
-		cueDeckBGpuShader: clampInt(source.cueDeckBGpuShader, 0, MAX_SHADER_INDEX, defaults.cueDeckBGpuShader),
+		cueDeckAGpuShader: clampInt(
+			source.cueDeckAGpuShader,
+			0,
+			MAX_SHADER_INDEX,
+			defaults.cueDeckAGpuShader,
+		),
+		cueDeckBGpuShader: clampInt(
+			source.cueDeckBGpuShader,
+			0,
+			MAX_SHADER_INDEX,
+			defaults.cueDeckBGpuShader,
+		),
 		trackMapping: {
 			deckAStart: clampInt(
 				(mapping as Partial<TrackMapping>).deckAStart,
@@ -585,9 +625,24 @@ const coerceControlState = (state: unknown): ControlState => {
 				defaults.trackMapping.highTrack,
 			),
 		},
-		activeShader: clampInt(source.activeShader, 0, MAX_SHADER_INDEX, defaults.activeShader),
-		deckAGpuShader: clampInt(source.deckAGpuShader, 0, MAX_SHADER_INDEX, defaults.deckAGpuShader),
-		deckBGpuShader: clampInt(source.deckBGpuShader, 0, MAX_SHADER_INDEX, defaults.deckBGpuShader),
+		activeShader: clampInt(
+			source.activeShader,
+			0,
+			MAX_SHADER_INDEX,
+			defaults.activeShader,
+		),
+		deckAGpuShader: clampInt(
+			source.deckAGpuShader,
+			0,
+			MAX_SHADER_INDEX,
+			defaults.deckAGpuShader,
+		),
+		deckBGpuShader: clampInt(
+			source.deckBGpuShader,
+			0,
+			MAX_SHADER_INDEX,
+			defaults.deckBGpuShader,
+		),
 		morph: clamp(source.morph, 0, 1, defaults.morph),
 		bandCurves: (() => {
 			const bc =
@@ -617,6 +672,57 @@ const coerceControlState = (state: unknown): ControlState => {
 		audioControlMode: Boolean(source.audioControlMode),
 		outputs: normalizeOutputRoutes(source.outputs),
 		audioTransientAutomation: Boolean(source.audioTransientAutomation),
+		// Fall back to the live value (not the default) when a field is absent, so
+		// a client that echoes ControlState without the layer-weight slots can't
+		// zero the live mix — only an explicit new value moves a weight.
+		layerWeight0: clamp(
+			source.layerWeight0,
+			0,
+			1,
+			latestControlState?.layerWeight0 ?? 0,
+		),
+		layerWeight1: clamp(
+			source.layerWeight1,
+			0,
+			1,
+			latestControlState?.layerWeight1 ?? 0,
+		),
+		layerWeight2: clamp(
+			source.layerWeight2,
+			0,
+			1,
+			latestControlState?.layerWeight2 ?? 0,
+		),
+		layerWeight3: clamp(
+			source.layerWeight3,
+			0,
+			1,
+			latestControlState?.layerWeight3 ?? 0,
+		),
+		layerWeight4: clamp(
+			source.layerWeight4,
+			0,
+			1,
+			latestControlState?.layerWeight4 ?? 0,
+		),
+		layerWeight5: clamp(
+			source.layerWeight5,
+			0,
+			1,
+			latestControlState?.layerWeight5 ?? 0,
+		),
+		layerWeight6: clamp(
+			source.layerWeight6,
+			0,
+			1,
+			latestControlState?.layerWeight6 ?? 0,
+		),
+		layerWeight7: clamp(
+			source.layerWeight7,
+			0,
+			1,
+			latestControlState?.layerWeight7 ?? 0,
+		),
 	};
 };
 
@@ -788,7 +894,10 @@ const coerceAudioFeatures = (raw: unknown): AudioFeatures => {
 	};
 };
 
-function broadcastBrowserAudioFeatures(features: AudioFeatures, nowMs: number): void {
+function broadcastBrowserAudioFeatures(
+	features: AudioFeatures,
+	nowMs: number,
+): void {
 	// Live AbletonOSC remains authoritative. Browser mic frames fill the same
 	// renderer-facing audio lane only while OSC has gone quiet.
 	if (nowMs - latestOscFrameAt < OSC_ACTIVE_TTL_MS) return;
@@ -923,7 +1032,8 @@ const broadcastControl = (state: unknown) => {
 	latestControlState = coerceControlState(state);
 	if (
 		prev &&
-		prev.audioTransientAutomation !== latestControlState.audioTransientAutomation
+		prev.audioTransientAutomation !==
+			latestControlState.audioTransientAutomation
 	) {
 		automationBridge.resetTransientDetector(
 			latestControlState.audioTransientAutomation
@@ -932,10 +1042,33 @@ const broadcastControl = (state: unknown) => {
 		);
 	}
 	audioControlRouter.setEnabled(latestControlState.audioControlMode);
-	controlStateLog.record(
-		prev as Record<string, unknown> | null,
-		latestControlState as unknown as Record<string, unknown>,
-	);
+	// An external weight edit (automation replay, OSC, or MIDI) lands on a
+	// layerWeight slot; forward it into the stack *before* the fan-out/log so both
+	// see the corrected composite. A live layer's slot recomposites through the
+	// guarded merge, which reassigns latestControlState and already broadcast the
+	// corrected frame; an absent slot's phantom weight is zeroed in place. Skip
+	// controller-driven writes (guarded) and the very first state (no prev).
+	const recomposited =
+		!applyingLayerWeights && prev
+			? applyLayerWeightControl(
+					layerController,
+					prev as unknown as Record<string, unknown>,
+					latestControlState as unknown as Record<string, unknown>,
+				)
+			: false;
+	// Log once, from the outer pass, against the recomposited state — so a weight
+	// sweep records a single entry (the weight edit and its composited result)
+	// instead of the guarded merge doubling it. The guarded pass suppresses its
+	// own record here.
+	if (!applyingLayerWeights) {
+		controlStateLog.record(
+			prev as Record<string, unknown> | null,
+			latestControlState as unknown as Record<string, unknown>,
+		);
+	}
+	// The guarded recomposite already fanned the corrected frame out; skip the
+	// outer send so clients receive exactly one frame per weight edit.
+	if (recomposited) return;
 	const data = JSON.stringify({
 		address: "/aurora/control/state",
 		args: [latestControlState],
@@ -1149,8 +1282,14 @@ const applyVstControlMessage = (msg: OscMsg) => {
 			cueCrossfade: finiteNumber(cue.crossfade, current.crossfade),
 			cueDeckAMode: finiteNumber(cue.deckAMode, current.deckAMode),
 			cueDeckBMode: finiteNumber(cue.deckBMode, current.deckBMode),
-			cueDeckAGpuShader: finiteNumber(cue.deckAGpuShader, current.deckAGpuShader),
-			cueDeckBGpuShader: finiteNumber(cue.deckBGpuShader, current.deckBGpuShader),
+			cueDeckAGpuShader: finiteNumber(
+				cue.deckAGpuShader,
+				current.deckAGpuShader,
+			),
+			cueDeckBGpuShader: finiteNumber(
+				cue.deckBGpuShader,
+				current.deckBGpuShader,
+			),
 			flashVersion:
 				name === "panic" ? current.flashVersion : current.flashVersion + 1,
 		});
@@ -1189,7 +1328,21 @@ const applyPresetMorph = (msg: OscMsg) => {
 // forgotten so future edits re-capture a fresh floor.
 const layerController = createLayerController({
 	captureFloor: () => pickLayerState(currentControlState()),
-	merge: (state) => mergeControlState(state),
+	// Merge the recomposited state together with the current stack weights, so the
+	// weight slots in ControlState always mirror the live stack. The flag marks
+	// this as a controller-driven write so broadcastControl doesn't loop it back
+	// through applyLayerWeightControl.
+	merge: (state) => {
+		applyingLayerWeights = true;
+		try {
+			mergeControlState({
+				...state,
+				...(layerWeightFields(layerController.stack) as Partial<ControlState>),
+			});
+		} finally {
+			applyingLayerWeights = false;
+		}
+	},
 	onFull: () =>
 		console.error(
 			`[OSC] dropping preset layer add — stack already at max ${PRESET_LAYER_MAX}`,
@@ -1882,7 +2035,10 @@ setInterval(() => {
 	// Drive the router from the demo feed only when no browser source is active;
 	// otherwise both streams would share the router's edge state and thrash.
 	const routerNowMs = Date.now();
-	if (routerNowMs - lastBrowserAudioFeaturesMs >= BROWSER_AUDIO_FEATURE_TTL_MS) {
+	if (
+		routerNowMs - lastBrowserAudioFeaturesMs >=
+		BROWSER_AUDIO_FEATURE_TTL_MS
+	) {
 		audioControlRouter.onFeatures(smoothed, routerNowMs);
 	}
 	const demo = {

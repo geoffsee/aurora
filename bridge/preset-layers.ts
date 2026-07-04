@@ -29,6 +29,17 @@ export type PresetLayer = {
 // blow the idle-memory budget. Eight layers comfortably covers live use.
 export const PRESET_LAYER_MAX = 8;
 
+// Stable ControlState field names, one per stack slot, that mirror each layer's
+// weight (opacity/blend amount). Exposing the weights as fixed scalar fields is
+// what lets per-layer opacity ride the existing morph/automation machinery:
+// automation records/replays them like any other ControlState field, an OSC or
+// MIDI control edit lands on one of these names, and the change is forwarded
+// back into the stack via applyLayerWeightControl.
+export const LAYER_WEIGHT_KEYS: readonly string[] = Array.from(
+	{ length: PRESET_LAYER_MAX },
+	(_, i) => `layerWeight${i}`,
+);
+
 // Clamp a layer weight into the unit interval; non-finite input collapses to 0
 // so a malformed message renders the layer invisible rather than throwing.
 export const clampLayerWeight = (value: unknown): number => {
@@ -188,4 +199,69 @@ export const createLayerController = (deps: LayerControllerDeps) => {
 			return layerStack;
 		},
 	};
+};
+
+export type LayerWeightController = Pick<
+	ReturnType<typeof createLayerController>,
+	"setWeight" | "stack"
+>;
+
+// Project the stack's weights onto the fixed slot fields. Slots past the current
+// stack depth (or with a non-finite weight) read 0, so a removed or absent layer
+// reports no contribution and the mirror always carries every slot.
+export const layerWeightFields = (
+	layers: readonly PresetLayer[],
+): Record<string, number> => {
+	const out: Record<string, number> = {};
+	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+		out[LAYER_WEIGHT_KEYS[i]!] = clampLayerWeight(layers[i]?.weight);
+	}
+	return out;
+};
+
+// Slots whose weight field differs between two states. Used to spot an external
+// weight edit (automation replay, OSC/MIDI control) that landed in ControlState.
+export const changedLayerWeightIndices = (
+	prev: Record<string, unknown>,
+	next: Record<string, unknown>,
+): number[] => {
+	const out: number[] = [];
+	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+		const key = LAYER_WEIGHT_KEYS[i]!;
+		if (prev[key] !== next[key]) out.push(i);
+	}
+	return out;
+};
+
+// Forward externally-set weight-slot fields into the controller so the stack
+// re-composites. Returns whether any edit reached a live layer (i.e. a
+// recomposite/merge ran) so the caller can tell an effective edit apart from a
+// pure no-op. A slot with no live layer behind it never recomposites — its
+// `setWeight` early-returns without reprojecting — so instead of leaving the
+// phantom weight to linger in `next` (broadcast + recorded as a stale value),
+// zero it in place here. `next` is the caller's live control-state record, so
+// the zero lands on the field it will emit.
+export const applyLayerWeightControl = (
+	controller: LayerWeightController,
+	prev: Record<string, unknown>,
+	next: Record<string, unknown>,
+): boolean => {
+	// Iterate the slots directly rather than through changedLayerWeightIndices so
+	// the common no-change broadcast doesn't allocate an indices array.
+	let recomposited = false;
+	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+		const key = LAYER_WEIGHT_KEYS[i]!;
+		if (prev[key] === next[key]) continue;
+		if (controller.stack[i]) {
+			// A live layer backs this slot: forwarding recomposites the stack, and
+			// the controller's merge reprojects every slot back onto the state.
+			controller.setWeight(i, next[key]);
+			recomposited = true;
+		} else {
+			// No layer behind this slot, so setWeight wouldn't reproject. Snap the
+			// phantom weight back to 0 so it isn't broadcast or recorded.
+			next[key] = 0;
+		}
+	}
+	return recomposited;
 };

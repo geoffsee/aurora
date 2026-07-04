@@ -26,16 +26,16 @@ export const VISUAL_MODES = [
 ] as const;
 
 export const SHADER_OPTIONS = [
-	"Palette - Rehoboam (Ring)",
-	"Palette - Spokes",
-	"Palette - Rings",
-	"Palette - Plasma (Warp)",
-	"Grid (Tiles)",
-	"Tunnel (Cyberpunk)",
-	"Glitch (Y2K)",
-	"Fluid (Ambient)",
-	"Truchet (Geometric)",
 	"Imported (Shadertoy)",
+	"Ring",
+	"Spokes",
+	"Rings",
+	"Warp",
+	"Grid",
+	"Tunnel",
+	"Glitch",
+	"Fluid",
+	"Truchet",
 	"Bass Reactor",
 	"High Spark Field",
 	"Kick Rings",
@@ -104,6 +104,14 @@ export const MIDI_CC_PARAM_LABELS: Record<string, string> = {
 	deckBMode: "Deck B Mode",
 	ringOpacity: "Ring Opc",
 	maxBrightness: "Max Bright",
+	layerWeight0: "Layer 1 Opacity",
+	layerWeight1: "Layer 2 Opacity",
+	layerWeight2: "Layer 3 Opacity",
+	layerWeight3: "Layer 4 Opacity",
+	layerWeight4: "Layer 5 Opacity",
+	layerWeight5: "Layer 6 Opacity",
+	layerWeight6: "Layer 7 Opacity",
+	layerWeight7: "Layer 8 Opacity",
 };
 
 export const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);

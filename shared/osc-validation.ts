@@ -45,7 +45,9 @@ export const VST_OSC_CONTRACT = contract;
 // v7: added paletteR/G/B fields (color-picker duotone base; palette hue kept for VST/MIDI)
 // v8: added audioTransientAutomation field (opt-in audio→automation transient detector)
 // v9: added outputs field (multi-output routing for multi-projector venues)
-export const CONTROL_STATE_SCHEMA_VERSION = 9;
+// v10: added layerWeight0..7 fields (per-layer composite weights, mirrored from
+//      the live layer stack so per-layer opacity is an automation/OSC/MIDI target)
+export const CONTROL_STATE_SCHEMA_VERSION = 10;
 
 export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
