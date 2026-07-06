@@ -29,33 +29,95 @@ export function shouldUseBroadcastChannel(
 	}
 }
 
-/** Standalone projector on static hosting with no embedded controls parent. */
+/** True when the projector should listen on the shared BroadcastChannel. */
+export function shouldSubscribeBroadcastChannel(
+	loc: Pick<Location, "search" | "hostname" | "protocol" | "origin"> = location,
+	win: Pick<Window, "parent"> = window,
+): boolean {
+	if (typeof BroadcastChannel === "undefined") return false;
+	return isStaticHosting(loc) || shouldUseBroadcastChannel(loc, win);
+}
+
+/** Standalone projector on static hosting with no bridge from controls. */
 export function shouldRunStandaloneStaticDemo(
 	loc: Pick<Location, "search" | "hostname" | "protocol" | "origin"> = location,
 	win: Pick<Window, "parent"> = window,
 ): boolean {
-	return isStaticHosting(loc) && !shouldUseBroadcastChannel(loc, win);
+	return isStaticHosting(loc) && !shouldSubscribeBroadcastChannel(loc, win);
 }
 
-export function startStandaloneStaticDemo(
+export const STATIC_BRIDGE_FALLBACK_MS = 2500;
+
+const runDemoLoop = (
 	getBpm: () => number,
 	onFrame: (demo: DemoAudioFrame) => void,
-	loc: Pick<Location, "search" | "hostname" | "protocol" | "origin"> = location,
-	win: Pick<Window, "parent"> = window,
-): () => void {
-	if (!shouldRunStandaloneStaticDemo(loc, win)) return () => {};
+): (() => void) => {
 	const tick = () => {
 		onFrame(generateDemoAudioFrame(getBpm(), Date.now() / 1000));
 	};
 	const timer = setInterval(tick, DEMO_AUDIO_INTERVAL_MS);
 	tick();
 	return () => clearInterval(timer);
+};
+
+export type StaticProjectorDemoHandle = {
+	/** Call when a bridge frame arrives so the projector-only demo stays off. */
+	notifyBridgeActivity(): void;
+	dispose(): void;
+};
+
+/** Demo loop for static hosting; waits for controls over BroadcastChannel first. */
+export function startStaticProjectorDemo(
+	getBpm: () => number,
+	onFrame: (demo: DemoAudioFrame) => void,
+	options: {
+		onFallbackDemo?: () => void;
+		fallbackMs?: number;
+		loc?: Pick<Location, "search" | "hostname" | "protocol" | "origin">;
+		win?: Pick<Window, "parent">;
+	} = {},
+): StaticProjectorDemoHandle {
+	const loc = options.loc ?? location;
+	const win = options.win ?? window;
+	let stopDemo = () => {};
+	let bridgeSeen = false;
+
+	const startDemo = () => {
+		options.onFallbackDemo?.();
+		stopDemo();
+		stopDemo = runDemoLoop(getBpm, onFrame);
+	};
+
+	const fallbackTimer =
+		isStaticHosting(loc) && shouldSubscribeBroadcastChannel(loc, win)
+			? setTimeout(() => {
+					if (!bridgeSeen) startDemo();
+				}, options.fallbackMs ?? STATIC_BRIDGE_FALLBACK_MS)
+			: null;
+
+	if (shouldRunStandaloneStaticDemo(loc, win)) {
+		startDemo();
+	}
+
+	return {
+		notifyBridgeActivity() {
+			if (bridgeSeen) return;
+			bridgeSeen = true;
+			if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+			stopDemo();
+		},
+		dispose() {
+			if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+			stopDemo();
+		},
+	};
 }
 
 export function createProjectorTransport(
-	loc: Pick<Location, "protocol" | "host" | "search" | "origin"> = location,
+	loc: Pick<Location, "protocol" | "host" | "search" | "hostname" | "origin"> = location,
+	win: Pick<Window, "parent"> = window,
 ): BridgeTransport {
-	if (shouldUseBroadcastChannel(loc)) {
+	if (shouldSubscribeBroadcastChannel(loc, win)) {
 		return createBroadcastChannelTransport({ role: "subscribe-only" });
 	}
 	const scheme = loc.protocol === "https:" ? "wss" : "ws";

@@ -1,8 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
 	mountGeoffseePagesNav,
 	shouldRunStandaloneStaticDemo,
+	shouldSubscribeBroadcastChannel,
 	shouldUseBroadcastChannel,
+	startStaticProjectorDemo,
+	STATIC_BRIDGE_FALLBACK_MS,
 } from "../../web/projector-bridge.ts";
 
 describe("shouldUseBroadcastChannel", () => {
@@ -24,8 +27,53 @@ describe("shouldUseBroadcastChannel", () => {
 	});
 });
 
+describe("shouldSubscribeBroadcastChannel", () => {
+	test("is true for static hosting standalone projector tabs", () => {
+		expect(
+			shouldSubscribeBroadcastChannel(
+				{
+					search: "",
+					hostname: "geoffsee.github.io",
+					protocol: "https:",
+					origin: "https://geoffsee.github.io",
+				},
+				{ parent: window },
+			),
+		).toBe(true);
+	});
+
+	test("is true for embedded previews on local dev", () => {
+		const parent = { location: { origin: "http://127.0.0.1:3001" } };
+		expect(
+			shouldSubscribeBroadcastChannel(
+				{
+					search: "?embed=1",
+					hostname: "127.0.0.1",
+					protocol: "http:",
+					origin: "http://127.0.0.1:3001",
+				},
+				{ parent: parent as Window },
+			),
+		).toBe(true);
+	});
+
+	test("is false for local standalone projector", () => {
+		expect(
+			shouldSubscribeBroadcastChannel(
+				{
+					search: "",
+					hostname: "127.0.0.1",
+					protocol: "http:",
+					origin: "http://127.0.0.1:3000",
+				},
+				{ parent: window },
+			),
+		).toBe(false);
+	});
+});
+
 describe("shouldRunStandaloneStaticDemo", () => {
-	test("is true on GitHub Pages without an embed parent", () => {
+	test("is false on GitHub Pages when BroadcastChannel can sync controls", () => {
 		expect(
 			shouldRunStandaloneStaticDemo(
 				{
@@ -36,7 +84,7 @@ describe("shouldRunStandaloneStaticDemo", () => {
 				},
 				{ parent: window },
 			),
-		).toBe(true);
+		).toBe(false);
 	});
 
 	test("is false when embedded preview can use BroadcastChannel", () => {
@@ -52,6 +100,62 @@ describe("shouldRunStandaloneStaticDemo", () => {
 				{ parent: parent as Window },
 			),
 		).toBe(false);
+	});
+});
+
+describe("startStaticProjectorDemo", () => {
+	test("waits for bridge activity before starting demo on static hosting", () => {
+		vi.useFakeTimers();
+		const frames: unknown[] = [];
+		const handle = startStaticProjectorDemo(
+			() => 120,
+			(frame) => frames.push(frame),
+			{
+				loc: {
+					search: "",
+					hostname: "geoffsee.github.io",
+					protocol: "https:",
+					origin: "https://geoffsee.github.io",
+				},
+				win: { parent: window },
+			},
+		);
+
+		vi.advanceTimersByTime(STATIC_BRIDGE_FALLBACK_MS - 1);
+		expect(frames).toHaveLength(0);
+
+		handle.notifyBridgeActivity();
+		vi.advanceTimersByTime(STATIC_BRIDGE_FALLBACK_MS);
+		expect(frames).toHaveLength(0);
+
+		handle.dispose();
+		vi.useRealTimers();
+	});
+
+	test("falls back to demo when controls never publish", () => {
+		vi.useFakeTimers();
+		const frames: unknown[] = [];
+		const handle = startStaticProjectorDemo(
+			() => 120,
+			(frame) => frames.push(frame),
+			{
+				onFallbackDemo: () => {},
+				loc: {
+					search: "",
+					hostname: "geoffsee.github.io",
+					protocol: "https:",
+					origin: "https://geoffsee.github.io",
+				},
+				win: { parent: window },
+			},
+		);
+
+		vi.advanceTimersByTime(STATIC_BRIDGE_FALLBACK_MS);
+		expect(frames.length).toBeGreaterThan(0);
+		expect(frames[0]).toMatchObject({ tempo: 120 });
+
+		handle.dispose();
+		vi.useRealTimers();
 	});
 });
 

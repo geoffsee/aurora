@@ -19,7 +19,8 @@
         createProjectorTransport,
         mountGeoffseePagesNav,
         shouldRunStandaloneStaticDemo,
-        startStandaloneStaticDemo,
+        shouldSubscribeBroadcastChannel,
+        startStaticProjectorDemo,
       } from "./dist/projector-bridge.js";
 
       mountGeoffseePagesNav();
@@ -422,6 +423,7 @@
       }
 
       let bridgeTransport = null;
+      let staticProjectorDemo = null;
 
       function sendErrorToControls(description) {
         bridgeTransport?.send({
@@ -445,7 +447,12 @@
             oscState.connected = false;
             oscState.bridgeReady = false;
           },
-          onMessage: applyOscFrame,
+          onMessage: (frame) => {
+            if (shouldSubscribeBroadcastChannel()) {
+              staticProjectorDemo?.notifyBridgeActivity();
+            }
+            applyOscFrame(frame);
+          },
         });
       }
 
@@ -540,9 +547,14 @@
 
       connectBridgeTransport();
 
-      startStandaloneStaticDemo(
+      staticProjectorDemo = startStaticProjectorDemo(
         () => controlState.bpm,
         (demo) => applyDemoFrame(demo),
+        {
+          onFallbackDemo: () => {
+            controlState.demoMode = true;
+          },
+        },
       );
 
       try {
