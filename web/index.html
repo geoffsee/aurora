@@ -17,6 +17,8 @@
       import {
         attachProjectorTransport,
         createProjectorTransport,
+        shouldRunStandaloneStaticDemo,
+        startStandaloneStaticDemo,
       } from "./dist/projector-bridge.js";
 
       const boot = document.querySelector("#boot");
@@ -529,7 +531,16 @@
       };
       window.__auroraDiagnostics = () => diagnostics;
 
+      if (shouldRunStandaloneStaticDemo()) {
+        controlState.demoMode = true;
+      }
+
       connectBridgeTransport();
+
+      startStandaloneStaticDemo(
+        () => controlState.bpm,
+        (demo) => applyDemoFrame(demo),
+      );
 
       try {
         const { default: init } = await import("./dist/pkg/aurora.js");

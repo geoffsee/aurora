@@ -91,11 +91,19 @@ export function applyDemo(
 	frame: Record<string, unknown>,
 	osc: OscMeters,
 ) {
-	osc.lastFrameAt = performance.now();
+	const now = performance.now();
+	osc.lastFrameAt = now;
 	osc.energy = clamp01(frame.energy);
 	osc.bass = clamp01(frame.bass);
 	osc.mid = clamp01(frame.mid);
 	osc.high = clamp01(frame.high);
 	osc.deckA = clamp01(frame.deckA);
 	osc.deckB = clamp01(frame.deckB);
+	const beat = Number(frame.beat);
+	if (Number.isFinite(beat)) {
+		osc.beat = beat;
+		if (Math.floor(beat) !== osc.beatIndex) {
+			osc.beatIndex = Math.floor(beat);
+		}
+	}
 }

@@ -23,9 +23,20 @@ export function StatusHeader() {
 	const bridgeLabel =
 		bridgeStatus === "live"
 			? "bridge live"
+			: bridgeStatus === "static"
+				? "static preview"
 			: bridgeStatus === "error"
 				? "bridge error"
 				: "bridge connecting";
+
+	const bridgePillState =
+		bridgeStatus === "live"
+			? "live"
+			: bridgeStatus === "static"
+				? "static"
+				: bridgeStatus === "error"
+					? "error"
+					: "connecting";
 
 	const oscLabel = state.demoMode
 		? "Demo audio"
@@ -65,7 +76,7 @@ export function StatusHeader() {
 					wrap="wrap"
 					justify="flex-end"
 				>
-					<StatusPill state={bridgeStatus}>{bridgeLabel}</StatusPill>
+					<StatusPill state={bridgePillState}>{bridgeLabel}</StatusPill>
 					<StatusPill state={oscState}>{oscLabel}</StatusPill>
 					<StatusPill state={diagnostics.clockSource ? "live" : "idle"}>
 						Clock {CLOCK_LABELS[diagnostics.clockSource ?? ""] ?? "—"}

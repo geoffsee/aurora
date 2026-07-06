@@ -14,6 +14,11 @@ import {
 	createWebSocketTransport,
 	type BridgeTransport,
 } from "../../../shared/bridge-transport.ts";
+import {
+	DEMO_AUDIO_INTERVAL_MS,
+	generateDemoAudioFrame,
+} from "../../../shared/demo-audio.ts";
+import { isStaticHosting } from "../../../shared/static-hosting.ts";
 import { AUTOMATION_LAYOUT_PRESERVED_FIELDS } from "../../../bridge/automation-player.ts";
 import { cuePresets } from "../lib/cues.ts";
 import {
@@ -137,6 +142,14 @@ type ControlsContextValue = {
 
 const ControlsContext = createContext<ControlsContextValue | null>(null);
 
+function initialControlState(): ControlState {
+	const loaded = loadSessionState();
+	if (isStaticHosting() && !loaded.demoMode) {
+		return { ...loaded, demoMode: true };
+	}
+	return loaded;
+}
+
 export function useControls() {
 	const ctx = useContext(ControlsContext);
 	if (!ctx) throw new Error("useControls must be used within ControlsProvider");
@@ -144,12 +157,15 @@ export function useControls() {
 }
 
 export function ControlsProvider({ children }: { children: ReactNode }) {
-	const [state, setState] = useState<ControlState>(() => loadSessionState());
+	const staticPreview = useRef(isStaticHosting());
+	const [state, setState] = useState<ControlState>(initialControlState);
 	const [osc, setOsc] = useState<OscMeters>(() => defaultOscMeters());
 	const [diagnostics, setDiagnostics] = useState<Diagnostics>(() =>
 		defaultDiagnostics(),
 	);
-	const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>("connecting");
+	const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(() =>
+		staticPreview.current ? "static" : "connecting",
+	);
 	const [banners, setBanners] = useState<ErrorBanner[]>([]);
 	const [pendingCue, setPendingCue] = useState<{ name: string } | null>(null);
 	const [transitionDurationMs, setTransitionDurationMs] = useState(500);
@@ -658,7 +674,8 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 		if (!mic || !ctx) return;
 		mic.analyser.getFloatFrequencyData(mic.bins);
 		const transport = transportRef.current;
-		if (!transport?.ready) return;
+		if (!transport) return;
+		if (!staticPreview.current && !transport.ready) return;
 		const features = extractMicFeatures(mic.bins, {
 			sampleRate: ctx.sampleRate,
 			fftSize: MIC_FFT_SIZE,
@@ -794,6 +811,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	const sendPing = useCallback(() => {
+		if (staticPreview.current) return;
 		const transport = transportRef.current;
 		if (!transport?.ready) return;
 		pingIdRef.current += 1;
@@ -835,7 +853,11 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			) {
 				setOsc((prev) => {
 					const next = { ...prev };
+					const beatIndexBefore = prev.beatIndex;
 					applyDemo(args[0] as Record<string, unknown>, next);
+					if (next.beatIndex !== beatIndexBefore) {
+						flushPendingCue(next.beat);
+					}
 					oscRef.current = next;
 					return next;
 				});
@@ -942,6 +964,16 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 
 	const connect = useCallback(() => {
 		transportRef.current?.close();
+
+		if (staticPreview.current) {
+			const transport = createBroadcastChannelTransport({ role: "publish-only" });
+			transportRef.current = transport;
+			transport.connect();
+			setBridgeStatus("static");
+			publish({ record: false });
+			return;
+		}
+
 		const scheme = location.protocol === "https:" ? "wss" : "ws";
 		const bridge = createWebSocketTransport(
 			`${scheme}://${location.hostname || "localhost"}:3000/ws`,
@@ -981,10 +1013,12 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		connect();
 		const publishTimer = setInterval(() => publish(), 500);
-		const pingTimer = setInterval(sendPing, 1000);
+		const pingTimer = staticPreview.current
+			? null
+			: setInterval(sendPing, 1000);
 		return () => {
 			clearInterval(publishTimer);
-			clearInterval(pingTimer);
+			if (pingTimer) clearInterval(pingTimer);
 			replayTimersRef.current.forEach(clearTimeout);
 			if (activeTransitionRafRef.current !== null) {
 				cancelAnimationFrame(activeTransitionRafRef.current);
@@ -993,6 +1027,22 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			transportRef.current?.close();
 		};
 	}, [connect, publish, sendPing, stopMicCapture]);
+
+	useEffect(() => {
+		if (!staticPreview.current) return;
+		const tick = () => {
+			if (!stateRef.current.demoMode) return;
+			const demo = generateDemoAudioFrame(
+				stateRef.current.bpm,
+				Date.now() / 1000,
+			);
+			const frame = { address: "/aurora/demo/audio", args: [demo] };
+			applyFrame(frame);
+			transportRef.current?.send(frame);
+		};
+		const timer = setInterval(tick, DEMO_AUDIO_INTERVAL_MS);
+		return () => clearInterval(timer);
+	}, [applyFrame]);
 
 	const value = useMemo<ControlsContextValue>(
 		() => ({
