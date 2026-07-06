@@ -18,3 +18,13 @@ export function projectorPreviewUrl(
 	}
 	return withEmbedParam(new URL("../", loc.href).href);
 }
+
+/** Full projector page without the embed flag (for opening in a new window). */
+export function projectorWindowUrl(
+	loc: Pick<Location, "port" | "protocol" | "hostname" | "href"> = location,
+): string {
+	if (loc.port === String(CONTROLS_PORT)) {
+		return `${loc.protocol}//${loc.hostname || "localhost"}:${PROJECTOR_PORT}/`;
+	}
+	return new URL("../", loc.href).href;
+}

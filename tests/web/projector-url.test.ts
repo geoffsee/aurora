@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	CONTROLS_PORT,
 	projectorPreviewUrl,
+	projectorWindowUrl,
 	PROJECTOR_PORT,
 } from "../../web/controls/lib/projector-url.ts";
 
@@ -24,5 +25,18 @@ describe("projectorPreviewUrl", () => {
 			href: "https://example.github.io/aurora/controls/index.html",
 		});
 		expect(url).toBe("https://example.github.io/aurora/?embed=1");
+	});
+});
+
+describe("projectorWindowUrl", () => {
+	test("opens the clean projector page without embed", () => {
+		expect(
+			projectorWindowUrl({
+				port: "",
+				protocol: "https:",
+				hostname: "geoffsee.github.io",
+				href: "https://geoffsee.github.io/aurora/controls/",
+			}),
+		).toBe("https://geoffsee.github.io/aurora/");
 	});
 });

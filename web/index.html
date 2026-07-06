@@ -18,9 +18,6 @@
         attachProjectorTransport,
         createProjectorTransport,
         mountGeoffseePagesNav,
-        shouldRunStandaloneStaticDemo,
-        shouldSubscribeBroadcastChannel,
-        startStaticProjectorDemo,
       } from "./dist/projector-bridge.js";
 
       mountGeoffseePagesNav();
@@ -423,7 +420,6 @@
       }
 
       let bridgeTransport = null;
-      let staticProjectorDemo = null;
 
       function sendErrorToControls(description) {
         bridgeTransport?.send({
@@ -447,12 +443,7 @@
             oscState.connected = false;
             oscState.bridgeReady = false;
           },
-          onMessage: (frame) => {
-            if (shouldSubscribeBroadcastChannel()) {
-              staticProjectorDemo?.notifyBridgeActivity();
-            }
-            applyOscFrame(frame);
-          },
+          onMessage: applyOscFrame,
         });
       }
 
@@ -541,21 +532,7 @@
       };
       window.__auroraDiagnostics = () => diagnostics;
 
-      if (shouldRunStandaloneStaticDemo()) {
-        controlState.demoMode = true;
-      }
-
       connectBridgeTransport();
-
-      staticProjectorDemo = startStaticProjectorDemo(
-        () => controlState.bpm,
-        (demo) => applyDemoFrame(demo),
-        {
-          onFallbackDemo: () => {
-            controlState.demoMode = true;
-          },
-        },
-      );
 
       try {
         const { default: init } = await import("./dist/pkg/aurora.js");

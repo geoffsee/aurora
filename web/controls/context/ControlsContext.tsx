@@ -143,11 +143,7 @@ type ControlsContextValue = {
 const ControlsContext = createContext<ControlsContextValue | null>(null);
 
 function initialControlState(): ControlState {
-	const loaded = loadSessionState();
-	if (isStaticHosting() && !loaded.demoMode) {
-		return { ...loaded, demoMode: true };
-	}
-	return loaded;
+	return loadSessionState();
 }
 
 export function useControls() {

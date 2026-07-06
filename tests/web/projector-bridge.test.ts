@@ -1,11 +1,8 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
 	mountGeoffseePagesNav,
-	shouldRunStandaloneStaticDemo,
 	shouldSubscribeBroadcastChannel,
 	shouldUseBroadcastChannel,
-	startStaticProjectorDemo,
-	STATIC_BRIDGE_FALLBACK_MS,
 } from "../../web/projector-bridge.ts";
 
 describe("shouldUseBroadcastChannel", () => {
@@ -69,93 +66,6 @@ describe("shouldSubscribeBroadcastChannel", () => {
 				{ parent: window },
 			),
 		).toBe(false);
-	});
-});
-
-describe("shouldRunStandaloneStaticDemo", () => {
-	test("is false on GitHub Pages when BroadcastChannel can sync controls", () => {
-		expect(
-			shouldRunStandaloneStaticDemo(
-				{
-					search: "",
-					hostname: "geoffsee.github.io",
-					protocol: "https:",
-					origin: "https://geoffsee.github.io",
-				},
-				{ parent: window },
-			),
-		).toBe(false);
-	});
-
-	test("is false when embedded preview can use BroadcastChannel", () => {
-		const parent = { location: { origin: "https://geoffsee.github.io" } };
-		expect(
-			shouldRunStandaloneStaticDemo(
-				{
-					search: "?embed=1",
-					hostname: "geoffsee.github.io",
-					protocol: "https:",
-					origin: "https://geoffsee.github.io",
-				},
-				{ parent: parent as Window },
-			),
-		).toBe(false);
-	});
-});
-
-describe("startStaticProjectorDemo", () => {
-	test("waits for bridge activity before starting demo on static hosting", () => {
-		vi.useFakeTimers();
-		const frames: unknown[] = [];
-		const handle = startStaticProjectorDemo(
-			() => 120,
-			(frame) => frames.push(frame),
-			{
-				loc: {
-					search: "",
-					hostname: "geoffsee.github.io",
-					protocol: "https:",
-					origin: "https://geoffsee.github.io",
-				},
-				win: { parent: window },
-			},
-		);
-
-		vi.advanceTimersByTime(STATIC_BRIDGE_FALLBACK_MS - 1);
-		expect(frames).toHaveLength(0);
-
-		handle.notifyBridgeActivity();
-		vi.advanceTimersByTime(STATIC_BRIDGE_FALLBACK_MS);
-		expect(frames).toHaveLength(0);
-
-		handle.dispose();
-		vi.useRealTimers();
-	});
-
-	test("falls back to demo when controls never publish", () => {
-		vi.useFakeTimers();
-		const frames: unknown[] = [];
-		const handle = startStaticProjectorDemo(
-			() => 120,
-			(frame) => frames.push(frame),
-			{
-				onFallbackDemo: () => {},
-				loc: {
-					search: "",
-					hostname: "geoffsee.github.io",
-					protocol: "https:",
-					origin: "https://geoffsee.github.io",
-				},
-				win: { parent: window },
-			},
-		);
-
-		vi.advanceTimersByTime(STATIC_BRIDGE_FALLBACK_MS);
-		expect(frames.length).toBeGreaterThan(0);
-		expect(frames[0]).toMatchObject({ tempo: 120 });
-
-		handle.dispose();
-		vi.useRealTimers();
 	});
 });
 
