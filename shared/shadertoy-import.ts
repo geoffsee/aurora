@@ -2,12 +2,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, readFile, unlink } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
+import {
+	extractShadertoyId,
+	fetchShadertoyShader,
+	parseShadertoyImagePass,
+} from "./shadertoy-api.ts";
+import type { ShadertoyMeta } from "./shadertoy-api.ts";
 
-export type ShadertoyMeta = {
-	id: string;
-	name: string;
-	username: string;
-};
+export type { ShadertoyMeta };
+export { extractShadertoyId } from "./shadertoy-api.ts";
 
 export type ImportSuccess = {
 	ok: true;
@@ -22,21 +25,6 @@ export type ImportFailure = {
 };
 
 export type ImportResult = ImportSuccess | ImportFailure;
-
-const SHADERTOY_ID_RE = /^[A-Za-z0-9]{1,16}$/;
-
-export const extractShadertoyId = (input: string): string | null => {
-	const trimmed = input.trim();
-	if (SHADERTOY_ID_RE.test(trimmed)) return trimmed;
-	const match = trimmed.match(/\/view\/([A-Za-z0-9]+)/);
-	if (match && match[1] && SHADERTOY_ID_RE.test(match[1])) {
-		return match[1];
-	}
-	return null;
-};
-
-const sanitize = (s: unknown): string =>
-	String(s ?? "").replace(/[\x00-\x1f<>]/g, "").slice(0, 200);
 
 const WRAPPER_PREAMBLE = `#version 450
 precision highp float;
@@ -201,23 +189,6 @@ const stripGlslComments = (src: string): string =>
 export const checkIChannelUsage = (userGlsl: string): boolean =>
 	ICHANNEL_USAGE_RE.test(stripGlslComments(userGlsl));
 
-const fetchShader = async (id: string, apiKey: string) => {
-	const apiUrl = `https://www.shadertoy.com/api/v1/shaders/${id}?key=${encodeURIComponent(apiKey)}`;
-	const response = await fetch(apiUrl);
-	if (!response.ok) {
-		throw new Error(`Shadertoy API HTTP ${response.status}`);
-	}
-	const json = (await response.json()) as Record<string, unknown>;
-	if (typeof json.Error === "string") {
-		throw new Error(`Shadertoy API error: ${json.Error}`);
-	}
-	const shader = json.Shader as Record<string, unknown> | undefined;
-	if (!shader) {
-		throw new Error("Shadertoy API response missing `Shader` field");
-	}
-	return shader;
-};
-
 export type TransformSuccess = {
 	ok: true;
 	wgsl: string;
@@ -308,7 +279,7 @@ export const importShadertoyUrl = async (
 
 	let shader: Record<string, unknown>;
 	try {
-		shader = await fetchShader(id, apiKey);
+		shader = await fetchShadertoyShader(id, apiKey);
 	} catch (err) {
 		return {
 			ok: false,
@@ -316,42 +287,17 @@ export const importShadertoyUrl = async (
 		};
 	}
 
-	const info = (shader.info ?? {}) as Record<string, unknown>;
-	const renderpass = (shader.renderpass ?? []) as Array<Record<string, unknown>>;
-	if (!Array.isArray(renderpass) || renderpass.length === 0) {
-		return { ok: false, error: "Shadertoy response has no render passes" };
+	const parsed = parseShadertoyImagePass(shader, id);
+	if ("ok" in parsed) {
+		return parsed;
 	}
 
-	const imagePass = renderpass.find((p) => p.type === "image");
-	if (!imagePass) {
-		return { ok: false, error: "Shader has no Image render pass" };
-	}
-	const extraPasses = renderpass.filter((p) => p.type !== "image");
-	if (extraPasses.length > 0) {
-		const passNames = extraPasses
-			.map((p) => sanitize(p.name ?? p.type))
-			.join(", ");
-		return {
-			ok: false,
-			error: `Multi-pass shaders not supported in v1. This shader has additional passes: ${passNames}`,
-		};
-	}
-
-	const userGlsl = typeof imagePass.code === "string" ? imagePass.code : "";
-	if (!userGlsl) {
-		return { ok: false, error: "Image pass has no source code" };
-	}
-
+	const { userGlsl, meta } = parsed;
 	const transformed = await transformShadertoyGlsl(userGlsl);
 	if (!transformed.ok) {
 		return transformed;
 	}
 
-	const meta: ShadertoyMeta = {
-		id,
-		name: sanitize(info.name ?? id),
-		username: sanitize(info.username ?? "unknown"),
-	};
 	return {
 		ok: true,
 		wgsl: transformed.wgsl,

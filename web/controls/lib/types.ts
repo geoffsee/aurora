@@ -107,7 +107,7 @@ export type Diagnostics = {
 	clockSource: string | null;
 };
 
-export type BridgeStatus = "connecting" | "live" | "error";
+export type BridgeStatus = "connecting" | "live" | "error" | "static";
 
 export type CurveMode = "snap" | "linear" | "ease";
 
