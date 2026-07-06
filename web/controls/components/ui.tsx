@@ -8,6 +8,7 @@ export type PillState =
 	| "warn"
 	| "error"
 	| "demo"
+	| "static"
 	| "recording"
 	| "replaying"
 	| "ready";
@@ -20,6 +21,7 @@ const pillColors: Record<PillState, BadgeProps["colorPalette"]> = {
 	warn: "orange",
 	error: "red",
 	demo: "purple",
+	static: "cyan",
 	recording: "red",
 	replaying: "purple",
 	ready: "gray",

@@ -14,6 +14,20 @@
     </main>
 
     <script type="module">
+      import {
+        attachProjectorTransport,
+        bridgeDebug,
+        createProjectorTransport,
+        mountGeoffseePagesNav,
+      } from "./dist/projector-bridge.js";
+
+      mountGeoffseePagesNav();
+      bridgeDebug("projector page boot", {
+        href: location.href,
+        origin: location.origin,
+        embed: new URLSearchParams(location.search).get("embed"),
+      });
+
       const boot = document.querySelector("#boot");
       // Multi-output routing: a window opened with ?output=<id> renders the route
       // matching that id from ControlState.outputs. No param (or an unconfigured
@@ -411,40 +425,41 @@
         location.reload();
       }
 
-      let oscWs = null;
-      let wsReconnectDelay = 1000; // 1 s initial; intentionally lowered from the original 2 s to align with controls.html
+      let bridgeTransport = null;
 
       function sendErrorToControls(description) {
-        if (oscWs?.readyState === WebSocket.OPEN) {
-          oscWs.send(JSON.stringify({ address: "/aurora/error", error: description, args: [] }));
-        }
+        bridgeTransport?.send({
+          address: "/aurora/error",
+          error: description,
+          args: [],
+        });
       }
 
-      function connectOscSocket() {
-        const scheme = location.protocol === "https:" ? "wss" : "ws";
-        oscWs = new WebSocket(`${scheme}://${location.host}/ws`);
-
-        oscWs.onopen = () => {
-          oscState.bridgeReady = true;
-          wsReconnectDelay = 1000;
-        };
-        oscWs.onclose = () => {
-          oscState.connected = false;
-          oscState.bridgeReady = false;
-          setTimeout(connectOscSocket, wsReconnectDelay);
-          wsReconnectDelay = Math.min(wsReconnectDelay * 2, 16000);
-        };
-        oscWs.onerror = () => {
-          oscState.connected = false;
-          oscState.bridgeReady = false;
-        };
-        oscWs.onmessage = (event) => {
-          try {
-            applyOscFrame(JSON.parse(event.data));
-          } catch (error) {
-            console.warn("bad OSC frame", error);
-          }
-        };
+      function connectBridgeTransport() {
+        bridgeTransport = createProjectorTransport();
+        attachProjectorTransport(bridgeTransport, {
+          onOpen: () => {
+            oscState.bridgeReady = true;
+            bridgeDebug("projector transport open", { href: location.href });
+          },
+          onClose: () => {
+            oscState.connected = false;
+            oscState.bridgeReady = false;
+            bridgeDebug("projector transport closed");
+          },
+          onError: () => {
+            oscState.connected = false;
+            oscState.bridgeReady = false;
+            bridgeDebug("projector transport error");
+          },
+          onMessage: (frame) => {
+            bridgeDebug("projector frame", {
+              address: frame?.address,
+              hasArgs: Array.isArray(frame?.args) && frame.args.length > 0,
+            });
+            applyOscFrame(frame);
+          },
+        });
       }
 
       window.addEventListener("unhandledrejection", (event) => {
@@ -532,7 +547,7 @@
       };
       window.__auroraDiagnostics = () => diagnostics;
 
-      connectOscSocket();
+      connectBridgeTransport();
 
       try {
         const { default: init } = await import("./dist/pkg/aurora.js");

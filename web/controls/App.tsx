@@ -9,10 +9,13 @@ import { RehearsalPanel, AudioControlPanel } from "./components/RehearsalPanel.t
 import { MidiCcPanel, TriggersPanel } from "./components/MidiTriggersPanel.tsx";
 import { MetersPanel } from "./components/MetersPanel.tsx";
 import { ErrorBanners } from "./components/ErrorBanners.tsx";
+import { PreviewPanel } from "./components/PreviewPanel.tsx";
+import { GeoffseePagesNav } from "./components/GeoffseePagesNav.tsx";
 import { ControlsProvider } from "./context/ControlsContext.tsx";
 
 const gridAreas = `
   "head head head head head head head head head head head head"
+  "prev prev prev prev prev prev prev prev prev prev prev prev"
   "hero hero hero hero cues cues cues cues cues cues cues cues"
   "slid slid slid slid slid slid slid slid slid slid slid slid"
   "mast mast mast mast mast map map map map reh reh reh"
@@ -44,6 +47,7 @@ export function App() {
 					gap={3}
 				>
 					<StatusHeader />
+					<PreviewPanel />
 					<CrossfadePanel />
 					<CuesPanel />
 					<SlidersPanel />
@@ -57,6 +61,7 @@ export function App() {
 					<MetersPanel />
 				</Grid>
 				<ErrorBanners />
+				<GeoffseePagesNav />
 			</Box>
 		</ControlsProvider>
 	);
