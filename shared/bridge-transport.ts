@@ -1,4 +1,5 @@
 import { nextReconnectDelay } from "../src/reconnect.ts";
+import { bridgeDebug } from "./bridge-debug.ts";
 
 /** Shared fan-out channel for same-origin controls ↔ embedded projector preview. */
 export const AURORA_BRIDGE_CHANNEL = "aurora-bridge";
@@ -150,29 +151,68 @@ export function createBroadcastChannelTransport(
 		},
 		connect() {
 			if (typeof BroadcastChannel === "undefined") {
+				bridgeDebug("BroadcastChannel unavailable", { role, channelName });
 				error.emit();
 				close.emit();
 				return;
 			}
 			channel?.close();
 			channel = new BroadcastChannel(channelName);
+			bridgeDebug("BroadcastChannel connected", {
+				role,
+				channelName,
+				origin: typeof location !== "undefined" ? location.origin : "",
+				href: typeof location !== "undefined" ? location.href : "",
+			});
 			if (role !== "publish-only") {
 				channel.onmessage = (event) => {
-					if (!event.data || typeof event.data !== "object") return;
-					message.emit(event.data as OscFrame);
+					if (!event.data || typeof event.data !== "object") {
+						bridgeDebug("BroadcastChannel ignored message", {
+							role,
+							reason: "non-object payload",
+						});
+						return;
+					}
+					const frame = event.data as OscFrame;
+					bridgeDebug("BroadcastChannel received", {
+						role,
+						address: frame.address,
+					});
+					message.emit(frame);
 				};
 			}
 			queueMicrotask(() => open.emit());
 		},
 		close() {
+			bridgeDebug("BroadcastChannel closed", { role, channelName });
 			channel?.close();
 			channel = null;
 			close.emit();
 		},
 		send(frame) {
-			if (role === "subscribe-only" || !channel) return false;
-			channel.postMessage(frame);
-			return true;
+			if (role === "subscribe-only" || !channel) {
+				bridgeDebug("BroadcastChannel send skipped", {
+					role,
+					hasChannel: channel !== null,
+					address: frame.address,
+				});
+				return false;
+			}
+			try {
+				channel.postMessage(frame);
+				bridgeDebug("BroadcastChannel sent", {
+					role,
+					address: frame.address,
+				});
+				return true;
+			} catch (err) {
+				bridgeDebug("BroadcastChannel send failed", {
+					role,
+					address: frame.address,
+					error: err instanceof Error ? err.message : String(err),
+				});
+				return false;
+			}
 		},
 		onOpen: open.subscribe.bind(open),
 		onClose: close.subscribe.bind(close),

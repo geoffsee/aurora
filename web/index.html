@@ -16,11 +16,17 @@
     <script type="module">
       import {
         attachProjectorTransport,
+        bridgeDebug,
         createProjectorTransport,
         mountGeoffseePagesNav,
       } from "./dist/projector-bridge.js";
 
       mountGeoffseePagesNav();
+      bridgeDebug("projector page boot", {
+        href: location.href,
+        origin: location.origin,
+        embed: new URLSearchParams(location.search).get("embed"),
+      });
 
       const boot = document.querySelector("#boot");
       // Multi-output routing: a window opened with ?output=<id> renders the route
@@ -434,16 +440,25 @@
         attachProjectorTransport(bridgeTransport, {
           onOpen: () => {
             oscState.bridgeReady = true;
+            bridgeDebug("projector transport open", { href: location.href });
           },
           onClose: () => {
             oscState.connected = false;
             oscState.bridgeReady = false;
+            bridgeDebug("projector transport closed");
           },
           onError: () => {
             oscState.connected = false;
             oscState.bridgeReady = false;
+            bridgeDebug("projector transport error");
           },
-          onMessage: applyOscFrame,
+          onMessage: (frame) => {
+            bridgeDebug("projector frame", {
+              address: frame?.address,
+              hasArgs: Array.isArray(frame?.args) && frame.args.length > 0,
+            });
+            applyOscFrame(frame);
+          },
         });
       }
 
