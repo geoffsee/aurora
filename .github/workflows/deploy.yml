@@ -50,15 +50,20 @@ jobs:
       - name: Build WASM (web target)
         run: bun run build:web
 
+      - name: Build controls app
+        run: bun run build:controls
+
       - name: Stage static site
         run: |
           set -euo pipefail
-          cp web/index.html web/controls.html web/styles.css web/controls.css dist/
+          cp web/index.html web/styles.css dist/
           cp -r assets dist/
           # In dev, the Bun server serves web/ plus the root dist/pkg bundle so the HTML imports
           # `./dist/pkg/aurora.js`. In the Pages bundle, HTML and WASM sit
           # together, so the WASM lives at `./pkg/aurora.js`.
           sed -i 's|./dist/pkg/|./pkg/|g' dist/index.html
+          # `build:controls` writes the React controls bundle to dist/controls/.
+          test -f dist/controls/index.html
           touch dist/.nojekyll
 
       - uses: actions/configure-pages@v5
