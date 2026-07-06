@@ -62,6 +62,7 @@ jobs:
           # `./dist/pkg/aurora.js`. In the Pages bundle, HTML and WASM sit
           # together, so the WASM lives at `./pkg/aurora.js`.
           sed -i 's|./dist/pkg/|./pkg/|g' dist/index.html
+          sed -i 's|./dist/projector-bridge.js|./projector-bridge.js|g' dist/index.html
           # `build:controls` writes the React controls bundle to dist/controls/.
           test -f dist/controls/index.html
           touch dist/.nojekyll

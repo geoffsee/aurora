@@ -13,7 +13,7 @@ describe("projectorPreviewUrl", () => {
 			hostname: "127.0.0.1",
 			href: `http://127.0.0.1:${CONTROLS_PORT}/`,
 		});
-		expect(url).toBe(`http://127.0.0.1:${PROJECTOR_PORT}/`);
+		expect(url).toBe(`http://127.0.0.1:${PROJECTOR_PORT}/?embed=1`);
 	});
 
 	test("uses a relative parent URL on static hosting", () => {
@@ -23,6 +23,6 @@ describe("projectorPreviewUrl", () => {
 			hostname: "example.github.io",
 			href: "https://example.github.io/aurora/controls/index.html",
 		});
-		expect(url).toBe("https://example.github.io/aurora/");
+		expect(url).toBe("https://example.github.io/aurora/?embed=1");
 	});
 });
