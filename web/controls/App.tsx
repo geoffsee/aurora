@@ -10,6 +10,7 @@ import { MidiCcPanel, TriggersPanel } from "./components/MidiTriggersPanel.tsx";
 import { MetersPanel } from "./components/MetersPanel.tsx";
 import { ErrorBanners } from "./components/ErrorBanners.tsx";
 import { PreviewPanel } from "./components/PreviewPanel.tsx";
+import { GeoffseePagesNav } from "./components/GeoffseePagesNav.tsx";
 import { ControlsProvider } from "./context/ControlsContext.tsx";
 
 const gridAreas = `
@@ -60,6 +61,7 @@ export function App() {
 					<MetersPanel />
 				</Grid>
 				<ErrorBanners />
+				<GeoffseePagesNav />
 			</Box>
 		</ControlsProvider>
 	);

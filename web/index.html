@@ -17,9 +17,12 @@
       import {
         attachProjectorTransport,
         createProjectorTransport,
+        mountGeoffseePagesNav,
         shouldRunStandaloneStaticDemo,
         startStandaloneStaticDemo,
       } from "./dist/projector-bridge.js";
+
+      mountGeoffseePagesNav();
 
       const boot = document.querySelector("#boot");
       // Multi-output routing: a window opened with ?output=<id> renders the route

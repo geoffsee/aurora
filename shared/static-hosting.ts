@@ -7,3 +7,22 @@ export function isStaticHosting(
 	if (loc.hostname.endsWith(".github.io")) return true;
 	return false;
 }
+
+/** True on the published Geoff See GitHub Pages site. */
+export function isGeoffseeGithubPages(
+	loc: Pick<Location, "href"> = location,
+): boolean {
+	return loc.href.includes("geoffsee.github.io");
+}
+
+export function geoffseePagesControlsUrl(
+	loc: Pick<Location, "href"> = location,
+): string {
+	return new URL("./controls/", loc.href).href;
+}
+
+export function geoffseePagesProjectorUrl(
+	loc: Pick<Location, "href"> = location,
+): string {
+	return new URL("../", loc.href).href;
+}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	mountGeoffseePagesNav,
 	shouldRunStandaloneStaticDemo,
 	shouldUseBroadcastChannel,
 } from "../../web/projector-bridge.ts";
@@ -51,5 +52,81 @@ describe("shouldRunStandaloneStaticDemo", () => {
 				{ parent: parent as Window },
 			),
 		).toBe(false);
+	});
+});
+
+describe("mountGeoffseePagesNav", () => {
+	test("returns cleanup on Geoff See Pages", () => {
+		let appended = false;
+		const nav = {
+			className: "",
+			attributes: {} as Record<string, string>,
+			children: [] as unknown[],
+			setAttribute(name: string, value: string) {
+				this.attributes[name] = name;
+			},
+			append(...nodes: unknown[]) {
+				this.children.push(...nodes);
+			},
+			remove() {},
+			addEventListener() {},
+			removeEventListener() {},
+		};
+		const doc = {
+			createElement: (tag: string) => {
+				if (tag === "nav") return nav;
+				return {
+					className: "",
+					href: "",
+					title: "",
+					type: "button",
+					innerHTML: "",
+					attributes: {} as Record<string, string>,
+					setAttribute(name: string, value: string) {
+						this.attributes[name] = value;
+					},
+					addEventListener() {},
+					removeEventListener() {},
+				};
+			},
+			body: {
+				append() {
+					appended = true;
+				},
+			},
+			documentElement: {},
+			fullscreenElement: null,
+			addEventListener() {},
+			removeEventListener() {},
+			querySelector: () => null,
+		} as unknown as Document;
+
+		const cleanup = mountGeoffseePagesNav(doc, {
+			href: "https://geoffsee.github.io/aurora/",
+			search: "",
+		});
+		expect(appended).toBe(true);
+		expect(nav.children).toHaveLength(2);
+		expect(typeof cleanup).toBe("function");
+	});
+
+	test("no-ops for embedded previews and local dev", () => {
+		const doc = {
+			createElement: () => {
+				throw new Error("should not mount");
+			},
+		} as unknown as Document;
+		expect(
+			mountGeoffseePagesNav(doc, {
+				href: "https://geoffsee.github.io/aurora/?embed=1",
+				search: "?embed=1",
+			}),
+		).toEqual(expect.any(Function));
+		expect(
+			mountGeoffseePagesNav(doc, {
+				href: "http://127.0.0.1:3000/",
+				search: "",
+			}),
+		).toEqual(expect.any(Function));
 	});
 });
