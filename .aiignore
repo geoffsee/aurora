@@ -1,0 +1,79 @@
+# Git internals
+.git/
+
+# Dependencies
+node_modules/
+
+# Build outputs and generated bundles
+dist/
+out/
+target/
+target-vst/
+target-launcher/
+plugins/**/target/
+*.tgz
+
+# Coverage and reports
+coverage/
+*.lcov
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Logs and runtime traces
+logs/
+*.log
+
+# Local environment and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.github-app
+
+# Caches and tool metadata
+.cache/
+.eslintcache
+*.tsbuildinfo
+.playwright-mcp/
+temp_scratch/
+
+# Editor/OS cruft and local agent state
+.idea/
+.DS_Store
+.cursor/
+.caretta/
+
+# Generated shader artifacts (sources live under shaders/)
+assets/shaders/vj_grid.wgsl
+assets/shaders/vj_palette.wgsl
+
+# Strict mode: common large/binary assets
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svgz
+*.ico
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.avi
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.aiff
+*.zip
+*.tar
+*.gz
+*.7z
+*.rar
+*.pdf
+*.wasm
+*.vst3
+*.dylib
+*.so
+*.dll
+*.exe
