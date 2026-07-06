@@ -689,6 +689,14 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			minDecibels: MIC_MIN_DB,
 			maxDecibels: MIC_MAX_DB,
 		});
+		// BroadcastChannel and the bridge do not echo mic frames back to the
+		// sender — update local meters here so the controls UI stays live.
+		setOsc((prev) => {
+			const next = { ...prev };
+			applyBrowserAudio(features, next);
+			oscRef.current = next;
+			return next;
+		});
 		transport.send({ address: "/aurora/audio/features", args: [features] });
 	}, []);
 
