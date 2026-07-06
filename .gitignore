@@ -48,3 +48,5 @@ assets/shaders/vj_palette.wgsl
 
 # Scratch directory used during shader bundling (cleaned by the script)
 temp_scratch/
+*.jpeg
+*.png
