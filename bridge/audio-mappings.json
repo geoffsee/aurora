@@ -31,7 +31,7 @@
 		"source": "pulse",
 		"target": "flashVersion",
 		"mode": "threshold",
-		"level": 0.8,
+		"level": 0.45,
 		"offDelayMs": 180,
 		"increment": true
 	}
