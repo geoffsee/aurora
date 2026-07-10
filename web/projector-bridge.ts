@@ -5,13 +5,16 @@ import {
 	type OscFrame,
 } from "../shared/bridge-transport.ts";
 import {
+	isControlBridgeConnected,
+	isOscBridgeConnected,
+} from "../shared/bridge-connection.ts";
+import {
 	geoffseePagesControlsUrl,
 	isGeoffseeGithubPages,
 	isStaticHosting,
 } from "../shared/static-hosting.ts";
-import { bridgeDebug } from "../shared/bridge-debug.ts";
 
-export { bridgeDebug };
+export { isControlBridgeConnected, isOscBridgeConnected };
 
 /** True when an embedded preview can share the controls page origin. */
 export function shouldUseBroadcastChannel(
@@ -41,20 +44,10 @@ export function createProjectorTransport(
 	win: Pick<Window, "parent"> = window,
 ): BridgeTransport {
 	const useBroadcast = shouldSubscribeBroadcastChannel(loc, win);
-	bridgeDebug("createProjectorTransport", {
-		useBroadcast,
-		isStatic: isStaticHosting(loc),
-		embed: new URLSearchParams(loc.search).get("embed"),
-		href: loc.href,
-		origin: loc.origin,
-	});
 	if (useBroadcast) {
 		return createBroadcastChannelTransport({ role: "subscribe-only" });
 	}
 	const scheme = loc.protocol === "https:" ? "wss" : "ws";
-	bridgeDebug("createProjectorTransport using WebSocket", {
-		url: `${scheme}://${loc.host}/ws`,
-	});
 	return createWebSocketTransport(`${scheme}://${loc.host}/ws`, {
 		reconnect: true,
 	});

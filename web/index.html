@@ -16,17 +16,13 @@
     <script type="module">
       import {
         attachProjectorTransport,
-        bridgeDebug,
         createProjectorTransport,
+        isControlBridgeConnected,
+        isOscBridgeConnected,
         mountGeoffseePagesNav,
       } from "./dist/projector-bridge.js";
 
       mountGeoffseePagesNav();
-      bridgeDebug("projector page boot", {
-        href: location.href,
-        origin: location.origin,
-        embed: new URLSearchParams(location.search).get("embed"),
-      });
 
       const boot = document.querySelector("#boot");
       // Multi-output routing: a window opened with ?output=<id> renders the route
@@ -440,23 +436,16 @@
         attachProjectorTransport(bridgeTransport, {
           onOpen: () => {
             oscState.bridgeReady = true;
-            bridgeDebug("projector transport open", { href: location.href });
           },
           onClose: () => {
             oscState.connected = false;
             oscState.bridgeReady = false;
-            bridgeDebug("projector transport closed");
           },
           onError: () => {
             oscState.connected = false;
             oscState.bridgeReady = false;
-            bridgeDebug("projector transport error");
           },
           onMessage: (frame) => {
-            bridgeDebug("projector frame", {
-              address: frame?.address,
-              hasArgs: Array.isArray(frame?.args) && frame.args.length > 0,
-            });
             applyOscFrame(frame);
           },
         });
@@ -471,10 +460,13 @@
         sendErrorToControls(`Runtime error: ${msg}`);
       });
 
-      window.__auroraOscConnected = () => {
-        oscState.connected = controlState.demoMode || performance.now() - oscState.lastFrameAt < 3000;
-        return oscState.connected;
-      };
+      window.__auroraOscConnected = () =>
+        isOscBridgeConnected({
+          demoMode: controlState.demoMode,
+          bridgeReady: oscState.bridgeReady,
+          lastFrameAt: oscState.lastFrameAt,
+          now: performance.now(),
+        });
       window.__auroraOscPlaying = () => Boolean(oscState.playing);
       window.__auroraOscTempo = () => oscState.tempo;
       window.__auroraOscEnergy = () => (decayMeters(), applyAudioCurve(oscState.energy, controlState.bandCurves.energy));
@@ -494,10 +486,12 @@
         }
         return applyAudioCurve(oscState.bass, controlState.bandCurves.bass);
       };
-      window.__auroraControlConnected = () => {
-        controlState.connected = performance.now() - controlState.lastFrameAt < 3000;
-        return controlState.connected;
-      };
+      window.__auroraControlConnected = () =>
+        isControlBridgeConnected({
+          bridgeReady: oscState.bridgeReady,
+          lastFrameAt: controlState.lastFrameAt,
+          now: performance.now(),
+        });
       window.__auroraControlCrossfade = () => controlState.crossfade;
       window.__auroraControlBpm = () => controlState.bpm;
       window.__auroraControlSpeed = () => controlState.speed;

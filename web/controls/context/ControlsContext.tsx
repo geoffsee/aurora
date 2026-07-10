@@ -19,7 +19,6 @@ import {
 	generateDemoAudioFrame,
 } from "../../../shared/demo-audio.ts";
 import { isStaticHosting } from "../../../shared/static-hosting.ts";
-import { bridgeDebug } from "../../../shared/bridge-debug.ts";
 import { AUTOMATION_LAYOUT_PRESERVED_FIELDS } from "../../../bridge/automation-player.ts";
 import { cuePresets } from "../lib/cues.ts";
 import {
@@ -223,16 +222,9 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 	const publish = useCallback((options: { record?: boolean } = {}) => {
 		const transport = transportRef.current;
 		const current = stateRef.current;
-		const sent = transport?.send({
+		transport?.send({
 			address: "/aurora/control/state",
 			args: [current],
-		});
-		bridgeDebug("controls publish", {
-			staticPreview: staticPreview.current,
-			transportReady: transport?.ready ?? false,
-			sent: sent ?? false,
-			crossfade: current.crossfade,
-			demoMode: current.demoMode,
 		});
 		if (isRecordingRef.current && options.record !== false) {
 			const now = performance.now();
@@ -981,10 +973,6 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 		transportRef.current?.close();
 
 		if (staticPreview.current) {
-			bridgeDebug("controls connect (static BroadcastChannel publish-only)", {
-				href: location.href,
-				origin: location.origin,
-			});
 			const transport = createBroadcastChannelTransport({ role: "publish-only" });
 			transportRef.current = transport;
 			transport.connect();
@@ -1057,8 +1045,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
 			);
 			const frame = { address: "/aurora/demo/audio", args: [demo] };
 			applyFrame(frame);
-			const sent = transportRef.current?.send(frame);
-			bridgeDebug("controls demo audio tick", { sent: sent ?? false, tempo: demo.tempo });
+			transportRef.current?.send(frame);
 		};
 		const timer = setInterval(tick, DEMO_AUDIO_INTERVAL_MS);
 		return () => clearInterval(timer);
