@@ -1,5 +1,6 @@
 project_name = "aurora"
-geodynamo-url = "https://geoffsee.github.io/geodynamo/"
+
+geodynamo-url = "https://geodynamo.seemueller.workers.dev/"
 
 [test]
 command = ["sh", "-c", "bun install && bun run test"]
