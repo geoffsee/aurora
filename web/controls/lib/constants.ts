@@ -23,6 +23,7 @@ export const VISUAL_MODES = [
 	"Scanner",
 	"Comet",
 	"Bloom",
+	"Figure",
 ] as const;
 
 export const SHADER_OPTIONS = [

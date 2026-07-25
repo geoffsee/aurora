@@ -36,10 +36,12 @@ test("deck mode metadata exposes the full CPU mode range", () => {
 		"Scanner",
 		"Comet",
 		"Bloom",
+		"Figure",
 	]);
 	expect(PARAM_META.deckAMode.max).toBe(VISUAL_MODES.length - 1);
 	expect(PARAM_META.deckBMode.max).toBe(VISUAL_MODES.length - 1);
 	expect(PARAM_META.deckAMode.format(23)).toBe("Bloom");
+	expect(PARAM_META.deckAMode.format(24)).toBe("Figure");
 	expect(PARAM_META.deckBMode.format(20)).toBe("Prism");
 });
 

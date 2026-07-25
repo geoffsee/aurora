@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "models": [
+    {
+      "id": "human-female",
+      "label": "Human Female",
+      "assetPath": "models/human-female/source/74f42c5a92bbb95403c45ff3929560ae.glb",
+      "scene": 0,
+      "defaultScale": 1.0,
+      "offset": [0.0, -1.0, 0.0],
+      "yawSpeed": 0.35,
+      "visualMode": 24
+    }
+  ]
+}

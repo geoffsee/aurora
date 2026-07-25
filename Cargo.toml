@@ -15,11 +15,13 @@ bevy = { version = "0.17", default-features = false, features = [
   "bevy_camera",
   "bevy_color",
   "bevy_core_pipeline",
+  "bevy_gltf",
   "bevy_image",
   "bevy_log",
   "bevy_mesh",
   "bevy_pbr",
   "bevy_render",
+  "bevy_scene",
   "bevy_shader",
   "bevy_sprite",
   "bevy_sprite_render",
@@ -30,6 +32,8 @@ bevy = { version = "0.17", default-features = false, features = [
   "bevy_winit",
   "default_font",
   "png",
+  # Scene/type registry helpers if any path still spawns reflected scenes.
+  "reflect_auto_register",
   "webgpu",
   # With `default-features = false`, bevy_winit does not forward winit's X11 stack;
   # host `cargo check` on Linux would hit winit's unsupported-platform stub.

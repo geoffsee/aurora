@@ -237,6 +237,10 @@ const mimeTypes: Record<string, string> = {
 	".json": "application/json; charset=utf-8",
 	".wasm": "application/wasm",
 	".wgsl": "text/plain; charset=utf-8",
+	// glTF mesh catalog (models/* mirrored at assets/models)
+	".glb": "model/gltf-binary",
+	".gltf": "model/gltf+json",
+	".bin": "application/octet-stream",
 };
 
 function contentType(pathname: string) {
@@ -532,8 +536,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
 		gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
 		gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
-		deckAMode: clampInt(source.deckAMode, 0, 23, defaults.deckAMode),
-		deckBMode: clampInt(source.deckBMode, 0, 23, defaults.deckBMode),
+		deckAMode: clampInt(source.deckAMode, 0, 24, defaults.deckAMode),
+		deckBMode: clampInt(source.deckBMode, 0, 24, defaults.deckBMode),
 		rings: source.rings !== false,
 		ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
 		strobe: Boolean(source.strobe),
@@ -567,8 +571,8 @@ const coerceControlState = (state: unknown): ControlState => {
 		cueIntensity: clamp(source.cueIntensity, 0, 1, defaults.cueIntensity),
 		cuePalette: clamp(source.cuePalette, 0, 1, defaults.cuePalette),
 		cueCrossfade: clamp(source.cueCrossfade, 0, 1, defaults.cueCrossfade),
-		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 23, defaults.cueDeckAMode),
-		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 23, defaults.cueDeckBMode),
+		cueDeckAMode: clampInt(source.cueDeckAMode, 0, 24, defaults.cueDeckAMode),
+		cueDeckBMode: clampInt(source.cueDeckBMode, 0, 24, defaults.cueDeckBMode),
 		cueDeckAGpuShader: clampInt(
 			source.cueDeckAGpuShader,
 			0,

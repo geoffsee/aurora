@@ -1,6 +1,9 @@
+mod model_layer;
+
 use std::f32::consts::TAU;
 
 use bevy::{
+    asset::AssetMetaCheck,
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
     render::render_resource::AsBindGroup,
@@ -8,6 +11,9 @@ use bevy::{
     sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
     window::{PresentMode, PrimaryWindow, WindowResolution},
     winit::WinitSettings,
+};
+use model_layer::{
+    apply_model_instance, resolve_pending_gltf_models, setup_model_layer, ModelDrive, ModelInstance,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -282,22 +288,30 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(WinitSettings::continuous())
         .insert_resource(VjState::default())
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "aurora VJ".into(),
-                canvas: Some("#bevy-canvas".into()),
-                resolution: WindowResolution::new(1280, 720).with_scale_factor_override(1.0),
-                fit_canvas_to_parent: true,
-                prevent_default_event_handling: true,
-                present_mode: PresentMode::AutoVsync,
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "aurora VJ".into(),
+                        canvas: Some("#bevy-canvas".into()),
+                        resolution: WindowResolution::new(1280, 720).with_scale_factor_override(1.0),
+                        fit_canvas_to_parent: true,
+                        prevent_default_event_handling: true,
+                        present_mode: PresentMode::AutoVsync,
+                        ..default()
+                    }),
+                    ..default()
+                })
+                // Web/bridge does not ship `.meta` sidecars; skip the 404 fetch storm.
+                .set(AssetPlugin {
+                    meta_check: AssetMetaCheck::Never,
+                    ..default()
+                }),
+        )
         .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
         .add_plugins(Material2dPlugin::<VjGridMaterial>::default())
         .add_plugins(Material2dPlugin::<VjImportedMaterial>::default())
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, setup_model_layer))
         .add_systems(
             Update,
             (
@@ -306,6 +320,8 @@ fn main() {
                 advance_clock,
                 update_visuals,
                 update_tunnel_rings,
+                resolve_pending_gltf_models,
+                update_model_instances,
                 update_palette_material,
                 consume_pending_imported_shader,
                 debug_inject_imported_shader,
@@ -461,6 +477,8 @@ enum VisualMode {
     Scanner,
     Comet,
     Bloom,
+    /// Mesh layer: binds to a glTF entry in `model_layer::MODEL_CATALOG`.
+    Figure,
 }
 
 impl VisualMode {
@@ -489,7 +507,39 @@ impl VisualMode {
             21 => Self::Scanner,
             22 => Self::Comet,
             23 => Self::Bloom,
+            24 => Self::Figure,
             _ => Self::Beams,
+        }
+    }
+
+    /// Integer sent on the control bus / matched by model catalog entries.
+    fn as_control(self) -> i32 {
+        match self {
+            Self::Beams => 0,
+            Self::Tunnel => 1,
+            Self::Burst => 2,
+            Self::Mirror => 3,
+            Self::Wash => 4,
+            Self::Strobe => 5,
+            Self::Swarm => 6,
+            Self::Orbit => 7,
+            Self::Pulse => 8,
+            Self::Spiral => 9,
+            Self::Ripple => 10,
+            Self::Shatter => 11,
+            Self::Flux => 12,
+            Self::Lattice => 13,
+            Self::Drift => 14,
+            Self::Storm => 15,
+            Self::Echo => 16,
+            Self::Vortex => 17,
+            Self::Fracture => 18,
+            Self::Nebula => 19,
+            Self::Prism => 20,
+            Self::Scanner => 21,
+            Self::Comet => 22,
+            Self::Bloom => 23,
+            Self::Figure => 24,
         }
     }
 }
@@ -714,6 +764,30 @@ fn setup(
     ));
 
     // The control surface now lives on port 3001, so the projector output has no HUD.
+}
+
+/// Drive glTF model instances from live deck modes + audio (see `model_layer`).
+fn update_model_instances(
+    state: Res<VjState>,
+    mut query: Query<(&ModelInstance, &mut Transform, &mut Visibility)>,
+) {
+    let drive = ModelDrive {
+        show_time: state.show_time,
+        intensity: state.intensity,
+        blackout: state.blackout,
+        freeze: state.freeze,
+        crossfade: state.crossfade,
+        deck_a_mode: state.deck_a_mode.as_control(),
+        deck_b_mode: state.deck_b_mode.as_control(),
+        bass: state.osc_bass,
+        mid: state.osc_mid,
+        high: state.osc_high,
+        energy: state.osc_energy,
+        pulse: state.osc_pulse,
+    };
+    for (instance, mut transform, mut visibility) in &mut query {
+        apply_model_instance(drive, instance, &mut transform, &mut visibility);
+    }
 }
 
 /// Stretch the fullscreen GPU-shader quads to cover the whole window. The
@@ -1405,6 +1479,10 @@ fn update_visuals(
                         alpha *= 0.24 + bloom * 0.55 + state.feedback * 0.35;
                         hue += 25.0 + mid * 50.0 + bloom * 35.0;
                     }
+                    // Mesh catalog owns the look; hide CPU geometry for this deck.
+                    VisualMode::Figure => {
+                        alpha = 0.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1513,6 +1591,7 @@ fn update_visuals(
                         0.34 + state.feedback * 0.3 + beat_hit * 0.18,
                         1.0,
                     ),
+                    VisualMode::Figure => (1.0, 1.0, 0.0, 0.0),
                     VisualMode::Beams => (0.9, 0.8, 0.55, 1.0),
                 };
 
@@ -1767,6 +1846,10 @@ fn update_visuals(
                         alpha *= 0.16 + bloom * 0.58 + state.feedback * 0.22;
                         hue += 32.0 + bloom * 42.0 + mid * 35.0;
                     }
+                    // Mesh catalog owns the look; hide CPU geometry for this deck.
+                    VisualMode::Figure => {
+                        alpha = 0.0;
+                    }
                     VisualMode::Beams => {}
                 }
 
@@ -1982,6 +2065,10 @@ fn update_visuals(
                         transform.scale.y *= 0.9 + bloom * 0.9 + mid * 0.35;
                         alpha *= 0.18 + bloom * 0.45 + state.feedback * 0.3;
                         hue += 30.0 + bloom * 35.0;
+                    }
+                    // Mesh catalog owns the look; hide CPU geometry for this deck.
+                    VisualMode::Figure => {
+                        alpha = 0.0;
                     }
                     VisualMode::Beams => {}
                 }
