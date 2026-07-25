@@ -90,7 +90,8 @@ export function ModelsPanel() {
 							</NativeSelect.Field>
 						</NativeSelect.Root>
 						<Text fontSize="xs" color="whiteAlpha.500" mt={1}>
-							Catalog entries from models/* (not a live folder scan).
+							Web pack ships small free samples; “(local)” needs files under
+							models/ (not on GitHub Pages). Lazy-loaded when Figure is live.
 						</Text>
 					</Field.Root>
 

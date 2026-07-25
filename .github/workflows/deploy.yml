@@ -57,7 +57,12 @@ jobs:
         run: |
           set -euo pipefail
           cp web/index.html web/styles.css dist/
-          cp -r assets dist/
+          # Shaders only — do NOT `cp -r assets` (assets/models is a symlink to
+          # models/ and would dump local-only multi‑MB packs or a broken link).
+          mkdir -p dist/assets/shaders
+          cp -R assets/shaders/. dist/assets/shaders/
+          # Web-safe glTF pack only (ship:true in models/manifest.json, ~5 MB).
+          bun run scripts/stage-web-models.ts
           # In dev, the Bun server serves web/ plus the root dist/pkg bundle so the HTML imports
           # `./dist/pkg/aurora.js`. In the Pages bundle, HTML and WASM sit
           # together, so the WASM lives at `./pkg/aurora.js`.

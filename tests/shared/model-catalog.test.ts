@@ -3,19 +3,35 @@ import { resolve } from "node:path";
 import { expect, test } from "vitest";
 import {
 	MODEL_CATALOG,
+	SHIPPED_MODEL_CATALOG,
 	modelById,
 	modelByVisualMode,
 } from "../../shared/model-catalog.ts";
 import { VISUAL_MODES } from "../../web/controls/lib/constants.ts";
 
-test("model catalog registers human-female on Figure mode", () => {
+test("model catalog default is a shipped Figure-mode entry", () => {
 	expect(MODEL_CATALOG.length).toBeGreaterThan(0);
+	expect(MODEL_CATALOG[0]?.ship).toBe(true);
+	expect(MODEL_CATALOG[0]?.visualMode).toBe(24);
+	expect(VISUAL_MODES[MODEL_CATALOG[0]!.visualMode]).toBe("Figure");
+	expect(MODEL_CATALOG[0]?.assetPath.endsWith(".glb")).toBe(true);
+	// First match for mode 24 is the default web pack entry.
+	expect(modelByVisualMode(24)?.id).toBe(MODEL_CATALOG[0]!.id);
+});
+
+test("human-female stays local-only", () => {
 	const human = modelById("human-female");
 	expect(human).toBeDefined();
+	expect(human?.ship).toBe(false);
 	expect(human?.visualMode).toBe(24);
-	expect(VISUAL_MODES[human!.visualMode]).toBe("Figure");
-	expect(human?.assetPath.endsWith(".glb")).toBe(true);
-	expect(modelByVisualMode(24)?.id).toBe("human-female");
+});
+
+test("web pack is non-empty and every ship entry has a glb path", () => {
+	expect(SHIPPED_MODEL_CATALOG.length).toBeGreaterThan(0);
+	for (const entry of SHIPPED_MODEL_CATALOG) {
+		expect(entry.ship).toBe(true);
+		expect(entry.assetPath.endsWith(".glb")).toBe(true);
+	}
 });
 
 test("model catalog stays in sync with models/manifest.json", () => {
@@ -27,6 +43,7 @@ test("model catalog stays in sync with models/manifest.json", () => {
 			assetPath: string;
 			visualMode: number;
 			defaultScale: number;
+			ship: boolean;
 		}>;
 	};
 	expect(manifest.schemaVersion).toBe(1);
@@ -37,6 +54,7 @@ test("model catalog stays in sync with models/manifest.json", () => {
 		expect(fromFile?.assetPath).toBe(entry.assetPath);
 		expect(fromFile?.visualMode).toBe(entry.visualMode);
 		expect(fromFile?.defaultScale).toBe(entry.defaultScale);
+		expect(fromFile?.ship).toBe(entry.ship);
 	}
 });
 
@@ -54,6 +72,6 @@ test("figure mode constants match catalog wiring", async () => {
 	expect(FIGURE_VISUAL_MODE).toBe(24);
 	expect(VISUAL_MODES[FIGURE_VISUAL_MODE]).toBe("Figure");
 	expect(MAX_FIGURE_MODEL_INDEX).toBe(MODEL_CATALOG.length - 1);
-	expect(modelByIndex(0)?.id).toBe("human-female");
+	expect(modelByIndex(0)?.ship).toBe(true);
 	expect(modelByIndex(99)).toBeUndefined();
 });

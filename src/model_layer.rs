@@ -5,11 +5,15 @@
 //! - `shared/model-catalog.ts` (TS tests / future UI)
 //! - `MODEL_CATALOG` here (runtime Bevy spawn + update)
 //!
-//! Pattern: each catalog entry loads a `Handle<Gltf>`. When the asset is ready,
-//! mesh primitives are spawned as children of a `ModelInstance` root (not
-//! `SceneRoot` — scene spawn needs Reflect type registration that is easy to
-//! miss under `default-features = false` / WASM). Visibility + transform are
-//! driven from deck modes and audio.
+//! Pattern: each catalog entry gets a `ModelInstance` root at startup, but the
+//! glTF is **lazy-loaded only for the UI-selected index** (and only when Figure
+//! mode is live). That keeps GitHub Pages light: web visitors only fetch the
+//! ~0.5 MB default humanoid, not every local-only multi‑MB pack. When the
+//! asset is ready, mesh primitives are spawned as children (not `SceneRoot` —
+//! scene spawn needs Reflect type registration that is easy to miss under
+//! `default-features = false` / WASM). Missing assets (local-only on Pages)
+//! fail soft via `AssetLoadFailedEvent` — the stage stays empty instead of
+//! spinning forever on a 404.
 //!
 //! Stage lighting: an invisible ring of spotlights above the figure (sectional
 //! halo) is driven from the same `ModelDrive` so intensity and hue ride bass /
@@ -17,6 +21,7 @@
 
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_6, PI, TAU};
 
+use bevy::asset::AssetLoadFailedEvent;
 use bevy::gltf::GltfMesh;
 use bevy::prelude::*;
 
@@ -52,21 +57,209 @@ pub struct ModelDef {
     pub yaw_speed: f32,
     /// Matches `VisualMode::from_control` integer (e.g. 24 = Figure).
     pub visual_mode: i32,
+    /// When true, the GLB is part of the GH Pages / CI web pack.
+    #[allow(dead_code)]
+    pub ship: bool,
 }
 
 /// Registry of models available to visualizations. Keep in sync with
 /// `models/manifest.json` and `shared/model-catalog.ts`.
-pub const MODEL_CATALOG: &[ModelDef] = &[ModelDef {
-    id: "human-female",
-    asset_path: "models/human-female/source/74f42c5a92bbb95403c45ff3929560ae.glb",
-    scene: 0,
-    default_scale: 1.0,
-    offset: Vec3::new(0.0, -1.0, 0.0),
-    // Blender export node: 90° about X so the figure stands upright in Bevy Y-up.
-    base_rotation: Quat::from_xyzw(FRAC_1_SQRT_2, 0.0, 0.0, FRAC_1_SQRT_2),
-    yaw_speed: 0.35,
-    visual_mode: 24,
-}];
+///
+/// Order: web pack first (index 0 is the default `figureModel` on a fresh
+/// visit), then local-only packs. `base_rotation` is Identity for Khronos
+/// Y-up samples; only `human-female` needs the Blender X-up fix (90° about X).
+pub const MODEL_CATALOG: &[ModelDef] = &[
+    // --- Web pack (committed + deploy) ---
+    ModelDef {
+        id: "cesium-man",
+        asset_path: "models/cesium-man/source/CesiumMan.glb",
+        scene: 0,
+        default_scale: 1.1,
+        offset: Vec3::new(0.0, -1.0, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.35,
+        visual_mode: 24,
+        ship: true,
+    },
+    ModelDef {
+        id: "fox",
+        asset_path: "models/fox/source/Fox.glb",
+        scene: 0,
+        default_scale: 0.02,
+        offset: Vec3::new(0.0, -1.0, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.45,
+        visual_mode: 24,
+        ship: true,
+    },
+    ModelDef {
+        id: "duck",
+        asset_path: "models/duck/source/Duck.glb",
+        scene: 0,
+        default_scale: 1.4,
+        offset: Vec3::new(0.0, -0.6, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.5,
+        visual_mode: 24,
+        ship: true,
+    },
+    ModelDef {
+        id: "rigged-figure",
+        asset_path: "models/rigged-figure/source/RiggedFigure.glb",
+        scene: 0,
+        default_scale: 1.2,
+        offset: Vec3::new(0.0, -1.0, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.4,
+        visual_mode: 24,
+        ship: true,
+    },
+    ModelDef {
+        id: "damaged-helmet",
+        asset_path: "models/damaged-helmet/source/DamagedHelmet.glb",
+        scene: 0,
+        default_scale: 1.15,
+        offset: Vec3::new(0.0, -0.2, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.4,
+        visual_mode: 24,
+        ship: true,
+    },
+    ModelDef {
+        id: "cesium-milk-truck",
+        asset_path: "models/cesium-milk-truck/source/CesiumMilkTruck.glb",
+        scene: 0,
+        default_scale: 0.55,
+        offset: Vec3::new(0.0, -0.9, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.25,
+        visual_mode: 24,
+        ship: true,
+    },
+    // --- Local-only (large / private; not on Pages) ---
+    ModelDef {
+        id: "human-female",
+        asset_path: "models/human-female/source/74f42c5a92bbb95403c45ff3929560ae.glb",
+        scene: 0,
+        default_scale: 1.0,
+        offset: Vec3::new(0.0, -1.0, 0.0),
+        // Blender export node: 90° about X so the figure stands upright in Bevy Y-up.
+        base_rotation: Quat::from_xyzw(FRAC_1_SQRT_2, 0.0, 0.0, FRAC_1_SQRT_2),
+        yaw_speed: 0.35,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "brain-stem",
+        asset_path: "models/brain-stem/source/BrainStem.glb",
+        scene: 0,
+        default_scale: 1.0,
+        offset: Vec3::new(0.0, -1.0, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.3,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "boom-box",
+        asset_path: "models/boom-box/source/BoomBox.glb",
+        scene: 0,
+        default_scale: 80.0,
+        offset: Vec3::new(0.0, -0.5, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.35,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "lantern",
+        asset_path: "models/lantern/source/Lantern.glb",
+        scene: 0,
+        default_scale: 0.08,
+        offset: Vec3::new(0.0, -1.0, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.25,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "water-bottle",
+        asset_path: "models/water-bottle/source/WaterBottle.glb",
+        scene: 0,
+        default_scale: 8.0,
+        offset: Vec3::new(0.0, -0.4, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.4,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "avocado",
+        asset_path: "models/avocado/source/Avocado.glb",
+        scene: 0,
+        default_scale: 40.0,
+        offset: Vec3::new(0.0, -0.3, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.5,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "antique-camera",
+        asset_path: "models/antique-camera/source/AntiqueCamera.glb",
+        scene: 0,
+        default_scale: 0.35,
+        offset: Vec3::new(0.0, -0.8, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.3,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "corset",
+        asset_path: "models/corset/source/Corset.glb",
+        scene: 0,
+        default_scale: 25.0,
+        offset: Vec3::new(0.0, -0.5, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.35,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "sheen-chair",
+        asset_path: "models/sheen-chair/source/SheenChair.glb",
+        scene: 0,
+        default_scale: 1.3,
+        offset: Vec3::new(0.0, -0.9, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.3,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "toy-car",
+        asset_path: "models/toy-car/source/ToyCar.glb",
+        scene: 0,
+        default_scale: 1.5,
+        offset: Vec3::new(0.0, -0.7, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.4,
+        visual_mode: 24,
+        ship: false,
+    },
+    ModelDef {
+        id: "iridescent-dish",
+        asset_path: "models/iridescent-dish/source/IridescentDishWithOlives.glb",
+        scene: 0,
+        default_scale: 4.0,
+        offset: Vec3::new(0.0, -0.4, 0.0),
+        base_rotation: Quat::IDENTITY,
+        yaw_speed: 0.35,
+        visual_mode: 24,
+        ship: false,
+    },
+];
 
 /// Marks a model root that visualizations drive (transform / visibility).
 #[derive(Component)]
@@ -83,6 +276,10 @@ pub struct ModelInstance {
 pub(crate) struct PendingGltfModel {
     handle: Handle<Gltf>,
 }
+
+/// Asset path 404 / decode failure — do not retry; keep the root hidden.
+#[derive(Component)]
+pub(crate) struct ModelLoadFailed;
 
 /// One section of the invisible overhead stage-light halo.
 ///
@@ -173,12 +370,12 @@ impl ModelDrive {
     }
 }
 
+/// Frame inputs for the model layer (written by the main app each Update).
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct ActiveModelDrive(pub ModelDrive);
+
 /// Spawn one pending root per catalog entry plus a dim base rig and stage halo.
-pub fn setup_model_layer(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut ambient_light: ResMut<AmbientLight>,
-) {
+pub fn setup_model_layer(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
     // Dim cool fill — previous ambient (120) + cinema point blew out PBR albedos.
     ambient_light.color = Color::srgb(0.55, 0.62, 0.78);
     ambient_light.brightness = 22.0;
@@ -220,8 +417,11 @@ pub fn setup_model_layer(
         ));
     }
 
+    // Spawn roots only — do not kick off glTF fetches here. Web visitors would
+    // otherwise download every catalog entry (including local-only multi‑MB
+    // packs that 404 on Pages). `ensure_selected_model_loaded` starts the load
+    // when Figure mode is active and a catalog index is selected.
     for (index, def) in MODEL_CATALOG.iter().enumerate() {
-        let handle: Handle<Gltf> = asset_server.load(def.asset_path);
         commands.spawn((
             Transform::from_translation(def.offset)
                 .with_rotation(def.base_rotation)
@@ -234,8 +434,78 @@ pub fn setup_model_layer(
                 offset: def.offset,
                 base_rotation: def.base_rotation,
             },
-            PendingGltfModel { handle },
         ));
+    }
+}
+
+type ModelLoadQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static ModelInstance,
+        Option<&'static PendingGltfModel>,
+        Option<&'static ModelLoadFailed>,
+        Option<&'static Children>,
+    ),
+>;
+
+/// Start loading the UI-selected catalog entry when Figure mode is live.
+///
+/// Skips roots that already have mesh children, are mid-load, or previously
+/// failed (missing local-only file on a static host).
+pub fn ensure_selected_model_loaded(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    drive: Res<ActiveModelDrive>,
+    query: ModelLoadQuery,
+) {
+    let drive = drive.0;
+    // Prefer loading only when Figure mode contributes — keeps Pages idle until used.
+    let needs_figure = MODEL_CATALOG
+        .iter()
+        .any(|d| drive.weight_for_mode(d.visual_mode) >= 0.01);
+    if !needs_figure {
+        return;
+    }
+
+    let selected = drive
+        .figure_model
+        .clamp(0, MODEL_CATALOG.len().saturating_sub(1) as i32) as usize;
+
+    for (entity, instance, pending, failed, children) in &query {
+        if instance.catalog_index != selected {
+            continue;
+        }
+        if pending.is_some() || failed.is_some() {
+            continue;
+        }
+        if children.is_some_and(|c| !c.is_empty()) {
+            continue;
+        }
+        let Some(def) = MODEL_CATALOG.get(selected) else {
+            continue;
+        };
+        let handle: Handle<Gltf> = asset_server.load(def.asset_path);
+        commands.entity(entity).insert(PendingGltfModel { handle });
+    }
+}
+
+/// Mark pending loads that 404 / fail so we never spin forever on Pages.
+pub fn handle_gltf_load_failures(
+    mut commands: Commands,
+    mut failures: MessageReader<AssetLoadFailedEvent<Gltf>>,
+    pending: Query<(Entity, &PendingGltfModel)>,
+) {
+    for event in failures.read() {
+        for (entity, pending_model) in &pending {
+            if pending_model.handle.id() == event.id {
+                commands
+                    .entity(entity)
+                    .remove::<PendingGltfModel>()
+                    .insert(ModelLoadFailed);
+            }
+        }
     }
 }
 
@@ -412,14 +682,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn catalog_has_human_female_on_figure_mode() {
+    fn catalog_default_is_shipped_web_pack() {
         assert!(!MODEL_CATALOG.is_empty());
+        // Index 0 is the default figureModel — must ship so Pages visitors load something.
+        assert!(
+            MODEL_CATALOG[0].ship,
+            "catalog[0] ({}) must be ship:true for GH Pages",
+            MODEL_CATALOG[0].id
+        );
+        assert_eq!(MODEL_CATALOG[0].visual_mode, 24);
+        assert!(MODEL_CATALOG[0].asset_path.ends_with(".glb"));
         let human = MODEL_CATALOG
             .iter()
             .find(|m| m.id == "human-female")
             .expect("human-female catalog entry");
+        assert!(!human.ship, "human-female stays local-only (large)");
         assert_eq!(human.visual_mode, 24);
-        assert!(human.asset_path.ends_with(".glb"));
     }
 
     #[test]

@@ -13,7 +13,8 @@ use bevy::{
     winit::WinitSettings,
 };
 use model_layer::{
-    apply_model_instance, apply_stage_halo_section, resolve_pending_gltf_models, setup_model_layer,
+    apply_model_instance, apply_stage_halo_section, ensure_selected_model_loaded,
+    handle_gltf_load_failures, resolve_pending_gltf_models, setup_model_layer, ActiveModelDrive,
     ModelDrive, ModelInstance, StageHaloSection,
 };
 #[cfg(target_arch = "wasm32")]
@@ -302,6 +303,7 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(WinitSettings::continuous())
         .insert_resource(VjState::default())
+        .insert_resource(ActiveModelDrive::default())
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
@@ -334,6 +336,9 @@ fn main() {
                 advance_clock,
                 update_visuals,
                 update_tunnel_rings,
+                sync_model_drive,
+                handle_gltf_load_failures,
+                ensure_selected_model_loaded,
                 resolve_pending_gltf_models,
                 update_model_instances,
                 update_palette_material,
@@ -793,13 +798,8 @@ fn setup(
     // The control surface now lives on port 3001, so the projector output has no HUD.
 }
 
-/// Drive glTF model instances + the invisible sectional stage-halo lights.
-fn update_model_instances(
-    state: Res<VjState>,
-    mut models: Query<(&ModelInstance, &mut Transform, &mut Visibility)>,
-    mut halo: Query<(&StageHaloSection, &mut SpotLight)>,
-) {
-    let drive = ModelDrive {
+fn model_drive_from_state(state: &VjState) -> ModelDrive {
+    ModelDrive {
         show_time: state.show_time,
         intensity: state.intensity,
         blackout: state.blackout,
@@ -817,7 +817,21 @@ fn update_model_instances(
         figure_spin: state.figure_spin,
         figure_halo: state.figure_halo,
         figure_audio: state.figure_audio,
-    };
+    }
+}
+
+/// Publish VJ control state into the model layer before lazy-load / apply systems.
+fn sync_model_drive(state: Res<VjState>, mut drive: ResMut<ActiveModelDrive>) {
+    drive.0 = model_drive_from_state(&state);
+}
+
+/// Drive glTF model instances + the invisible sectional stage-halo lights.
+fn update_model_instances(
+    drive: Res<ActiveModelDrive>,
+    mut models: Query<(&ModelInstance, &mut Transform, &mut Visibility)>,
+    mut halo: Query<(&StageHaloSection, &mut SpotLight)>,
+) {
+    let drive = drive.0;
     for (instance, mut transform, mut visibility) in &mut models {
         apply_model_instance(drive, instance, &mut transform, &mut visibility);
     }

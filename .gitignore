@@ -50,3 +50,19 @@ assets/shaders/vj_palette.wgsl
 temp_scratch/
 *.jpeg
 *.png
+# Large / local-only glTF packs (show machines only — not GH Pages).
+# Web pack (ship:true): cesium-man, fox, duck, rigged-figure, damaged-helmet,
+# cesium-milk-truck — those stay tracked. See models/SOURCES.md.
+models/human-female/
+models/antique-camera/
+models/avocado/
+models/boom-box/
+models/brain-stem/
+models/corset/
+models/iridescent-dish/
+models/lantern/
+models/sheen-chair/
+models/toy-car/
+models/water-bottle/
+models/**/*.zip
+models/3daistock.zip
