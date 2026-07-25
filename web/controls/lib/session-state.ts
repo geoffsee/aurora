@@ -1,4 +1,5 @@
 import { migrateControlState } from "../../../shared/control-state-schema.ts";
+import { normalizeRemoteModelAssetPath } from "../../../shared/model-asset-path.ts";
 import { CONTROL_STATE_SCHEMA_VERSION } from "../../../shared/osc-validation.ts";
 import { SESSION_STATE_KEY } from "./constants.ts";
 import { defaultState } from "./default-state.ts";
@@ -59,6 +60,10 @@ export function mergeSessionControlState(
 			...defaults.emaAlphas,
 			...(patch.emaAlphas ?? {}),
 		},
+		figureAssetPath: normalizeRemoteModelAssetPath(
+			patch.figureAssetPath,
+			defaults.figureAssetPath,
+		),
 		...EPHEMERAL_CONTROL_FIELDS,
 	};
 }

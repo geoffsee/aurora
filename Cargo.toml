@@ -32,6 +32,9 @@ bevy = { version = "0.17", default-features = false, features = [
   "bevy_winit",
   "default_font",
   "png",
+  # Remote Figure assets entered in the controls console.
+  "http",
+  "https",
   # Scene/type registry helpers if any path still spawns reflected scenes.
   "reflect_auto_register",
   "webgpu",
@@ -45,4 +48,3 @@ wasm-bindgen = "0.2.122"
 opt-level = "z"
 lto = "thin"
 codegen-units = 1
-

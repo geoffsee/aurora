@@ -3,15 +3,17 @@ import {
 	Button,
 	Field,
 	Grid,
+	Input,
 	NativeSelect,
 	Text,
 } from "@chakra-ui/react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
 	FIGURE_VISUAL_MODE,
 	MAX_FIGURE_MODEL_INDEX,
 	MODEL_CATALOG,
 } from "../../../shared/model-catalog.ts";
+import { normalizeRemoteModelAssetPath } from "../../../shared/model-asset-path.ts";
 import { useControls } from "../context/ControlsContext.tsx";
 import { VISUAL_MODES } from "../lib/constants.ts";
 import { Panel } from "./ui.tsx";
@@ -19,6 +21,9 @@ import { ParamSlider } from "./ParamSlider.tsx";
 
 export function ModelsPanel() {
 	const { state, updateState } = useControls();
+	const [assetPath, setAssetPath] = useState(state.figureAssetPath);
+
+	useEffect(() => setAssetPath(state.figureAssetPath), [state.figureAssetPath]);
 
 	const setScale = useCallback(
 		(figureScale: number) => updateState({ figureScale }),
@@ -43,9 +48,22 @@ export function ModelsPanel() {
 	const figureOnA = state.deckAMode === FIGURE_VISUAL_MODE;
 	const figureOnB = state.deckBMode === FIGURE_VISUAL_MODE;
 	const selected = MODEL_CATALOG[state.figureModel] ?? MODEL_CATALOG[0];
-	const activeHint = figureOnA || figureOnB
-		? `Live on ${[figureOnA ? "Deck A" : null, figureOnB ? "Deck B" : null].filter(Boolean).join(" + ")}`
-		: "Not on a deck — assign below or pick Figure in Deck Mode";
+	const useRemoteAsset = () => {
+		const normalized = normalizeRemoteModelAssetPath(
+			assetPath,
+			state.figureAssetPath,
+		);
+		setAssetPath(normalized);
+		updateState({ figureAssetPath: normalized });
+	};
+	const clearRemoteAsset = () => {
+		setAssetPath("");
+		updateState({ figureAssetPath: "" });
+	};
+	const activeHint =
+		figureOnA || figureOnB
+			? `Live on ${[figureOnA ? "Deck A" : null, figureOnB ? "Deck B" : null].filter(Boolean).join(" + ")}`
+			: "Not on a deck — assign below or pick Figure in Deck Mode";
 
 	return (
 		<Box gridArea="modl">
@@ -74,10 +92,7 @@ export function ModelsPanel() {
 									updateState({
 										figureModel: Math.max(
 											0,
-											Math.min(
-												MAX_FIGURE_MODEL_INDEX,
-												Number(e.target.value),
-											),
+											Math.min(MAX_FIGURE_MODEL_INDEX, Number(e.target.value)),
 										),
 									})
 								}
@@ -95,7 +110,47 @@ export function ModelsPanel() {
 						</Text>
 					</Field.Root>
 
-					<Box display="flex" flexDirection="column" gap={2} justifyContent="flex-end">
+					<Field.Root gridColumn={{ base: "1", md: "1 / -1" }}>
+						<Field.Label display="flex" justifyContent="space-between">
+							<span>Remote 3D asset</span>
+							<Text
+								color={state.figureAssetPath ? "cyan.300" : "whiteAlpha.500"}
+								fontSize="sm"
+							>
+								{state.figureAssetPath ? "Override active" : "Using catalog"}
+							</Text>
+						</Field.Label>
+						<Input
+							type="url"
+							autoComplete="off"
+							spellCheck={false}
+							placeholder="https://cdn.example.com/model.glb"
+							value={assetPath}
+							onChange={(e) => setAssetPath(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") useRemoteAsset();
+							}}
+						/>
+						<Box display="flex" gap={2} mt={2}>
+							<Button size="sm" onClick={useRemoteAsset}>
+								Load remote
+							</Button>
+							<Button size="sm" variant="surface" onClick={clearRemoteAsset}>
+								Use catalog
+							</Button>
+						</Box>
+						<Text fontSize="xs" color="whiteAlpha.500" mt={1}>
+							Absolute HTTP(S) .glb or .gltf URL. The host must allow browser
+							CORS requests; embedded GLB files are the most portable.
+						</Text>
+					</Field.Root>
+
+					<Box
+						display="flex"
+						flexDirection="column"
+						gap={2}
+						justifyContent="flex-end"
+					>
 						<Button
 							size="sm"
 							variant={figureOnA ? "solid" : "surface"}
@@ -107,7 +162,9 @@ export function ModelsPanel() {
 								)
 							}
 						>
-							{figureOnA ? "Deck A · Figure" : `Figure → Deck A (${VISUAL_MODES[FIGURE_VISUAL_MODE]})`}
+							{figureOnA
+								? "Deck A · Figure"
+								: `Figure → Deck A (${VISUAL_MODES[FIGURE_VISUAL_MODE]})`}
 						</Button>
 						<Button
 							size="sm"
@@ -120,7 +177,9 @@ export function ModelsPanel() {
 								)
 							}
 						>
-							{figureOnB ? "Deck B · Figure" : `Figure → Deck B (${VISUAL_MODES[FIGURE_VISUAL_MODE]})`}
+							{figureOnB
+								? "Deck B · Figure"
+								: `Figure → Deck B (${VISUAL_MODES[FIGURE_VISUAL_MODE]})`}
 						</Button>
 					</Box>
 

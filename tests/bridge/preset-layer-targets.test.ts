@@ -173,16 +173,17 @@ describe("MIDI target", () => {
 });
 
 describe("schema migration", () => {
-	test("v9 state gains zeroed layer-weight slots and figure knobs by v11", () => {
+	test("v9 state gains layer-weight slots and Figure controls by v12", () => {
 		const result = migrateControlState({
 			schemaVersion: 9,
 			outputs: [],
 		}) as Record<string, unknown>;
-		expect(result.schemaVersion).toBe(11);
+		expect(result.schemaVersion).toBe(12);
 		for (const key of LAYER_WEIGHT_KEYS) {
 			expect(result[key]).toBe(0);
 		}
 		expect(result.figureModel).toBe(0);
 		expect(result.figureHalo).toBe(0.75);
+		expect(result.figureAssetPath).toBe("");
 	});
 });

@@ -48,6 +48,7 @@ test("saveSessionState round-trips user knobs and nested mappings", () => {
 		intensity: 1.1,
 		palette: 0.67,
 		audioControlMode: true,
+		figureAssetPath: "https://cdn.example.com/performer.glb",
 		trackMapping: {
 			...defaultState().trackMapping,
 			bassTrack: 4,
@@ -64,6 +65,7 @@ test("saveSessionState round-trips user knobs and nested mappings", () => {
 	expect(loaded.intensity).toBeCloseTo(1.1);
 	expect(loaded.palette).toBeCloseTo(0.67);
 	expect(loaded.audioControlMode).toBe(true);
+	expect(loaded.figureAssetPath).toBe("https://cdn.example.com/performer.glb");
 	expect(loaded.trackMapping.bassTrack).toBe(4);
 	expect(loaded.trackMapping.highTrack).toBe(7);
 	expect(loaded.emaAlphas.high).toBeCloseTo(0.55);
@@ -107,4 +109,15 @@ test("toPersistedControlState keeps schema version for migration on load", () =>
 test("invalid JSON in storage falls back to defaults", () => {
 	localStorage.setItem(SESSION_STATE_KEY, "not-json");
 	expect(loadSessionState()).toEqual(defaultState());
+});
+
+test("invalid persisted remote model paths fall back to the catalog", () => {
+	localStorage.setItem(
+		SESSION_STATE_KEY,
+		JSON.stringify({
+			...toPersistedControlState(defaultState()),
+			figureAssetPath: "javascript:alert(1)",
+		}),
+	);
+	expect(loadSessionState().figureAssetPath).toBe("");
 });

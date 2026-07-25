@@ -83,6 +83,8 @@ export type ControlState = {
 	layerWeight7: number;
 	/** Catalog index into MODEL_CATALOG (0 = first entry). */
 	figureModel: number;
+	/** Optional absolute HTTP(S) URL to a .glb/.gltf asset; empty uses the catalog. */
+	figureAssetPath: string;
 	/** Multiplier on the catalog default scale (0.2..2.5). */
 	figureScale: number;
 	/** Yaw rate for the figure (0 = static, ~0.35 = catalog default). */

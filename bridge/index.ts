@@ -55,6 +55,7 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "../shared/control-state-schema.ts";
+import { normalizeRemoteModelAssetPath } from "../shared/model-asset-path.ts";
 import { MAX_FIGURE_MODEL_INDEX } from "../shared/model-catalog.ts";
 import {
 	DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
@@ -171,6 +172,7 @@ type ControlState = {
 	layerWeight6: number;
 	layerWeight7: number;
 	figureModel: number;
+	figureAssetPath: string;
 	figureScale: number;
 	figureSpin: number;
 	figureHalo: number;
@@ -426,6 +428,7 @@ const defaultControlState = (): ControlState => ({
 	layerWeight6: 0,
 	layerWeight7: 0,
 	figureModel: 0,
+	figureAssetPath: "",
 	figureScale: 1,
 	figureSpin: 0.35,
 	figureHalo: 0.75,
@@ -748,6 +751,10 @@ const coerceControlState = (state: unknown): ControlState => {
 			0,
 			MAX_FIGURE_MODEL_INDEX,
 			defaults.figureModel,
+		),
+		figureAssetPath: normalizeRemoteModelAssetPath(
+			source.figureAssetPath,
+			latestControlState?.figureAssetPath ?? defaults.figureAssetPath,
 		),
 		figureScale: clamp(source.figureScale, 0.2, 2.5, defaults.figureScale),
 		figureSpin: clamp(source.figureSpin, 0, 2, defaults.figureSpin),

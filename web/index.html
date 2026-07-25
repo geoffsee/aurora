@@ -125,6 +125,7 @@
         deckBGpuShader: 36,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
         figureModel: 0,
+        figureAssetPath: "",
         figureScale: 1,
         figureSpin: 0.35,
         figureHalo: 0.75,
@@ -155,6 +156,26 @@
         return value; // linear
       };
       const VALID_CURVES = new Set(["linear", "exponential", "logarithmic"]);
+      const normalizeRemoteModelAssetPath = (value, fallback = "") => {
+        if (typeof value !== "string") return fallback;
+        const path = value.trim();
+        if (!path) return "";
+        if (path.length > 2048) return fallback;
+        try {
+          const url = new URL(path);
+          const pathname = url.pathname.toLowerCase();
+          if (
+            !["http:", "https:"].includes(url.protocol)
+            || url.username
+            || url.password
+            || url.hash
+            || (!pathname.endsWith(".glb") && !pathname.endsWith(".gltf"))
+          ) return fallback;
+          return path;
+        } catch {
+          return fallback;
+        }
+      };
 
       function trackDataValueStart(args) {
         const fieldIndex = args.findIndex(
@@ -380,6 +401,10 @@
         controlState.cueDeckBGpuShader = clampInt(next.cueDeckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.cueDeckBGpuShader);
         controlState.activeShader = clampInt(next.activeShader, 0, MAX_GPU_SHADER_INDEX, controlState.activeShader);
         controlState.figureModel = clampInt(next.figureModel, 0, 31, controlState.figureModel);
+        controlState.figureAssetPath = normalizeRemoteModelAssetPath(
+          next.figureAssetPath,
+          controlState.figureAssetPath,
+        );
         controlState.figureScale = next.figureScale === undefined
           ? controlState.figureScale
           : Math.max(0.2, Math.min(2.5, Number(next.figureScale) || controlState.figureScale));
@@ -549,6 +574,7 @@
       window.__auroraControlDeckBGpuShader = () => controlState.deckBGpuShader;
       window.__auroraControlActiveShader = () => controlState.activeShader;
       window.__auroraControlFigureModel = () => controlState.figureModel;
+      window.__auroraControlFigureAssetPath = () => controlState.figureAssetPath;
       window.__auroraControlFigureScale = () => controlState.figureScale;
       window.__auroraControlFigureSpin = () => controlState.figureSpin;
       window.__auroraControlFigureHalo = () => controlState.figureHalo;

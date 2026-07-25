@@ -13,9 +13,9 @@ use bevy::{
     winit::WinitSettings,
 };
 use model_layer::{
+    ActiveModelAssetPath, ActiveModelDrive, ModelDrive, ModelInstance, StageHaloSection,
     apply_model_instance, apply_stage_halo_section, ensure_selected_model_loaded,
-    handle_gltf_load_failures, resolve_pending_gltf_models, setup_model_layer, ActiveModelDrive,
-    ModelDrive, ModelInstance, StageHaloSection,
+    handle_gltf_load_failures, resolve_pending_gltf_models, setup_model_layer,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -127,6 +127,8 @@ unsafe extern "C" {
     fn browser_control_beat_sync() -> bool;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureModel)]
     fn browser_control_figure_model() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureAssetPath)]
+    fn browser_control_figure_asset_path() -> String;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureScale)]
     fn browser_control_figure_scale() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureSpin)]
@@ -304,6 +306,7 @@ fn main() {
         .insert_resource(WinitSettings::continuous())
         .insert_resource(VjState::default())
         .insert_resource(ActiveModelDrive::default())
+        .insert_resource(ActiveModelAssetPath::default())
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
@@ -402,6 +405,8 @@ struct VjState {
     beat_sync: bool,
     /// Catalog index for the active Figure mesh (`MODEL_CATALOG`).
     figure_model: i32,
+    /// Optional remote HTTP(S) glTF/GLB URL; empty uses the catalog.
+    figure_asset_path: String,
     figure_scale: f32,
     figure_spin: f32,
     figure_halo: f32,
@@ -461,6 +466,7 @@ impl Default for VjState {
             active_shader: DEFAULT_DECK_A_GPU_SHADER,
             beat_sync: true,
             figure_model: 0,
+            figure_asset_path: String::new(),
             figure_scale: 1.0,
             figure_spin: 0.35,
             figure_halo: 0.75,
@@ -821,8 +827,13 @@ fn model_drive_from_state(state: &VjState) -> ModelDrive {
 }
 
 /// Publish VJ control state into the model layer before lazy-load / apply systems.
-fn sync_model_drive(state: Res<VjState>, mut drive: ResMut<ActiveModelDrive>) {
+fn sync_model_drive(
+    state: Res<VjState>,
+    mut drive: ResMut<ActiveModelDrive>,
+    mut asset_path: ResMut<ActiveModelAssetPath>,
+) {
     drive.0 = model_drive_from_state(&state);
+    asset_path.0.clone_from(&state.figure_asset_path);
 }
 
 /// Drive glTF model instances + the invisible sectional stage-halo lights.
@@ -979,6 +990,7 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.active_shader = browser_control_active_shader().min(MAX_GPU_SHADER_INDEX);
         state.beat_sync = browser_control_beat_sync();
         state.figure_model = browser_control_figure_model().round() as i32;
+        state.figure_asset_path = browser_control_figure_asset_path();
         state.figure_scale = browser_control_figure_scale().clamp(0.2, 2.5);
         state.figure_spin = browser_control_figure_spin().clamp(0.0, 2.0);
         state.figure_halo = browser_control_figure_halo().clamp(0.0, 1.0);

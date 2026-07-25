@@ -5,10 +5,11 @@
 //! - `shared/model-catalog.ts` (TS tests / future UI)
 //! - `MODEL_CATALOG` here (runtime Bevy spawn + update)
 //!
-//! Pattern: each catalog entry gets a `ModelInstance` root at startup, but the
-//! glTF is **lazy-loaded only for the UI-selected index** (and only when Figure
-//! mode is live). That keeps GitHub Pages light: web visitors only fetch the
-//! ~0.5 MB default humanoid, not every local-only multi‑MB pack. When the
+//! Pattern: each catalog entry gets a `ModelInstance` root at startup, but glTF
+//! is **lazy-loaded only for the UI-selected index** (and only when Figure mode
+//! is live). An optional controls-supplied HTTP(S) path overrides the selected
+//! root's catalog asset. That keeps GitHub Pages light: web visitors only fetch
+//! the ~0.5 MB default humanoid, not every local-only multi‑MB pack. When the
 //! asset is ready, mesh primitives are spawned as children (not `SceneRoot` —
 //! scene spawn needs Reflect type registration that is easy to miss under
 //! `default-features = false` / WASM). Missing assets (local-only on Pages)
@@ -281,6 +282,10 @@ pub(crate) struct PendingGltfModel {
 #[derive(Component)]
 pub(crate) struct ModelLoadFailed;
 
+/// Path currently loaded, pending, or failed on a model root.
+#[derive(Component, Debug)]
+pub(crate) struct ModelAssetPath(String);
+
 /// One section of the invisible overhead stage-light halo.
 ///
 /// Lights are pure `SpotLight` entities (no mesh), aimed at the figure. Intensity
@@ -374,6 +379,10 @@ impl ModelDrive {
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct ActiveModelDrive(pub ModelDrive);
 
+/// Optional remote glTF/GLB URL supplied by the controls console.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct ActiveModelAssetPath(pub String);
+
 /// Spawn one pending root per catalog entry plus a dim base rig and stage halo.
 pub fn setup_model_layer(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
     // Dim cool fill — previous ambient (120) + cinema point blew out PBR albedos.
@@ -446,6 +455,7 @@ type ModelLoadQuery<'w, 's> = Query<
         &'static ModelInstance,
         Option<&'static PendingGltfModel>,
         Option<&'static ModelLoadFailed>,
+        Option<&'static ModelAssetPath>,
         Option<&'static Children>,
     ),
 >;
@@ -458,6 +468,7 @@ pub fn ensure_selected_model_loaded(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     drive: Res<ActiveModelDrive>,
+    remote_path: Res<ActiveModelAssetPath>,
     query: ModelLoadQuery,
 ) {
     let drive = drive.0;
@@ -473,21 +484,37 @@ pub fn ensure_selected_model_loaded(
         .figure_model
         .clamp(0, MODEL_CATALOG.len().saturating_sub(1) as i32) as usize;
 
-    for (entity, instance, pending, failed, children) in &query {
+    for (entity, instance, pending, failed, loaded_path, children) in &query {
         if instance.catalog_index != selected {
-            continue;
-        }
-        if pending.is_some() || failed.is_some() {
-            continue;
-        }
-        if children.is_some_and(|c| !c.is_empty()) {
             continue;
         }
         let Some(def) = MODEL_CATALOG.get(selected) else {
             continue;
         };
-        let handle: Handle<Gltf> = asset_server.load(def.asset_path);
-        commands.entity(entity).insert(PendingGltfModel { handle });
+        let desired_path = if remote_path.0.is_empty() {
+            def.asset_path
+        } else {
+            remote_path.0.as_str()
+        };
+        let path_changed = loaded_path.is_some_and(|path| path.0 != desired_path);
+
+        if !path_changed
+            && (pending.is_some() || failed.is_some() || children.is_some_and(|c| !c.is_empty()))
+        {
+            continue;
+        }
+
+        let handle: Handle<Gltf> = asset_server.load(desired_path.to_owned());
+        let mut root = commands.entity(entity);
+        if path_changed {
+            root.despawn_children()
+                .remove::<PendingGltfModel>()
+                .remove::<ModelLoadFailed>();
+        }
+        root.insert((
+            PendingGltfModel { handle },
+            ModelAssetPath(desired_path.to_owned()),
+        ));
     }
 }
 

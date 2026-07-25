@@ -95,7 +95,7 @@ export const migrateControlState = (state: unknown): unknown => {
 	}
 	// v10 → v11: mesh Figure mode controls (catalog pick + stage/motion knobs).
 	if (s.schemaVersion === 10) {
-		return {
+		return migrateControlState({
 			...s,
 			schemaVersion: 11,
 			figureModel: typeof s.figureModel === "number" ? s.figureModel : 0,
@@ -103,6 +103,15 @@ export const migrateControlState = (state: unknown): unknown => {
 			figureSpin: typeof s.figureSpin === "number" ? s.figureSpin : 0.35,
 			figureHalo: typeof s.figureHalo === "number" ? s.figureHalo : 0.75,
 			figureAudio: typeof s.figureAudio === "number" ? s.figureAudio : 1,
+		});
+	}
+	// v11 → v12: optional remote glTF/GLB URL for the Figure layer.
+	if (s.schemaVersion === 11) {
+		return {
+			...s,
+			schemaVersion: 12,
+			figureAssetPath:
+				typeof s.figureAssetPath === "string" ? s.figureAssetPath : "",
 		};
 	}
 	return state;

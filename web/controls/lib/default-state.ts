@@ -89,6 +89,7 @@ export function defaultState(): ControlState {
 		layerWeight6: 0,
 		layerWeight7: 0,
 		figureModel: 0,
+		figureAssetPath: "",
 		figureScale: 1,
 		figureSpin: 0.35,
 		figureHalo: 0.75,

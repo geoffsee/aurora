@@ -47,7 +47,9 @@ export const VST_OSC_CONTRACT = contract;
 // v9: added outputs field (multi-output routing for multi-projector venues)
 // v10: added layerWeight0..7 fields (per-layer composite weights, mirrored from
 //      the live layer stack so per-layer opacity is an automation/OSC/MIDI target)
-export const CONTROL_STATE_SCHEMA_VERSION = 11;
+// v11: added Figure model catalog and motion/halo controls
+// v12: added figureAssetPath for optional remote glTF/GLB loading
+export const CONTROL_STATE_SCHEMA_VERSION = 12;
 
 export type AudioCurveShape = "linear" | "exponential" | "logarithmic";
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
