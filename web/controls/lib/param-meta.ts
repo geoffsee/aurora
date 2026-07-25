@@ -1,3 +1,4 @@
+import { MAX_FIGURE_MODEL_INDEX, MODEL_CATALOG } from "../../../shared/model-catalog.ts";
 import { hueToRgb } from "./palette.ts";
 import { VISUAL_MODES } from "./constants.ts";
 import type { ControlState } from "./types.ts";
@@ -30,7 +31,12 @@ export type MappableParam =
 	| "layerWeight4"
 	| "layerWeight5"
 	| "layerWeight6"
-	| "layerWeight7";
+	| "layerWeight7"
+	| "figureModel"
+	| "figureScale"
+	| "figureSpin"
+	| "figureHalo"
+	| "figureAudio";
 
 export type ParamMeta = {
 	key: MappableParam;
@@ -90,6 +96,48 @@ export const PARAM_META: Record<MappableParam, ParamMeta> = {
 	layerWeight5: { key: "layerWeight5", label: "Layer 6 Opacity", min: 0, max: 1, step: 0.01, format: pct },
 	layerWeight6: { key: "layerWeight6", label: "Layer 7 Opacity", min: 0, max: 1, step: 0.01, format: pct },
 	layerWeight7: { key: "layerWeight7", label: "Layer 8 Opacity", min: 0, max: 1, step: 0.01, format: pct },
+	figureModel: {
+		key: "figureModel",
+		label: "Figure Model",
+		min: 0,
+		max: MAX_FIGURE_MODEL_INDEX,
+		step: 1,
+		integer: true,
+		format: (v) =>
+			MODEL_CATALOG[Math.round(v)]?.label ?? String(Math.round(v)),
+	},
+	figureScale: {
+		key: "figureScale",
+		label: "Figure Scale",
+		min: 0.2,
+		max: 2.5,
+		step: 0.01,
+		format: f2,
+	},
+	figureSpin: {
+		key: "figureSpin",
+		label: "Figure Spin",
+		min: 0,
+		max: 2,
+		step: 0.01,
+		format: f2,
+	},
+	figureHalo: {
+		key: "figureHalo",
+		label: "Figure Halo",
+		min: 0,
+		max: 1,
+		step: 0.01,
+		format: pct,
+	},
+	figureAudio: {
+		key: "figureAudio",
+		label: "Figure Audio",
+		min: 0,
+		max: 1,
+		step: 0.01,
+		format: pct,
+	},
 };
 
 export const MAPPABLE_PARAMS = Object.keys(PARAM_META) as MappableParam[];

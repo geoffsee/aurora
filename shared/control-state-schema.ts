@@ -91,7 +91,19 @@ export const migrateControlState = (state: unknown): unknown => {
 	if (s.schemaVersion === 9) {
 		const layerWeights: Record<string, number> = {};
 		for (let i = 0; i < 8; i++) layerWeights[`layerWeight${i}`] = 0;
-		return { ...s, schemaVersion: 10, ...layerWeights };
+		return migrateControlState({ ...s, schemaVersion: 10, ...layerWeights });
+	}
+	// v10 → v11: mesh Figure mode controls (catalog pick + stage/motion knobs).
+	if (s.schemaVersion === 10) {
+		return {
+			...s,
+			schemaVersion: 11,
+			figureModel: typeof s.figureModel === "number" ? s.figureModel : 0,
+			figureScale: typeof s.figureScale === "number" ? s.figureScale : 1,
+			figureSpin: typeof s.figureSpin === "number" ? s.figureSpin : 0.35,
+			figureHalo: typeof s.figureHalo === "number" ? s.figureHalo : 0.75,
+			figureAudio: typeof s.figureAudio === "number" ? s.figureAudio : 1,
+		};
 	}
 	return state;
 };

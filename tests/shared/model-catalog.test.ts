@@ -47,3 +47,13 @@ test("every catalog visualMode lands in VISUAL_MODES", () => {
 		expect(VISUAL_MODES[entry.visualMode]).toBeTruthy();
 	}
 });
+
+test("figure mode constants match catalog wiring", async () => {
+	const { FIGURE_VISUAL_MODE, MAX_FIGURE_MODEL_INDEX, modelByIndex } =
+		await import("../../shared/model-catalog.ts");
+	expect(FIGURE_VISUAL_MODE).toBe(24);
+	expect(VISUAL_MODES[FIGURE_VISUAL_MODE]).toBe("Figure");
+	expect(MAX_FIGURE_MODEL_INDEX).toBe(MODEL_CATALOG.length - 1);
+	expect(modelByIndex(0)?.id).toBe("human-female");
+	expect(modelByIndex(99)).toBeUndefined();
+});

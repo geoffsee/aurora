@@ -36,6 +36,12 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
 
 export const MODEL_IDS = MODEL_CATALOG.map((m) => m.id);
 
+/** Deck visual-mode index for mesh models (VISUAL_MODES[24] === "Figure"). */
+export const FIGURE_VISUAL_MODE = 24;
+
+/** Inclusive max for ControlState.figureModel (catalog index). */
+export const MAX_FIGURE_MODEL_INDEX = Math.max(0, MODEL_CATALOG.length - 1);
+
 export function modelById(id: string): ModelCatalogEntry | undefined {
 	return MODEL_CATALOG.find((m) => m.id === id);
 }
@@ -43,4 +49,10 @@ export function modelById(id: string): ModelCatalogEntry | undefined {
 export function modelByVisualMode(mode: number): ModelCatalogEntry | undefined {
 	const rounded = Math.round(mode);
 	return MODEL_CATALOG.find((m) => m.visualMode === rounded);
+}
+
+export function modelByIndex(index: number): ModelCatalogEntry | undefined {
+	const i = Math.round(index);
+	if (i < 0 || i >= MODEL_CATALOG.length) return undefined;
+	return MODEL_CATALOG[i];
 }

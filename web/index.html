@@ -124,6 +124,11 @@
         deckAGpuShader: 1,
         deckBGpuShader: 6,
         bandCurves: { energy: "linear", bass: "linear", mid: "linear", high: "linear" },
+        figureModel: 0,
+        figureScale: 1,
+        figureSpin: 0.35,
+        figureHalo: 0.75,
+        figureAudio: 1,
       };
       const diagnostics = {
         sockets: 0,
@@ -374,6 +379,15 @@
         controlState.cueDeckAGpuShader = clampInt(next.cueDeckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.cueDeckAGpuShader);
         controlState.cueDeckBGpuShader = clampInt(next.cueDeckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.cueDeckBGpuShader);
         controlState.activeShader = clampInt(next.activeShader, 0, MAX_GPU_SHADER_INDEX, controlState.activeShader);
+        controlState.figureModel = clampInt(next.figureModel, 0, 31, controlState.figureModel);
+        controlState.figureScale = next.figureScale === undefined
+          ? controlState.figureScale
+          : Math.max(0.2, Math.min(2.5, Number(next.figureScale) || controlState.figureScale));
+        controlState.figureSpin = next.figureSpin === undefined
+          ? controlState.figureSpin
+          : Math.max(0, Math.min(2, Number(next.figureSpin) || 0));
+        controlState.figureHalo = next.figureHalo === undefined ? controlState.figureHalo : clamp01(next.figureHalo);
+        controlState.figureAudio = next.figureAudio === undefined ? controlState.figureAudio : clamp01(next.figureAudio);
         if (next.bandCurves && typeof next.bandCurves === "object") {
           const bc = next.bandCurves;
           controlState.bandCurves = {
@@ -534,6 +548,11 @@
       window.__auroraControlDeckAGpuShader = () => controlState.deckAGpuShader;
       window.__auroraControlDeckBGpuShader = () => controlState.deckBGpuShader;
       window.__auroraControlActiveShader = () => controlState.activeShader;
+      window.__auroraControlFigureModel = () => controlState.figureModel;
+      window.__auroraControlFigureScale = () => controlState.figureScale;
+      window.__auroraControlFigureSpin = () => controlState.figureSpin;
+      window.__auroraControlFigureHalo = () => controlState.figureHalo;
+      window.__auroraControlFigureAudio = () => controlState.figureAudio;
       window.__auroraTakePendingImportedShader = () => {
         const wgsl = pendingImportedShader;
         pendingImportedShader = null;

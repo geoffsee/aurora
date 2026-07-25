@@ -2,6 +2,7 @@ import { Box, Grid } from "@chakra-ui/react";
 import { StatusHeader } from "./components/StatusHeader.tsx";
 import { CrossfadePanel } from "./components/CrossfadePanel.tsx";
 import { CuesPanel } from "./components/CuesPanel.tsx";
+import { ModelsPanel } from "./components/ModelsPanel.tsx";
 import { SlidersPanel } from "./components/SlidersPanel.tsx";
 import { MasterPanel } from "./components/MasterPanel.tsx";
 import { MappingPanel, AudioCurvesPanel } from "./components/MappingPanel.tsx";
@@ -18,6 +19,7 @@ const gridAreas = `
   "prev prev prev prev prev prev prev prev prev prev prev prev"
   "hero hero hero hero cues cues cues cues cues cues cues cues"
   "slid slid slid slid slid slid slid slid slid slid slid slid"
+  "modl modl modl modl modl modl modl modl modl modl modl modl"
   "mast mast mast mast mast map map map map reh reh reh"
   "audc audc audc audc audc audc audc audc audc audc audc audc"
   "midi midi midi midi midi midi midi midi midi midi midi midi"
@@ -51,6 +53,7 @@ export function App() {
 					<CrossfadePanel />
 					<CuesPanel />
 					<SlidersPanel />
+					<ModelsPanel />
 					<MasterPanel />
 					<MappingPanel />
 					<RehearsalPanel />

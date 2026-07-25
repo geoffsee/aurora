@@ -13,7 +13,8 @@ use bevy::{
     winit::WinitSettings,
 };
 use model_layer::{
-    apply_model_instance, resolve_pending_gltf_models, setup_model_layer, ModelDrive, ModelInstance,
+    apply_model_instance, apply_stage_halo_section, resolve_pending_gltf_models, setup_model_layer,
+    ModelDrive, ModelInstance, StageHaloSection,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -123,6 +124,16 @@ unsafe extern "C" {
     fn browser_control_active_shader() -> u32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlBeatSync)]
     fn browser_control_beat_sync() -> bool;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureModel)]
+    fn browser_control_figure_model() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureScale)]
+    fn browser_control_figure_scale() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureSpin)]
+    fn browser_control_figure_spin() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureHalo)]
+    fn browser_control_figure_halo() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFigureAudio)]
+    fn browser_control_figure_audio() -> f32;
     /// Returns and consumes the pending imported-shader WGSL string, if any.
     /// JS-side global `window.__auroraTakePendingImportedShader()` returns the
     /// WGSL source from the most recent /api/shadertoy/import response, or null.
@@ -381,6 +392,12 @@ struct VjState {
     last_control_cue_version: u32,
     active_shader: u32,
     beat_sync: bool,
+    /// Catalog index for the active Figure mesh (`MODEL_CATALOG`).
+    figure_model: i32,
+    figure_scale: f32,
+    figure_spin: f32,
+    figure_halo: f32,
+    figure_audio: f32,
 }
 
 impl Default for VjState {
@@ -433,6 +450,11 @@ impl Default for VjState {
             last_control_cue_version: 0,
             active_shader: 0,
             beat_sync: true,
+            figure_model: 0,
+            figure_scale: 1.0,
+            figure_spin: 0.35,
+            figure_halo: 0.75,
+            figure_audio: 1.0,
         }
     }
 }
@@ -766,10 +788,11 @@ fn setup(
     // The control surface now lives on port 3001, so the projector output has no HUD.
 }
 
-/// Drive glTF model instances from live deck modes + audio (see `model_layer`).
+/// Drive glTF model instances + the invisible sectional stage-halo lights.
 fn update_model_instances(
     state: Res<VjState>,
-    mut query: Query<(&ModelInstance, &mut Transform, &mut Visibility)>,
+    mut models: Query<(&ModelInstance, &mut Transform, &mut Visibility)>,
+    mut halo: Query<(&StageHaloSection, &mut SpotLight)>,
 ) {
     let drive = ModelDrive {
         show_time: state.show_time,
@@ -784,9 +807,17 @@ fn update_model_instances(
         high: state.osc_high,
         energy: state.osc_energy,
         pulse: state.osc_pulse,
+        figure_model: state.figure_model,
+        figure_scale: state.figure_scale,
+        figure_spin: state.figure_spin,
+        figure_halo: state.figure_halo,
+        figure_audio: state.figure_audio,
     };
-    for (instance, mut transform, mut visibility) in &mut query {
+    for (instance, mut transform, mut visibility) in &mut models {
         apply_model_instance(drive, instance, &mut transform, &mut visibility);
+    }
+    for (section, mut light) in &mut halo {
+        apply_stage_halo_section(drive, section, &mut light);
     }
 }
 
@@ -928,6 +959,11 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.grid_shape_mix = browser_control_grid_shape_mix().clamp(0.0, 1.0);
         state.active_shader = browser_control_active_shader().min(MAX_GPU_SHADER_INDEX);
         state.beat_sync = browser_control_beat_sync();
+        state.figure_model = browser_control_figure_model().round() as i32;
+        state.figure_scale = browser_control_figure_scale().clamp(0.2, 2.5);
+        state.figure_spin = browser_control_figure_spin().clamp(0.0, 2.0);
+        state.figure_halo = browser_control_figure_halo().clamp(0.0, 1.0);
+        state.figure_audio = browser_control_figure_audio().clamp(0.0, 1.0);
         state.deck_a_mode = VisualMode::from_control(browser_control_deck_a_mode());
         state.deck_b_mode = VisualMode::from_control(browser_control_deck_b_mode());
         state.deck_a_gpu_shader = browser_control_deck_a_gpu_shader().min(MAX_GPU_SHADER_INDEX);

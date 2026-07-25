@@ -113,6 +113,15 @@ export const MIDI_CC_PARAM_LABELS: Record<string, string> = {
 	layerWeight5: "Layer 6 Opacity",
 	layerWeight6: "Layer 7 Opacity",
 	layerWeight7: "Layer 8 Opacity",
+	figureModel: "Figure Model",
+	figureScale: "Figure Scale",
+	figureSpin: "Figure Spin",
+	figureHalo: "Figure Halo",
+	figureAudio: "Figure Audio",
 };
 
-export const MIDI_CC_INTEGER_PARAMS = new Set(["deckAMode", "deckBMode"]);
+export const MIDI_CC_INTEGER_PARAMS = new Set([
+	"deckAMode",
+	"deckBMode",
+	"figureModel",
+]);

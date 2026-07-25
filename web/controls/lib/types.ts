@@ -81,6 +81,16 @@ export type ControlState = {
 	layerWeight5: number;
 	layerWeight6: number;
 	layerWeight7: number;
+	/** Catalog index into MODEL_CATALOG (0 = first entry). */
+	figureModel: number;
+	/** Multiplier on the catalog default scale (0.2..2.5). */
+	figureScale: number;
+	/** Yaw rate for the figure (0 = static, ~0.35 = catalog default). */
+	figureSpin: number;
+	/** Stage-halo intensity (0 = off, 1 = full). */
+	figureHalo: number;
+	/** How much audio drives figure motion + halo sections (0..1). */
+	figureAudio: number;
 };
 
 export type OscMeters = {

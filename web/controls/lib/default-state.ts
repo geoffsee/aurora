@@ -82,6 +82,11 @@ export function defaultState(): ControlState {
 		layerWeight5: 0,
 		layerWeight6: 0,
 		layerWeight7: 0,
+		figureModel: 0,
+		figureScale: 1,
+		figureSpin: 0.35,
+		figureHalo: 0.75,
+		figureAudio: 1,
 	};
 }
 

@@ -55,6 +55,7 @@ import {
 	stepAudioEma,
 } from "./audio-ema.ts";
 import { migrateControlState } from "../shared/control-state-schema.ts";
+import { MAX_FIGURE_MODEL_INDEX } from "../shared/model-catalog.ts";
 import {
 	MAX_SHADER_INDEX,
 	type OutputRoute,
@@ -165,6 +166,11 @@ type ControlState = {
 	layerWeight5: number;
 	layerWeight6: number;
 	layerWeight7: number;
+	figureModel: number;
+	figureScale: number;
+	figureSpin: number;
+	figureHalo: number;
+	figureAudio: number;
 };
 
 const require = createRequire(import.meta.url);
@@ -414,6 +420,11 @@ const defaultControlState = (): ControlState => ({
 	layerWeight5: 0,
 	layerWeight6: 0,
 	layerWeight7: 0,
+	figureModel: 0,
+	figureScale: 1,
+	figureSpin: 0.35,
+	figureHalo: 0.75,
+	figureAudio: 1,
 });
 const cuePresets: Record<string, Partial<ControlState>> = {
 	warmup: {
@@ -727,6 +738,16 @@ const coerceControlState = (state: unknown): ControlState => {
 			1,
 			latestControlState?.layerWeight7 ?? 0,
 		),
+		figureModel: clampInt(
+			source.figureModel,
+			0,
+			MAX_FIGURE_MODEL_INDEX,
+			defaults.figureModel,
+		),
+		figureScale: clamp(source.figureScale, 0.2, 2.5, defaults.figureScale),
+		figureSpin: clamp(source.figureSpin, 0, 2, defaults.figureSpin),
+		figureHalo: clamp(source.figureHalo, 0, 1, defaults.figureHalo),
+		figureAudio: clamp(source.figureAudio, 0, 1, defaults.figureAudio),
 	};
 };
 
