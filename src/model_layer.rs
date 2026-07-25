@@ -430,8 +430,10 @@ mod tests {
             deck_b_mode: 0,
             ..default()
         };
+        // Deck A owns mode 24 at (1 - crossfade); Deck B owns mode 0 at crossfade.
         assert!((drive.weight_for_mode(24) - 0.75).abs() < 1e-4);
-        assert_eq!(drive.weight_for_mode(0), 0.0);
+        assert!((drive.weight_for_mode(0) - 0.25).abs() < 1e-4);
+        assert_eq!(drive.weight_for_mode(1), 0.0);
 
         drive.deck_b_mode = 24;
         assert!((drive.weight_for_mode(24) - 1.0).abs() < 1e-4);
