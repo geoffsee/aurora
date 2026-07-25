@@ -264,7 +264,10 @@ const AUDIO_GATE_START: f32 = 0.001;
 const AUDIO_GATE_END: f32 = 0.025;
 const PULSE_ATTACK_SPEED: f32 = 24.0;
 const PULSE_RELEASE_SPEED: f32 = 7.0;
-const MAX_GPU_SHADER_INDEX: u32 = 35;
+const MAX_GPU_SHADER_INDEX: u32 = 36;
+/// Default dual-deck borealis pair (matches SHADER_OPTIONS / gpu-shader-routing).
+const DEFAULT_DECK_A_GPU_SHADER: u32 = 26;
+const DEFAULT_DECK_B_GPU_SHADER: u32 = 36;
 /// UI picker index for the Shadertoy imported slot (prepended to SHADER_OPTIONS).
 const GPU_SHADER_IMPORTED_UI_INDEX: u32 = 0;
 /// UI picker index for the grid material slot.
@@ -409,28 +412,30 @@ impl Default for VjState {
             intensity: 0.82,
             feedback: 0.35,
             depth: 0.0,
-            palette: 0.0,
-            palette_r: 61.0 / 255.0,
-            palette_g: 90.0 / 255.0,
-            palette_b: 128.0 / 255.0,
-            palette_saturation: 1.0,
-            palette_brightness: 1.0,
+            // Cool aurora-green base; crown shader adds magenta tips on Deck B.
+            palette: 0.38,
+            palette_r: 0.12,
+            palette_g: 0.72,
+            palette_b: 0.42,
+            palette_saturation: 0.88,
+            palette_brightness: 0.92,
             grid_density: 0.5,
             grid_diamond: 0.5,
             grid_line_width: 0.5,
             grid_shape_mix: 0.5,
             deck_a_mode: VisualMode::Beams,
             deck_b_mode: VisualMode::Tunnel,
-            deck_a_gpu_shader: 1,
-            deck_b_gpu_shader: 6,
-            rings_enabled: true,
-            ring_opacity: 1.0,
+            deck_a_gpu_shader: DEFAULT_DECK_A_GPU_SHADER,
+            deck_b_gpu_shader: DEFAULT_DECK_B_GPU_SHADER,
+            rings_enabled: false,
+            ring_opacity: 0.35,
             strobe: false,
             strobe_lockout: false,
             blackout: false,
             freeze: false,
-            show_gpu_palette: false,
-            max_brightness: 0.9,
+            // Dual GPU decks on by default: Aurora Curtains × Aurora Crown.
+            show_gpu_palette: true,
+            max_brightness: 0.95,
             show_time: 0.0,
             flash: 0.0,
             cue_boost: 0.0,
@@ -448,7 +453,7 @@ impl Default for VjState {
             last_control_flash_version: 0,
             last_control_reset_version: 0,
             last_control_cue_version: 0,
-            active_shader: 0,
+            active_shader: DEFAULT_DECK_A_GPU_SHADER,
             beat_sync: true,
             figure_model: 0,
             figure_scale: 1.0,
@@ -1206,9 +1211,15 @@ fn update_visuals(
     } else {
         0.0
     };
-    let gpu_shader_solo =
-        !state.show_gpu_palette && state.active_shader == GPU_SHADER_TOPO_LINES_UI_INDEX;
-    let blackout = if state.blackout || gpu_shader_solo { 0.0 } else { 1.0 };
+    // Dual GPU deck mode (and Topo solo) owns the frame — hide CPU geometry so
+    // it doesn't stack on top of fullscreen aurora / shader layers.
+    let gpu_shader_solo = state.show_gpu_palette
+        || (!state.show_gpu_palette && state.active_shader == GPU_SHADER_TOPO_LINES_UI_INDEX);
+    let blackout = if state.blackout || gpu_shader_solo {
+        0.0
+    } else {
+        1.0
+    };
 
     for (element, mut transform, material_handle) in &mut query {
         let deck_alpha = match element.deck {

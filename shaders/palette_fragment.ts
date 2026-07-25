@@ -36,6 +36,7 @@ import {
   gummy_wire_bearVariant,
   fierce_walking_wolfVariant,
   spectral_ghostVariant,
+  aurora_crownVariant,
 } from './variants/index.ts';
 
 export const paletteFragment = tgpu.fn([BevyVertexOutput], vec4f)((frag) => {
@@ -180,6 +181,10 @@ export const paletteFragment = tgpu.fn([BevyVertexOutput], vec4f)((frag) => {
   }
   if (v === 35.0) {
     const c = spectral_ghostVariant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4f(c.x, c.y, c.z, c.w * layer_alpha);
+  }
+  if (v === 36.0) {
+    const c = aurora_crownVariant(uv, time, hue, pulse, energy, bass, mid, high);
     return vec4f(c.x, c.y, c.z, c.w * layer_alpha);
   }
 

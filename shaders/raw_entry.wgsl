@@ -142,6 +142,10 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
     let c = spectral_ghost_variant(uv, time, hue, pulse, energy, bass, mid, high);
     return vec4<f32>(c.xyz, c.w * layer_alpha);
   }
+  if (v == 36) {
+    let c = aurora_crown_variant(uv, time, hue, pulse, energy, bass, mid, high);
+    return vec4<f32>(c.xyz, c.w * layer_alpha);
+  }
 
   let c = geometry_field(uv, time, hue, params.z, pulse, energy, bass, mid, high);
   return vec4<f32>(c.xyz, c.w * layer_alpha);

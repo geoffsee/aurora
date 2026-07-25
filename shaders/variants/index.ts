@@ -29,6 +29,7 @@ import { glass_ribbonsVariant } from './32_glass_ribbons.ts';
 import { gummy_wire_bearVariant } from './33_gummy_wire_bear.ts';
 import { fierce_walking_wolfVariant } from './34_fierce_walking_wolf.ts';
 import { spectral_ghostVariant } from './35_spectral_ghost.ts';
+import { aurora_crownVariant } from './36_aurora_crown.ts';
 
 /** All palette variant fns in shader-index order. */
 export const paletteVariantFns = [
@@ -63,6 +64,7 @@ export const paletteVariantFns = [
   gummy_wire_bearVariant,
   fierce_walking_wolfVariant,
   spectral_ghostVariant,
+  aurora_crownVariant,
 ] as const;
 
 export {
@@ -97,4 +99,5 @@ export {
   gummy_wire_bearVariant,
   fierce_walking_wolfVariant,
   spectral_ghostVariant,
+  aurora_crownVariant,
 };

@@ -316,24 +316,26 @@ pub fn apply_model_instance(
     let spin = drive.figure_spin.clamp(0.0, 2.0);
     let scale_mul = drive.figure_scale.clamp(0.2, 2.5);
 
-    let yaw = t * spin * (0.55 + intensity * 0.55 + mid * 0.35);
-    let bob = (t * 1.4 + bass * 2.0).sin() * (0.04 + bass * 0.08);
+    // Yaw is intentional spin from the UI; everything else is audio-only so the
+    // figure does not idle-bob or drift when the room is quiet.
+    let yaw = t * spin * (0.55 + intensity * 0.35 + mid * 0.25);
+    let bob = (t * 1.4).sin() * bass * 0.12;
     let scale = instance.base_scale
         * scale_mul
-        * (0.92 + intensity * 0.12 + bass * 0.14 + pulse * 0.08)
-        * (0.85 + weight * 0.15);
+        * (0.96 + intensity * 0.06 + bass * 0.1 + pulse * 0.06)
+        * (0.9 + weight * 0.1);
 
     transform.translation = instance.offset
         + Vec3::new(
-            (t * 0.7 + high).sin() * high * 0.08,
+            (t * 0.7).sin() * high * 0.06,
             bob,
-            (energy - 0.5) * 0.15,
+            energy * 0.08,
         );
     let audio_rot = Quat::from_euler(
         EulerRot::YXZ,
         yaw,
-        (mid - 0.5) * 0.12,
-        (high - 0.5) * 0.08 * pulse,
+        mid * 0.08,
+        high * 0.05 * pulse,
     );
     transform.rotation = audio_rot * instance.base_rotation;
     transform.scale = Vec3::splat(scale.max(0.05));

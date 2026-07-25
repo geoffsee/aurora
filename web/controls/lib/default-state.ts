@@ -2,6 +2,11 @@ import { CONTROL_STATE_SCHEMA_VERSION } from "../../../shared/osc-validation.ts"
 import { DEFAULT_PALETTE_RGB } from "../../../shared/palette-color.ts";
 import type { ControlState } from "./types.ts";
 
+import {
+	DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
+	DEFAULT_DECK_B_GPU_SHADER_UI_INDEX,
+} from "../../../shared/gpu-shader-routing.ts";
+
 export function defaultState(): ControlState {
 	return {
 		schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
@@ -9,28 +14,29 @@ export function defaultState(): ControlState {
 		bpm: 124,
 		speed: 1,
 		intensity: 0.82,
-		feedback: 0.35,
+		feedback: 0.22,
 		depth: 0,
-		palette: 0,
+		palette: 0.38,
 		paletteR: DEFAULT_PALETTE_RGB.r,
 		paletteG: DEFAULT_PALETTE_RGB.g,
 		paletteB: DEFAULT_PALETTE_RGB.b,
-		paletteSaturation: 1,
-		paletteBrightness: 1,
+		paletteSaturation: 0.88,
+		paletteBrightness: 0.92,
 		gridDensity: 0.5,
 		gridDiamond: 0.5,
 		gridLineWidth: 0.5,
 		gridShapeMix: 0.5,
 		deckAMode: 0,
 		deckBMode: 1,
-		rings: true,
-		ringOpacity: 1,
+		rings: false,
+		ringOpacity: 0.35,
 		strobe: false,
 		strobeLockout: false,
 		blackout: false,
 		freeze: false,
-		maxBrightness: 0.9,
-		showGpuPalette: false,
+		maxBrightness: 0.95,
+		// Dual GPU borealis: Aurora Curtains (A) × Aurora Crown (B).
+		showGpuPalette: true,
 		beatSync: true,
 		barSync: false,
 		demoMode: false,
@@ -43,8 +49,8 @@ export function defaultState(): ControlState {
 		cueCrossfade: 0.5,
 		cueDeckAMode: 0,
 		cueDeckBMode: 1,
-		cueDeckAGpuShader: 1,
-		cueDeckBGpuShader: 6,
+		cueDeckAGpuShader: DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
+		cueDeckBGpuShader: DEFAULT_DECK_B_GPU_SHADER_UI_INDEX,
 		trackMapping: {
 			deckAStart: 0,
 			deckACount: 8,
@@ -54,9 +60,9 @@ export function defaultState(): ControlState {
 			midTrack: 1,
 			highTrack: 2,
 		},
-		activeShader: 0,
-		deckAGpuShader: 1,
-		deckBGpuShader: 6,
+		activeShader: DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
+		deckAGpuShader: DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
+		deckBGpuShader: DEFAULT_DECK_B_GPU_SHADER_UI_INDEX,
 		bandCurves: {
 			energy: "linear",
 			bass: "linear",

@@ -13,11 +13,17 @@ export const GPU_SHADER_GRID_UI_INDEX = 5;
 /** UI picker index for Topo Lines (solo GPU path hides CPU geometry). */
 export const GPU_SHADER_TOPO_LINES_UI_INDEX = 31;
 
-/** Default deck-A shader: Ring (palette variant 0). */
-export const DEFAULT_DECK_A_GPU_SHADER_UI_INDEX = 1;
+/** Default deck-A shader: Aurora Curtains (vertical sheets). */
+export const DEFAULT_DECK_A_GPU_SHADER_UI_INDEX = 26;
 
-/** Default deck-B shader: Tunnel (palette variant 5). */
-export const DEFAULT_DECK_B_GPU_SHADER_UI_INDEX = 6;
+/** Default deck-B shader: Aurora Crown (arched ribbons; complements curtains). */
+export const DEFAULT_DECK_B_GPU_SHADER_UI_INDEX = 36;
+
+/** UI index for Aurora Curtains (alias of default A). */
+export const GPU_SHADER_AURORA_CURTAINS_UI_INDEX = 26;
+
+/** UI index for Aurora Crown (alias of default B). */
+export const GPU_SHADER_AURORA_CROWN_UI_INDEX = 36;
 
 /** Map control-state picker index → palette shader `params.z` variant id. */
 export function paletteVariantFromUiIndex(ui: number): number {

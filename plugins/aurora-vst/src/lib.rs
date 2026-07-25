@@ -4,7 +4,7 @@ use nih_plug::prelude::*;
 use rosc::{encoder, OscMessage, OscPacket, OscType};
 
 const DEFAULT_TARGET: &str = "127.0.0.1:12000";
-const MAX_GPU_SHADER_INDEX: i32 = 35;
+const MAX_GPU_SHADER_INDEX: i32 = 36;
 struct AuroraVst {
     params: Arc<AuroraParams>,
     sender: OscSender,
@@ -171,12 +171,12 @@ impl Default for AuroraParams {
             beat_sync: BoolParam::new("Beat Sync", true),
             bar_sync: BoolParam::new("Bar Sync", false),
             demo_mode: BoolParam::new("Demo Mode", false),
-            show_gpu_palette: BoolParam::new("Show GPU Palette", false),
-            active_shader: IntParam::new("Active Shader", 0, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
-            deck_a_gpu_shader: IntParam::new("Deck A GPU Shader", 1, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
-            deck_b_gpu_shader: IntParam::new("Deck B GPU Shader", 6, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
-            palette_saturation: float_param("Palette Saturation", 1.0, 0.0, 1.0),
-            palette_brightness: float_param("Palette Brightness", 1.0, 0.0, 1.0),
+            show_gpu_palette: BoolParam::new("Show GPU Palette", true),
+            active_shader: IntParam::new("Active Shader", 26, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
+            deck_a_gpu_shader: IntParam::new("Deck A GPU Shader", 26, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
+            deck_b_gpu_shader: IntParam::new("Deck B GPU Shader", 36, IntRange::Linear { min: 0, max: MAX_GPU_SHADER_INDEX }),
+            palette_saturation: float_param("Palette Saturation", 0.88, 0.0, 1.0),
+            palette_brightness: float_param("Palette Brightness", 0.92, 0.0, 1.0),
             grid_density: float_param("Grid Density", 0.5, 0.0, 1.0),
             grid_diamond: float_param("Grid Diamond", 0.5, 0.0, 1.0),
             grid_line_width: float_param("Grid Line Width", 0.5, 0.0, 1.0),

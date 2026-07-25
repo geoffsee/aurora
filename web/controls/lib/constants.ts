@@ -63,6 +63,7 @@ export const SHADER_OPTIONS = [
 	"Gummy Wire Bear",
 	"Fierce Walking Wolf",
 	"Spectral Ghost",
+	"Aurora Crown",
 ] as const;
 
 export const MAX_GPU_SHADER_INDEX = SHADER_OPTIONS.length - 1;

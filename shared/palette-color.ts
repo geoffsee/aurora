@@ -1,8 +1,8 @@
-/** Default duotone base: steel blue — avoids the old red/yellow hue-slider start. */
+/** Default duotone base: northern-lights green (pairs with Aurora Curtains × Crown). */
 export const DEFAULT_PALETTE_RGB = {
-	r: 61 / 255,
-	g: 90 / 255,
-	b: 128 / 255,
+	r: 0.12,
+	g: 0.72,
+	b: 0.42,
 } as const;
 
 /** Hue (0..1) → RGB with pleasant fixed saturation/lightness for legacy presets/VST. */

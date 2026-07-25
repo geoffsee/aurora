@@ -46,7 +46,7 @@ test("deck mode metadata exposes the full CPU mode range", () => {
 });
 
 test("GPU shader metadata exposes the full shader range", () => {
-	expect(SHADER_OPTIONS).toHaveLength(36);
+	expect(SHADER_OPTIONS).toHaveLength(37);
 	expect(SHADER_OPTIONS.slice(26)).toEqual([
 		"Aurora Curtains",
 		"Bass Monolith",
@@ -58,7 +58,10 @@ test("GPU shader metadata exposes the full shader range", () => {
 		"Gummy Wire Bear",
 		"Fierce Walking Wolf",
 		"Spectral Ghost",
+		"Aurora Crown",
 	]);
+	expect(SHADER_OPTIONS[26]).toBe("Aurora Curtains");
+	expect(SHADER_OPTIONS[36]).toBe("Aurora Crown");
 	expect(MAX_GPU_SHADER_INDEX).toBe(SHADER_OPTIONS.length - 1);
 	expect(MAX_SHADER_INDEX).toBe(SHADER_OPTIONS.length - 1);
 	expect(normalizeOutputRoute({ id: "left", activeShader: 99 })?.activeShader).toBe(
