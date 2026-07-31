@@ -31,15 +31,15 @@
     "format:biome": "biome format --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
     "@types/bun": "latest",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "happy-dom": "^20.9.0",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.0",
-    "ws": "^8",
-    "@biomejs/biome": "^2.5.6",
-    "typescript": "^5.9.3"
+    "ws": "^8"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -55,5 +55,5 @@
     "typegpu": "^0.11.9",
     "unplugin-typegpu": "^0.11.6"
   },
-  "version": "0.1.0"
+  "version": "0.1.1"
 }
