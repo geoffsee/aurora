@@ -23,9 +23,12 @@
     "test:rust": "bash scripts/test-rust.sh",
     "test:web": "vitest run",
     "setup": "bash scripts/setup.sh",
-    "postinstall": "bash .dev/setup-git-hooks.sh",
+    "postinstall": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "typecheck": "tsc --noEmit",
-    "format": "bash scripts/format-code.sh"
+    "format": "bash scripts/format-code.sh",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format:biome": "biome format --write ."
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -34,7 +37,9 @@
     "@types/ws": "^8.18.1",
     "happy-dom": "^20.9.0",
     "vitest": "^4.0.0",
-    "ws": "^8"
+    "ws": "^8",
+    "@biomejs/biome": "^2.5.6",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "typescript": "^5"
