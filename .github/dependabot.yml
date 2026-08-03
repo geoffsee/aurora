@@ -68,6 +68,11 @@ updates:
       - "geoffsee"
     labels:
       - "dependencies"
+    # Private sibling actions are not reachable by Dependabot's updater and
+    # turn the whole github-actions job red even when public Action bumps land.
+    ignore:
+      - dependency-name: "geoffsee/helios-action"
+      - dependency-name: "geoffsee/caretta-autopilot-action"
     groups:
       github-actions:
         patterns:
