@@ -10,8 +10,6 @@ updates:
     open-pull-requests-limit: 10
     assignees:
       - "geoffsee"
-    labels:
-      - "dependencies"
     groups:
       bun-minor-and-patch:
         patterns:
@@ -38,8 +36,6 @@ updates:
     open-pull-requests-limit: 10
     assignees:
       - "geoffsee"
-    labels:
-      - "dependencies"
     groups:
       cargo-minor-and-patch:
         patterns:
@@ -66,8 +62,6 @@ updates:
     open-pull-requests-limit: 5
     assignees:
       - "geoffsee"
-    labels:
-      - "dependencies"
     # Private sibling actions are not reachable by Dependabot's updater and
     # turn the whole github-actions job red even when public Action bumps land.
     ignore:
