@@ -6,6 +6,7 @@
 # Steps:
 #   1. bun install (npm deps + git hooks via postinstall)
 #   2. Verify wasm-bindgen-cli version matches the pinned WASM_BINDGEN_VERSION
+#   3. bun link — registers the `aurora` CLI on PATH (~/.bun/bin)
 
 set -euo pipefail
 
@@ -47,7 +48,14 @@ fi
 ok "wasm-bindgen-cli ${installed} ✓"
 
 # ---------------------------------------------------------------------------
+# Step 3: link the `aurora` CLI onto PATH (~/.bun/bin)
+# ---------------------------------------------------------------------------
+log "bun link (aurora CLI)"
+bun link
+ok "aurora → $(command -v aurora || echo '~/.bun/bin/aurora')"
+
+# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 printf '\n\033[1;32m[setup] Setup complete. You are ready to develop.\033[0m\n'
-printf '\033[1;32m[setup] Try: bun run dev\033[0m\n\n'
+printf '\033[1;32m[setup] Try: aurora\033[0m\n\n'

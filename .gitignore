@@ -10,6 +10,14 @@ target-launcher
 plugins/**/target
 *.tgz
 
+# Compiled aurora CLI + embedded Docker context / native vendor cache
+/aurora
+/aurora.exe
+cli/.embedded/
+cli/.vendor/
+dist-cli/
+.aurora/
+
 # code coverage
 coverage
 *.lcov

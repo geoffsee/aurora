@@ -20,6 +20,7 @@
         isControlBridgeConnected,
         isOscBridgeConnected,
         mountGeoffseePagesNav,
+        webgpuSecureContextError,
       } from "./dist/projector-bridge.js";
 
       mountGeoffseePagesNav();
@@ -606,7 +607,18 @@
 
       connectBridgeTransport();
 
-      try {
+      const secureErr = webgpuSecureContextError({
+        isSecureContext: window.isSecureContext,
+        hostname: location.hostname,
+      });
+      if (secureErr) {
+        console.error(secureErr);
+        sendErrorToControls(secureErr);
+        if (boot) {
+          boot.textContent = secureErr;
+          boot.classList.add("error");
+        }
+      } else try {
         const { default: init } = await import("./dist/pkg/aurora.js");
         await init();
         boot?.remove();
@@ -616,7 +628,7 @@
         sendErrorToControls(`WASM init failed: ${msg}`);
         if (boot) {
           boot.innerHTML =
-            "Could not load the WASM build. Run <code>bun run build:web</code>, then <code>bun run serve</code>.";
+            "Could not load the WASM build. Run <code>aurora</code> (builds the image and starts the stack).";
           boot.classList.add("error");
         }
       }

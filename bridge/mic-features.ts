@@ -1,4 +1,4 @@
-import type { AudioFeatures } from "./audio-ema.ts";
+import type { AudioFeatures } from './audio-ema.ts';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Mic Features — Phase 2 of "Audio as the Only Controller"
@@ -20,9 +20,9 @@ const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // Band edges in Hz. Bins falling in each [lo, hi) range average into the band.
 const BANDS = {
-	bass: [20, 250],
-	mid: [250, 2000],
-	high: [2000, 8000],
+  bass: [20, 250],
+  mid: [250, 2000],
+  high: [2000, 8000],
 } as const;
 
 // Natural music spectra roll off toward higher frequencies (roughly pink, ~-3dB
@@ -37,9 +37,9 @@ const BANDS = {
 // big dilution-compensation factor mid (a mean) still needs. A larger high gain
 // here just slams the meter to 1.0 on every hi-hat and then bleeds off.
 const BAND_GAIN = {
-	bass: 10 ** (-10 / 20), // -10 dB: pull the dominant low end back down
-	mid: 10 ** (-10 / 20), // -10 dB: same trim on the mids
-	high: 1.4 * 10 ** (-10 / 20), // peak-biased base, then -10 dB trim
+  bass: 10 ** (-10 / 20), // -10 dB: pull the dominant low end back down
+  mid: 10 ** (-10 / 20), // -10 dB: same trim on the mids
+  high: 1.4 * 10 ** (-10 / 20), // peak-biased base, then -10 dB trim
 } as const;
 
 // The high band (2-8kHz) is wide and music rarely fills its top end, so a flat
@@ -48,10 +48,9 @@ const BAND_GAIN = {
 // being averaged away. 0 = pure mean, 1 = pure peak.
 const HIGH_PEAK_BIAS = 0.65;
 
-export type MicSecureContextInput = {
-	isSecureContext: boolean;
-	hostname: string;
-};
+import { isBrowserSecureContext, type SecureContextInput } from '../shared/secure-context.ts';
+
+export type MicSecureContextInput = SecureContextInput;
 
 /**
  * `getUserMedia` only resolves in a SECURE CONTEXT — an HTTPS origin or a
@@ -64,31 +63,25 @@ export type MicSecureContextInput = {
  * Returns `null` when capture is allowed, or a human-readable reason string
  * when it is blocked.
  */
-export function micSecureContextError(
-	ctx: MicSecureContextInput,
-): string | null {
-	if (ctx.isSecureContext) return null;
-	const host = ctx.hostname;
-	if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
-		return null;
-	}
-	return (
-		`Live mic capture needs a secure context: this page is served from ` +
-		`"${host || "an insecure origin"}" over plain HTTP. Browsers only allow ` +
-		`getUserMedia on HTTPS or localhost. Open the controls page via localhost ` +
-		`or terminate TLS / use a localhost tunnel for LAN deployments.`
-	);
+export function micSecureContextError(ctx: MicSecureContextInput): string | null {
+  if (isBrowserSecureContext(ctx)) return null;
+  return (
+    `Live mic capture needs a secure context: this page is served from ` +
+    `"${ctx.hostname || 'an insecure origin'}" over plain HTTP. Browsers only allow ` +
+    `getUserMedia on HTTPS or localhost. Open the controls page via localhost ` +
+    `or terminate TLS / use a localhost tunnel for LAN deployments.`
+  );
 }
 
 export type ExtractMicFeaturesOptions = {
-	/** AudioContext sample rate (Hz), e.g. 48000. */
-	sampleRate: number;
-	/** AnalyserNode.fftSize (the time-domain window; bins = fftSize / 2). */
-	fftSize: number;
-	/** AnalyserNode.minDecibels (dB value mapping to 0). Default -100. */
-	minDecibels?: number;
-	/** AnalyserNode.maxDecibels (dB value mapping to 1). Default -30. */
-	maxDecibels?: number;
+  /** AudioContext sample rate (Hz), e.g. 48000. */
+  sampleRate: number;
+  /** AnalyserNode.fftSize (the time-domain window; bins = fftSize / 2). */
+  fftSize: number;
+  /** AnalyserNode.minDecibels (dB value mapping to 0). Default -100. */
+  minDecibels?: number;
+  /** AnalyserNode.maxDecibels (dB value mapping to 1). Default -30. */
+  maxDecibels?: number;
 };
 
 /**
@@ -104,56 +97,56 @@ export type ExtractMicFeaturesOptions = {
  * satisfies the router/coerce contract regardless of analyser configuration.
  */
 export function extractMicFeatures(
-	freqDb: ArrayLike<number>,
-	opts: ExtractMicFeaturesOptions,
+  freqDb: ArrayLike<number>,
+  opts: ExtractMicFeaturesOptions,
 ): AudioFeatures {
-	const minDb = opts.minDecibels ?? -100;
-	const maxDb = opts.maxDecibels ?? -30;
-	const span = maxDb - minDb;
-	const bins = freqDb.length;
+  const minDb = opts.minDecibels ?? -100;
+  const maxDb = opts.maxDecibels ?? -30;
+  const span = maxDb - minDb;
+  const bins = freqDb.length;
 
-	if (bins === 0 || span <= 0 || !(opts.sampleRate > 0) || !(opts.fftSize > 0)) {
-		return { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 };
-	}
+  if (bins === 0 || span <= 0 || !(opts.sampleRate > 0) || !(opts.fftSize > 0)) {
+    return { energy: 0, bass: 0, mid: 0, high: 0, pulse: 0 };
+  }
 
-	// getFloatFrequencyData yields fftSize/2 bins spanning 0..Nyquist. Each bin i
-	// is centred at i * sampleRate / fftSize.
-	const hzPerBin = opts.sampleRate / opts.fftSize;
+  // getFloatFrequencyData yields fftSize/2 bins spanning 0..Nyquist. Each bin i
+  // is centred at i * sampleRate / fftSize.
+  const hzPerBin = opts.sampleRate / opts.fftSize;
 
-	let energySum = 0;
-	let bassSum = 0;
-	let bassCount = 0;
-	let midSum = 0;
-	let midCount = 0;
-	let highSum = 0;
-	let highCount = 0;
-	let highPeak = 0;
+  let energySum = 0;
+  let bassSum = 0;
+  let bassCount = 0;
+  let midSum = 0;
+  let midCount = 0;
+  let highSum = 0;
+  let highCount = 0;
+  let highPeak = 0;
 
-	for (let i = 0; i < bins; i++) {
-		const norm = clamp01(((freqDb[i] ?? minDb) - minDb) / span);
-		energySum += norm;
-		const hz = i * hzPerBin;
-		if (hz >= BANDS.bass[0] && hz < BANDS.bass[1]) {
-			bassSum += norm;
-			bassCount++;
-		} else if (hz >= BANDS.mid[0] && hz < BANDS.mid[1]) {
-			midSum += norm;
-			midCount++;
-		} else if (hz >= BANDS.high[0] && hz < BANDS.high[1]) {
-			highSum += norm;
-			highCount++;
-			if (norm > highPeak) highPeak = norm;
-		}
-	}
+  for (let i = 0; i < bins; i++) {
+    const norm = clamp01(((freqDb[i] ?? minDb) - minDb) / span);
+    energySum += norm;
+    const hz = i * hzPerBin;
+    if (hz >= BANDS.bass[0] && hz < BANDS.bass[1]) {
+      bassSum += norm;
+      bassCount++;
+    } else if (hz >= BANDS.mid[0] && hz < BANDS.mid[1]) {
+      midSum += norm;
+      midCount++;
+    } else if (hz >= BANDS.high[0] && hz < BANDS.high[1]) {
+      highSum += norm;
+      highCount++;
+      if (norm > highPeak) highPeak = norm;
+    }
+  }
 
-	const highMean = highCount ? highSum / highCount : 0;
-	const highValue = highMean * (1 - HIGH_PEAK_BIAS) + highPeak * HIGH_PEAK_BIAS;
+  const highMean = highCount ? highSum / highCount : 0;
+  const highValue = highMean * (1 - HIGH_PEAK_BIAS) + highPeak * HIGH_PEAK_BIAS;
 
-	return {
-		energy: clamp01(energySum / bins),
-		bass: bassCount ? clamp01((bassSum / bassCount) * BAND_GAIN.bass) : 0,
-		mid: midCount ? clamp01((midSum / midCount) * BAND_GAIN.mid) : 0,
-		high: highCount ? clamp01(highValue * BAND_GAIN.high) : 0,
-		pulse: clamp01(highPeak * BAND_GAIN.high),
-	};
+  return {
+    energy: clamp01(energySum / bins),
+    bass: bassCount ? clamp01((bassSum / bassCount) * BAND_GAIN.bass) : 0,
+    mid: midCount ? clamp01((midSum / midCount) * BAND_GAIN.mid) : 0,
+    high: highCount ? clamp01(highValue * BAND_GAIN.high) : 0,
+    pulse: clamp01(highPeak * BAND_GAIN.high),
+  };
 }

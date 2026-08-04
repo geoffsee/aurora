@@ -1,6 +1,8 @@
 import { Box, Button, Field, Grid, Input, Text } from '@chakra-ui/react';
 import { useCallback, useEffect, useState } from 'react';
+import { GPU_SHADER_IMPORTED_UI_INDEX } from '../../../shared/gpu-shader-routing.ts';
 import { useControls } from '../context/ControlsContext.tsx';
+import { deckGpuShaderPatch } from '../lib/deck-gpu-shader.ts';
 import { DeckModeLaunchpad } from './DeckModeLaunchpad.tsx';
 import { ParamSlider } from './ParamSlider.tsx';
 import { ShaderLaunchpad } from './ShaderLaunchpad.tsx';
@@ -118,7 +120,12 @@ export function SlidersPanel() {
       const meta = body.meta ?? {};
       const warn = body.usedIChannel ? ' (iChannel: lossy)' : '';
       setImportStatus(`loaded: ${meta.name ?? meta.id}${warn}`);
-      updateState({ activeShader: 9 });
+      // Imported slot is UI index 0; stamp both decks so dual-GPU mode shows it.
+      updateState({
+        activeShader: GPU_SHADER_IMPORTED_UI_INDEX,
+        deckAGpuShader: GPU_SHADER_IMPORTED_UI_INDEX,
+        deckBGpuShader: GPU_SHADER_IMPORTED_UI_INDEX,
+      });
     } catch (err) {
       setImportStatus(`net err: ${(err as Error)?.message || String(err)}`);
     }
@@ -128,7 +135,7 @@ export function SlidersPanel() {
     <>
       <Box gridArea="pads">
         <Grid
-          templateColumns={{ base: '1fr', lg: 'repeat(3, minmax(0, 1fr))' }}
+          templateColumns={{ base: '1fr', md: 'repeat(2, minmax(0, 1fr))' }}
           gap={3}
           alignItems="stretch"
         >
@@ -150,21 +157,18 @@ export function SlidersPanel() {
           </Panel>
           <Panel>
             <ShaderLaunchpad
-              value={state.activeShader}
-              colorPalette="purple"
-              onChange={(v) => {
-                if (state.showGpuPalette) {
-                  // Keep the single GPU Shader picker live even when
-                  // "GPU Rehoboam" (per-deck GPU layers) is active.
-                  updateState({
-                    activeShader: v,
-                    deckAGpuShader: v,
-                    deckBGpuShader: v,
-                  });
-                } else {
-                  updateState({ activeShader: v });
-                }
-              }}
+              value={state.deckAGpuShader}
+              label="Deck A GPU"
+              colorPalette="cyan"
+              onChange={(v) => updateState(deckGpuShaderPatch('A', v), { bumpCue: true })}
+            />
+          </Panel>
+          <Panel>
+            <ShaderLaunchpad
+              value={state.deckBGpuShader}
+              label="Deck B GPU"
+              colorPalette="pink"
+              onChange={(v) => updateState(deckGpuShaderPatch('B', v), { bumpCue: true })}
             />
           </Panel>
         </Grid>

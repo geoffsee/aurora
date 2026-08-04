@@ -1,0 +1,20 @@
+# Processes supervised by muxox inside ghcr.io/geoffsee/aurora:latest.
+# Entrypoint: muxox --port 18450 (web UI on IPv6 loopback; socat publishes :8450).
+
+[[service]]
+name = "bridge"
+cmd = "env PORT=13000 CONTROLS_PORT=13001 HOST=127.0.0.1 bun run bridge/index.ts"
+cwd = "/app"
+log_capacity = 5000
+
+[[service]]
+name = "caddy"
+cmd = "caddy run --config /app/deploy/Caddyfile --adapter caddyfile"
+cwd = "/app"
+log_capacity = 2000
+
+# muxox binds its web UI to [::1] only; expose it on all interfaces for Docker publish.
+[[service]]
+name = "muxox-ui-proxy"
+cmd = "socat TCP-LISTEN:8450,fork,reuseaddr,bind=0.0.0.0 TCP6:[::1]:18450"
+log_capacity = 500

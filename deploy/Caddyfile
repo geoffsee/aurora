@@ -1,0 +1,16 @@
+# Generated at container start by entrypoint.sh — do not edit by hand.
+# Placeholder so the image build has a valid default; runtime overwrites this.
+{
+	auto_https disable_redirects
+	default_sni localhost
+}
+
+https://localhost:8443, https://127.0.0.1:8443 {
+	tls internal
+	reverse_proxy 127.0.0.1:13000
+}
+
+https://localhost:8444, https://127.0.0.1:8444 {
+	tls internal
+	reverse_proxy 127.0.0.1:13001
+}

@@ -1,0 +1,107 @@
+name: Release CLI
+
+# Cross-compile the self-contained `aurora` CLI (embedded Docker context) and
+# attach binaries to the GitHub Release for the pushing v* tag.
+# Host still needs Docker; the binary does not need a repo checkout.
+#
+# Targets (Bun --compile): darwin/linux/windows × x64/arm64.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)build assets for (e.g. v1.2.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-cli-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-darwin-arm64
+            artifact: aurora-darwin-arm64
+          - target: bun-darwin-x64
+            artifact: aurora-darwin-x64
+          - target: bun-linux-x64
+            artifact: aurora-linux-x64
+          - target: bun-linux-arm64
+            artifact: aurora-linux-arm64
+          - target: bun-windows-x64
+            artifact: aurora-windows-x64.exe
+          - target: bun-windows-arm64
+            artifact: aurora-windows-arm64.exe
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS deps
+        run: bun install --frozen-lockfile
+
+      - name: Compile CLI
+        env:
+          AURORA_CLI_TARGET: ${{ matrix.target }}
+          # Omit .exe — Bun appends it for Windows targets.
+          AURORA_CLI_OUT: dist-cli/${{ matrix.artifact }}
+        run: |
+          mkdir -p dist-cli
+          artifact="${{ matrix.artifact }}"
+          out="dist-cli/${artifact%.exe}"
+          AURORA_CLI_OUT="$out" bun run aurora.bun.build.ts
+          if [[ "$artifact" == *.exe ]]; then
+            test -f "${out}.exe"
+            if [[ "${out}.exe" != "dist-cli/$artifact" ]]; then
+              mv "${out}.exe" "dist-cli/$artifact"
+            fi
+          else
+            test -f "dist-cli/$artifact"
+          fi
+          ls -lh "dist-cli/$artifact"
+          file "dist-cli/$artifact" || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist-cli/${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lh release-assets/
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-assets/*

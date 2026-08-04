@@ -95,7 +95,7 @@ export function CrossfadePanel() {
           </Button>
         </Flex>
         <Text fontSize="sm" color="whiteAlpha.500" textAlign="center">
-          Blends Deck A ↔ Deck B modes below
+          Blends Deck A ↔ Deck B modes and GPU shaders below
         </Text>
       </Flex>
     </Panel>

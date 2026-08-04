@@ -7,9 +7,13 @@ This file provides guidance to agents when working with code in this repository.
 Web dev loop (the most common):
 
 ```bash
-bun run dev          # build:web + serve in one step
+aurora               # docker: BuildKit-build image, run container, stream logs; Ctrl+C tears down
+aurora -d            # docker detached (--daemon); stop with aurora down
+aurora --native / -n # native: vendored Caddy + Bun.spawn bridge (no Docker)
+bun run build:cli    # aurora.bun.build.ts — compile ./aurora with embedded Docker context
+                     # cross-compile: AURORA_CLI_TARGET=bun-windows-x64 AURORA_CLI_OUT=aurora-win bun run build:cli
+bun run aurora       # same as aurora (package bin / script)
 bun run build:web    # cargo build --release --target wasm32-unknown-unknown + wasm-bindgen into dist/pkg
-bun run serve        # bun run bridge/index.ts (projector :3000, controls :3001, OSC bridge)
 bun run check:wasm   # fast cargo check against wasm32-unknown-unknown
 bun run clippy       # clippy:wasm + clippy:vst, both with -D warnings (pre-commit runs this)
 bun run typecheck    # tsc --noEmit (also runs as the pre-commit hook)
@@ -124,9 +128,10 @@ The bridge is the **single source of truth for `ControlState`**. `coerceControlS
 
 - `src/` — Bevy/WASM renderer (`main.rs`) and small browser helpers (`reconnect.ts`)
 - `bridge/` — Bun OSC/WebSocket bridge and audio/automation subsystems
+- `cli/` — host `aurora` CLI (build/run Docker show stack) + Docker context assembler
 - `shared/` — TypeScript schemas, validation, and Shadertoy import shared by bridge and tests
 - `web/` — projector and controls HTML/CSS served by the bridge
-- `tests/` — vitest suite, mirroring `bridge/`, `shared/`, `shaders/`, and `web/`
+- `tests/` — vitest suite, mirroring `bridge/`, `shared/`, `shaders/`, `web/`, and `cli/`
 - `plugins/aurora-vst/` — VST3 plugin and `xtask` bundler
 - `scripts/` — setup, dry-run, format, and Rust test helpers
 

@@ -4,6 +4,9 @@
   "type": "module",
   "author": "Geoff Seemueller 2026",
   "private": true,
+  "bin": {
+    "aurora": "./cli/aurora.ts"
+  },
   "scripts": {
     "build:shaders": "bun run scripts/build-shaders.ts",
     "convert:variants": "bun run scripts/wgsl-to-typegpu-variant.ts",
@@ -16,8 +19,10 @@
     "clippy": "bun run clippy:wasm && bun run clippy:vst",
     "build:vst": "CARGO_TARGET_DIR=target-vst cargo run -p xtask -- bundle aurora-vst --release",
     "install:vst:mac": "mkdir -p \"$HOME/Library/Audio/Plug-Ins/VST3\" && cp -R \"target-vst/bundled/aurora VJ Bridge.vst3\" \"$HOME/Library/Audio/Plug-Ins/VST3/\"",
-    "serve": "bun run bridge/index.ts",
-    "dev": "bun run build:web && bun run build:controls && HOT_RELOAD=1 bun run bridge/index.ts",
+    "aurora": "bun run cli/aurora.ts",
+    "dev": "bun run cli/aurora.ts",
+    "down": "bun run cli/aurora.ts down",
+    "build:cli": "bun run aurora.bun.build.ts",
     "dry-run": "bun run scripts/dry-run.ts",
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",

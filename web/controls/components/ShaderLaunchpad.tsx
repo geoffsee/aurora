@@ -1,5 +1,5 @@
 import { Box, Button, Flex, Grid, Text } from '@chakra-ui/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SHADER_OPTIONS } from '../lib/constants.ts';
 
 type ShaderAccent = 'cyan' | 'pink' | 'purple';
@@ -52,6 +52,11 @@ export function ShaderLaunchpad({
   onChange,
 }: ShaderLaunchpadProps) {
   const [activeGroup, setActiveGroup] = useState<ShaderGroup>(() => groupForIndex(value));
+
+  // Keep the group tab aligned when MIDI / cue / WS updates the value from outside.
+  useEffect(() => {
+    setActiveGroup(groupForIndex(value));
+  }, [value]);
 
   const shaders = useMemo(() => {
     const [lo, hi] = GROUP_RANGES[activeGroup];

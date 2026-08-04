@@ -6,47 +6,71 @@ Browser/WebAssembly Bevy app for live Video DJ performance. The first show build
 
 ## Requirements
 
-- Rust with the `wasm32-unknown-unknown` target.
-- [`wasm-bindgen-cli`](https://rustwasm.github.io/wasm-bindgen/reference/cli.html).
-- Bun.
+- Docker (Desktop or Engine) — `aurora` builds and runs the show stack as one container.
 - A browser with WebGPU enabled, such as current Chrome or Edge.
+- For local wasm/tooling work (tests, clippy): Rust `wasm32-unknown-unknown`, Bun, and [`wasm-bindgen-cli`](https://rustwasm.github.io/wasm-bindgen/reference/cli.html) **0.2.122**.
 
-Install the Rust pieces once. The `wasm-bindgen-cli` version must match the version locked by the Rust build:
-
-```bash
-rustup target add wasm32-unknown-unknown
-cargo install -f wasm-bindgen-cli --version 0.2.122
-```
-
-Install Bun dependencies:
+Install once (`bun run setup` also verifies wasm-bindgen and runs `bun link` so `aurora` is on your PATH):
 
 ```bash
-bun install
+bun run setup
+# or: bun install && bun link
 ```
 
 ## Run
 
-Build the WebAssembly bundle and serve it locally:
+From the repo (Docker must be running):
 
 ```bash
-bun run build:web
-bun run serve
+aurora
 ```
 
-Open the clean projector output at [http://localhost:3000](http://localhost:3000).
-Open the separate controls app at [http://localhost:3001](http://localhost:3001).
+That builds the image, starts the container, and streams logs. Ctrl+C stops and removes the container.
 
-Or build and serve in one step:
+Native (no Docker) — vendors Caddy for your OS/arch and `Bun.spawn`s the bridge:
 
 ```bash
-bun run dev
+aurora --native    # or: aurora -n
 ```
 
-Quick type-checking without producing artifacts:
+Detach:
+
+```bash
+aurora -d          # docker detached
+aurora -n -d       # native detached
+aurora down        # stop docker and/or native
+```
+
+(`bun run aurora` / `bun run dev` are the same entrypoint. Compile a self-contained CLI that embeds the Docker build context with `bun run build:cli` → `./aurora`.)
+
+Then open:
+
+- Projector: [https://localhost:8443](https://localhost:8443)
+- Controls: [https://localhost:8444](https://localhost:8444)
+- Muxox service logs UI: [http://localhost:8450](http://localhost:8450)
+
+Accept the Caddy `tls internal` certificate warning once.
+
+### LAN / other devices
+
+Use the same HTTPS ports on this machine’s LAN IP (`https://<ip>:8443` / `:8444`). WebGPU requires a secure context — plain `http://192.168.x.x` will black-screen the projector. The Docker image terminates TLS via Caddy so LAN clients get a secure context after trusting the warning.
+
+AbletonOSC / VST UDP (`11001`, `12000`) is published from the container; the bridge reaches Ableton on the host via `host.docker.internal`.
+
+### Image
+
+Runtime image: **`ghcr.io/geoffsee/aurora:latest`**. One process tree: [muxox](https://github.com/geoffsee/muxox) supervises Caddy + the Bun bridge (`deploy/muxox.toml`). CI pushes `:latest` on `main` and `:vX.Y.Z` on release tags (see `.github/workflows/publish-image.yml`). Operators who only want the published image can `docker pull` / `docker run` it themselves; `aurora` is the repo-side build-and-run path.
+
+Version tags also publish cross-compiled CLI binaries (macOS / Linux / Windows × x64 & arm64) via `.github/workflows/release-cli.yml` — download from the GitHub Release, run with Docker installed; no repo checkout required.
+
+### Tooling without Docker
+
+Quick type-checking and tests (no container):
 
 ```bash
 bun run check:wasm   # cargo check against wasm32-unknown-unknown
 bun run check:vst    # cargo check the VST plugin crate
+bun run test
 ```
 
 The shipped projector build is **`wasm32-unknown-unknown`** — use **`bun run check:wasm`** / **`bun run build:web`**, or **`cargo check-wasm`** / **`cargo build-wasm`** from **`.cargo/config.toml`**.
@@ -55,7 +79,7 @@ Because `bevy` is **`default-features = false`**, the crate also opts into **`x1
 
 ## Performance Controls
 
-Use the controls app on port `3001` for show operation. The projector output on port `3000` has no visible HUD or help overlay.
+Use the controls app on port `8444` for show operation. The projector output on port `8443` has no visible HUD or help overlay.
 
 ![Controls app: crossfade, cues, deck modes, BPM/speed/intensity sliders, color, and safety toggles](screenshots/control-panel.webp)
 
@@ -97,14 +121,13 @@ The Bun server mirrors the OSC bridge pattern from `ableton-osc-visualizer`:
 Start Ableton with AbletonOSC listening on port `11000`, then run:
 
 ```bash
-bun run build:web
-bun run serve
+aurora
 ```
 
 The controls app shows `OSC live` plus energy bands, deck averages, server diagnostics, and mapped track activity when the bridge is receiving data. Use the Ableton Mapping panel to choose which 0-based track indices drive each visual signal. Override ports if needed:
 
 ```bash
-LIVE_HOST=127.0.0.1 LIVE_SEND_PORT=11000 LIVE_RECV_PORT=11001 bun run serve
+LIVE_HOST=127.0.0.1 LIVE_SEND_PORT=11000 LIVE_RECV_PORT=11001 aurora
 ```
 
 ### Clock-source priority
@@ -136,14 +159,13 @@ bun run install:vst:mac
 After installing, rescan plugins in Ableton and load `aurora VJ Bridge` as a VST3 audio effect. Start the VJ bridge with:
 
 ```bash
-bun run build:web
-bun run serve
+aurora
 ```
 
-If you need a different plugin control port, start the server with:
+If you need a different plugin control port, start with:
 
 ```bash
-VST_CONTROL_RECV_PORT=12000 bun run serve
+VST_CONTROL_RECV_PORT=12000 aurora
 ```
 
 The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, trails, depth, palette, ring opacity, and max brightness; toggle parameters for rings, strobe, strobe lockout, blackout, freeze, beat sync, bar sync, and demo mode; deck mode parameters for Beams/Tunnel/Burst/Mirror/Wash; and momentary parameters for flash, reset, and the cue presets.
@@ -152,10 +174,12 @@ The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, t
 
 - `src/main.rs` – Bevy app compiled to WebAssembly.
 - `bridge/index.ts` – Bun server hosting the projector page, the controls page, and the OSC/WebSocket bridge.
-- `web/index.html` / `web/styles.css` – projector output (port `3000`).
-- `web/controls.html` / `web/controls.css` – controls app (port `3001`).
+- `web/index.html` / `web/styles.css` – projector output (port `8443` via Caddy).
+- `web/controls/` – controls app (port `8444` via Caddy).
+- `deploy/` – `Caddyfile` + `muxox.toml` for the container entrypoint.
+- `Dockerfile` – `ghcr.io/geoffsee/aurora` image (muxox + Caddy + Bun).
 - `plugins/aurora-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.
-- `assets/` – fonts, images, and reserved shaders.
+- `assets/shaders/` – reserved / generated WGSL.
 
 ## Notes
 
