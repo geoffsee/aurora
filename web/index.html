@@ -371,8 +371,8 @@
         controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
-        controlState.deckAMode = clampInt(next.deckAMode, 0, 24, controlState.deckAMode);
-        controlState.deckBMode = clampInt(next.deckBMode, 0, 24, controlState.deckBMode);
+        controlState.deckAMode = clampInt(next.deckAMode, 0, 48, controlState.deckAMode);
+        controlState.deckBMode = clampInt(next.deckBMode, 0, 48, controlState.deckBMode);
         controlState.deckAGpuShader = clampInt(next.deckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckAGpuShader);
         controlState.deckBGpuShader = clampInt(next.deckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckBGpuShader);
         controlState.rings = next.rings !== false;
@@ -508,12 +508,30 @@
         });
       window.__auroraOscPlaying = () => Boolean(oscState.playing);
       window.__auroraOscTempo = () => oscState.tempo;
-      window.__auroraOscEnergy = () => (decayMeters(), applyAudioCurve(oscState.energy, controlState.bandCurves.energy));
-      window.__auroraOscDeckA = () => (decayMeters(), oscState.deckA);
-      window.__auroraOscDeckB = () => (decayMeters(), oscState.deckB);
-      window.__auroraOscBass = () => (decayMeters(), applyAudioCurve(oscState.bass, controlState.bandCurves.bass));
-      window.__auroraOscMid = () => (decayMeters(), applyAudioCurve(oscState.mid, controlState.bandCurves.mid));
-      window.__auroraOscHigh = () => (decayMeters(), applyAudioCurve(oscState.high, controlState.bandCurves.high));
+      window.__auroraOscEnergy = () => {
+        decayMeters();
+        return applyAudioCurve(oscState.energy, controlState.bandCurves.energy);
+      };
+      window.__auroraOscDeckA = () => {
+        decayMeters();
+        return oscState.deckA;
+      };
+      window.__auroraOscDeckB = () => {
+        decayMeters();
+        return oscState.deckB;
+      };
+      window.__auroraOscBass = () => {
+        decayMeters();
+        return applyAudioCurve(oscState.bass, controlState.bandCurves.bass);
+      };
+      window.__auroraOscMid = () => {
+        decayMeters();
+        return applyAudioCurve(oscState.mid, controlState.bandCurves.mid);
+      };
+      window.__auroraOscHigh = () => {
+        decayMeters();
+        return applyAudioCurve(oscState.high, controlState.bandCurves.high);
+      };
       window.__auroraOscPulse = () => {
         decayMeters();
         if (oscState.energy < 0.02) return 0;
