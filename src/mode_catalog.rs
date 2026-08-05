@@ -30,6 +30,13 @@ pub enum OverlayPolicy {
 }
 
 /// Private backend flags for ModeDirector composition.
+///
+/// Flag mapping (PR11 / #245):
+/// - `figure` — catalog Figure path (legacyIndex 24): MODEL_CATALOG + `figureModel`
+///   controls. Disposition is typically `mesh-primary`.
+/// - `mesh` — DSL / pack mesh layer via CompiledModeWire `layers[{kind:mesh}]`
+///   resolved against epoch `assetBase` (may also reference catalog ids).
+/// - `field` / `fullscreen` / `accent` — other composition backends.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ModeBackends {
     pub field: bool,
@@ -106,7 +113,9 @@ pub struct ModeSpec {
     pub category: ModeCategory,
     pub character: &'static str,
     pub backends: ModeBackends,
-    /// Intent for later PRs; ModeDirector keeps legacy field weight 1 until replacements ship.
+    /// When true with a ready backend (figure/mesh-primary/fullscreen), ModeDirector
+    /// zeros legacy field weight. Placeholder modes may still keep weight 1 until
+    /// their replacement backends ship.
     pub suppress_legacy_field: bool,
     pub overlay_policy: OverlayPolicy,
     pub routing: ModeRouting,

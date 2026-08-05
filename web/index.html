@@ -176,6 +176,13 @@
         const path = value.trim();
         if (!path) return "";
         if (path.length > 2048) return fallback;
+        // Epoch pack assets (PR11): root-relative /api/data/e/.../*.glb
+        if (path.startsWith("/") && !path.startsWith("//")) {
+          if (path.includes("..") || path.includes("\\")) return fallback;
+          const bare = (path.split("?")[0] || path).toLowerCase();
+          if (!bare.endsWith(".glb") && !bare.endsWith(".gltf")) return fallback;
+          return path;
+        }
         try {
           const url = new URL(path);
           const pathname = url.pathname.toLowerCase();

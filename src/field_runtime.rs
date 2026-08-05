@@ -144,12 +144,54 @@ pub struct CompiledFieldDef {
     pub params: HashMap<String, f32>,
 }
 
+/// Mirror of `ModeDisposition` on CompiledModeWire / ModePreset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ModeDisposition {
+    FieldPrimitive,
+    FullscreenPrimary,
+    MeshPrimary,
+    EngineModule,
+    RetireMerge,
+    #[default]
+    Unknown,
+}
+
+impl ModeDisposition {
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "field-primitive" => Self::FieldPrimitive,
+            "fullscreen-primary" => Self::FullscreenPrimary,
+            "mesh-primary" => Self::MeshPrimary,
+            "engine-module" => Self::EngineModule,
+            "retire/merge" => Self::RetireMerge,
+            _ => Self::Unknown,
+        }
+    }
+
+    pub fn is_mesh_primary(self) -> bool {
+        matches!(self, Self::MeshPrimary)
+    }
+}
+
+/// One mesh layer from CompiledModeWire.layers (kind == "mesh").
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeshLayerSpec {
+    /// Catalog id or path relative to asset_base (or absolute/root-relative).
+    pub ref_id: String,
+    pub weight: f32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ActiveCompiled {
     pub slug: String,
     pub epoch: u32,
     pub field: Option<CompiledFieldDef>,
     pub suppress_legacy_field: bool,
+    pub disposition: ModeDisposition,
+    /// Epoch-scoped base URL for pack-local assets (`/api/data/e/.../`).
+    pub asset_base: String,
+    /// Mesh layers from the wire (catalog id or pack-local glTF ref).
+    pub mesh_layers: Vec<MeshLayerSpec>,
 }
 
 // ── Runtime ──────────────────────────────────────────────────────────────────
@@ -176,6 +218,30 @@ impl FieldRuntime {
         self.active(deck)
             .map(|a| a.suppress_legacy_field)
             .unwrap_or(false)
+    }
+
+    /// True when the active compiled disposition is mesh-primary.
+    pub fn is_mesh_primary(&self, deck: FieldDeck) -> bool {
+        self.active(deck)
+            .map(|a| a.disposition.is_mesh_primary())
+            .unwrap_or(false)
+    }
+
+    /// True when ModeDirector should zero legacy_field_weight for this deck:
+    /// mesh-primary disposition, or suppress + at least one mesh layer.
+    pub fn should_zero_legacy_field(&self, deck: FieldDeck) -> bool {
+        match self.active(deck) {
+            Some(a) => {
+                a.disposition.is_mesh_primary()
+                    || (a.suppress_legacy_field && !a.mesh_layers.is_empty())
+            }
+            None => false,
+        }
+    }
+
+    /// First mesh layer on the active compiled wire, if any.
+    pub fn primary_mesh_layer(&self, deck: FieldDeck) -> Option<&MeshLayerSpec> {
+        self.active(deck).and_then(|a| a.mesh_layers.first())
     }
 
     /// True when this deck has a compiled field primitive the runtime can pose.
@@ -471,6 +537,48 @@ pub fn parse_compiled_wire(json: &str) -> Result<ActiveCompiled, String> {
         .and_then(|x| x.as_bool())
         .unwrap_or(false);
 
+    let disposition = obj
+        .get("disposition")
+        .and_then(|x| x.as_str())
+        .map(ModeDisposition::parse)
+        .unwrap_or(ModeDisposition::Unknown);
+
+    let asset_base = obj
+        .get("assetBase")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let mut mesh_layers = Vec::new();
+    if let Some(layers) = obj.get("layers").and_then(|x| x.as_array()) {
+        for layer in layers {
+            let Some(lobj) = layer.as_object() else {
+                continue;
+            };
+            let kind = lobj.get("kind").and_then(|x| x.as_str()).unwrap_or("");
+            if kind != "mesh" {
+                continue;
+            }
+            let ref_id = lobj
+                .get("ref")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if ref_id.is_empty() {
+                // Soft: skip empty mesh refs rather than fail the whole wire.
+                continue;
+            }
+            let weight = lobj
+                .get("weight")
+                .and_then(|x| x.as_f64())
+                .map(|n| n as f32)
+                .unwrap_or(1.0)
+                .clamp(0.0, 1.0);
+            mesh_layers.push(MeshLayerSpec { ref_id, weight });
+        }
+    }
+
     let field = match obj.get("field") {
         None | Some(serde_json::Value::Null) => None,
         Some(f) => {
@@ -515,6 +623,9 @@ pub fn parse_compiled_wire(json: &str) -> Result<ActiveCompiled, String> {
         epoch,
         field,
         suppress_legacy_field,
+        disposition,
+        asset_base,
+        mesh_layers,
     })
 }
 
@@ -919,6 +1030,62 @@ mod tests {
         assert!(rt.active(FieldDeck::A).is_none());
         drain_pending(&mut rt);
         assert_eq!(rt.active(FieldDeck::A).unwrap().slug, "supernova");
+    }
+
+    #[test]
+    fn parse_mesh_primary_figure_wire() {
+        let json = r#"{
+            "wireVersion": 1,
+            "epoch": 4,
+            "deck": "deck-a",
+            "slug": "figure",
+            "label": "Figure",
+            "legacyIndex": 24,
+            "disposition": "mesh-primary",
+            "assetBase": "/api/data/e/4/decks/deck-a/figure/",
+            "layers": [
+                { "kind": "mesh", "ref": "human-female" },
+                { "kind": "accent", "ref": "glow" }
+            ],
+            "suppressLegacyField": true
+        }"#;
+        let active = parse_compiled_wire(json).expect("figure wire");
+        assert_eq!(active.slug, "figure");
+        assert_eq!(active.disposition, ModeDisposition::MeshPrimary);
+        assert!(active.suppress_legacy_field);
+        assert_eq!(active.asset_base, "/api/data/e/4/decks/deck-a/figure/");
+        assert_eq!(active.mesh_layers.len(), 1);
+        assert_eq!(active.mesh_layers[0].ref_id, "human-female");
+        assert!(active.field.is_none());
+
+        let mut rt = FieldRuntime::default();
+        rt.try_set_compiled(FieldDeck::A, json).unwrap();
+        assert!(rt.is_mesh_primary(FieldDeck::A));
+        assert!(rt.should_zero_legacy_field(FieldDeck::A));
+        assert_eq!(
+            rt.primary_mesh_layer(FieldDeck::A).unwrap().ref_id,
+            "human-female"
+        );
+        assert!(!rt.is_mesh_primary(FieldDeck::B));
+        assert!(!rt.should_zero_legacy_field(FieldDeck::B));
+    }
+
+    #[test]
+    fn parse_skips_empty_mesh_refs_softly() {
+        let json = r#"{
+            "wireVersion": 1,
+            "slug": "figure",
+            "disposition": "mesh-primary",
+            "assetBase": "/x/",
+            "layers": [
+                { "kind": "mesh", "ref": "" },
+                { "kind": "mesh", "ref": "fox" }
+            ],
+            "suppressLegacyField": true
+        }"#;
+        let active = parse_compiled_wire(json).expect("soft empty mesh ref");
+        assert_eq!(active.mesh_layers.len(), 1);
+        assert_eq!(active.mesh_layers[0].ref_id, "fox");
     }
 
     #[test]

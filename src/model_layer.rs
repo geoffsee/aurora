@@ -383,6 +383,101 @@ pub struct ActiveModelDrive(pub ModelDrive);
 #[derive(Resource, Clone, Debug, Default)]
 pub struct ActiveModelAssetPath(pub String);
 
+// ── Mesh layer ref resolution (PR11 / #245) ───────────────────────────────────
+
+/// Result of resolving a CompiledModeWire mesh layer `ref` against `asset_base`.
+///
+/// Soft contract: `Unresolved` never panics the loader — the stage keeps the
+/// previous mesh or stays hidden (`ModelLoadFailed` / Visibility::Hidden).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ResolvedMeshAsset {
+    /// Global MODEL_CATALOG entry (catalog `figure` backend path).
+    Catalog { index: usize },
+    /// Pack-local epoch URL, root-relative path, or absolute http(s) URL.
+    Path(String),
+    /// Unknown ref — soft fail.
+    Unresolved,
+}
+
+/// Look up a MODEL_CATALOG index by stable id (`human-female`, `fox`, …).
+pub fn catalog_index_for_id(id: &str) -> Option<usize> {
+    let key = id.trim();
+    if key.is_empty() {
+        return None;
+    }
+    MODEL_CATALOG.iter().position(|m| m.id == key)
+}
+
+fn is_gltf_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".glb") || lower.ends_with(".gltf")
+}
+
+fn join_asset_base(asset_base: &str, rel: &str) -> String {
+    let base = asset_base.trim();
+    let rel = rel.trim_start_matches("./");
+    if base.is_empty() {
+        return rel.to_string();
+    }
+    if base.ends_with('/') {
+        format!("{base}{rel}")
+    } else {
+        format!("{base}/{rel}")
+    }
+}
+
+/// Resolve a mesh layer ref from CompiledModeWire.
+///
+/// Backend flag mapping:
+/// - **Catalog figure path** — ref matches a MODEL_CATALOG id → `Catalog { index }`
+///   (UI `figureModel` / Bevy catalog root).
+/// - **DSL mesh layer** — pack-relative glTF under `asset_base` (epoch URL tree)
+///   or absolute / root-relative / remote path → `Path(...)`.
+///
+/// Failure is soft (`Unresolved`); callers must not panic.
+pub fn resolve_mesh_layer_ref(ref_str: &str, asset_base: &str) -> ResolvedMeshAsset {
+    let r = ref_str.trim();
+    if r.is_empty() || r.len() > 2048 {
+        return ResolvedMeshAsset::Unresolved;
+    }
+    if r.contains("..") || r.contains('\\') {
+        return ResolvedMeshAsset::Unresolved;
+    }
+
+    // 1. Global catalog id (figure preset: human-female).
+    if let Some(index) = catalog_index_for_id(r) {
+        return ResolvedMeshAsset::Catalog { index };
+    }
+
+    // 2. Absolute remote URL.
+    if r.starts_with("http://") || r.starts_with("https://") {
+        // Strip query for extension check; keep full string as load path.
+        let path_for_ext = r.split('?').next().unwrap_or(r);
+        if is_gltf_path(path_for_ext) {
+            return ResolvedMeshAsset::Path(r.to_string());
+        }
+        return ResolvedMeshAsset::Unresolved;
+    }
+
+    // 3. Root-relative epoch asset URL (`/api/data/e/.../mesh.glb`).
+    if r.starts_with('/') {
+        if is_gltf_path(r.split('?').next().unwrap_or(r)) {
+            return ResolvedMeshAsset::Path(r.to_string());
+        }
+        return ResolvedMeshAsset::Unresolved;
+    }
+
+    // 4. Pack-relative path under asset_base.
+    if is_gltf_path(r) || r.contains('/') {
+        if !is_gltf_path(r) {
+            return ResolvedMeshAsset::Unresolved;
+        }
+        return ResolvedMeshAsset::Path(join_asset_base(asset_base, r));
+    }
+
+    ResolvedMeshAsset::Unresolved
+}
+
 /// Spawn one pending root per catalog entry plus a dim base rig and stage halo.
 pub fn setup_model_layer(mut commands: Commands, mut ambient_light: ResMut<AmbientLight>) {
     // Dim cool fill — previous ambient (120) + cinema point blew out PBR albedos.
@@ -818,5 +913,56 @@ mod tests {
         };
         apply_model_instance(drive, &other, &mut transform, &mut visibility);
         assert!(matches!(visibility, Visibility::Hidden));
+    }
+
+    #[test]
+    fn resolve_mesh_layer_catalog_id() {
+        let resolved = resolve_mesh_layer_ref("human-female", "/api/data/e/1/decks/deck-a/figure/");
+        match resolved {
+            ResolvedMeshAsset::Catalog { index } => {
+                assert_eq!(MODEL_CATALOG[index].id, "human-female");
+            }
+            other => panic!("expected Catalog, got {other:?}"),
+        }
+        // Unknown id without path shape → soft unresolved (no panic).
+        assert_eq!(
+            resolve_mesh_layer_ref("not-a-real-model", "/x/"),
+            ResolvedMeshAsset::Unresolved
+        );
+    }
+
+    #[test]
+    fn resolve_mesh_layer_pack_local_epoch_url() {
+        let base = "/api/data/e/3/decks/deck-b/figure/";
+        assert_eq!(
+            resolve_mesh_layer_ref("mesh.glb", base),
+            ResolvedMeshAsset::Path(format!("{base}mesh.glb"))
+        );
+        assert_eq!(
+            resolve_mesh_layer_ref("/api/data/e/3/decks/deck-b/figure/other.gltf", base),
+            ResolvedMeshAsset::Path(
+                "/api/data/e/3/decks/deck-b/figure/other.gltf".to_string()
+            )
+        );
+        assert_eq!(
+            resolve_mesh_layer_ref("https://cdn.example.com/a.glb", base),
+            ResolvedMeshAsset::Path("https://cdn.example.com/a.glb".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_mesh_layer_soft_rejects_escapes_and_bad_ext() {
+        assert_eq!(
+            resolve_mesh_layer_ref("../secret.glb", "/api/data/e/1/decks/deck-a/figure/"),
+            ResolvedMeshAsset::Unresolved
+        );
+        assert_eq!(
+            resolve_mesh_layer_ref("mesh.obj", "/api/data/e/1/decks/deck-a/figure/"),
+            ResolvedMeshAsset::Unresolved
+        );
+        assert_eq!(
+            resolve_mesh_layer_ref("", "/x/"),
+            ResolvedMeshAsset::Unresolved
+        );
     }
 }
