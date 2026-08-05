@@ -1,11 +1,12 @@
 /**
- * FieldRuntime vertical-slice parity harness (PR6 / #240).
+ * FieldRuntime parity harness (PR6 / #240 + PR8 / #242 Family A 0–7).
  *
  * Rust unit tests in `src/field_runtime.rs` own golden pose snapshots
  * (`UPDATE_FIELD_GOLDS=1 cargo test -p aurora --bin aurora golden_poses`).
  * This suite covers the TS compile path and live-show safety contracts that
  * the projector/WASM ingest relies on:
  * - supernova preset compiles to primitiveId 1 with suppressLegacyField
+ * - Family A modes 0–7 compile to permanent ids 10–17
  * - all four pools are the FieldRuntime contract (documented; poses in Rust)
  * - failed wire must not be applied (mirror of try_set_compiled keep-previous)
  */
@@ -22,6 +23,18 @@ import { compileModePreset, validateModePreset } from '../../shared/mode-preset-
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 
 const FIELD_POOLS = ['beams', 'rings', 'tiles', 'ghost'] as const;
+
+/** Family A legacy indices 0–7 → permanent primitive ids (mirror field_runtime.rs). */
+const FAMILY_A_MODES = [
+  { slug: 'beams', legacyIndex: 0, primitiveId: FIELD_PRIMITIVE_IDS.beams },
+  { slug: 'tunnel', legacyIndex: 1, primitiveId: FIELD_PRIMITIVE_IDS.tunnel },
+  { slug: 'burst', legacyIndex: 2, primitiveId: FIELD_PRIMITIVE_IDS.burst },
+  { slug: 'mirror', legacyIndex: 3, primitiveId: FIELD_PRIMITIVE_IDS.mirror },
+  { slug: 'wash', legacyIndex: 4, primitiveId: FIELD_PRIMITIVE_IDS.wash },
+  { slug: 'strobe', legacyIndex: 5, primitiveId: FIELD_PRIMITIVE_IDS.strobe },
+  { slug: 'swarm', legacyIndex: 6, primitiveId: FIELD_PRIMITIVE_IDS.swarm },
+  { slug: 'orbit', legacyIndex: 7, primitiveId: FIELD_PRIMITIVE_IDS.orbit },
+] as const;
 
 describe('FieldRuntime / supernova vertical slice', () => {
   test('bundled supernova presets validate and compile for both decks', () => {
@@ -74,8 +87,8 @@ describe('FieldRuntime / supernova vertical slice', () => {
   });
 
   test('contract: FieldRuntime covers all four pools (no beams-only migration)', () => {
-    // Rust implements pose_supernova_burst for every FieldPool; this list is the
-    // acceptance surface for #240. Family A migrations (#242+) add primitives, not pools.
+    // Rust implements poses for every FieldPool; this list is the
+    // acceptance surface for #240/#242. Family migrations add primitives, not pools.
     expect(FIELD_POOLS).toEqual(['beams', 'rings', 'tiles', 'ghost']);
     expect(FIELD_POOLS).toHaveLength(4);
   });
@@ -110,5 +123,49 @@ describe('FieldRuntime / supernova vertical slice', () => {
     expect(active).toEqual(before);
     expect(trySet('not-json')).toBe(false);
     expect(active).toEqual(before);
+  });
+});
+
+describe('FieldRuntime / Family A modes 0–7 (#242)', () => {
+  test('permanent primitive ids 10–17 match registry', () => {
+    expect(FIELD_PRIMITIVE_IDS.beams).toBe(10);
+    expect(FIELD_PRIMITIVE_IDS.tunnel).toBe(11);
+    expect(FIELD_PRIMITIVE_IDS.burst).toBe(12);
+    expect(FIELD_PRIMITIVE_IDS.mirror).toBe(13);
+    expect(FIELD_PRIMITIVE_IDS.wash).toBe(14);
+    expect(FIELD_PRIMITIVE_IDS.strobe).toBe(15);
+    expect(FIELD_PRIMITIVE_IDS.swarm).toBe(16);
+    expect(FIELD_PRIMITIVE_IDS.orbit).toBe(17);
+  });
+
+  test('bundled Family A presets compile for both decks (pool contract via Rust)', () => {
+    for (const mode of FAMILY_A_MODES) {
+      for (const deck of ['deck-a', 'deck-b'] as const) {
+        const path = resolve(REPO_ROOT, `data/decks/${deck}/${mode.slug}/preset.json`);
+        const raw = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+        const validated = validateModePreset(raw);
+        expect(
+          validated.ok,
+          `${deck}/${mode.slug}: ${!validated.ok ? validated.errors.join('; ') : ''}`,
+        ).toBe(true);
+        if (!validated.ok) return;
+
+        const compiled = compileModePreset(validated.value, {
+          epoch: 1,
+          deck,
+          assetBase: `/api/data/e/1/decks/${deck}/${mode.slug}/`,
+        });
+        expect(compiled.ok, `${deck}/${mode.slug} compile`).toBe(true);
+        if (!compiled.ok) return;
+
+        const wire: CompiledModeWire = compiled.value;
+        expect(wire.wireVersion).toBe(COMPILED_MODE_WIRE_VERSION);
+        expect(wire.slug).toBe(mode.slug);
+        expect(wire.legacyIndex).toBe(mode.legacyIndex);
+        expect(wire.field?.primitiveId).toBe(mode.primitiveId);
+        expect(wire.field?.primitiveName).toBe(mode.slug);
+        expect(FIELD_POOLS).toHaveLength(4);
+      }
+    }
   });
 });
