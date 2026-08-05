@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "forcing",
+  "slug": "forcing",
+  "label": "Forcing",
+  "disposition": "engine-module",
+  "character": "Expanding condition tree—partial order growth as drama.",
+  "uiGroup": "abstract-character",
+  "legacyIndex": 48,
+  "engineModule": "forcing"
+}

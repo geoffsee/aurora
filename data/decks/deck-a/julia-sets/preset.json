@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "julia-sets",
+  "slug": "julia-sets",
+  "label": "JuliaSets",
+  "disposition": "fullscreen-primary",
+  "character": "Julia seed orbit—c as a living performance parameter.",
+  "uiGroup": "continuous-space",
+  "legacyIndex": 40,
+  "suppressLegacyField": true
+}

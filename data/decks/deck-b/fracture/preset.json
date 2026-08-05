@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "fracture",
+  "slug": "fracture",
+  "label": "Fracture",
+  "disposition": "field-primitive",
+  "character": "Broken planes—angular splits on hits.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 18,
+  "field": {
+    "primitive": "fracture"
+  }
+}

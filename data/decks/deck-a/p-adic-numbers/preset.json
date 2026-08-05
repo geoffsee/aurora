@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "p-adic-numbers",
+  "slug": "p-adic-numbers",
+  "label": "PAdicNumbers",
+  "disposition": "fullscreen-primary",
+  "character": "Hierarchical nested disks—ultrametric depth as zoom.",
+  "uiGroup": "abstract-character",
+  "legacyIndex": 44,
+  "suppressLegacyField": true
+}

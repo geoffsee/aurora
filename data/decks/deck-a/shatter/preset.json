@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "shatter",
+  "slug": "shatter",
+  "label": "Shatter",
+  "disposition": "field-primitive",
+  "character": "High-band shards—cracks on impact.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 11,
+  "field": {
+    "primitive": "shatter"
+  }
+}

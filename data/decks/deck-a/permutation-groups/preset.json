@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "permutation-groups",
+  "slug": "permutation-groups",
+  "label": "PermutationGroups",
+  "disposition": "engine-module",
+  "character": "Discrete reordering—slots permute on musical events.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 33,
+  "engineModule": "permutation-groups"
+}

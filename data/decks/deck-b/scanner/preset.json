@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "scanner",
+  "slug": "scanner",
+  "label": "Scanner",
+  "disposition": "field-primitive",
+  "character": "Sweeping bars—scanline time as motion.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 21,
+  "field": {
+    "primitive": "scanner"
+  }
+}

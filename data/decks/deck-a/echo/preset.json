@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "echo",
+  "slug": "echo",
+  "label": "Echo",
+  "disposition": "field-primitive",
+  "character": "Trail-forward afterimages—feedback owns the ghost.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 16,
+  "field": {
+    "primitive": "echo"
+  }
+}

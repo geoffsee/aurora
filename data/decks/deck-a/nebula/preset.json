@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "nebula",
+  "slug": "nebula",
+  "label": "Nebula",
+  "disposition": "field-primitive",
+  "character": "Soft cloud mass—bloom and drift.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 19,
+  "field": {
+    "primitive": "nebula"
+  }
+}

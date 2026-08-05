@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "tetrahedral-matrix",
+  "slug": "tetrahedral-matrix",
+  "label": "TetrahedralMatrix",
+  "disposition": "mesh-primary",
+  "character": "Tetrahedral lattice—edge glow and lattice scale.",
+  "uiGroup": "structured-space",
+  "legacyIndex": 30,
+  "suppressLegacyField": true
+}

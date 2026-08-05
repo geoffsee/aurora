@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "vector-spaces",
+  "slug": "vector-spaces",
+  "label": "VectorSpaces",
+  "disposition": "engine-module",
+  "character": "Basis and span—shear and scale the frame axes.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 45,
+  "engineModule": "vector-spaces"
+}

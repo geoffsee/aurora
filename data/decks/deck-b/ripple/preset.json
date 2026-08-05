@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "ripple",
+  "slug": "ripple",
+  "label": "Ripple",
+  "disposition": "field-primitive",
+  "character": "Concentric waves—bass as radius.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 10,
+  "field": {
+    "primitive": "ripple"
+  }
+}

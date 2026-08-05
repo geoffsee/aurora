@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "storm",
+  "slug": "storm",
+  "label": "Storm",
+  "disposition": "field-primitive",
+  "character": "Squall front—rain curtains and lightning on hits.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 15,
+  "field": {
+    "primitive": "storm"
+  }
+}

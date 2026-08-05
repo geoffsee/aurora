@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "mirror",
+  "slug": "mirror",
+  "label": "Mirror",
+  "disposition": "field-primitive",
+  "character": "Bilateral symmetry—left/right as a gesture.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 3,
+  "field": {
+    "primitive": "mirror"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "drift",
+  "slug": "drift",
+  "label": "Drift",
+  "disposition": "field-primitive",
+  "character": "Slow lateral float—space between drops.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 14,
+  "field": {
+    "primitive": "drift"
+  }
+}

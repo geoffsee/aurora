@@ -2,6 +2,21 @@
 
 Read-only **bundled** catalog shipped in the repo under `data/decks/`. Operators can overlay custom presets via `AURORA_DATA_DIR` or `aurora --data-dir` without replacing the whole catalog.
 
+Runtime never writes into this tree — only the optional override root is writable.
+
+## Builtin set
+
+Bundled builtins cover **all legacy control-bus modes 0–48** (49 presets) **per deck**, duplicated strictly under `deck-a/` and `deck-b/` (no shared library). Labels, character briefs, and `uiGroup` come from `shared/visual-mode-catalog.ts`. Folder names are kebab-case slugs derived from the catalog labels (`Beams` → `beams`, `CalabiYau` → `calabi-yau`).
+
+Regenerate after catalog renames:
+
+```bash
+bun run scripts/generate-bundled-mode-presets.ts
+bun run scripts/generate-bundled-mode-presets.ts --check   # CI / drift guard
+```
+
+The engine still matches legacy indices in Rust match arms; these folders are the catalog/metadata source for scan, compile, and later HTTP APIs. Modes 25–48 may be metadata-only (`engine-module` / `mesh-primary` / `fullscreen-primary`) until their backends ship.
+
 ## Layout
 
 ```
@@ -18,16 +33,23 @@ $AURORA_DATA_DIR/             # optional writable overlay (same shape)
 
 Strict per-deck catalogs: Deck A only reads `deck-a/`, Deck B only `deck-b/`.
 
-Each preset folder is a **slug** (kebab-case). Required file: `preset.json` with at least:
+Each preset folder is a **slug** (kebab-case). Bundled `preset.json` files use authoring schema v1 (`shared/mode-preset-schema.ts`):
 
 ```json
 {
+  "schemaVersion": 1,
   "id": "beams",
   "slug": "beams",
   "label": "Beams",
-  "legacyIndex": 0
+  "character": "Radial sticks—core pulse and spin field.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 0,
+  "disposition": "field-primitive",
+  "field": { "primitive": "beams" }
 }
 ```
+
+Scan (`bridge/mode-catalog.ts`) only requires `id` + folder/slug consistency (plus optional `label` / `legacyIndex`). Full `validateModePreset` applies on the compile path.
 
 - `id` is required. If `slug` is omitted, `id` must equal the folder name.
 - If `slug` is present, it must match the folder name.

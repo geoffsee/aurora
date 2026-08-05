@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "lattice",
+  "slug": "lattice",
+  "label": "Lattice",
+  "disposition": "field-primitive",
+  "character": "Snapped grid—order with beat accents.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 13,
+  "field": {
+    "primitive": "lattice"
+  }
+}

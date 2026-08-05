@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "vortex",
+  "slug": "vortex",
+  "label": "Vortex",
+  "disposition": "field-primitive",
+  "character": "Inward pull—spin collapses to center.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 17,
+  "field": {
+    "primitive": "vortex"
+  }
+}

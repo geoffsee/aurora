@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "borromean-rings",
+  "slug": "borromean-rings",
+  "label": "BorromeanRings",
+  "disposition": "mesh-primary",
+  "character": "Linked rings—unlink-impossible silhouette as identity.",
+  "uiGroup": "structured-space",
+  "legacyIndex": 31,
+  "suppressLegacyField": true
+}
