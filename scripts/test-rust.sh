@@ -21,17 +21,18 @@ log "cargo test -p xtask"
 cargo test -p xtask --verbose
 
 # ---------------------------------------------------------------------------
-# aurora (root crate)
+# aurora (root crate) — FieldRuntime unit tests only
 #
-# Skipped: the crate targets `wasm32-unknown-unknown` and pulls in Bevy
-# with `bevy_winit` + `webgpu`. A native `cargo test` build would try to
-# link the desktop windowing/renderer stack, which has no functioning host
-# backend in headless CI (and the `webgpu` feature is wasm-only). The wasm
-# build is verified separately by `bun run check:wasm` and the deploy/CI
-# workflows.
+# Full native `cargo test -p aurora` used to be skipped because the crate is
+# primarily wasm/Bevy. Unit tests under `src/field_runtime.rs` (and existing
+# mode_catalog/mode_director modules) compile as bin tests without spawning a
+# window. We run the FieldRuntime parity/golden suite for PR6 (#240).
+# Wasm build remains verified by `bun run check:wasm` / CI workflows.
+#
+# Refresh goldens: UPDATE_FIELD_GOLDS=1 cargo test -p aurora --bin aurora golden_poses -- --nocapture
 # ---------------------------------------------------------------------------
-log "skipping aurora native tests (wasm-only crate)"
-# cargo test -p aurora --verbose
+log "cargo test -p aurora --bin aurora field_runtime"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}" cargo test -p aurora --bin aurora field_runtime
 
 # ---------------------------------------------------------------------------
 # aurora-vst (plugins/aurora-vst)

@@ -49,6 +49,12 @@
         STATE: "/aurora/control/state",
       };
       const MAX_GPU_SHADER_INDEX = 36;
+      /** WASM export set after init — off-frame CompiledModeWire ingest (PR6 / #240). */
+      let auroraSetCompiledMode = null;
+      /** Last slug successfully requested per deck (not necessarily applied). */
+      const compiledSlugApplied = { "deck-a": "", "deck-b": "" };
+      /** In-flight fetch tokens so stale responses do not clobber a newer slug. */
+      const compiledFetchGen = { "deck-a": 0, "deck-b": 0 };
       const oscState = {
         connected: false,
         bridgeReady: false,
@@ -359,81 +365,52 @@
         oscState.lastEnvelopeAt = now;
       }
 
-      // Last-known-good compiled mode wire per deck (FieldRuntime / #240 consumes later).
-      // Menu/catalog epoch updates never clear these — only reselect/reload replaces them.
-      const compiledHold = {
-        "deck-a": { wireJson: "", slug: "", epoch: 0, seq: 0 },
-        "deck-b": { wireJson: "", slug: "", epoch: 0, seq: 0 },
-      };
-      let compiledFetchSeqA = 0;
-      let compiledFetchSeqB = 0;
-
-      function compiledUrl(deck, slug, epoch) {
-        const params = new URLSearchParams({ deck, slug });
-        if (Number.isInteger(epoch) && epoch > 0) params.set("epoch", String(epoch));
-        return `/api/modes/compiled?${params.toString()}`;
-      }
-
-      async function fetchAndHoldCompiled(deck, slug, reason) {
-        const trimmed = typeof slug === "string" ? slug.trim() : "";
-        if (!trimmed || trimmed.startsWith("legacy-")) return;
-        const seqKey = deck === "deck-a" ? "A" : "B";
-        const seq = seqKey === "A" ? ++compiledFetchSeqA : ++compiledFetchSeqB;
+      /**
+       * Off-frame: fetch CompiledModeWire for a deck slug and push into WASM.
+       * Disk/catalog epoch bumps alone do not call this — only slug change,
+       * initial bind, or explicit reload-active (`__auroraReloadActiveCompiledModes`).
+       * On fetch/parse failure the previous ActiveCompiled in Rust is kept.
+       */
+      async function fetchAndSetCompiledMode(deck, slug, force) {
+        if (!auroraSetCompiledMode) return;
+        const key = deck === 1 ? "deck-b" : "deck-a";
+        const clean = typeof slug === "string" ? slug.trim() : "";
+        if (!clean) return;
+        if (!force && compiledSlugApplied[key] === clean) return;
+        const gen = ++compiledFetchGen[key];
+        compiledSlugApplied[key] = clean;
         try {
-          const res = await fetch(compiledUrl(deck, trimmed), {
-            method: "GET",
-            headers: { accept: "application/json" },
-            cache: "no-store",
-          });
+          const url = `/api/modes/compiled?deck=${encodeURIComponent(key)}&slug=${encodeURIComponent(clean)}`;
+          const res = await fetch(url, { cache: "no-store" });
+          if (gen !== compiledFetchGen[key]) return; // superseded
           if (!res.ok) {
-            // Hold last good on compile/missing failure (show-safe).
-            console.warn(
-              `[compiled] ${reason} failed for ${deck}/${trimmed}: HTTP ${res.status} — holding last good`,
-            );
+            console.warn(`[field-runtime] compile fetch ${res.status} for ${key}/${clean}`);
             return;
           }
           const wire = await res.json();
-          // Drop stale responses if a newer fetch started.
-          const latest = seqKey === "A" ? compiledFetchSeqA : compiledFetchSeqB;
-          if (seq !== latest) return;
-          const epoch =
-            wire && typeof wire === "object" && Number.isFinite(Number(wire.epoch))
-              ? Math.floor(Number(wire.epoch))
-              : 0;
-          compiledHold[deck] = {
-            wireJson: JSON.stringify(wire),
-            slug: trimmed,
-            epoch,
-            seq,
-          };
+          if (gen !== compiledFetchGen[key]) return;
+          const json = JSON.stringify(wire);
+          const ok = auroraSetCompiledMode(deck, json);
+          if (!ok) {
+            console.warn(`[field-runtime] aurora_set_compiled_mode rejected deck=${deck}`);
+          }
         } catch (err) {
-          console.warn(
-            `[compiled] ${reason} error for ${deck}/${trimmed}:`,
-            err instanceof Error ? err.message : err,
-          );
+          console.warn(`[field-runtime] compile fetch failed for ${key}/${clean}:`, err);
         }
       }
 
-      function maybeFetchCompiled(deck, prevSlug, prevReloadVersion) {
-        const slug =
-          deck === "deck-a" ? controlState.deckAPresetSlug : controlState.deckBPresetSlug;
-        const reload =
-          deck === "deck-a"
-            ? controlState.deckAReloadActiveVersion
-            : controlState.deckBReloadActiveVersion;
-        const hold = compiledHold[deck];
-        const slugChanged = typeof slug === "string" && slug !== prevSlug;
-        const reloadBumped = reload !== prevReloadVersion && reload > prevReloadVersion;
-        // Warm hold on first control frame when we have a slug but no compiled yet.
-        const needsInitial = Boolean(slug) && !hold.wireJson && hold.slug !== slug;
-        if (slugChanged) {
-          void fetchAndHoldCompiled(deck, slug, "slug-change");
-        } else if (reloadBumped) {
-          void fetchAndHoldCompiled(deck, slug, "reload-active");
-        } else if (needsInitial) {
-          void fetchAndHoldCompiled(deck, slug, "initial");
-        }
+      function syncCompiledModesFromControlState(force) {
+        if (!auroraSetCompiledMode) return;
+        void fetchAndSetCompiledMode(0, controlState.deckAPresetSlug, force);
+        void fetchAndSetCompiledMode(1, controlState.deckBPresetSlug, force);
       }
+
+      /** Explicit reload-active: re-fetch current slugs (new epoch compile if any). */
+      window.__auroraReloadActiveCompiledModes = () => {
+        compiledSlugApplied["deck-a"] = "";
+        compiledSlugApplied["deck-b"] = "";
+        syncCompiledModesFromControlState(true);
+      };
 
       function applyControlState(next) {
         if (!next || typeof next !== "object") return;
@@ -481,10 +458,28 @@
           Number.MAX_SAFE_INTEGER,
           controlState.deckBReloadActiveVersion,
         );
-        // Compiled delivery path (#241): fetch on slug change or explicit Reload active.
-        // Catalog epoch bumps do NOT auto-swap the held compiled payload.
-        maybeFetchCompiled("deck-a", prevSlugA, prevReloadA);
-        maybeFetchCompiled("deck-b", prevSlugB, prevReloadB);
+        // Off-frame FieldRuntime ingest: slug change, or explicit Reload active.
+        // Catalog epoch bumps alone do not re-fetch (show-safe last-known-good in Rust).
+        const reloadBumpedA =
+          controlState.deckAReloadActiveVersion !== prevReloadA &&
+          controlState.deckAReloadActiveVersion > prevReloadA;
+        const reloadBumpedB =
+          controlState.deckBReloadActiveVersion !== prevReloadB &&
+          controlState.deckBReloadActiveVersion > prevReloadB;
+        if (controlState.deckAPresetSlug !== prevSlugA || reloadBumpedA) {
+          void fetchAndSetCompiledMode(
+            0,
+            controlState.deckAPresetSlug,
+            reloadBumpedA,
+          );
+        }
+        if (controlState.deckBPresetSlug !== prevSlugB || reloadBumpedB) {
+          void fetchAndSetCompiledMode(
+            1,
+            controlState.deckBPresetSlug,
+            reloadBumpedB,
+          );
+        }
         controlState.deckAGpuShader = clampInt(next.deckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckAGpuShader);
         controlState.deckBGpuShader = clampInt(next.deckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckBGpuShader);
         controlState.rings = next.rings !== false;
@@ -752,8 +747,13 @@
           boot.classList.add("error");
         }
       } else try {
-        const { default: init } = await import("./dist/pkg/aurora.js");
-        await init();
+        const wasm = await import("./dist/pkg/aurora.js");
+        await wasm.default();
+        if (typeof wasm.aurora_set_compiled_mode === "function") {
+          auroraSetCompiledMode = wasm.aurora_set_compiled_mode;
+          // Initial bind: load compiled defs for current slugs (off-frame).
+          syncCompiledModesFromControlState(true);
+        }
         boot?.remove();
       } catch (error) {
         console.error(error);
