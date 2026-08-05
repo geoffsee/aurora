@@ -60,6 +60,8 @@ export const PRESETS_KEY = 'aurora.presets';
 export const SESSION_STATE_KEY = 'aurora.control-session';
 export const MIDI_CC_BINDINGS_KEY = 'aurora.midi-cc-bindings';
 export const AUTOMATION_TRIGGERS_KEY = 'aurora.automation-triggers';
+/** Opt-in embedded projector iframe in controls (memory conservation; issue #231). */
+export const PREVIEW_ENABLED_KEY = 'aurora.controls.previewEnabled';
 
 export const MIDI_CC_PARAM_LABELS: Record<string, string> = {
   crossfade: 'Crossfade',

@@ -1,6 +1,7 @@
-import { Box, Flex, Link } from '@chakra-ui/react';
-import { useMemo } from 'react';
+import { Box, Button, Flex, Link, Text } from '@chakra-ui/react';
+import { useCallback, useMemo, useState } from 'react';
 import { isGeoffseeGithubPages } from '../../../shared/static-hosting.ts';
+import { loadPreviewEnabled, savePreviewEnabled } from '../lib/preview-preference.ts';
 import { projectorPreviewUrl, projectorWindowUrl } from '../lib/projector-url.ts';
 import { Panel } from './ui.tsx';
 
@@ -30,6 +31,17 @@ const glassButtonProps = {
   },
 } as const;
 
+const previewFrameProps = {
+  position: 'relative' as const,
+  flex: '1',
+  minH: { base: '14rem', md: '18rem', xl: '22rem' },
+  borderRadius: 'lg',
+  overflow: 'hidden' as const,
+  borderWidth: '1px',
+  borderColor: 'whiteAlpha.200',
+  bg: 'black',
+};
+
 function ProjectorIcon() {
   return (
     <svg
@@ -57,32 +69,68 @@ export function PreviewPanel() {
   const src = useMemo(() => projectorPreviewUrl(), []);
   const projectorUrl = useMemo(() => projectorWindowUrl(), []);
   const onGeoffsee = isGeoffseeGithubPages();
+  const [previewEnabled, setPreviewEnabled] = useState(() => loadPreviewEnabled());
+
+  const setEnabled = useCallback((enabled: boolean) => {
+    setPreviewEnabled(enabled);
+    savePreviewEnabled(enabled);
+  }, []);
 
   return (
     <Panel area="prev" aria-label="Visualization preview">
       <Flex align="stretch" gap={3} h="100%">
-        <Box
-          position="relative"
-          flex="1"
-          minH={{ base: '14rem', md: '18rem', xl: '22rem' }}
-          borderRadius="lg"
-          overflow="hidden"
-          borderWidth="1px"
-          borderColor="whiteAlpha.200"
-          bg="black"
-        >
-          <iframe
-            src={src}
-            title="aurora visualization preview"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              border: 'none',
-            }}
-            loading="lazy"
-          />
+        <Box {...previewFrameProps}>
+          {previewEnabled ? (
+            <>
+              <iframe
+                src={src}
+                title="aurora visualization preview"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                }}
+                loading="lazy"
+              />
+              <Button
+                size="sm"
+                variant="surface"
+                position="absolute"
+                top={2}
+                right={2}
+                zIndex={1}
+                onClick={() => setEnabled(false)}
+                aria-label="Disable preview"
+              >
+                Disable preview
+              </Button>
+            </>
+          ) : (
+            <Flex
+              position="absolute"
+              inset={0}
+              direction="column"
+              align="center"
+              justify="center"
+              gap={3}
+              px={4}
+              textAlign="center"
+            >
+              <Text color="whiteAlpha.700" fontSize="sm" m={0}>
+                Embedded preview is off to save memory. Enable only when you need a live view here.
+              </Text>
+              <Button
+                size="md"
+                colorPalette="cyan"
+                onClick={() => setEnabled(true)}
+                aria-label="Enable preview"
+              >
+                Enable preview
+              </Button>
+            </Flex>
+          )}
         </Box>
         {onGeoffsee ? (
           <Link
