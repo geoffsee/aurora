@@ -70,6 +70,7 @@ import {
   MIDI_CLOCK_TIMEOUT_MS,
   MIDI_CLOCK_WINDOW,
 } from './midi-clock.ts';
+import { type CatalogSnapshot, formatCatalogSummary, loadModeCatalog } from './mode-catalog.ts';
 import {
   applyLayerWeightControl,
   createLayerController,
@@ -219,6 +220,27 @@ const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
 const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? '';
 const abletonLinkEnabled = Bun.env.ABLETON_LINK_ENABLED === '1';
 const hotReload = Bun.env.HOT_RELOAD === '1';
+
+// Deck preset catalog (bundled data/ + optional AURORA_DATA_DIR overlay).
+// HTTP list/serve APIs land in a later PR; boot only resolves, scans, and holds
+// the snapshot so epoch + counts are visible in logs.
+let modeCatalog: CatalogSnapshot = loadModeCatalog({ appRoot: root });
+console.log(formatCatalogSummary(modeCatalog));
+if (Bun.env.AURORA_DATA_DIR?.trim()) {
+  console.log(`[catalog] override AURORA_DATA_DIR=${Bun.env.AURORA_DATA_DIR.trim()}`);
+}
+
+/** Rescan bundled + override layers; bumps epoch only when content changes. */
+export function rescanModeCatalog(): CatalogSnapshot {
+  modeCatalog = loadModeCatalog({ appRoot: root, previous: modeCatalog });
+  console.log(formatCatalogSummary(modeCatalog));
+  return modeCatalog;
+}
+
+export function getModeCatalog(): CatalogSnapshot {
+  return modeCatalog;
+}
+
 const sockets = new Set<ServerWebSocket<undefined>>();
 let numTracks = 0;
 let oscReady = false;

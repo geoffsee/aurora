@@ -85,6 +85,8 @@ COPY --from=build /app/bridge ./bridge
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/assets/shaders ./assets/shaders
+# Bundled deck preset catalog (read-only layer; override via AURORA_DATA_DIR)
+COPY data ./data
 COPY deploy ./deploy
 RUN chmod +x /app/deploy/entrypoint.sh
 

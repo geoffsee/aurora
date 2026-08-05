@@ -32,6 +32,21 @@ describe('parseArgs runtimes', () => {
   test('down command', () => {
     expect(parseArgs(['bun', 'aurora', 'down']).mode).toBe('down');
   });
+
+  test('accepts --data-dir path and --data-dir=path', () => {
+    expect(parseArgs(['bun', 'aurora', '--data-dir', './my-modes'])).toMatchObject({
+      mode: 'run',
+      dataDir: './my-modes',
+    });
+    expect(parseArgs(['bun', 'aurora', '--data-dir=./my-modes', '-n'])).toMatchObject({
+      runtime: 'native',
+      dataDir: './my-modes',
+    });
+  });
+
+  test('rejects --data-dir without a value', () => {
+    expect(parseArgs(['bun', 'aurora', '--data-dir']).error).toMatch(/requires a path/);
+  });
 });
 
 describe('renderCaddyfile', () => {

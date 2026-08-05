@@ -13,6 +13,7 @@
  */
 
 import { networkInterfaces } from 'node:os';
+import { resolve } from 'node:path';
 import { parseArgs, usage } from './args';
 import { type DockerArch, dockerArchFromHost, dockerPlatform } from './docker-platform';
 import { EMBEDDED_DOCKER_CONTEXT_PATH } from './embedded-context';
@@ -119,7 +120,10 @@ async function buildImage(): Promise<number> {
   return buildImageFromWorktree();
 }
 
-function startContainer(): number {
+/** In-container mount path for operator overlay (see data/README.md). */
+const CONTAINER_DATA_DIR = '/override';
+
+function startContainer(dataDir?: string): number {
   stopContainer();
   console.log(`[aurora] starting ${CONTAINER}…`);
   const tlsHosts = ['localhost', '127.0.0.1', ...hostLanIps()].join(',');
@@ -142,6 +146,20 @@ function startContainer(): number {
     }
   }
 
+  // Overlay catalog: CLI --data-dir wins over AURORA_DATA_DIR env.
+  const hostDataDir =
+    dataDir !== undefined && dataDir.trim() !== ''
+      ? resolve(dataDir.trim())
+      : process.env.AURORA_DATA_DIR?.trim()
+        ? resolve(process.env.AURORA_DATA_DIR.trim())
+        : null;
+  const volumeArgs: string[] = [];
+  if (hostDataDir) {
+    volumeArgs.push('-v', `${hostDataDir}:${CONTAINER_DATA_DIR}`);
+    envArgs.push('-e', `AURORA_DATA_DIR=${CONTAINER_DATA_DIR}`);
+    console.log(`[aurora] data overlay ${hostDataDir} → ${CONTAINER_DATA_DIR}`);
+  }
+
   return run([
     'docker',
     'run',
@@ -153,6 +171,7 @@ function startContainer(): number {
     '--add-host',
     'host.docker.internal:host-gateway',
     ...envArgs,
+    ...volumeArgs,
     '-p',
     `${PROJECTOR_PORT}:8443`,
     '-p',
@@ -212,7 +231,7 @@ async function attachLogsUntilExit(): Promise<number> {
   return 0;
 }
 
-async function runDocker(daemon: boolean): Promise<number> {
+async function runDocker(daemon: boolean, dataDir?: string): Promise<number> {
   if (!dockerAvailable()) {
     console.error(
       '[aurora] Docker is not available. Start Docker Desktop (or the Engine) and retry.\n' +
@@ -226,7 +245,7 @@ async function runDocker(daemon: boolean): Promise<number> {
   const buildCode = await buildImage();
   if (buildCode !== 0) return buildCode;
 
-  const startCode = startContainer();
+  const startCode = startContainer(dataDir);
   if (startCode !== 0) return startCode;
 
   printDockerUrls();
@@ -240,7 +259,7 @@ async function runDocker(daemon: boolean): Promise<number> {
 }
 
 async function main(): Promise<number> {
-  const { mode, daemon, runtime, error } = parseArgs(process.argv);
+  const { mode, daemon, runtime, dataDir, error } = parseArgs(process.argv);
 
   if (error) {
     console.error(`[aurora] ${error}`);
@@ -272,10 +291,10 @@ async function main(): Promise<number> {
   }
 
   if (runtime === 'native') {
-    return runNativeStack({ daemon, cliDir: import.meta.dir });
+    return runNativeStack({ daemon, cliDir: import.meta.dir, dataDir });
   }
 
-  return runDocker(daemon);
+  return runDocker(daemon, dataDir);
 }
 
 if (import.meta.main) {

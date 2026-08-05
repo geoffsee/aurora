@@ -102,6 +102,8 @@ export type NativeRunOptions = {
   daemon?: boolean;
   cliDir?: string;
   cwd?: string;
+  /** Overlay data dir (sets AURORA_DATA_DIR for the bridge). */
+  dataDir?: string;
 };
 
 /**
@@ -137,9 +139,14 @@ export async function runNativeStack(opts: NativeRunOptions = {}): Promise<numbe
     'VST_CONTROL_RECV_PORT',
     'MIDI_CLOCK_DEVICE',
     'ABLETON_LINK_ENABLED',
+    'AURORA_DATA_DIR',
   ] as const) {
     const v = process.env[key];
     if (v !== undefined && v !== '') bridgeEnv[key] = v;
+  }
+  // CLI --data-dir wins over a pre-existing env value for this process tree.
+  if (opts.dataDir !== undefined && opts.dataDir.trim() !== '') {
+    bridgeEnv.AURORA_DATA_DIR = resolve(opts.dataDir.trim());
   }
 
   if (

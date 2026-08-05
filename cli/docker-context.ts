@@ -39,6 +39,7 @@ export const DOCKERFILE_REQUIRED = [
   'scripts',
   'web',
   'bridge',
+  'data',
   '.cargo',
   'deploy',
 ] as const;
