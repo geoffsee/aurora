@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "broken-pack",
+  "slug": "broken-pack",
+  "label": "Broken",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "not_a_real_primitive",
+    "params": { "intensity": 1 }
+  }
+}

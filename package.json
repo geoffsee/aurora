@@ -24,6 +24,7 @@
     "down": "bun run cli/aurora.ts down",
     "build:cli": "bun run aurora.bun.build.ts",
     "dry-run": "bun run scripts/dry-run.ts",
+    "modes:validate": "bun run scripts/modes-validate.ts",
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",
     "test:web": "vitest run",
