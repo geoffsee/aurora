@@ -1,9 +1,10 @@
 //! Engine modules for legacy visual modes 25–48 (PR12 / #246).
 //!
 //! Layout math formerly lived in four giant `match deck_mode` arms inside
-//! `update_visuals`. Those arms are deleted for 25–48; this module owns the
-//! FieldPose math instead. Catalog folders still exist on disk for every mode
-//! (including engine-module dispositions). Novel math still requires a rebuild.
+//! `update_visuals`. PR14 (#248) removed residual four-site matches entirely;
+//! this module owns FieldPose math for modes 25–48. Catalog folders still exist
+//! on disk for every mode (including engine-module dispositions). Novel math
+//! still requires a rebuild.
 //!
 //! Mesh-primary / fullscreen-primary modes use these ports as the field look
 //! until pack mesh / WGSL backends are active (ModeDirector weight 0 then).
@@ -34,7 +35,7 @@ fn field_energy(inputs: &FieldFrameInputs) -> f32 {
 }
 
 /// Pose one field element for modes 25–48. Returns `None` outside that range
-/// (caller continues to Family A FieldRuntime / remaining legacy arms).
+/// (caller uses Family A FieldRuntime fallback or hides the element).
 #[allow(clippy::too_many_arguments)]
 pub fn pose_for_mode(
     mode: VisualMode,
@@ -742,5 +743,50 @@ mod tests {
         assert!(h.alpha > 0.0);
         let f = pose_for_mode(VisualMode::Forcing, FieldPool::Tiles, 12, 0.5, 2, 1, &inputs).unwrap();
         assert!(f.sx >= 1.0);
+    }
+
+    /// PR14 routing contract: every mode 0–48 either FieldRuntime-poses (0–23),
+    /// engine-module-poses (25–48), or is Figure/mesh (24 → hide, no field pose).
+    #[test]
+    fn modes_0_48_have_disposition_path() {
+        use crate::field_runtime::{
+            FieldRuntime, primitive_id_for_legacy_index,
+        };
+
+        let inputs = sample_inputs();
+        let rt = FieldRuntime::default();
+        for id in 0..=48i32 {
+            let mode = VisualMode::from_control(id as f32);
+            let fallback = primitive_id_for_legacy_index(id);
+            let field = rt.pose(
+                crate::field_runtime::FieldDeck::A,
+                FieldPool::Beams,
+                0,
+                0.1,
+                0,
+                0,
+                &inputs,
+                fallback,
+            );
+            let engine = pose_for_mode(mode, FieldPool::Beams, 0, 0.1, 0, 0, &inputs);
+            match id {
+                0..=23 => {
+                    let pose = field.expect("Family A FieldRuntime pose");
+                    assert!(pose.px.is_finite() && pose.alpha.is_finite(), "mode {id}");
+                    assert!(engine.is_none(), "engine must not claim Family A {id}");
+                }
+                24 => {
+                    // Figure: mesh owns look; field + engine return None → hide.
+                    assert!(field.is_none(), "figure must not field-pose");
+                    assert!(engine.is_none(), "figure must not engine-pose");
+                }
+                25..=48 => {
+                    assert!(field.is_none(), "25–48 not Family A field fallback");
+                    let pose = engine.expect("engine_modules pose");
+                    assert!(pose.sx.is_finite() && pose.sy.is_finite(), "mode {id}");
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 }

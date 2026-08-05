@@ -1474,8 +1474,6 @@ fn update_visuals(
     } else {
         1.0
     };
-    // Trails slider — gates the ghost layer and echo-style deck modes.
-    let trail_gain = state.feedback.clamp(0.0, 1.0);
     // Derive a transient-only signal for strobe: the excess of bass_activity over
     // its level-follow component. This keeps strobe flashing on kicks/hits rather
     // than staying solid during sustained bass.
@@ -1540,568 +1538,57 @@ fn update_visuals(
             intensity_drive,
             motion_drive,
         );
-        // Family A (0–23): FieldRuntime always handles these, even without a compiled
-        // wire (VST int-only shows). Compiled wire wins when present.
+        // Routing (PR14 / #248): FieldRuntime (0–23 + compiled) → engine_modules
+        // (25–48) → hide. No residual 49-way layout match arms on the four pools.
         let field_fallback = primitive_id_for_legacy_index(deck_mode.as_control());
+        let pool = match element.kind {
+            VisualKind::Beam => FieldPool::Beams,
+            VisualKind::Ring => FieldPool::Rings,
+            VisualKind::Tile => FieldPool::Tiles,
+            VisualKind::Ghost => FieldPool::Ghost,
+        };
 
-        match element.kind {
-            VisualKind::Beam => {
-                // FieldRuntime DSL path (PR6/PR8/PR9): compiled field or Family A fallback.
-                if let Some(pose) = field_runtime.pose(
-                    fdeck,
-                    FieldPool::Beams,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                    field_fallback,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                } else if let Some(pose) = engine_pose_for_mode(
-                    deck_mode,
-                    FieldPool::Beams,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                } else if field_runtime.suppress_legacy(fdeck) {
-                    alpha = 0.0;
-                } else {
-                // Deck A field: every mode fully owns layout (pos/rot/scale/alpha/hue).
-                // Same contract as Deck B — no shared base that makes every pad identical.
-                let n = DECK_A_BEAMS.max(1) as f32;
-                let fraction = element.index as f32 / n;
-                let layer = (element.index % 12) as f32 / 11.0;
-                let seed = element.seed;
-                let depth = state.depth;
-                let wobble = wave(t * 2.3 + seed * 9.0);
-                let field_live = if state.osc_connected {
-                    (0.4 + motion_drive * 0.6 + intensity_drive * 0.12 + bass_activity * 0.15)
-                        .clamp(0.4, 1.6)
-                } else {
-                    1.0
-                };
-                let energy = (intensity_drive * field_live).clamp(0.2, 2.2);
+        if let Some(pose) = field_runtime.pose(
+            fdeck,
+            pool,
+            element.index,
+            element.seed,
+            element.col,
+            element.row,
+            &finputs,
+            field_fallback,
+        ) {
+            transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+            transform.rotation = Quat::from_rotation_z(pose.rot);
+            transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+            alpha *= pose.alpha.clamp(0.0, 1.5);
+            hue = pose.hue;
+            lightness = pose.lightness;
+        } else if let Some(pose) = engine_pose_for_mode(
+            deck_mode,
+            pool,
+            element.index,
+            element.seed,
+            element.col,
+            element.row,
+            &finputs,
+        ) {
+            transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+            transform.rotation = Quat::from_rotation_z(pose.rot);
+            transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+            alpha *= pose.alpha.clamp(0.0, 1.5);
+            hue = pose.hue;
+            lightness = pose.lightness;
+        } else {
+            // Figure/mesh/fullscreen (weight already 0) or no disposition: hide element.
+            alpha = 0.0;
+        }
 
-                let mut px = 0.0_f32;
-                let mut py = 0.0_f32;
-                let mut pz = 2.0_f32 + fraction;
-                let mut rot = 0.0_f32;
-                let mut sx = 6.0_f32;
-                let mut sy = 200.0_f32;
-                let mut mode_alpha = 1.0_f32;
-                let mut mode_hue = 0.0_f32;
-
-                match deck_mode {
-                    // Family A (0–23): FieldRuntime only (compiled wire or VST fallback).
-                    VisualMode::Beams
-                    | VisualMode::Tunnel
-                    | VisualMode::Burst
-                    | VisualMode::Mirror
-                    | VisualMode::Wash
-                    | VisualMode::Strobe
-                    | VisualMode::Swarm
-                    | VisualMode::Orbit
-                    | VisualMode::Pulse
-                    | VisualMode::Spiral
-                    | VisualMode::Ripple
-                    | VisualMode::Shatter
-                    | VisualMode::Flux
-                    | VisualMode::Lattice
-                    | VisualMode::Drift
-                    | VisualMode::Storm
-                    | VisualMode::Echo
-                    | VisualMode::Vortex
-                    | VisualMode::Fracture
-                    | VisualMode::Nebula
-                    | VisualMode::Prism
-                    | VisualMode::Scanner
-                    | VisualMode::Comet
-                    | VisualMode::Bloom => {
-                        mode_alpha = 0.0;
-                    }
-                    VisualMode::Figure => {
-                        mode_alpha = 0.0;
-                    }
-                    
-                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
-                    VisualMode::Hypercube
-                    | VisualMode::CalabiYau
-                    | VisualMode::Quasicrystal
-                    | VisualMode::PenroseTiling
-                    | VisualMode::SierpinskiTriangle
-                    | VisualMode::TetrahedralMatrix
-                    | VisualMode::BorromeanRings
-                    | VisualMode::Torus
-                    | VisualMode::PermutationGroups
-                    | VisualMode::SymmetryGroups
-                    | VisualMode::LieAlgebras
-                    | VisualMode::LatticeTheory
-                    | VisualMode::GraphTheory
-                    | VisualMode::DesignTheory
-                    | VisualMode::MandelbrotSet
-                    | VisualMode::JuliaSets
-                    | VisualMode::LorenzAttractor
-                    | VisualMode::Functors
-                    | VisualMode::ModularArithmetic
-                    | VisualMode::PAdicNumbers
-                    | VisualMode::VectorSpaces
-                    | VisualMode::Eigenvectors
-                    | VisualMode::BooleanLattices
-                    | VisualMode::Forcing => {
-                        mode_alpha = 0.0;
-                    }
-                }
-
-                transform.translation = Vec3::new(px, py, pz);
-                transform.rotation = Quat::from_rotation_z(rot);
-                // Perspective-ish scale boost from depth control (subtle, all modes).
-                let persp = 1.0 + depth * (layer - 0.45) * 0.35;
-                transform.scale = Vec3::new(sx.max(1.0) * persp, sy.max(1.0) * persp, 1.0);
-
-                alpha *= (mode_alpha * (0.3 + 0.55 * energy) + beat_hit * 0.12 + state.flash * 0.3)
-                    .clamp(0.0, 1.5);
-                hue += mode_hue;
-                lightness += beat_hit * 0.04
-                    + state.flash * 0.15
-                    + deck_drive * 0.06
-                    + depth * layer * 0.05
-                    + high * 0.03;
-                } // end legacy Beam path
-            }
-            VisualKind::Ring => {
-                if let Some(pose) = field_runtime.pose(
-                    fdeck,
-                    FieldPool::Rings,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                    field_fallback,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                    alpha *= state.ring_opacity;
-                    if !state.rings_enabled {
-                        alpha = 0.0;
-                    }
-                } else if let Some(pose) = engine_pose_for_mode(
-                    deck_mode,
-                    FieldPool::Rings,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                    alpha *= state.ring_opacity;
-                    if !state.rings_enabled {
-                        alpha = 0.0;
-                    }
-                } else if field_runtime.suppress_legacy(fdeck) {
-                    alpha = 0.0;
-                } else {
-                // A restrained halo, not a target ring. Layers stay close and faint so
-                // the ring supports the beams instead of becoming the whole composition.
-                let layer = if DECK_A_RINGS > 1 {
-                    element.index as f32 / (DECK_A_RINGS as f32 - 1.0)
-                } else {
-                    0.0
-                };
-                let ring_pulse = wave(t * 2.4);
-                let beat_swell = beat_hit * 0.7 + cue_hit * 0.4;
-
-                // Per-mode feel WITHOUT moving the ring off-centre or onto multiple
-                // radii (that is exactly what read as a web). Only radius, halo spread,
-                // alpha, and an on/off gate change per mode; the ring stays centred.
-                let (radius_gain, halo_gain, alpha_gain, mode_gate) = match deck_mode {
-                    // Family A (0–23): FieldRuntime only — exhaustiveness stub.
-                    VisualMode::Beams
-                    | VisualMode::Tunnel
-                    | VisualMode::Burst
-                    | VisualMode::Mirror
-                    | VisualMode::Wash
-                    | VisualMode::Strobe
-                    | VisualMode::Swarm
-                    | VisualMode::Orbit
-                    | VisualMode::Pulse
-                    | VisualMode::Spiral
-                    | VisualMode::Ripple
-                    | VisualMode::Shatter
-                    | VisualMode::Flux
-                    | VisualMode::Lattice
-                    | VisualMode::Drift
-                    | VisualMode::Storm
-                    | VisualMode::Echo
-                    | VisualMode::Vortex
-                    | VisualMode::Fracture
-                    | VisualMode::Nebula
-                    | VisualMode::Prism
-                    | VisualMode::Scanner
-                    | VisualMode::Comet
-                    | VisualMode::Bloom => (0.0, 0.0, 0.0, 0.0),
-                    VisualMode::Figure => (1.0, 1.0, 0.0, 0.0),
-                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
-                    VisualMode::Hypercube
-                    | VisualMode::CalabiYau
-                    | VisualMode::Quasicrystal
-                    | VisualMode::PenroseTiling
-                    | VisualMode::SierpinskiTriangle
-                    | VisualMode::TetrahedralMatrix
-                    | VisualMode::BorromeanRings
-                    | VisualMode::Torus
-                    | VisualMode::PermutationGroups
-                    | VisualMode::SymmetryGroups
-                    | VisualMode::LieAlgebras
-                    | VisualMode::LatticeTheory
-                    | VisualMode::GraphTheory
-                    | VisualMode::DesignTheory
-                    | VisualMode::MandelbrotSet
-                    | VisualMode::JuliaSets
-                    | VisualMode::LorenzAttractor
-                    | VisualMode::Functors
-                    | VisualMode::ModularArithmetic
-                    | VisualMode::PAdicNumbers
-                    | VisualMode::VectorSpaces
-                    | VisualMode::Eigenvectors
-                    | VisualMode::BooleanLattices
-                    | VisualMode::Forcing => (0.0, 0.0, 0.0, 0.0),
-                };
-
-                let base_radius = 220.0
-                    + deck_drive * 44.0
-                    + bass * 58.0
-                    + melodic_activity * 18.0
-                    + ring_pulse * 9.0 * motion_drive
-                    + beat_swell * 24.0;
-                let size = (base_radius * radius_gain * (1.0 + layer * 0.08 * halo_gain)).max(1.0);
-
-                transform.translation = Vec3::new(0.0, 0.0, 18.0 - layer);
-                transform.rotation = Quat::from_rotation_z(-t * 0.22);
-                transform.scale = Vec3::splat(size);
-
-                hue += 35.0 + layer * 24.0;
-
-                // Faint inner band; halo falls off quickly outward.
-                let halo = 1.0 - layer;
-                let glow = halo * halo;
-                alpha *= mode_gate
-                    * alpha_gain
-                    * (0.015 + 0.22 * glow)
-                    * (0.26
-                        + ring_pulse * 0.12 * motion_drive
-                        + beat_hit * 0.22
-                        + melodic_activity * 0.08
-                        + state.flash * 0.16);
-                alpha *= state.ring_opacity;
-                if !state.rings_enabled {
-                    alpha = 0.0;
-                }
-                lightness += 0.04 + mid * 0.025 + high * 0.02 + glow * 0.035;
-                } // end legacy Ring path
-            }
-            VisualKind::Tile => {
-                if let Some(pose) = field_runtime.pose(
-                    fdeck,
-                    FieldPool::Tiles,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                    field_fallback,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                } else if let Some(pose) = engine_pose_for_mode(
-                    deck_mode,
-                    FieldPool::Tiles,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                } else if field_runtime.suppress_legacy(fdeck) {
-                    alpha = 0.0;
-                } else {
-                // Deck B field: every mode fully owns layout (pos/rot/scale/alpha/hue).
-                // No shared "default sticks" base — that made every pad look identical.
-                let col = element.col as f32;
-                let row = element.row as f32;
-                let cols = DECK_B_COLS as f32;
-                let rows = DECK_B_ROWS as f32;
-                let fraction = element.index as f32
-                    / ((DECK_B_COLS * DECK_B_ROWS).max(1) as f32);
-                let seed = element.seed;
-                let diagonal = col * 0.32 + row * 0.41;
-                let pulse = wave(
-                    t * (3.8 + melodic_activity * 5.5) - diagonal * 1.7
-                        + beat_hit * 2.0
-                        + deck_drive,
-                );
-                let u = if cols > 1.0 { col / (cols - 1.0) } else { 0.5 };
-                let v = if rows > 1.0 { row / (rows - 1.0) } else { 0.5 };
-                // Keep field visible under quiet OSC (old path died when motion_drive ~ 0).
-                let field_live = if state.osc_connected {
-                    (0.4 + motion_drive * 0.6 + intensity_drive * 0.12 + bass_activity * 0.15)
-                        .clamp(0.4, 1.6)
-                } else {
-                    1.0
-                };
-                let energy = (intensity_drive * field_live).clamp(0.2, 2.2);
-
-                let mut px = 0.0_f32;
-                let mut py = 0.0_f32;
-                let mut pz = 8.0_f32;
-                let mut rot = 0.0_f32;
-                let mut sx = 6.0_f32;
-                let mut sy = 90.0_f32;
-                let mut mode_alpha = 1.0_f32;
-                let mut mode_hue = 0.0_f32;
-
-                match deck_mode {
-                    // Family A (0–23): FieldRuntime only (compiled wire or VST fallback).
-                    VisualMode::Beams
-                    | VisualMode::Tunnel
-                    | VisualMode::Burst
-                    | VisualMode::Mirror
-                    | VisualMode::Wash
-                    | VisualMode::Strobe
-                    | VisualMode::Swarm
-                    | VisualMode::Orbit
-                    | VisualMode::Pulse
-                    | VisualMode::Spiral
-                    | VisualMode::Ripple
-                    | VisualMode::Shatter
-                    | VisualMode::Flux
-                    | VisualMode::Lattice
-                    | VisualMode::Drift
-                    | VisualMode::Storm
-                    | VisualMode::Echo
-                    | VisualMode::Vortex
-                    | VisualMode::Fracture
-                    | VisualMode::Nebula
-                    | VisualMode::Prism
-                    | VisualMode::Scanner
-                    | VisualMode::Comet
-                    | VisualMode::Bloom => {
-                        mode_alpha = 0.0;
-                    }
-                    VisualMode::Figure => {
-                        mode_alpha = 0.0;
-                    }
-                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
-                    VisualMode::Hypercube
-                    | VisualMode::CalabiYau
-                    | VisualMode::Quasicrystal
-                    | VisualMode::PenroseTiling
-                    | VisualMode::SierpinskiTriangle
-                    | VisualMode::TetrahedralMatrix
-                    | VisualMode::BorromeanRings
-                    | VisualMode::Torus
-                    | VisualMode::PermutationGroups
-                    | VisualMode::SymmetryGroups
-                    | VisualMode::LieAlgebras
-                    | VisualMode::LatticeTheory
-                    | VisualMode::GraphTheory
-                    | VisualMode::DesignTheory
-                    | VisualMode::MandelbrotSet
-                    | VisualMode::JuliaSets
-                    | VisualMode::LorenzAttractor
-                    | VisualMode::Functors
-                    | VisualMode::ModularArithmetic
-                    | VisualMode::PAdicNumbers
-                    | VisualMode::VectorSpaces
-                    | VisualMode::Eigenvectors
-                    | VisualMode::BooleanLattices
-                    | VisualMode::Forcing => {
-                        mode_alpha = 0.0;
-                    }
-                }
-
-                transform.translation = Vec3::new(px, py, pz);
-                transform.rotation = Quat::from_rotation_z(rot);
-                transform.scale = Vec3::new(sx.max(1.0), sy.max(1.0), 1.0);
-
-                // Visible floor — modes can darken, but the field shouldn't vanish under quiet OSC.
-                alpha *= (mode_alpha * (0.3 + 0.55 * energy) + beat_hit * 0.12 + state.flash * 0.25)
-                    .clamp(0.0, 1.5);
-                hue += mode_hue;
-                lightness += 0.05 + pulse * 0.08 + beat_hit * 0.05;
-                } // end legacy Tile path
-            }
-            VisualKind::Ghost => {
-                if let Some(pose) = field_runtime.pose(
-                    fdeck,
-                    FieldPool::Ghost,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                    field_fallback,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                } else if let Some(pose) = engine_pose_for_mode(
-                    deck_mode,
-                    FieldPool::Ghost,
-                    element.index,
-                    element.seed,
-                    element.col,
-                    element.row,
-                    &finputs,
-                ) {
-                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
-                    transform.rotation = Quat::from_rotation_z(pose.rot);
-                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
-                    alpha *= pose.alpha.clamp(0.0, 1.5);
-                    hue = pose.hue;
-                    lightness = pose.lightness;
-                } else if field_runtime.suppress_legacy(fdeck)
-                    || (trail_gain <= 0.0 && state.flash <= 0.0)
-                {
-                    // DSL suppress without pose, or silent trails layer (feedback 0, no flash).
-                    alpha = 0.0;
-                } else {
-                // Ghost streaks are the dedicated trails layer.
-                let fraction = element.index as f32 / 18.0;
-                let angle = t * (0.08 + fraction * 0.04) + fraction * TAU;
-                let sway = wave(t * 0.9 + element.seed * 4.0);
-
-                // Staggered life cycles so each streak brightens then fades out.
-                // Higher feedback stretches the tail; at zero the layer is silent.
-                let life_rate = 0.32 + trail_gain * 0.85 + state.speed * 0.1;
-                let life = (t * life_rate + element.seed * 4.1).fract();
-                let decay_power = (2.6 - trail_gain * 1.8).max(0.4);
-                let trail_fade = (1.0 - life).powf(decay_power);
-
-                transform.translation = Vec3::new(
-                    angle.cos() * 120.0 * sway,
-                    angle.sin() * 70.0 * (1.0 - sway),
-                    -8.0 + fraction,
-                );
-                transform.rotation = Quat::from_rotation_z(angle);
-                transform.scale = Vec3::new(
-                    STAGE_WIDTH
-                        * (0.22 + trail_gain * 0.9 + bass * 0.05 * trail_gain)
-                        * (0.3 + 0.7 * trail_fade)
-                        * trail_gain.max(state.flash * 0.5),
-                    (18.0 + 180.0 * trail_gain * wave(t + element.seed)
-                        + melodic_activity * 24.0 * trail_gain
-                        + bass_activity * 22.0 * trail_gain)
-                        * trail_fade
-                        * trail_gain.max(state.flash * 0.5),
-                    1.0,
-                );
-
-                match deck_mode {
-                    // Family A (0–23): FieldRuntime only (compiled wire or VST fallback).
-                    VisualMode::Beams
-                    | VisualMode::Tunnel
-                    | VisualMode::Burst
-                    | VisualMode::Mirror
-                    | VisualMode::Wash
-                    | VisualMode::Strobe
-                    | VisualMode::Swarm
-                    | VisualMode::Orbit
-                    | VisualMode::Pulse
-                    | VisualMode::Spiral
-                    | VisualMode::Ripple
-                    | VisualMode::Shatter
-                    | VisualMode::Flux
-                    | VisualMode::Lattice
-                    | VisualMode::Drift
-                    | VisualMode::Storm
-                    | VisualMode::Echo
-                    | VisualMode::Vortex
-                    | VisualMode::Fracture
-                    | VisualMode::Nebula
-                    | VisualMode::Prism
-                    | VisualMode::Scanner
-                    | VisualMode::Comet
-                    | VisualMode::Bloom => {
-                        alpha = 0.0;
-                    }
-                    // Mesh catalog owns the look; hide CPU geometry for this deck.
-                    VisualMode::Figure => {
-                        alpha = 0.0;
-                    }
-                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
-                    VisualMode::Hypercube
-                    | VisualMode::CalabiYau
-                    | VisualMode::Quasicrystal
-                    | VisualMode::PenroseTiling
-                    | VisualMode::SierpinskiTriangle
-                    | VisualMode::TetrahedralMatrix
-                    | VisualMode::BorromeanRings
-                    | VisualMode::Torus
-                    | VisualMode::PermutationGroups
-                    | VisualMode::SymmetryGroups
-                    | VisualMode::LieAlgebras
-                    | VisualMode::LatticeTheory
-                    | VisualMode::GraphTheory
-                    | VisualMode::DesignTheory
-                    | VisualMode::MandelbrotSet
-                    | VisualMode::JuliaSets
-                    | VisualMode::LorenzAttractor
-                    | VisualMode::Functors
-                    | VisualMode::ModularArithmetic
-                    | VisualMode::PAdicNumbers
-                    | VisualMode::VectorSpaces
-                    | VisualMode::Eigenvectors
-                    | VisualMode::BooleanLattices
-                    | VisualMode::Forcing => {
-                        alpha = 0.0;
-                    }
-                }
-
-                hue += fraction * 90.0;
-                alpha *= (trail_gain * (0.06 + 0.22 * sway) * trail_fade)
-                    .max(0.0)
-                    + state.flash * 0.08 * trail_fade;
-                lightness += 0.08;
-                }
+        // Pool-specific gates (not mode layout).
+        if matches!(element.kind, VisualKind::Ring) {
+            alpha *= state.ring_opacity;
+            if !state.rings_enabled {
+                alpha = 0.0;
             }
         }
 
@@ -2404,10 +1891,6 @@ fn musical_pulse(state: &VjState) -> f32 {
         return (pulse * (0.55 + bass * 0.45)).clamp(0.0, 1.0);
     }
     (bass * 0.78 + pulse * 0.22).clamp(0.0, 1.0)
-}
-
-fn wave(value: f32) -> f32 {
-    value.sin() * 0.5 + 0.5
 }
 
 fn soft_audio_gate(value: f32) -> f32 {
