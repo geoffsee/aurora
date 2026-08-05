@@ -1,12 +1,13 @@
 /**
- * FieldRuntime parity harness (PR6 / #240 + PR8 / #242 Family A 0–7).
+ * FieldRuntime parity harness (PR6 / #240 + PR8 / #242 Family A 0–7 +
+ * PR9 / #243 Family A 8–15).
  *
  * Rust unit tests in `src/field_runtime.rs` own golden pose snapshots
  * (`UPDATE_FIELD_GOLDS=1 cargo test -p aurora --bin aurora golden_poses`).
  * This suite covers the TS compile path and live-show safety contracts that
  * the projector/WASM ingest relies on:
  * - supernova preset compiles to primitiveId 1 with suppressLegacyField
- * - Family A modes 0–7 compile to permanent ids 10–17
+ * - Family A modes 0–15 compile to permanent ids 10–25
  * - all four pools are the FieldRuntime contract (documented; poses in Rust)
  * - failed wire must not be applied (mirror of try_set_compiled keep-previous)
  */
@@ -24,7 +25,7 @@ const REPO_ROOT = resolve(import.meta.dirname, '../..');
 
 const FIELD_POOLS = ['beams', 'rings', 'tiles', 'ghost'] as const;
 
-/** Family A legacy indices 0–7 → permanent primitive ids (mirror field_runtime.rs). */
+/** Family A legacy indices 0–15 → permanent primitive ids (mirror field_runtime.rs). */
 const FAMILY_A_MODES = [
   { slug: 'beams', legacyIndex: 0, primitiveId: FIELD_PRIMITIVE_IDS.beams },
   { slug: 'tunnel', legacyIndex: 1, primitiveId: FIELD_PRIMITIVE_IDS.tunnel },
@@ -34,6 +35,14 @@ const FAMILY_A_MODES = [
   { slug: 'strobe', legacyIndex: 5, primitiveId: FIELD_PRIMITIVE_IDS.strobe },
   { slug: 'swarm', legacyIndex: 6, primitiveId: FIELD_PRIMITIVE_IDS.swarm },
   { slug: 'orbit', legacyIndex: 7, primitiveId: FIELD_PRIMITIVE_IDS.orbit },
+  { slug: 'pulse', legacyIndex: 8, primitiveId: FIELD_PRIMITIVE_IDS.pulse },
+  { slug: 'spiral', legacyIndex: 9, primitiveId: FIELD_PRIMITIVE_IDS.spiral },
+  { slug: 'ripple', legacyIndex: 10, primitiveId: FIELD_PRIMITIVE_IDS.ripple },
+  { slug: 'shatter', legacyIndex: 11, primitiveId: FIELD_PRIMITIVE_IDS.shatter },
+  { slug: 'flux', legacyIndex: 12, primitiveId: FIELD_PRIMITIVE_IDS.flux },
+  { slug: 'lattice', legacyIndex: 13, primitiveId: FIELD_PRIMITIVE_IDS.lattice },
+  { slug: 'drift', legacyIndex: 14, primitiveId: FIELD_PRIMITIVE_IDS.drift },
+  { slug: 'storm', legacyIndex: 15, primitiveId: FIELD_PRIMITIVE_IDS.storm },
 ] as const;
 
 describe('FieldRuntime / supernova vertical slice', () => {
@@ -126,8 +135,8 @@ describe('FieldRuntime / supernova vertical slice', () => {
   });
 });
 
-describe('FieldRuntime / Family A modes 0–7 (#242)', () => {
-  test('permanent primitive ids 10–17 match registry', () => {
+describe('FieldRuntime / Family A modes 0–15 (#242 + #243)', () => {
+  test('permanent primitive ids 10–25 match registry', () => {
     expect(FIELD_PRIMITIVE_IDS.beams).toBe(10);
     expect(FIELD_PRIMITIVE_IDS.tunnel).toBe(11);
     expect(FIELD_PRIMITIVE_IDS.burst).toBe(12);
@@ -136,6 +145,14 @@ describe('FieldRuntime / Family A modes 0–7 (#242)', () => {
     expect(FIELD_PRIMITIVE_IDS.strobe).toBe(15);
     expect(FIELD_PRIMITIVE_IDS.swarm).toBe(16);
     expect(FIELD_PRIMITIVE_IDS.orbit).toBe(17);
+    expect(FIELD_PRIMITIVE_IDS.pulse).toBe(18);
+    expect(FIELD_PRIMITIVE_IDS.spiral).toBe(19);
+    expect(FIELD_PRIMITIVE_IDS.ripple).toBe(20);
+    expect(FIELD_PRIMITIVE_IDS.shatter).toBe(21);
+    expect(FIELD_PRIMITIVE_IDS.flux).toBe(22);
+    expect(FIELD_PRIMITIVE_IDS.lattice).toBe(23);
+    expect(FIELD_PRIMITIVE_IDS.drift).toBe(24);
+    expect(FIELD_PRIMITIVE_IDS.storm).toBe(25);
   });
 
   test('bundled Family A presets compile for both decks (pool contract via Rust)', () => {
