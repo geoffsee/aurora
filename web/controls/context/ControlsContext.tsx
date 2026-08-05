@@ -72,6 +72,7 @@ import {
 import { fetchCompiledMode, fetchModesCatalog } from '../lib/modes-api-client.ts';
 import { applyBrowserAudio, applyDemo, applyTrackData } from '../lib/osc-track-data.ts';
 import { hexToRgb, syncPaletteFromHue, syncPaletteFromRgb } from '../lib/palette.ts';
+import { buildParamPatch, isMappableParam, PARAM_META } from '../lib/param-meta.ts';
 import {
   cloneState,
   defaultPendingCurves,
@@ -781,13 +782,22 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       const patch: Partial<ControlState> = {};
       let changed = false;
       let bumpCue = false;
+      const current = stateRef.current;
       for (const binding of bindings) {
         if (binding.cc !== ccNumber) continue;
         if (binding.channel !== 0 && binding.channel !== ccChannel) continue;
         const raw = scaleCcToParam(ccValue, binding);
-        (patch as Record<string, number>)[binding.param] = MIDI_CC_INTEGER_PARAMS.has(binding.param)
-          ? Math.round(raw)
-          : raw;
+        // Prefer buildParamPatch so palette hue keeps RGB duotone in sync.
+        if (isMappableParam(binding.param)) {
+          Object.assign(patch, buildParamPatch(binding.param, raw, current));
+          if (PARAM_META[binding.param].bumpCue) bumpCue = true;
+        } else {
+          (patch as Record<string, number>)[binding.param] = MIDI_CC_INTEGER_PARAMS.has(
+            binding.param,
+          )
+            ? Math.round(raw)
+            : raw;
+        }
         changed = true;
         if (
           binding.param === 'deckAMode' ||
