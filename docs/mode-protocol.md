@@ -32,7 +32,10 @@ JSON-serializable `CompiledModeWire`:
 - Clamps known params; strips unknown keys
 - Fails if required params are missing
 
-No WASM ingest here (PR6 / FieldRuntime). No disk scan here (PR1 / PR3).
+WASM ingest of `CompiledModeWire` is off-frame (PR6 / FieldRuntime): the
+projector fetches `/api/modes/compiled` on slug change / reload-active and calls
+`aurora_set_compiled_mode(deck, json)`. Parse failures keep the previous active
+definition. Disk/catalog epoch bumps alone do not swap the active renderer.
 
 ## Engine capabilities
 

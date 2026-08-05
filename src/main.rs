@@ -1,3 +1,4 @@
+mod field_runtime;
 mod mode_catalog;
 mod mode_director;
 mod model_layer;
@@ -14,6 +15,10 @@ use bevy::{
     window::{PresentMode, PrimaryWindow, WindowResolution},
     winit::WinitSettings,
 };
+use field_runtime::{
+    FieldDeck, FieldFrameInputs, FieldPool, FieldRuntime, drain_pending as drain_field_pending,
+    queue_compiled_json,
+};
 use mode_catalog::VisualMode;
 use mode_director::{ModeDirector, ModeDirectorInputs, resolve_director};
 use model_layer::{
@@ -23,6 +28,14 @@ use model_layer::{
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+
+/// Off-frame WASM/host entry: queue a `CompiledModeWire` JSON for one deck.
+/// Deck: 0 = deck-a, 1 = deck-b. Returns false if deck id is invalid.
+/// Parse failures are applied as no-ops inside the runtime (previous kept).
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn aurora_set_compiled_mode(deck: u32, json: &str) -> bool {
+    queue_compiled_json(deck, json)
+}
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
@@ -318,6 +331,7 @@ fn main() {
         .insert_resource(WinitSettings::continuous())
         .insert_resource(VjState::default())
         .insert_resource(ModeDirector::default())
+        .insert_resource(FieldRuntime::default())
         .insert_resource(ActiveModelDrive::default())
         .insert_resource(ActiveModelAssetPath::default())
         .add_plugins(
@@ -351,6 +365,7 @@ fn main() {
                 keyboard_controls,
                 advance_clock,
                 update_mode_director,
+                drain_field_runtime,
                 update_visuals,
                 update_tunnel_rings,
                 sync_model_drive,
@@ -1117,6 +1132,44 @@ fn advance_clock(time: Res<Time>, mut state: ResMut<VjState>) {
 }
 
 /// Resolve per-deck instrument specs + identity param packets for backends.
+fn drain_field_runtime(mut runtime: ResMut<FieldRuntime>) {
+    drain_field_pending(&mut runtime);
+}
+
+fn field_deck_of(deck: Deck) -> FieldDeck {
+    match deck {
+        Deck::A => FieldDeck::A,
+        Deck::B => FieldDeck::B,
+    }
+}
+
+fn field_frame_inputs(state: &VjState, deck_drive: f32, beat: f32, beat_hit: f32, cue_hit: f32, intensity_drive: f32, motion_drive: f32) -> FieldFrameInputs {
+    FieldFrameInputs {
+        t: state.show_time,
+        beat,
+        beat_hit,
+        bass: state.osc_bass.clamp(0.0, 1.0),
+        mid: state.osc_mid.clamp(0.0, 1.0),
+        high: state.osc_high.clamp(0.0, 1.0),
+        energy: state.osc_energy.clamp(0.0, 1.0),
+        pulse: state.osc_pulse.clamp(0.0, 1.0),
+        intensity: state.intensity,
+        depth: state.depth,
+        feedback: state.feedback.clamp(0.0, 1.0),
+        speed: state.speed,
+        deck_drive,
+        flash: state.flash,
+        cue_hit,
+        intensity_drive,
+        motion_drive,
+        beam_count: DECK_A_BEAMS as u32,
+        ring_count: DECK_A_RINGS as u32,
+        tile_cols: DECK_B_COLS as u32,
+        tile_rows: DECK_B_ROWS as u32,
+        ghost_count: 18,
+    }
+}
+
 fn update_mode_director(state: Res<VjState>, mut director: ResMut<ModeDirector>) {
     let beat = beat_phase(&state);
     *director = resolve_director(&ModeDirectorInputs {
@@ -1139,6 +1192,7 @@ fn update_mode_director(state: Res<VjState>, mut director: ResMut<ModeDirector>)
 fn update_visuals(
     state: Res<VjState>,
     director: Res<ModeDirector>,
+    field_runtime: Res<FieldRuntime>,
     mut query: Query<(
         &VisualElement,
         &mut Transform,
@@ -1225,8 +1279,39 @@ fn update_visuals(
         let mut lightness = 0.54;
         let saturation = 0.78 + intensity_drive * 0.12;
 
+        let fdeck = field_deck_of(element.deck);
+        let finputs = field_frame_inputs(
+            &state,
+            deck_drive,
+            beat,
+            beat_hit,
+            cue_hit,
+            intensity_drive,
+            motion_drive,
+        );
+
         match element.kind {
             VisualKind::Beam => {
+                // FieldRuntime DSL path (PR6): when a compiled field primitive is active
+                // for this deck, skip the legacy VisualMode match entirely.
+                if let Some(pose) = field_runtime.pose(
+                    fdeck,
+                    FieldPool::Beams,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
+                } else if field_runtime.suppress_legacy(fdeck) {
+                    alpha = 0.0;
+                } else {
                 // Deck A field: every mode fully owns layout (pos/rot/scale/alpha/hue).
                 // Same contract as Deck B — no shared base that makes every pad identical.
                 let n = DECK_A_BEAMS.max(1) as f32;
@@ -2016,8 +2101,31 @@ fn update_visuals(
                     + deck_drive * 0.06
                     + depth * layer * 0.05
                     + high * 0.03;
+                } // end legacy Beam path
             }
             VisualKind::Ring => {
+                if let Some(pose) = field_runtime.pose(
+                    fdeck,
+                    FieldPool::Rings,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
+                    alpha *= state.ring_opacity;
+                    if !state.rings_enabled {
+                        alpha = 0.0;
+                    }
+                } else if field_runtime.suppress_legacy(fdeck) {
+                    alpha = 0.0;
+                } else {
                 // A restrained halo, not a target ring. Layers stay close and faint so
                 // the ring supports the beams instead of becoming the whole composition.
                 let layer = if DECK_A_RINGS > 1 {
@@ -2162,8 +2270,27 @@ fn update_visuals(
                     alpha = 0.0;
                 }
                 lightness += 0.04 + mid * 0.025 + high * 0.02 + glow * 0.035;
+                } // end legacy Ring path
             }
             VisualKind::Tile => {
+                if let Some(pose) = field_runtime.pose(
+                    fdeck,
+                    FieldPool::Tiles,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
+                } else if field_runtime.suppress_legacy(fdeck) {
+                    alpha = 0.0;
+                } else {
                 // Deck B field: every mode fully owns layout (pos/rot/scale/alpha/hue).
                 // No shared "default sticks" base — that made every pad look identical.
                 let col = element.col as f32;
@@ -2982,13 +3109,31 @@ fn update_visuals(
                     .clamp(0.0, 1.5);
                 hue += mode_hue;
                 lightness += 0.05 + pulse * 0.08 + beat_hit * 0.05;
+                } // end legacy Tile path
             }
             VisualKind::Ghost => {
-                // Ghost streaks are the dedicated trails layer — fully silent at feedback 0
-                // (flash can still punch through briefly).
-                if trail_gain <= 0.0 && state.flash <= 0.0 {
+                if let Some(pose) = field_runtime.pose(
+                    fdeck,
+                    FieldPool::Ghost,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
+                } else if field_runtime.suppress_legacy(fdeck)
+                    || (trail_gain <= 0.0 && state.flash <= 0.0)
+                {
+                    // DSL suppress without pose, or silent trails layer (feedback 0, no flash).
                     alpha = 0.0;
                 } else {
+                // Ghost streaks are the dedicated trails layer.
                 let fraction = element.index as f32 / 18.0;
                 let angle = t * (0.08 + fraction * 0.04) + fraction * TAU;
                 let sway = wave(t * 0.9 + element.seed * 4.0);

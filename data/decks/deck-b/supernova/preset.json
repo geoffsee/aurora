@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "supernova",
+  "slug": "supernova",
+  "label": "Supernova",
+  "character": "PR6 FieldRuntime vertical slice — radial burst with spin and decay across beams, rings, tiles, and ghost.",
+  "uiGroup": "field-motion",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "supernova_burst",
+    "params": {
+      "intensity": 0.9,
+      "spin": 0.35,
+      "decay": 0.6
+    }
+  },
+  "layers": [],
+  "suppressLegacyField": true,
+  "engineMinCapabilities": ["field-runtime"]
+}

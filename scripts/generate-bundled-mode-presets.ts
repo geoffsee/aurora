@@ -129,15 +129,23 @@ function expectedPresets(): Map<string, ModePreset> {
   return map;
 }
 
+/**
+ * Slugs that are intentional bundled packs outside the legacy 0–48 catalog
+ * (e.g. PR6 FieldRuntime vertical-slice `supernova`). Generate/check must not
+ * delete or flag these as stale.
+ */
+const EXTRA_BUNDLED_SLUGS = new Set(['supernova']);
+
 function writeDeck(deckId: (typeof DECK_IDS)[number], presets: Map<string, ModePreset>): number {
   const deckRoot = join(DECKS_ROOT, deckId);
   mkdirSync(deckRoot, { recursive: true });
 
-  // Remove stale slug folders that are no longer in the catalog.
+  // Remove stale slug folders that are no longer in the catalog, but keep
+  // intentional non-legacy extras (EXTRA_BUNDLED_SLUGS).
   if (existsSync(deckRoot)) {
     for (const name of readdirSync(deckRoot)) {
       if (name.startsWith('.')) continue;
-      if (!presets.has(name)) {
+      if (!presets.has(name) && !EXTRA_BUNDLED_SLUGS.has(name)) {
         rmSync(join(deckRoot, name), { recursive: true, force: true });
       }
     }
@@ -169,7 +177,9 @@ function checkDeck(deckId: (typeof DECK_IDS)[number], presets: Map<string, ModeP
     if (!onDisk.has(slug)) errors.push(`${deckId}: missing folder ${slug}`);
   }
   for (const slug of onDisk) {
-    if (!presets.has(slug)) errors.push(`${deckId}: unexpected folder ${slug}`);
+    if (!presets.has(slug) && !EXTRA_BUNDLED_SLUGS.has(slug)) {
+      errors.push(`${deckId}: unexpected folder ${slug}`);
+    }
   }
 
   for (const [slug, expected] of presets) {
