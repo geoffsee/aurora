@@ -22,9 +22,10 @@ use field_runtime::{
 use mode_catalog::VisualMode;
 use mode_director::{ModeDirector, ModeDirectorInputs, resolve_director};
 use model_layer::{
-    ActiveModelAssetPath, ActiveModelDrive, ModelDrive, ModelInstance, StageHaloSection,
-    apply_model_instance, apply_stage_halo_section, ensure_selected_model_loaded,
-    handle_gltf_load_failures, resolve_pending_gltf_models, setup_model_layer,
+    ActiveModelAssetPath, ActiveModelDrive, ModelDrive, ModelInstance, ResolvedMeshAsset,
+    StageHaloSection, apply_model_instance, apply_stage_halo_section, ensure_selected_model_loaded,
+    handle_gltf_load_failures, resolve_mesh_layer_ref, resolve_pending_gltf_models,
+    setup_model_layer,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -364,8 +365,9 @@ fn main() {
                 read_osc_inputs,
                 keyboard_controls,
                 advance_clock,
-                update_mode_director,
+                // Drain compiled mesh/field wires before ModeDirector + model drive.
                 drain_field_runtime,
+                update_mode_director,
                 update_visuals,
                 update_tunnel_rings,
                 sync_model_drive,
@@ -770,14 +772,88 @@ fn model_drive_from_state(state: &VjState) -> ModelDrive {
     }
 }
 
+/// Pick which deck's compiled mesh layer drives the single model stage.
+///
+/// When both decks want mesh, prefer the crossfade-dominant side. Soft:
+/// missing/unresolved layers return `None` so the UI catalog path stays.
+fn pick_compiled_mesh_deck(
+    field_runtime: &FieldRuntime,
+    crossfade: f32,
+    deck_a_mode: VisualMode,
+    deck_b_mode: VisualMode,
+) -> Option<FieldDeck> {
+    let a_wants = deck_a_mode == VisualMode::Figure
+        || field_runtime.is_mesh_primary(FieldDeck::A)
+        || field_runtime.primary_mesh_layer(FieldDeck::A).is_some();
+    let b_wants = deck_b_mode == VisualMode::Figure
+        || field_runtime.is_mesh_primary(FieldDeck::B)
+        || field_runtime.primary_mesh_layer(FieldDeck::B).is_some();
+    match (a_wants, b_wants) {
+        (true, true) => {
+            if crossfade >= 0.5 {
+                Some(FieldDeck::B)
+            } else {
+                Some(FieldDeck::A)
+            }
+        }
+        (true, false) => Some(FieldDeck::A),
+        (false, true) => Some(FieldDeck::B),
+        (false, false) => None,
+    }
+}
+
+/// Apply pack/catalog mesh from ActiveCompiled onto drive + asset path.
+/// UI `figure_asset_path` always wins when non-empty (operator remote override).
+fn apply_compiled_mesh_to_drive(
+    field_runtime: &FieldRuntime,
+    state: &VjState,
+    drive: &mut ModelDrive,
+    asset_path: &mut String,
+) {
+    if !asset_path.is_empty() {
+        // Explicit remote override from controls — do not clobber.
+        return;
+    }
+    let Some(deck) = pick_compiled_mesh_deck(
+        field_runtime,
+        state.crossfade,
+        state.deck_a_mode,
+        state.deck_b_mode,
+    ) else {
+        return;
+    };
+    let Some(active) = field_runtime.active(deck) else {
+        return;
+    };
+    let Some(layer) = active.mesh_layers.first() else {
+        return;
+    };
+    match resolve_mesh_layer_ref(&layer.ref_id, &active.asset_base) {
+        ResolvedMeshAsset::Catalog { index } => {
+            drive.figure_model = index as i32;
+            // Leave asset_path empty so catalog asset_path is used.
+        }
+        ResolvedMeshAsset::Path(path) => {
+            *asset_path = path;
+        }
+        ResolvedMeshAsset::Unresolved => {
+            // Soft fail: keep previous UI figure_model / empty path (no panic).
+        }
+    }
+}
+
 /// Publish VJ control state into the model layer before lazy-load / apply systems.
 fn sync_model_drive(
     state: Res<VjState>,
+    field_runtime: Res<FieldRuntime>,
     mut drive: ResMut<ActiveModelDrive>,
     mut asset_path: ResMut<ActiveModelAssetPath>,
 ) {
-    drive.0 = model_drive_from_state(&state);
-    asset_path.0.clone_from(&state.figure_asset_path);
+    let mut drive_val = model_drive_from_state(&state);
+    let mut path = state.figure_asset_path.clone();
+    apply_compiled_mesh_to_drive(&field_runtime, &state, &mut drive_val, &mut path);
+    drive.0 = drive_val;
+    asset_path.0 = path;
 }
 
 /// Drive glTF model instances + the invisible sectional stage-halo lights.
@@ -1170,11 +1246,17 @@ fn field_frame_inputs(state: &VjState, deck_drive: f32, beat: f32, beat_hit: f32
     }
 }
 
-fn update_mode_director(state: Res<VjState>, mut director: ResMut<ModeDirector>) {
+fn update_mode_director(
+    state: Res<VjState>,
+    field_runtime: Res<FieldRuntime>,
+    mut director: ResMut<ModeDirector>,
+) {
     let beat = beat_phase(&state);
     *director = resolve_director(&ModeDirectorInputs {
         deck_a_mode: state.deck_a_mode,
         deck_b_mode: state.deck_b_mode,
+        deck_a_mesh_primary: field_runtime.should_zero_legacy_field(FieldDeck::A),
+        deck_b_mesh_primary: field_runtime.should_zero_legacy_field(FieldDeck::B),
         intensity: state.intensity,
         depth: state.depth,
         feedback: state.feedback,
@@ -1254,7 +1336,7 @@ fn update_visuals(
             ),
             Deck::B => (state.crossfade, state.cpu_deck_b_enabled, &director.deck_b),
         };
-        // ModeDirector.legacy_field_weight is 1.0 for all modes in PR1.
+        // ModeDirector zeros legacy_field_weight for Figure / mesh-primary.
         let deck_alpha = deck_mix
             * instrument.legacy_field_weight
             * if state.blackout || !cpu_enabled {

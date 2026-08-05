@@ -21,18 +21,27 @@ log "cargo test -p xtask"
 cargo test -p xtask --verbose
 
 # ---------------------------------------------------------------------------
-# aurora (root crate) — FieldRuntime unit tests only
+# aurora (root crate) — FieldRuntime + ModeDirector + model layer unit tests
 #
 # Full native `cargo test -p aurora` used to be skipped because the crate is
 # primarily wasm/Bevy. Unit tests under `src/field_runtime.rs` (and existing
-# mode_catalog/mode_director modules) compile as bin tests without spawning a
-# window. We run the FieldRuntime parity/golden suite for PR6 (#240).
+# mode_catalog/mode_director/model_layer modules) compile as bin tests without
+# spawning a window. We run:
+# - FieldRuntime parity/golden suite for PR6 (#240)
+# - ModeDirector figure/mesh-primary weight 0 for PR11 (#245)
+# - model_layer mesh-ref resolve + soft-fail for PR11 (#245)
 # Wasm build remains verified by `bun run check:wasm` / CI workflows.
 #
 # Refresh goldens: UPDATE_FIELD_GOLDS=1 cargo test -p aurora --bin aurora golden_poses -- --nocapture
 # ---------------------------------------------------------------------------
 log "cargo test -p aurora --bin aurora field_runtime"
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}" cargo test -p aurora --bin aurora field_runtime
+
+log "cargo test -p aurora --bin aurora mode_director"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}" cargo test -p aurora --bin aurora mode_director
+
+log "cargo test -p aurora --bin aurora model_layer"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}" cargo test -p aurora --bin aurora model_layer
 
 # ---------------------------------------------------------------------------
 # aurora-vst (plugins/aurora-vst)

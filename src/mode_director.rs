@@ -1,8 +1,8 @@
 //! ModeDirector — resolves per-deck instrument state from Control/Vj state.
 //!
-//! PR1: identity param routing and legacy field weight always 1.0 so looks
-//! match pre-catalog behavior. Later PRs retarget routing and zero legacy
-//! field when mesh/fullscreen backends own the mode.
+//! Identity param routing (PR1). Legacy field weight is 1.0 for field-led
+//! instruments; mesh-primary / figure backends zero the weight so the CPU
+//! field pools stay dark while the mesh layer owns the look (PR11 / #245).
 
 #![allow(dead_code)] // Packet/spec fields are consumed as backends grow.
 
@@ -33,7 +33,7 @@ pub struct DeckInstrument {
     pub mode: VisualMode,
     pub spec: ModeSpec,
     /// Multiplier on beam/tile/ghost field contribution for this deck.
-    /// PR1: always 1.0 (including modes that intend suppress_legacy_field).
+    /// 0.0 when figure / mesh-primary owns the look (no CPU field).
     pub legacy_field_weight: f32,
     pub params: ModeParamPacket,
 }
@@ -95,6 +95,10 @@ impl ModeDirector {
 pub struct ModeDirectorInputs {
     pub deck_a_mode: VisualMode,
     pub deck_b_mode: VisualMode,
+    /// When true, ActiveCompiled for deck A is mesh-primary (or mesh layer + suppress).
+    pub deck_a_mesh_primary: bool,
+    /// When true, ActiveCompiled for deck B is mesh-primary (or mesh layer + suppress).
+    pub deck_b_mesh_primary: bool,
     pub intensity: f32,
     pub depth: f32,
     pub feedback: f32,
@@ -115,11 +119,40 @@ pub fn route_params(_spec: &ModeSpec, source: ModeParamPacket) -> ModeParamPacke
     source
 }
 
-fn resolve_deck(mode: VisualMode, source: &ModeParamPacket) -> DeckInstrument {
+/// Legacy field contribution for a deck instrument.
+///
+/// Zero when:
+/// - mode is Figure / `backends.figure` (catalog figure path owns the look)
+/// - compiled disposition is mesh-primary / mesh layer with suppress
+///
+/// Modes that only *record* `suppress_legacy_field` intent but still use the
+/// field backend as a placeholder (Family B/C until their PRs land) keep
+/// weight 1.0 so looks do not go black.
+pub fn legacy_field_weight_for(
+    mode: VisualMode,
+    spec: &ModeSpec,
+    compiled_mesh_primary: bool,
+) -> f32 {
+    if mode == VisualMode::Figure || spec.backends.figure {
+        return 0.0;
+    }
+    if compiled_mesh_primary {
+        return 0.0;
+    }
+    // Mesh-only catalog instruments that suppress field and have no field backend.
+    if spec.suppress_legacy_field && !spec.backends.field && spec.backends.mesh {
+        return 0.0;
+    }
+    1.0
+}
+
+fn resolve_deck(
+    mode: VisualMode,
+    source: &ModeParamPacket,
+    compiled_mesh_primary: bool,
+) -> DeckInstrument {
     let spec = mode_spec(mode);
-    // PR1: never suppress legacy field — no replacement backends yet.
-    // Intent is recorded on spec.suppress_legacy_field for later PRs.
-    let legacy_field_weight = 1.0;
+    let legacy_field_weight = legacy_field_weight_for(mode, &spec, compiled_mesh_primary);
     DeckInstrument {
         mode,
         spec,
@@ -144,8 +177,8 @@ pub fn resolve_director(inputs: &ModeDirectorInputs) -> ModeDirector {
         energy: inputs.energy,
     };
     ModeDirector {
-        deck_a: resolve_deck(inputs.deck_a_mode, &source),
-        deck_b: resolve_deck(inputs.deck_b_mode, &source),
+        deck_a: resolve_deck(inputs.deck_a_mode, &source, inputs.deck_a_mesh_primary),
+        deck_b: resolve_deck(inputs.deck_b_mode, &source, inputs.deck_b_mesh_primary),
     }
 }
 
@@ -153,9 +186,8 @@ pub fn resolve_director(inputs: &ModeDirectorInputs) -> ModeDirector {
 mod tests {
     use super::*;
 
-    #[test]
-    fn identity_routing_preserves_values() {
-        let source = ModeParamPacket {
+    fn sample_source() -> ModeParamPacket {
+        ModeParamPacket {
             intensity: 0.82,
             depth: 0.4,
             feedback: 0.35,
@@ -167,8 +199,14 @@ mod tests {
             beat: 0.1,
             pulse: 0.7,
             energy: 0.6,
-        };
-        let deck = resolve_deck(VisualMode::MandelbrotSet, &source);
+        }
+    }
+
+    #[test]
+    fn identity_routing_preserves_values() {
+        let source = sample_source();
+        let deck = resolve_deck(VisualMode::MandelbrotSet, &source, false);
+        // Mandelbrot still uses field as placeholder despite suppress intent.
         assert_eq!(deck.legacy_field_weight, 1.0);
         assert_eq!(deck.params.intensity, 0.82);
         assert_eq!(deck.params.bass, 0.5);
@@ -177,10 +215,38 @@ mod tests {
     }
 
     #[test]
+    fn figure_mode_zeros_legacy_field_weight() {
+        let source = sample_source();
+        let deck = resolve_deck(VisualMode::Figure, &source, false);
+        assert_eq!(deck.mode, VisualMode::Figure);
+        assert!(deck.spec.backends.figure);
+        assert!(deck.spec.suppress_legacy_field);
+        assert_eq!(
+            deck.legacy_field_weight, 0.0,
+            "Figure (mesh-primary) must not contribute CPU field"
+        );
+        // Params still route (for mesh drive / future use).
+        assert_eq!(deck.params.intensity, 0.82);
+    }
+
+    #[test]
+    fn compiled_mesh_primary_zeros_legacy_field_weight() {
+        let source = sample_source();
+        // Beams catalog is field-led, but a mesh-primary compiled pack on this
+        // deck should still silence the field backend.
+        let deck = resolve_deck(VisualMode::Beams, &source, true);
+        assert_eq!(deck.legacy_field_weight, 0.0);
+        let plain = resolve_deck(VisualMode::Beams, &source, false);
+        assert_eq!(plain.legacy_field_weight, 1.0);
+    }
+
+    #[test]
     fn director_resolves_both_decks() {
         let dir = resolve_director(&ModeDirectorInputs {
             deck_a_mode: VisualMode::Beams,
-            deck_b_mode: VisualMode::Tunnel,
+            deck_b_mode: VisualMode::Figure,
+            deck_a_mesh_primary: false,
+            deck_b_mesh_primary: true,
             intensity: 1.0,
             depth: 0.0,
             feedback: 0.0,
@@ -194,8 +260,20 @@ mod tests {
             energy: 0.0,
         });
         assert_eq!(dir.deck_a.mode, VisualMode::Beams);
-        assert_eq!(dir.deck_b.mode, VisualMode::Tunnel);
+        assert_eq!(dir.deck_b.mode, VisualMode::Figure);
         assert_eq!(dir.deck_a.legacy_field_weight, 1.0);
-        assert_eq!(dir.deck_b.legacy_field_weight, 1.0);
+        assert_eq!(dir.deck_b.legacy_field_weight, 0.0);
+    }
+
+    #[test]
+    fn legacy_field_weight_helper_matches_resolve() {
+        let spec = mode_spec(VisualMode::Figure);
+        assert_eq!(
+            legacy_field_weight_for(VisualMode::Figure, &spec, false),
+            0.0
+        );
+        let beams = mode_spec(VisualMode::Beams);
+        assert_eq!(legacy_field_weight_for(VisualMode::Beams, &beams, false), 1.0);
+        assert_eq!(legacy_field_weight_for(VisualMode::Beams, &beams, true), 0.0);
     }
 }
