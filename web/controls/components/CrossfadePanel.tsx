@@ -202,8 +202,12 @@ export function CrossfadePanel() {
             Reset
           </Button>
           <Flex align="center" gap={2} ml={2}>
-            <Text fontSize="sm" fontWeight="semibold" whiteSpace="nowrap">Color</Text>
-            <Text fontFamily="mono" fontSize="sm" color="whiteAlpha.700">{paletteHex}</Text>
+            <Text fontSize="sm" fontWeight="semibold" whiteSpace="nowrap">
+              Color
+            </Text>
+            <Text fontFamily="mono" fontSize="sm" color="whiteAlpha.700">
+              {paletteHex}
+            </Text>
             <Input
               type="color"
               value={paletteHex}

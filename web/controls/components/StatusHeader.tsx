@@ -61,7 +61,7 @@ export function StatusHeader({ onSettings }: { onSettings: () => void }) {
             aurora
           </Text>
           <Text as="h1" fontSize="3xl" fontWeight="bold" m={0}>
-            VJ Controls
+            Console
           </Text>
         </Box>
         <Flex role="status" aria-live="polite" gap={3} wrap="wrap" justify="flex-end">
