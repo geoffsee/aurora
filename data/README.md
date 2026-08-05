@@ -73,4 +73,12 @@ docker run --rm \
 
 ## Epoch
 
-Each successful catalog scan produces a `CatalogSnapshot` with a monotonic `epoch`. The epoch advances only when the merged content hash changes (no-op rescans do not churn). HTTP list APIs (later) will expose this epoch for cache invalidation.
+Each successful catalog scan produces a `CatalogSnapshot` with a monotonic `epoch`. The epoch advances only when the merged content hash changes (no-op rescans do not churn).
+
+HTTP (visual server `:3000`, see `bridge/mode-api.ts`):
+
+- `GET /api/modes/catalog` — public catalog (no absolute host paths) + epoch
+- `GET /api/modes/compiled?deck=deck-a&slug=<slug>&epoch=<n>` — cached `CompiledModeWire` (omit `epoch` → current)
+- `GET /api/data/e/<epoch>/decks/deck-{a|b}/<slug>/...` — sandboxed assets for retained epochs
+
+On epoch bump the bridge broadcasts `/aurora/modes/catalog` over the WebSocket. The last ~4 epochs of assets/compile cache are retained.

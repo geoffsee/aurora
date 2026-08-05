@@ -70,6 +70,7 @@ import {
   MIDI_CLOCK_TIMEOUT_MS,
   MIDI_CLOCK_WINDOW,
 } from './midi-clock.ts';
+import { ModeApi, modesCatalogWsMessage } from './mode-api.ts';
 import { type CatalogSnapshot, formatCatalogSummary, loadModeCatalog } from './mode-catalog.ts';
 import {
   applyLayerWeightControl,
@@ -222,23 +223,43 @@ const abletonLinkEnabled = Bun.env.ABLETON_LINK_ENABLED === '1';
 const hotReload = Bun.env.HOT_RELOAD === '1';
 
 // Deck preset catalog (bundled data/ + optional AURORA_DATA_DIR overlay).
-// HTTP list/serve APIs land in a later PR; boot only resolves, scans, and holds
-// the snapshot so epoch + counts are visible in logs.
+// ModeApi retains last N epochs for compile cache + epoch-scoped asset URLs.
 let modeCatalog: CatalogSnapshot = loadModeCatalog({ appRoot: root });
+const modeApi = new ModeApi(modeCatalog);
 console.log(formatCatalogSummary(modeCatalog));
 if (Bun.env.AURORA_DATA_DIR?.trim()) {
   console.log(`[catalog] override AURORA_DATA_DIR=${Bun.env.AURORA_DATA_DIR.trim()}`);
 }
 
-/** Rescan bundled + override layers; bumps epoch only when content changes. */
+function broadcastModesCatalog(): void {
+  const data = JSON.stringify(modesCatalogWsMessage(modeApi.getPublicCatalog()));
+  sockets.forEach((ws) => {
+    ws.send(data);
+  });
+}
+
+/**
+ * Rescan bundled + override layers; bumps epoch only when content changes.
+ * On epoch advance: retain snapshot, prune old epochs, WS-broadcast public catalog.
+ * Does not tear any active renderer selection (menu/catalog only).
+ */
 export function rescanModeCatalog(): CatalogSnapshot {
   modeCatalog = loadModeCatalog({ appRoot: root, previous: modeCatalog });
+  const epochAdvanced = modeApi.applySnapshot(modeCatalog);
   console.log(formatCatalogSummary(modeCatalog));
+  if (epochAdvanced) {
+    broadcastModesCatalog();
+  }
   return modeCatalog;
 }
 
 export function getModeCatalog(): CatalogSnapshot {
   return modeCatalog;
+}
+
+/** Public mode API surface (catalog / compile / assets). Exported for tests. */
+export function getModeApi(): ModeApi {
+  return modeApi;
 }
 
 const sockets = new Set<ServerWebSocket<undefined>>();
@@ -1514,6 +1535,19 @@ const visualServer = Bun.serve({
       });
     }
 
+    // Mode catalog / compile cache / epoch-scoped assets (issue #237).
+    if (request.method === 'GET' && pathname === '/api/modes/catalog') {
+      return modeApi.handleCatalogRequest();
+    }
+    if (request.method === 'GET' && pathname === '/api/modes/compiled') {
+      return modeApi.handleCompiledRequest(url);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/api/data/e/')) {
+      const assetResponse = modeApi.handleAssetRequest(pathname);
+      if (assetResponse) return assetResponse;
+      return Response.json({ error: 'invalid mode asset path' }, { status: 400 });
+    }
+
     const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);
 
     if (relativePath.includes('..')) {
@@ -1551,6 +1585,9 @@ const visualServer = Bun.serve({
           }),
         );
       }
+      // Push current mode catalog so new clients can populate menus without
+      // waiting for the next epoch bump (renderer swap is still PR4/PR7).
+      ws.send(JSON.stringify(modesCatalogWsMessage(modeApi.getPublicCatalog())));
     },
     close(ws) {
       sockets.delete(ws);
