@@ -102,10 +102,15 @@ pub struct ModeDirectorInputs {
     pub deck_a_mesh_primary: bool,
     /// When true, ActiveCompiled for deck B is mesh-primary (or mesh layer + suppress).
     pub deck_b_mesh_primary: bool,
-    pub intensity: f32,
-    pub depth: f32,
-    pub feedback: f32,
-    pub speed: f32,
+    /// Per-deck performance axes (launchpad knobs).
+    pub deck_a_intensity: f32,
+    pub deck_a_depth: f32,
+    pub deck_a_feedback: f32,
+    pub deck_a_speed: f32,
+    pub deck_b_intensity: f32,
+    pub deck_b_depth: f32,
+    pub deck_b_feedback: f32,
+    pub deck_b_speed: f32,
     pub palette: f32,
     pub bass: f32,
     pub mid: f32,
@@ -171,11 +176,11 @@ fn resolve_deck(
 
 /// Resolve both decks from current control/audio inputs.
 pub fn resolve_director(inputs: &ModeDirectorInputs) -> ModeDirector {
-    let source = ModeParamPacket {
-        intensity: inputs.intensity,
-        depth: inputs.depth,
-        feedback: inputs.feedback,
-        speed: inputs.speed,
+    let shared = ModeParamPacket {
+        intensity: 0.0,
+        depth: 0.0,
+        feedback: 0.0,
+        speed: 0.0,
         palette: inputs.palette,
         bass: inputs.bass,
         mid: inputs.mid,
@@ -184,9 +189,23 @@ pub fn resolve_director(inputs: &ModeDirectorInputs) -> ModeDirector {
         pulse: inputs.pulse,
         energy: inputs.energy,
     };
+    let source_a = ModeParamPacket {
+        intensity: inputs.deck_a_intensity,
+        depth: inputs.deck_a_depth,
+        feedback: inputs.deck_a_feedback,
+        speed: inputs.deck_a_speed,
+        ..shared
+    };
+    let source_b = ModeParamPacket {
+        intensity: inputs.deck_b_intensity,
+        depth: inputs.deck_b_depth,
+        feedback: inputs.deck_b_feedback,
+        speed: inputs.deck_b_speed,
+        ..shared
+    };
     ModeDirector {
-        deck_a: resolve_deck(inputs.deck_a_mode, &source, inputs.deck_a_mesh_primary),
-        deck_b: resolve_deck(inputs.deck_b_mode, &source, inputs.deck_b_mesh_primary),
+        deck_a: resolve_deck(inputs.deck_a_mode, &source_a, inputs.deck_a_mesh_primary),
+        deck_b: resolve_deck(inputs.deck_b_mode, &source_b, inputs.deck_b_mesh_primary),
     }
 }
 
@@ -283,10 +302,14 @@ mod tests {
             deck_b_mode: VisualMode::Figure,
             deck_a_mesh_primary: false,
             deck_b_mesh_primary: true,
-            intensity: 1.0,
-            depth: 0.0,
-            feedback: 0.0,
-            speed: 1.0,
+            deck_a_intensity: 1.0,
+            deck_a_depth: 0.0,
+            deck_a_feedback: 0.0,
+            deck_a_speed: 1.0,
+            deck_b_intensity: 0.5,
+            deck_b_depth: 0.2,
+            deck_b_feedback: 0.3,
+            deck_b_speed: 1.5,
             palette: 0.5,
             bass: 0.0,
             mid: 0.0,
@@ -299,6 +322,9 @@ mod tests {
         assert_eq!(dir.deck_b.mode, VisualMode::Figure);
         assert_eq!(dir.deck_a.legacy_field_weight, 1.0);
         assert_eq!(dir.deck_b.legacy_field_weight, 0.0);
+        assert_eq!(dir.deck_a.params.intensity, 1.0);
+        assert_eq!(dir.deck_b.params.intensity, 0.5);
+        assert_eq!(dir.deck_b.params.speed, 1.5);
     }
 
     #[test]
@@ -325,10 +351,14 @@ mod tests {
             deck_b_mode: VisualMode::Beams,
             deck_a_mesh_primary: false,
             deck_b_mesh_primary: false,
-            intensity: 1.0,
-            depth: 0.0,
-            feedback: 0.0,
-            speed: 1.0,
+            deck_a_intensity: 1.0,
+            deck_a_depth: 0.0,
+            deck_a_feedback: 0.0,
+            deck_a_speed: 1.0,
+            deck_b_intensity: 1.0,
+            deck_b_depth: 0.0,
+            deck_b_feedback: 0.0,
+            deck_b_speed: 1.0,
             palette: 0.5,
             bass: 0.0,
             mid: 0.0,

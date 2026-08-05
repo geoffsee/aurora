@@ -22,6 +22,8 @@ export type DeckModeLaunchpadProps = {
   /** Explicit Reload active — re-fetch compiled for the current selection. */
   onReloadActive: () => void;
   reloadBusy?: boolean;
+  /** Always-visible per-deck performance knobs (intensity/depth/trails/speed). */
+  deckControls?: React.ReactNode;
   figureControls?: React.ReactNode;
 };
 
@@ -36,6 +38,7 @@ export function DeckModeLaunchpad({
   onSelectSlug,
   onReloadActive,
   reloadBusy = false,
+  deckControls,
   figureControls,
 }: DeckModeLaunchpadProps) {
   const groups = useMemo(() => groupCatalogByUiGroup(entries), [entries]);
@@ -74,7 +77,7 @@ export function DeckModeLaunchpad({
       : '—';
 
   return (
-    <Box h="100%" display="flex" flexDirection="column" gap={3}>
+    <Box h="100%" minW={0} maxW="100%" display="flex" flexDirection="column" gap={3}>
       <Flex align="baseline" justify="space-between" gap={3} wrap="wrap">
         <Box>
           <Text
@@ -189,10 +192,31 @@ export function DeckModeLaunchpad({
           );
         })}
       </Grid>
+      {deckControls && (
+        <Box
+          mt={2}
+          pt={3}
+          borderTop="1px solid"
+          borderColor="whiteAlpha.200"
+          minW={0}
+          maxW="100%"
+          overflow="hidden"
+        >
+          {deckControls}
+        </Box>
+      )}
       {figureControls &&
         (activeGroup === 'figure' ||
           activeModes.some((e) => e.uiGroup === 'figure' || e.legacyIndex === 24)) && (
-          <Box mt={2} pt={3} borderTop="1px solid" borderColor="whiteAlpha.200">
+          <Box
+            mt={2}
+            pt={3}
+            borderTop="1px solid"
+            borderColor="whiteAlpha.200"
+            minW={0}
+            maxW="100%"
+            overflow="hidden"
+          >
             {figureControls}
           </Box>
         )}

@@ -93,6 +93,14 @@
         intensity: 0.82,
         feedback: 0.35,
         depth: 0,
+        deckAIntensity: 0.82,
+        deckADepth: 0,
+        deckAFeedback: 0.35,
+        deckASpeed: 1,
+        deckBIntensity: 0.82,
+        deckBDepth: 0,
+        deckBFeedback: 0.35,
+        deckBSpeed: 1,
         palette: 0.38,
         paletteR: 0.12,
         paletteG: 0.72,
@@ -688,6 +696,14 @@
       window.__auroraControlIntensity = () => controlState.intensity;
       window.__auroraControlFeedback = () => controlState.feedback;
       window.__auroraControlDepth = () => controlState.depth;
+      window.__auroraControlDeckAIntensity = () => controlState.deckAIntensity ?? controlState.intensity;
+      window.__auroraControlDeckADepth = () => controlState.deckADepth ?? controlState.depth;
+      window.__auroraControlDeckAFeedback = () => controlState.deckAFeedback ?? controlState.feedback;
+      window.__auroraControlDeckASpeed = () => controlState.deckASpeed ?? controlState.speed;
+      window.__auroraControlDeckBIntensity = () => controlState.deckBIntensity ?? controlState.intensity;
+      window.__auroraControlDeckBDepth = () => controlState.deckBDepth ?? controlState.depth;
+      window.__auroraControlDeckBFeedback = () => controlState.deckBFeedback ?? controlState.feedback;
+      window.__auroraControlDeckBSpeed = () => controlState.deckBSpeed ?? controlState.speed;
       window.__auroraControlPalette = () => controlState.palette;
       window.__auroraControlPaletteR = () => controlState.paletteR;
       window.__auroraControlPaletteG = () => controlState.paletteG;

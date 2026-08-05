@@ -13,6 +13,14 @@ export type MappableParam =
   | 'intensity'
   | 'feedback'
   | 'depth'
+  | 'deckAIntensity'
+  | 'deckADepth'
+  | 'deckAFeedback'
+  | 'deckASpeed'
+  | 'deckBIntensity'
+  | 'deckBDepth'
+  | 'deckBFeedback'
+  | 'deckBSpeed'
   | 'palette'
   | 'paletteR'
   | 'paletteG'
@@ -72,6 +80,78 @@ export const PARAM_META: Record<MappableParam, ParamMeta> = {
     knobLabel: '3D Lines',
     min: 0,
     max: 1,
+    step: 0.01,
+    format: f2,
+  },
+  deckAIntensity: {
+    key: 'deckAIntensity',
+    label: 'Deck A Intensity',
+    knobLabel: 'Intensity',
+    min: 0.05,
+    max: 1.5,
+    step: 0.01,
+    format: f2,
+  },
+  deckADepth: {
+    key: 'deckADepth',
+    label: 'Deck A Depth',
+    knobLabel: '3D Lines',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: f2,
+  },
+  deckAFeedback: {
+    key: 'deckAFeedback',
+    label: 'Deck A Trails',
+    knobLabel: 'Trails',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: f2,
+  },
+  deckASpeed: {
+    key: 'deckASpeed',
+    label: 'Deck A Speed',
+    knobLabel: 'Speed',
+    min: 0.1,
+    max: 3,
+    step: 0.01,
+    format: f2,
+  },
+  deckBIntensity: {
+    key: 'deckBIntensity',
+    label: 'Deck B Intensity',
+    knobLabel: 'Intensity',
+    min: 0.05,
+    max: 1.5,
+    step: 0.01,
+    format: f2,
+  },
+  deckBDepth: {
+    key: 'deckBDepth',
+    label: 'Deck B Depth',
+    knobLabel: '3D Lines',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: f2,
+  },
+  deckBFeedback: {
+    key: 'deckBFeedback',
+    label: 'Deck B Trails',
+    knobLabel: 'Trails',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: f2,
+  },
+  deckBSpeed: {
+    key: 'deckBSpeed',
+    label: 'Deck B Speed',
+    knobLabel: 'Speed',
+    min: 0.1,
+    max: 3,
     step: 0.01,
     format: f2,
   },
@@ -384,6 +464,21 @@ export const FIGURE_KNOB_PARAMS = [
   'figureAudio',
 ] as const satisfies readonly MappableParam[];
 
+/** Per-deck launchpad performance knobs (not the global master strip). */
+export const DECK_A_KNOB_PARAMS = [
+  'deckAIntensity',
+  'deckADepth',
+  'deckAFeedback',
+  'deckASpeed',
+] as const satisfies readonly MappableParam[];
+
+export const DECK_B_KNOB_PARAMS = [
+  'deckBIntensity',
+  'deckBDepth',
+  'deckBFeedback',
+  'deckBSpeed',
+] as const satisfies readonly MappableParam[];
+
 /** Build the state patch for setting a mappable param to a value. Palette hue
  * also drives the RGB duotone base so the live color tracks the slider. */
 export function buildParamPatch(
@@ -407,6 +502,20 @@ export function buildParamPatch(
       paletteB: b,
       palette: rgbToHue(r, g, b),
     };
+  }
+  // Global masters (VST / top strip) also seed both deck axes so a master move
+  // keeps decks in lockstep until an operator diverges a launchpad knob.
+  if (param === 'intensity') {
+    return { intensity: v, deckAIntensity: v, deckBIntensity: v };
+  }
+  if (param === 'depth') {
+    return { depth: v, deckADepth: v, deckBDepth: v };
+  }
+  if (param === 'feedback') {
+    return { feedback: v, deckAFeedback: v, deckBFeedback: v };
+  }
+  if (param === 'speed') {
+    return { speed: v, deckASpeed: v, deckBSpeed: v };
   }
   return { [param]: v } as Partial<ControlState>;
 }

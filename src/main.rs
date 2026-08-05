@@ -78,6 +78,22 @@ unsafe extern "C" {
     fn browser_control_feedback() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDepth)]
     fn browser_control_depth() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckAIntensity)]
+    fn browser_control_deck_a_intensity() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckADepth)]
+    fn browser_control_deck_a_depth() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckAFeedback)]
+    fn browser_control_deck_a_feedback() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckASpeed)]
+    fn browser_control_deck_a_speed() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBIntensity)]
+    fn browser_control_deck_b_intensity() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBDepth)]
+    fn browser_control_deck_b_depth() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBFeedback)]
+    fn browser_control_deck_b_feedback() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBSpeed)]
+    fn browser_control_deck_b_speed() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPalette)]
     fn browser_control_palette() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteR)]
@@ -495,6 +511,14 @@ struct VjState {
     intensity: f32,
     feedback: f32,
     depth: f32,
+    deck_a_intensity: f32,
+    deck_a_depth: f32,
+    deck_a_feedback: f32,
+    deck_a_speed: f32,
+    deck_b_intensity: f32,
+    deck_b_depth: f32,
+    deck_b_feedback: f32,
+    deck_b_speed: f32,
     palette: f32,
     palette_r: f32,
     palette_g: f32,
@@ -559,6 +583,14 @@ impl Default for VjState {
             intensity: 0.82,
             feedback: 0.35,
             depth: 0.0,
+            deck_a_intensity: 0.82,
+            deck_a_depth: 0.0,
+            deck_a_feedback: 0.35,
+            deck_a_speed: 1.0,
+            deck_b_intensity: 0.82,
+            deck_b_depth: 0.0,
+            deck_b_feedback: 0.35,
+            deck_b_speed: 1.0,
             // Cool aurora-green base; crown shader adds magenta tips on Deck B.
             palette: 0.38,
             palette_r: 0.12,
@@ -1145,6 +1177,14 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.intensity = browser_control_intensity().clamp(0.05, 1.5);
         state.feedback = browser_control_feedback().clamp(0.0, 1.0);
         state.depth = browser_control_depth().clamp(0.0, 1.0);
+        state.deck_a_intensity = browser_control_deck_a_intensity().clamp(0.05, 1.5);
+        state.deck_a_depth = browser_control_deck_a_depth().clamp(0.0, 1.0);
+        state.deck_a_feedback = browser_control_deck_a_feedback().clamp(0.0, 1.0);
+        state.deck_a_speed = browser_control_deck_a_speed().clamp(0.1, 3.0);
+        state.deck_b_intensity = browser_control_deck_b_intensity().clamp(0.05, 1.5);
+        state.deck_b_depth = browser_control_deck_b_depth().clamp(0.0, 1.0);
+        state.deck_b_feedback = browser_control_deck_b_feedback().clamp(0.0, 1.0);
+        state.deck_b_speed = browser_control_deck_b_speed().clamp(0.1, 3.0);
         state.palette = browser_control_palette().clamp(0.0, 1.0);
         state.palette_r = browser_control_palette_r().clamp(0.0, 1.0);
         state.palette_g = browser_control_palette_g().clamp(0.0, 1.0);
@@ -1302,21 +1342,33 @@ fn keyboard_controls(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut state
     }
     if keys.pressed(KeyCode::KeyJ) {
         state.speed = (state.speed - knob_step).clamp(0.1, 3.0);
+        state.deck_a_speed = state.speed;
+        state.deck_b_speed = state.speed;
     }
     if keys.pressed(KeyCode::KeyL) {
         state.speed = (state.speed + knob_step).clamp(0.1, 3.0);
+        state.deck_a_speed = state.speed;
+        state.deck_b_speed = state.speed;
     }
     if keys.pressed(KeyCode::KeyK) {
         state.intensity = (state.intensity - knob_step).clamp(0.05, 1.5);
+        state.deck_a_intensity = state.intensity;
+        state.deck_b_intensity = state.intensity;
     }
     if keys.pressed(KeyCode::KeyI) {
         state.intensity = (state.intensity + knob_step).clamp(0.05, 1.5);
+        state.deck_a_intensity = state.intensity;
+        state.deck_b_intensity = state.intensity;
     }
     if keys.pressed(KeyCode::BracketLeft) {
         state.feedback = (state.feedback - knob_step).clamp(0.0, 1.0);
+        state.deck_a_feedback = state.feedback;
+        state.deck_b_feedback = state.feedback;
     }
     if keys.pressed(KeyCode::BracketRight) {
         state.feedback = (state.feedback + knob_step).clamp(0.0, 1.0);
+        state.deck_a_feedback = state.feedback;
+        state.deck_b_feedback = state.feedback;
     }
 
     if keys.just_pressed(KeyCode::KeyQ) {
@@ -1411,7 +1463,16 @@ fn field_deck_of(deck: Deck) -> FieldDeck {
     }
 }
 
-fn field_frame_inputs(state: &VjState, deck_drive: f32, beat: f32, beat_hit: f32, cue_hit: f32, intensity_drive: f32, motion_drive: f32) -> FieldFrameInputs {
+fn field_frame_inputs(
+    state: &VjState,
+    deck_drive: f32,
+    beat: f32,
+    beat_hit: f32,
+    cue_hit: f32,
+    intensity_drive: f32,
+    motion_drive: f32,
+    params: &crate::mode_director::ModeParamPacket,
+) -> FieldFrameInputs {
     FieldFrameInputs {
         t: state.show_time,
         beat,
@@ -1421,10 +1482,10 @@ fn field_frame_inputs(state: &VjState, deck_drive: f32, beat: f32, beat_hit: f32
         high: state.osc_high.clamp(0.0, 1.0),
         energy: state.osc_energy.clamp(0.0, 1.0),
         pulse: state.osc_pulse.clamp(0.0, 1.0),
-        intensity: state.intensity,
-        depth: state.depth,
-        feedback: state.feedback.clamp(0.0, 1.0),
-        speed: state.speed,
+        intensity: params.intensity,
+        depth: params.depth,
+        feedback: params.feedback.clamp(0.0, 1.0),
+        speed: params.speed,
         deck_drive,
         flash: state.flash,
         cue_hit,
@@ -1452,10 +1513,14 @@ fn update_mode_director(
         deck_b_mode: state.deck_b_mode,
         deck_a_mesh_primary: field_runtime.should_zero_legacy_field(FieldDeck::A),
         deck_b_mesh_primary: field_runtime.should_zero_legacy_field(FieldDeck::B),
-        intensity: state.intensity,
-        depth: state.depth,
-        feedback: state.feedback,
-        speed: state.speed,
+        deck_a_intensity: state.deck_a_intensity,
+        deck_a_depth: state.deck_a_depth,
+        deck_a_feedback: state.deck_a_feedback,
+        deck_a_speed: state.deck_a_speed,
+        deck_b_intensity: state.deck_b_intensity,
+        deck_b_depth: state.deck_b_depth,
+        deck_b_feedback: state.deck_b_feedback,
+        deck_b_speed: state.deck_b_speed,
         palette: state.palette,
         bass: state.osc_bass.clamp(0.0, 1.0),
         mid: state.osc_mid.clamp(0.0, 1.0),
@@ -1494,8 +1559,6 @@ fn update_visuals(
         manual_beat_hit
     }) + cue_hit * 0.38;
     let band_drive = bass_activity * 0.46 + melodic_activity * 0.42 + osc_drive * 0.12;
-    let intensity_drive =
-        (state.intensity * (0.75 + band_drive * 0.95 + cue_hit * 0.55)).clamp(0.05, 2.4);
     let motion_drive = if state.osc_connected {
         (band_drive * AUDIO_GEOMETRY_GAIN).clamp(0.0, 1.0)
     } else {
@@ -1550,6 +1613,9 @@ fn update_visuals(
             1.0
         };
 
+        let intensity_drive = (instrument.params.intensity
+            * (0.75 + band_drive * 0.95 + cue_hit * 0.55))
+            .clamp(0.05, 2.4);
         let mut hue = element.seed * 360.0 + t * VIS_HUE_DRIFT;
         let mut alpha = deck_alpha * reactive_gain;
         // #232: darker base + wider range later → clearer contrast, less wash.
@@ -1565,6 +1631,7 @@ fn update_visuals(
             cue_hit,
             intensity_drive,
             motion_drive,
+            &instrument.params,
         );
         // Routing (PR14 / #248): FieldRuntime (0–23 + compiled) → engine_modules
         // (25–48) → hide. No residual 49-way layout match arms on the four pools.
@@ -1824,12 +1891,18 @@ fn update_palette_material(
             alpha_b,
         );
         // Operator bus for pack shaders (point-cloud and future packs):
-        // intensity (0..1), depth/scatter, feedback/trails, speed (0..1 from 0.1..3).
-        let pack_drive = Vec4::new(
-            ((state.intensity - 0.05) / 1.45).clamp(0.0, 1.0),
-            state.depth.clamp(0.0, 1.0),
-            state.feedback.clamp(0.0, 1.0),
-            ((state.speed - 0.1) / 2.9).clamp(0.0, 1.0),
+        // per-deck intensity/depth/trails/speed (normalized).
+        let pack_drive_a = Vec4::new(
+            ((state.deck_a_intensity - 0.05) / 1.45).clamp(0.0, 1.0),
+            state.deck_a_depth.clamp(0.0, 1.0),
+            state.deck_a_feedback.clamp(0.0, 1.0),
+            ((state.deck_a_speed - 0.1) / 2.9).clamp(0.0, 1.0),
+        );
+        let pack_drive_b = Vec4::new(
+            ((state.deck_b_intensity - 0.05) / 1.45).clamp(0.0, 1.0),
+            state.deck_b_depth.clamp(0.0, 1.0),
+            state.deck_b_feedback.clamp(0.0, 1.0),
+            ((state.deck_b_speed - 0.1) / 2.9).clamp(0.0, 1.0),
         );
         if let Some(ha) = pack_a_handle.as_ref()
             && let Some(mat) = pack_a_materials.get_mut(&ha.0)
@@ -1838,7 +1911,7 @@ fn update_palette_material(
             mat.palette_extra = extra_a;
             mat.audio_uniforms = audio_uniforms;
             mat.palette_rgb = palette_rgb;
-            mat.pack_drive = pack_drive;
+            mat.pack_drive = pack_drive_a;
         }
         if let Some(hb) = pack_b_handle.as_ref()
             && let Some(mat) = pack_b_materials.get_mut(&hb.0)
@@ -1847,7 +1920,7 @@ fn update_palette_material(
             mat.palette_extra = extra_b;
             mat.audio_uniforms = audio_uniforms;
             mat.palette_rgb = palette_rgb;
-            mat.pack_drive = pack_drive;
+            mat.pack_drive = pack_drive_b;
         }
     }
 

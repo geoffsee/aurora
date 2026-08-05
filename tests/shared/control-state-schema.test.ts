@@ -332,10 +332,33 @@ test('v14 state gains reload-active counters', () => {
     deckBPresetSlug: 'tunnel',
   };
   const migrated = migrateControlState(input) as Record<string, unknown>;
-  expect(migrated.schemaVersion).toBe(15);
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
   expect(migrated.deckAReloadActiveVersion).toBe(0);
   expect(migrated.deckBReloadActiveVersion).toBe(0);
   expect(migrated.deckAPresetSlug).toBe('beams');
+});
+
+test('v15 state seeds per-deck axes from globals', () => {
+  const input = {
+    schemaVersion: 15,
+    intensity: 1.1,
+    depth: 0.4,
+    feedback: 0.55,
+    speed: 1.8,
+    deckAReloadActiveVersion: 2,
+    deckBReloadActiveVersion: 3,
+  };
+  const migrated = migrateControlState(input) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(16);
+  expect(migrated.deckAIntensity).toBe(1.1);
+  expect(migrated.deckBIntensity).toBe(1.1);
+  expect(migrated.deckADepth).toBe(0.4);
+  expect(migrated.deckBDepth).toBe(0.4);
+  expect(migrated.deckAFeedback).toBe(0.55);
+  expect(migrated.deckBFeedback).toBe(0.55);
+  expect(migrated.deckASpeed).toBe(1.8);
+  expect(migrated.deckBSpeed).toBe(1.8);
+  expect(migrated.deckAReloadActiveVersion).toBe(2);
 });
 
 test('null passes through unchanged', () => {

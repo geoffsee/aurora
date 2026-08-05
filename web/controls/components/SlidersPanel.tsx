@@ -1,11 +1,13 @@
-import { Box, Button, Flex, Grid, SimpleGrid, Text } from '@chakra-ui/react';
-import { useCallback, useMemo } from 'react';
+import { Box, Button, Flex, Grid, Text } from '@chakra-ui/react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { useControls } from '../context/ControlsContext.tsx';
 import { deckGpuShaderPatch } from '../lib/deck-gpu-shader.ts';
 import { deckGpuShaderModePatch, deckVisibilityPatch } from '../lib/deck-mode.ts';
 import { rgbToHex } from '../lib/palette.ts';
 import {
   buildParamPatch,
+  DECK_A_KNOB_PARAMS,
+  DECK_B_KNOB_PARAMS,
   KNOB_STRIP_PARAMS,
   type MappableParam,
   PARAM_META,
@@ -40,47 +42,104 @@ export function SlidersPanel() {
     [state, updateState],
   );
 
-  const figureKnobs = useMemo(
-    () => (
-      <SimpleGrid columns={4} gap={3}>
-        <ParamKnob
-          label="Scale"
-          value={state.figureScale}
-          min={0.2}
-          max={2.5}
-          step={0.01}
-          format={fmt2}
-          onChange={(figureScale) => updateState({ figureScale })}
-        />
-        <ParamKnob
-          label="Spin"
-          value={state.figureSpin}
-          min={0}
-          max={2}
-          step={0.01}
-          format={fmt2}
-          onChange={(figureSpin) => updateState({ figureSpin })}
-        />
-        <ParamKnob
-          label="Stage Halo"
-          value={state.figureHalo}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(figureHalo) => updateState({ figureHalo })}
-        />
-        <ParamKnob
-          label="Audio React"
-          value={state.figureAudio}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(figureAudio) => updateState({ figureAudio })}
-        />
-      </SimpleGrid>
+  /** Horizontal strip: knobs keep fixed width; overflow scrolls, never wraps. */
+  const knobScrollStrip = useCallback(
+    (children: ReactNode, ariaLabel: string) => (
+      <Box
+        overflowX="auto"
+        overflowY="hidden"
+        maxW="100%"
+        pb={1}
+        css={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(153,136,98,0.55) transparent',
+          WebkitOverflowScrolling: 'touch',
+        }}
+        aria-label={ariaLabel}
+      >
+        <Flex gap={3} minW="min-content" align="flex-start" pr={1} flexWrap="nowrap">
+          {children}
+        </Flex>
+      </Box>
     ),
+    [],
+  );
+
+  const deckKnobRow = useCallback(
+    (keys: readonly MappableParam[], ariaLabel: string) =>
+      knobScrollStrip(
+        keys.map((key) => {
+          const meta = PARAM_META[key];
+          return (
+            <ParamKnob
+              key={key}
+              label={meta.knobLabel ?? meta.label}
+              value={numericStateValue(state as unknown as Record<string, unknown>, key)}
+              min={meta.min}
+              max={meta.max}
+              step={meta.step}
+              format={meta.format}
+              onChange={(v) => onKnobChange(key, v)}
+            />
+          );
+        }),
+        ariaLabel,
+      ),
+    [state, onKnobChange, knobScrollStrip],
+  );
+
+  const deckAKnobs = useMemo(
+    () => deckKnobRow(DECK_A_KNOB_PARAMS, 'Deck A performance knobs'),
+    [deckKnobRow],
+  );
+  const deckBKnobs = useMemo(
+    () => deckKnobRow(DECK_B_KNOB_PARAMS, 'Deck B performance knobs'),
+    [deckKnobRow],
+  );
+
+  const figureKnobs = useMemo(
+    () =>
+      knobScrollStrip(
+        <>
+          <ParamKnob
+            label="Scale"
+            value={state.figureScale}
+            min={0.2}
+            max={2.5}
+            step={0.01}
+            format={fmt2}
+            onChange={(figureScale) => updateState({ figureScale })}
+          />
+          <ParamKnob
+            label="Spin"
+            value={state.figureSpin}
+            min={0}
+            max={2}
+            step={0.01}
+            format={fmt2}
+            onChange={(figureSpin) => updateState({ figureSpin })}
+          />
+          <ParamKnob
+            label="Stage Halo"
+            value={state.figureHalo}
+            min={0}
+            max={1}
+            step={0.01}
+            format={fmtPct}
+            onChange={(figureHalo) => updateState({ figureHalo })}
+          />
+          <ParamKnob
+            label="Audio React"
+            value={state.figureAudio}
+            min={0}
+            max={1}
+            step={0.01}
+            format={fmtPct}
+            onChange={(figureAudio) => updateState({ figureAudio })}
+          />
+        </>,
+        'Figure knobs',
+      ),
     [
       state.figureScale,
       state.figureSpin,
@@ -89,6 +148,7 @@ export function SlidersPanel() {
       updateState,
       fmt2,
       fmtPct,
+      knobScrollStrip,
     ],
   );
 
@@ -157,6 +217,7 @@ export function SlidersPanel() {
             onSelectSlug={(slug) => selectDeckPreset('A', slug)}
             onReloadActive={() => reloadActiveDeck('A')}
             reloadBusy={reloadBusy.A}
+            deckControls={deckAKnobs}
             figureControls={figureKnobs}
           />
         </Panel>
@@ -183,6 +244,7 @@ export function SlidersPanel() {
             onSelectSlug={(slug) => selectDeckPreset('B', slug)}
             onReloadActive={() => reloadActiveDeck('B')}
             reloadBusy={reloadBusy.B}
+            deckControls={deckBKnobs}
             figureControls={figureKnobs}
           />
         </Panel>

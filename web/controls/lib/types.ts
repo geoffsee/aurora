@@ -27,6 +27,15 @@ export type ControlState = {
   intensity: number;
   feedback: number;
   depth: number;
+  /** Per-deck instrument axes (launchpad knobs). Independent of global masters. */
+  deckAIntensity: number;
+  deckADepth: number;
+  deckAFeedback: number;
+  deckASpeed: number;
+  deckBIntensity: number;
+  deckBDepth: number;
+  deckBFeedback: number;
+  deckBSpeed: number;
   palette: number;
   paletteR: number;
   paletteG: number;
