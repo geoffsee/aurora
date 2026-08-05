@@ -2080,6 +2080,15 @@ fn update_visuals(
                 let x = -STAGE_WIDTH / 2.0 + x_step * (element.col as f32 + 0.5);
                 let y = -STAGE_HEIGHT / 2.0 + y_step * (element.row as f32 + 0.5);
                 let diagonal = element.col as f32 * 0.32 + element.row as f32 * 0.41;
+                // Normalized progress across the tile field — used by math-mode arms
+                // so Deck B isn't stuck on the default grid for modes 25–48.
+                let fraction = element.index as f32
+                    / ((DECK_B_COLS * DECK_B_ROWS).max(1) as f32);
+                let layer = if DECK_B_ROWS > 1 {
+                    element.row as f32 / (DECK_B_ROWS as f32 - 1.0)
+                } else {
+                    0.0
+                };
                 let pulse = wave(
                     t * (3.8 + melodic_activity * 5.5) - diagonal * 1.7
                         + beat_hit * 2.0
@@ -2298,31 +2307,256 @@ fn update_visuals(
                     VisualMode::Figure => {
                         alpha = 0.0;
                     }
-                    // Mathematical concepts - fall through to Beams
-                    VisualMode::Hypercube
-                    | VisualMode::CalabiYau
-                    | VisualMode::Quasicrystal
-                    | VisualMode::PenroseTiling
-                    | VisualMode::SierpinskiTriangle
-                    | VisualMode::TetrahedralMatrix
-                    | VisualMode::BorromeanRings
-                    | VisualMode::Torus
-                    | VisualMode::PermutationGroups
-                    | VisualMode::SymmetryGroups
-                    | VisualMode::LieAlgebras
-                    | VisualMode::LatticeTheory
-                    | VisualMode::GraphTheory
-                    | VisualMode::DesignTheory
-                    | VisualMode::MandelbrotSet
-                    | VisualMode::JuliaSets
-                    | VisualMode::LorenzAttractor
-                    | VisualMode::Functors
-                    | VisualMode::ModularArithmetic
-                    | VisualMode::PAdicNumbers
-                    | VisualMode::VectorSpaces
-                    | VisualMode::Eigenvectors
-                    | VisualMode::BooleanLattices
-                    | VisualMode::Forcing => {}
+                    // Mathematical concepts — same ideas as Beam, adapted to the tile field
+                    // (fraction/layer over the grid). Without these arms every math pad left
+                    // Deck B on the default pulsing tile grid.
+                    VisualMode::Hypercube => {
+                        let pull = bass * 1.4 + beat_hit * 0.7;
+                        let va = fraction * TAU * 2.8 + t * (2.2 + pull * 2.4);
+                        let vr = 90.0 - pull * 70.0 + (element.seed - 0.5) * 30.0;
+                        transform.translation.x = va.cos() * vr;
+                        transform.translation.y = va.sin() * vr * 0.8;
+                        transform.rotation = Quat::from_rotation_z(va * 1.3);
+                        transform.scale *= 0.55 + pull * 0.9;
+                        alpha *= 0.55 + pull * 0.5;
+                        hue += va.to_degrees() * 0.6 + pull * 45.0;
+                    }
+                    VisualMode::CalabiYau => {
+                        let drift = t * (0.07 + element.seed * 0.04) + element.seed * TAU * 0.6;
+                        let swell = wave(t * (0.6 + melodic_activity * 1.1) + element.seed * 2.0);
+                        transform.translation.x += drift.cos() * (42.0 + mid * 55.0) + (swell - 0.5) * 18.0;
+                        transform.translation.y += drift.sin() * (30.0 + high * 48.0) * 0.9;
+                        transform.scale *= 1.6 + swell * 1.4 + osc_drive * 0.8;
+                        alpha *= 0.55 + swell * 0.45 + (mid + high) * 0.2 + state.feedback * 0.15;
+                        hue += drift.to_degrees() * 0.12 + mid * 30.0 + swell * 25.0;
+                    }
+                    VisualMode::Quasicrystal => {
+                        let crack = (high * 2.8 + state.osc_pulse * 1.6 + beat_hit * 2.2).clamp(0.0, 3.5);
+                        let shard = (element.seed * 29.0 + t * 11.0 + high * 4.0).sin();
+                        transform.translation.x += shard * (12.0 + crack * 48.0);
+                        transform.translation.y += (shard * 0.7 + (t * 13.0 + element.seed).cos() * 0.3)
+                            * (10.0 + crack * 38.0);
+                        transform.scale *= 0.45 + shard.abs() * 0.7 + crack * 0.15;
+                        transform.rotation *= Quat::from_rotation_z(shard * 1.8 + crack * 0.7);
+                        alpha *= (0.35 + crack * 0.25).min(1.0) + high * 0.25;
+                        hue += shard * 160.0 + crack * 35.0 + high * 70.0;
+                    }
+                    VisualMode::PenroseTiling => {
+                        // Aperiodic-ish: snap to dual lattices offset by golden ratio.
+                        let phi = 1.618_034;
+                        let snap_x = (x / (36.0 * phi)).round() * (36.0 * phi);
+                        let snap_y = (y / 36.0).round() * 36.0;
+                        let alt = ((element.col + element.row) % 2) as f32;
+                        transform.translation.x = snap_x + alt * 10.0;
+                        transform.translation.y = snap_y + (1.0 - alt) * 8.0;
+                        transform.rotation *= Quat::from_rotation_z(alt * TAU * 0.2 + diagonal * 0.05);
+                        transform.scale *= 0.75 + (element.index % 5) as f32 * 0.08;
+                        alpha *= 0.88;
+                        hue += 62.0 + alt * 40.0;
+                    }
+                    VisualMode::SierpinskiTriangle => {
+                        let spiral_a = fraction * TAU * 4.0 + t * 0.4;
+                        let spiral_r = 80.0 + fraction * 380.0 + bass * 80.0;
+                        transform.translation.x = spiral_a.cos() * spiral_r;
+                        transform.translation.y = spiral_a.sin() * spiral_r;
+                        transform.rotation = Quat::from_rotation_z(spiral_a + TAU * 0.25);
+                        transform.scale *= 0.7 + fraction * 0.5;
+                        // Sierpinski cull: hide tiles whose index isn't a triangular subset.
+                        let bits = element.index as u32;
+                        if bits & (bits >> 1) != 0 {
+                            alpha = 0.0;
+                        }
+                        hue += 1.05 + fraction * 55.0;
+                    }
+                    VisualMode::TetrahedralMatrix => {
+                        let snap_x = (x / 48.0).round() * 48.0;
+                        let snap_y = (y / 42.0).round() * 42.0;
+                        let elev = ((element.col + 2 * element.row) % 3) as f32;
+                        transform.translation.x = snap_x + elev * 6.0;
+                        transform.translation.y = snap_y + elev * 4.0;
+                        transform.translation.z += elev * 8.0;
+                        transform.scale *= 0.7 + elev * 0.18;
+                        alpha *= 0.88;
+                        hue += 62.0 + elev * 25.0;
+                    }
+                    VisualMode::BorromeanRings => {
+                        let pull = bass * 1.4 + beat_hit * 0.7;
+                        let ring = (element.index % 3) as f32;
+                        let va = fraction * TAU * 2.8 + t * (2.2 + pull * 2.4) + ring * TAU / 3.0;
+                        let vr = 90.0 - pull * 70.0 + ring * 18.0;
+                        transform.translation.x = va.cos() * vr;
+                        transform.translation.y = va.sin() * vr * 0.8;
+                        transform.rotation = Quat::from_rotation_z(va * 1.3 + ring);
+                        transform.scale *= 0.55 + pull * 0.9;
+                        alpha *= 0.55 + pull * 0.5;
+                        hue += va.to_degrees() * 0.6 + pull * 45.0 + ring * 40.0;
+                    }
+                    VisualMode::Torus => {
+                        let centered_x = x / (STAGE_WIDTH * 0.5);
+                        let centered_y = y / (STAGE_HEIGHT * 0.5);
+                        let radius = (centered_x * centered_x + centered_y * centered_y).sqrt();
+                        let tunnel = (1.0 - radius).clamp(0.0, 1.0);
+                        transform.translation.x *= 0.75 + tunnel * state.depth;
+                        transform.translation.y *= 0.75 + tunnel * state.depth;
+                        transform.translation.z += tunnel * 24.0 + layer * 12.0;
+                        transform.scale *= 0.7 + tunnel * 1.8 + beat_hit;
+                        alpha *= 0.7 + tunnel;
+                        hue += 10.0 + layer * 12.0;
+                    }
+                    VisualMode::PermutationGroups => {
+                        let dx = (t * 1.7 + element.seed * 11.0).sin() * 110.0;
+                        let dy = (t * 2.1 + element.seed * 7.0).cos() * 90.0;
+                        transform.translation.x += dx;
+                        transform.translation.y += dy;
+                        transform.rotation *= Quat::from_rotation_z(element.seed * 4.0 + t * 0.4);
+                        transform.scale *= 0.9;
+                        alpha *= 0.88;
+                        hue += 1.0;
+                    }
+                    VisualMode::SymmetryGroups => {
+                        if element.col % 2 == 1 {
+                            transform.translation.x = -transform.translation.x.abs();
+                        } else {
+                            transform.translation.x = transform.translation.x.abs();
+                        }
+                        if element.row % 2 == 1 {
+                            transform.translation.y = -transform.translation.y.abs();
+                        }
+                        transform.scale *= 0.82 + wave(t * 2.0 + layer) * 0.45;
+                        alpha *= 0.72 + high * 0.9;
+                        hue += 130.0;
+                    }
+                    VisualMode::LieAlgebras => {
+                        let orbit_r = 140.0 + layer * 100.0;
+                        let orbit_a = t * (0.45 + element.seed * 0.4) + element.seed * TAU;
+                        transform.translation.x += orbit_a.cos() * orbit_r;
+                        transform.translation.y += orbit_a.sin() * orbit_r * 0.75;
+                        transform.rotation = Quat::from_rotation_z(orbit_a + TAU * 0.25);
+                        transform.scale *= 0.92;
+                        alpha *= 0.9;
+                        hue += 130.0;
+                    }
+                    VisualMode::LatticeTheory => {
+                        let snap_x = (x / 48.0).round() * 48.0;
+                        let snap_y = (y / 48.0).round() * 48.0;
+                        transform.translation.x = snap_x + (element.col % 2) as f32 * 6.0;
+                        transform.translation.y = snap_y + (element.row % 2) as f32 * 6.0;
+                        transform.scale *= 0.85 + (element.col % 3) as f32 * 0.12;
+                        alpha *= 0.88;
+                        hue += 62.0;
+                    }
+                    VisualMode::GraphTheory => {
+                        let drift = t * (0.07 + element.seed * 0.04) + element.seed * TAU * 0.6;
+                        let swell = wave(t * (0.6 + melodic_activity * 1.1) + element.seed * 2.0);
+                        transform.translation.x += drift.cos() * (42.0 + mid * 55.0) + (swell - 0.5) * 18.0;
+                        transform.translation.y += drift.sin() * (30.0 + high * 48.0) * 0.9;
+                        transform.scale *= 1.5 + swell * 1.3 + osc_drive * 0.7;
+                        alpha *= 0.5 + swell * 0.4 + (mid + high) * 0.2;
+                        hue += drift.to_degrees() * 0.12 + mid * 30.0 + swell * 25.0;
+                    }
+                    VisualMode::DesignTheory => {
+                        transform.scale.x *= 2.8 + state.feedback * 2.2;
+                        transform.scale.y *= 0.45 + pulse * 0.5;
+                        alpha *= 0.22 + state.feedback * 0.52 + osc_drive * 0.18;
+                        hue += 30.0;
+                    }
+                    VisualMode::MandelbrotSet => {
+                        let drift = wave(t * 0.25 + fraction * 0.4);
+                        transform.translation.x *= 0.96 + drift * 0.38;
+                        transform.translation.y *= 1.05 + (1.0 - drift) * 0.1;
+                        transform.scale *= 0.85 + drift * 0.4;
+                        alpha *= 0.7 + drift * 0.25;
+                        hue += 32.0 + (mid + high) * 18.0;
+                    }
+                    VisualMode::JuliaSets => {
+                        let prism = wave(t * (0.9 + mid * 1.4) + fraction * TAU * 3.0 + element.seed);
+                        let split = (element.index % 3) as f32 - 1.0;
+                        transform.translation.x += split * (28.0 + high * 54.0) + prism * (18.0 + mid * 38.0);
+                        transform.translation.y += (prism - 0.5) * (22.0 + high * 34.0);
+                        transform.rotation *= Quat::from_rotation_z(split * 0.18 + high * 0.16);
+                        transform.scale *= 0.7 + prism * 0.9 + high * 0.35;
+                        alpha *= 0.5 + prism * 0.45 + high * 0.35;
+                        hue += split * 82.0 + prism * 120.0 + high * 80.0;
+                    }
+                    VisualMode::LorenzAttractor => {
+                        let chaos = (t * 6.0 + fraction * 2.5).sin();
+                        let surge = osc_drive + state.osc_pulse * 0.8 + beat_hit;
+                        transform.translation.x += chaos * surge * 28.0;
+                        transform.translation.y += (chaos * 0.7).cos() * surge * 22.0;
+                        transform.scale *= 0.55 + surge * 1.5;
+                        alpha *= 0.35 + surge * 0.8;
+                        hue += 20.0 + (mid + high) * 18.0;
+                    }
+                    VisualMode::Functors => {
+                        let scan = ((t * (0.42 + state.speed * 0.12 + high * 0.65) + element.seed)
+                            .fract()
+                            * 2.0)
+                            - 1.0;
+                        transform.translation.x = wave(t * 0.8 + fraction * 5.0) * STAGE_WIDTH * 0.18;
+                        transform.translation.y = scan * STAGE_HEIGHT * 0.42 + layer * 6.0;
+                        transform.rotation = Quat::from_rotation_z(if element.index % 2 == 0 {
+                            0.0
+                        } else {
+                            TAU * 0.25
+                        });
+                        transform.scale.x *= 1.5 + high * 0.7;
+                        transform.scale.y *= 0.5 + state.osc_pulse * 1.2 + beat_hit * 0.6;
+                        alpha *= 0.5 + high * 0.45 + state.osc_pulse * 0.35;
+                        hue += 175.0 + scan * 70.0 + high * 90.0;
+                    }
+                    VisualMode::ModularArithmetic => {
+                        let gate = (bass_activity + beat_hit * 1.4).clamp(0.0, 1.0);
+                        let on = if gate > 0.38 { 1.0 } else { 0.12 };
+                        // Mod-class culling: only every Nth tile fully lit.
+                        let modulus = 2 + (element.col % 3);
+                        let lit = if element.index % modulus == 0 { 1.0 } else { 0.15 };
+                        alpha *= on * lit;
+                        transform.scale *= 1.0 + bass_activity * 0.7 + beat_hit * 0.6;
+                        hue += beat_hit * 120.0 + fraction * 60.0;
+                    }
+                    VisualMode::PAdicNumbers => {
+                        let crack = (high * 2.8 + state.osc_pulse * 1.6 + beat_hit * 2.2).clamp(0.0, 3.5);
+                        let shard = (element.seed * 29.0 + t * 11.0 + high * 4.0).sin();
+                        transform.translation.x += shard * (12.0 + crack * 48.0);
+                        transform.translation.y += (shard * 0.7 + (t * 13.0 + element.seed).cos() * 0.3)
+                            * (10.0 + crack * 38.0);
+                        transform.scale *= 0.45 + shard.abs() * 0.7 + crack * 0.15;
+                        transform.rotation *= Quat::from_rotation_z(shard * 1.8 + crack * 0.7);
+                        alpha *= (0.35 + crack * 0.25).min(1.0) + high * 0.25;
+                        hue += shard * 160.0 + crack * 35.0 + high * 70.0;
+                    }
+                    VisualMode::VectorSpaces => {
+                        // Default tile field — structured linear layout.
+                        transform.scale.x *= 1.15;
+                        transform.scale.y *= 0.85;
+                        hue += 20.0;
+                    }
+                    VisualMode::Eigenvectors => {
+                        let pump = (beat * TAU).sin().abs();
+                        let s = 0.55 + pump * 1.6 + beat_hit * 0.5;
+                        transform.scale *= s;
+                        alpha *= 0.78 + pump * 0.22 + beat_hit * 0.14;
+                        hue += 80.0 + pump * 80.0;
+                    }
+                    VisualMode::BooleanLattices => {
+                        transform.scale.x *= 2.8 + state.feedback * 2.2;
+                        transform.scale.y *= 0.45 + pulse * 0.5;
+                        // Boolean lattice: checkerboard gate.
+                        let bit = ((element.col ^ element.row) & 1) as f32;
+                        alpha *= (0.18 + state.feedback * 0.52 + osc_drive * 0.18) * (0.35 + bit * 0.65);
+                        hue += 30.0 + bit * 90.0;
+                    }
+                    VisualMode::Forcing => {
+                        let comet_a = t * (1.0 + bass * 2.2 + state.speed * 0.25) + fraction * TAU;
+                        let comet_r = 52.0 + fraction * 430.0 + beat_hit * 82.0 + bass * 60.0;
+                        transform.translation.x = comet_a.cos() * comet_r;
+                        transform.translation.y = comet_a.sin() * comet_r * 0.58;
+                        transform.rotation = Quat::from_rotation_z(comet_a + TAU * 0.25);
+                        transform.scale.x *= 0.5 + high * 0.35 + beat_hit * 0.25;
+                        transform.scale.y *= 1.15 + bass * 1.5 + trail_gain * 0.85 + beat_hit;
+                        alpha *= 0.42 + bass * 0.65 + beat_hit * 0.5 + trail_gain * 0.25;
+                        hue += comet_a.to_degrees() * 0.35 + bass * 60.0;
+                    }
                     VisualMode::Beams => {}
                 }
 

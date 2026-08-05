@@ -404,8 +404,8 @@
         controlState.cueIntensity = clamp01(next.cueIntensity);
         controlState.cuePalette = clamp01(next.cuePalette);
         controlState.cueCrossfade = clamp01(next.cueCrossfade);
-        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 24, controlState.cueDeckAMode);
-        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 24, controlState.cueDeckBMode);
+        controlState.cueDeckAMode = clampInt(next.cueDeckAMode, 0, 48, controlState.cueDeckAMode);
+        controlState.cueDeckBMode = clampInt(next.cueDeckBMode, 0, 48, controlState.cueDeckBMode);
         controlState.cueDeckAGpuShader = clampInt(next.cueDeckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.cueDeckAGpuShader);
         controlState.cueDeckBGpuShader = clampInt(next.cueDeckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.cueDeckBGpuShader);
         controlState.activeShader = clampInt(next.activeShader, 0, MAX_GPU_SHADER_INDEX, controlState.activeShader);

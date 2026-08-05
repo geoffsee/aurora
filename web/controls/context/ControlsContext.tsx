@@ -234,7 +234,25 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
         if (delta.trackMapping) {
           next.trackMapping = { ...prev.trackMapping, ...delta.trackMapping };
         }
-        if (options?.bumpCue) next.cueVersion += 1;
+        if (options?.bumpCue) {
+          next.cueVersion = prev.cueVersion + 1;
+          // Snapshot the live look into cue fields. The WASM cue-apply path
+          // overwrites deck modes / intensity / palette / crossfade from cue*
+          // when cueVersion advances; without this snapshot, a mode pad click
+          // would flash-stomp Deck B back to the stale cueDeckBMode (default
+          // Tunnel tiles) for a frame and leave cue* out of sync with live.
+          if (delta.cueIntensity === undefined) next.cueIntensity = next.intensity;
+          if (delta.cuePalette === undefined) next.cuePalette = next.palette;
+          if (delta.cueCrossfade === undefined) next.cueCrossfade = next.crossfade;
+          if (delta.cueDeckAMode === undefined) next.cueDeckAMode = next.deckAMode;
+          if (delta.cueDeckBMode === undefined) next.cueDeckBMode = next.deckBMode;
+          if (delta.cueDeckAGpuShader === undefined) {
+            next.cueDeckAGpuShader = next.deckAGpuShader;
+          }
+          if (delta.cueDeckBGpuShader === undefined) {
+            next.cueDeckBGpuShader = next.deckBGpuShader;
+          }
+        }
         stateRef.current = next;
         return next;
       });
@@ -268,8 +286,8 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
         next.cueIntensity = clamp01(cue.intensity ?? prev.intensity);
         next.cuePalette = clamp01(cue.palette ?? prev.palette);
         next.cueCrossfade = clamp01(cue.crossfade ?? prev.crossfade);
-        next.cueDeckAMode = clampInt(cue.deckAMode ?? prev.deckAMode, 0, 23, prev.deckAMode);
-        next.cueDeckBMode = clampInt(cue.deckBMode ?? prev.deckBMode, 0, 23, prev.deckBMode);
+        next.cueDeckAMode = clampInt(cue.deckAMode ?? prev.deckAMode, 0, 48, prev.deckAMode);
+        next.cueDeckBMode = clampInt(cue.deckBMode ?? prev.deckBMode, 0, 48, prev.deckBMode);
         next.cueDeckAGpuShader = clampInt(
           cue.deckAGpuShader ?? prev.deckAGpuShader ?? 1,
           0,
@@ -523,10 +541,10 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
         }
       }
       if (changed) {
-        updateState((prev) => ({
-          ...patch,
-          cueVersion: bumpCue ? prev.cueVersion + 1 : prev.cueVersion,
-        }));
+        // Route through bumpCue option so cue* fields snapshot live look
+        // (same path as DeckModeLaunchpad), instead of only incrementing
+        // cueVersion and leaving cueDeckBMode stuck on a stale Tunnel tile.
+        updateState(patch, bumpCue ? { bumpCue: true } : undefined);
       }
     },
     [updateState],
