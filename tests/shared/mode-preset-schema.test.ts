@@ -4,16 +4,16 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import {
   COMPILED_MODE_WIRE_VERSION,
-  FIELD_PRIMITIVE_IDS,
-  MODE_PRESET_SCHEMA_VERSION,
   compileModePreset,
+  FIELD_PRIMITIVE_IDS,
   fieldPrimitiveId,
   fieldPrimitiveName,
   isFieldPrimitiveName,
   listFieldPrimitiveNames,
+  MODE_PRESET_SCHEMA_VERSION,
+  type ModePreset,
   validateAndCompileModePreset,
   validateModePreset,
-  type ModePreset,
 } from '../../shared/mode-preset-schema.ts';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/modes');
@@ -145,9 +145,7 @@ describe('validateModePreset', () => {
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.errors.some((e) => e.includes('intensity') && e.includes('required'))).toBe(
-      true,
-    );
+    expect(result.errors.some((e) => e.includes('intensity') && e.includes('required'))).toBe(true);
   });
 
   test('field-primitive disposition requires field', () => {
@@ -236,9 +234,7 @@ describe('compileModePreset', () => {
     const result = compileModePreset(preset, COMPILE_CTX);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.errors.some((e) => e.includes('intensity') && e.includes('required'))).toBe(
-      true,
-    );
+    expect(result.errors.some((e) => e.includes('intensity') && e.includes('required'))).toBe(true);
   });
 
   test('known params are clamped', () => {

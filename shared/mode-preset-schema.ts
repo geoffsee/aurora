@@ -28,27 +28,27 @@ import {
   type ModeDisposition,
 } from './compiled-mode-wire.ts';
 import {
+  type FieldPrimitiveName,
   fieldPrimitiveId,
   isFieldPrimitiveName,
-  type FieldPrimitiveName,
 } from './field-primitive-ids.ts';
 import { MAX_VISUAL_MODE_INDEX } from './visual-mode-catalog.ts';
 
-// Re-export for single-import convenience in tests / loaders.
-export { COMPILED_MODE_WIRE_VERSION } from './compiled-mode-wire.ts';
 export type {
-  CompiledModeWire,
   CompiledModeDeck,
+  CompiledModeWire,
   ModeDisposition,
 } from './compiled-mode-wire.ts';
+// Re-export for single-import convenience in tests / loaders.
+export { COMPILED_MODE_WIRE_VERSION } from './compiled-mode-wire.ts';
 export {
   FIELD_PRIMITIVE_IDS,
+  type FieldPrimitiveId,
+  type FieldPrimitiveName,
   fieldPrimitiveId,
   fieldPrimitiveName,
   isFieldPrimitiveName,
   listFieldPrimitiveNames,
-  type FieldPrimitiveId,
-  type FieldPrimitiveName,
 } from './field-primitive-ids.ts';
 
 /** Authoring schema version for on-disk preset.json. */
@@ -230,7 +230,9 @@ export function validateModePreset(raw: unknown): ValidateModePresetResult {
     raw.slug.length > 0 &&
     raw.id !== raw.slug
   ) {
-    errors.push(`id must equal slug (id=${JSON.stringify(raw.id)}, slug=${JSON.stringify(raw.slug)})`);
+    errors.push(
+      `id must equal slug (id=${JSON.stringify(raw.id)}, slug=${JSON.stringify(raw.slug)})`,
+    );
   }
 
   if (typeof raw.label !== 'string' || raw.label.trim().length === 0) {
@@ -302,17 +304,13 @@ export function validateModePreset(raw: unknown): ValidateModePresetResult {
         const specs = FIELD_PRIMITIVE_PARAM_SPECS[raw.field.primitive];
         for (const [key, spec] of Object.entries(specs)) {
           if (spec.required && !(key in raw.field.params)) {
-            errors.push(
-              `field.params.${key} is required for primitive ${raw.field.primitive}`,
-            );
+            errors.push(`field.params.${key} is required for primitive ${raw.field.primitive}`);
           }
         }
         for (const [key, val] of Object.entries(raw.field.params)) {
           if (!(key in specs)) continue; // unknown keys: compile strips; authoring allows
           if (coerceParamNumber(val as number | boolean | string) === null) {
-            errors.push(
-              `field.params.${key} must be a finite number (or boolean/numeric string)`,
-            );
+            errors.push(`field.params.${key} must be a finite number (or boolean/numeric string)`);
           }
         }
       }
