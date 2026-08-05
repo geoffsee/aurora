@@ -5,6 +5,8 @@ use rosc::{encoder, OscMessage, OscPacket, OscType};
 
 const DEFAULT_TARGET: &str = "127.0.0.1:12000";
 const MAX_GPU_SHADER_INDEX: i32 = 36;
+/// Matches `MAX_VISUAL_MODE_INDEX` in shared/visual-mode-catalog.ts and bridge clamp (0–48).
+const MAX_VISUAL_MODE_INDEX: i32 = 48;
 struct AuroraVst {
     params: Arc<AuroraParams>,
     sender: OscSender,
@@ -159,8 +161,8 @@ impl Default for AuroraParams {
             feedback: float_param("Trails", 0.35, 0.0, 1.0),
             depth: float_param("Depth", 0.0, 0.0, 1.0),
             hue: float_param("Hue", 0.0, 0.0, 1.0),
-            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: 23 }),
-            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: 23 }),
+            deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: MAX_VISUAL_MODE_INDEX }),
+            deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: MAX_VISUAL_MODE_INDEX }),
             rings: BoolParam::new("Rings", true),
             ring_opacity: float_param("Ring Opacity", 1.0, 0.0, 1.0),
             strobe: BoolParam::new("Strobe", false),
