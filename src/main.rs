@@ -356,12 +356,28 @@ const GPU_QUAD_PACK_B: u32 = 21;
 
 const STAGE_WIDTH: f32 = 1280.0;
 const STAGE_HEIGHT: f32 = 720.0;
-const DECK_A_BEAMS: usize = 72;
-const DECK_A_RINGS: usize = 8;
-const DECK_B_COLS: usize = 14;
-const DECK_B_ROWS: usize = 8;
-const OSC_PULSE_GAIN: f32 = 0.08;
-const AUDIO_GEOMETRY_GAIN: f32 = 0.28;
+// #232 visual quality: slightly sparser pools for breathing room (still responsive).
+const DECK_A_BEAMS: usize = 56;
+const DECK_A_RINGS: usize = 7;
+const DECK_B_COLS: usize = 12;
+const DECK_B_ROWS: usize = 7;
+const DECK_GHOSTS: usize = 14;
+// Slightly calmer audio→geometry coupling (smoother motion, less jitter).
+const OSC_PULSE_GAIN: f32 = 0.07;
+const AUDIO_GEOMETRY_GAIN: f32 = 0.24;
+// Shared calm drivers applied in update_visuals / palette_color.
+const VIS_SAT_BASE: f32 = 0.66;
+const VIS_SAT_INTENSITY: f32 = 0.10;
+const VIS_LIGHTNESS_BASE: f32 = 0.48;
+const VIS_ALPHA_ENERGY_FLOOR: f32 = 0.26;
+const VIS_ALPHA_ENERGY_GAIN: f32 = 0.48;
+const VIS_ALPHA_CEIL: f32 = 1.22;
+const VIS_WOBBLE_FREQ: f32 = 1.55;
+const VIS_WOBBLE_SEED: f32 = 6.0;
+const VIS_HUE_DRIFT: f32 = 11.0;
+const VIS_GHOST_ALPHA_MUL: f32 = 0.68;
+const VIS_PALETTE_L_CEIL: f32 = 0.86;
+const VIS_PALETTE_L_FLOOR: f32 = 0.10;
 const TUNNEL_RING_COUNT: usize = 18;
 const TUNNEL_DEPTH: f32 = 32.0;
 const AUDIO_GATE_START: f32 = 0.001;
@@ -541,8 +557,9 @@ impl Default for VjState {
             palette_r: 0.12,
             palette_g: 0.72,
             palette_b: 0.42,
-            palette_saturation: 0.88,
-            palette_brightness: 0.92,
+            // #232: slightly lower sat/bright defaults — avoid neon clip, keep blacks.
+            palette_saturation: 0.82,
+            palette_brightness: 0.86,
             grid_density: 0.5,
             grid_diamond: 0.5,
             grid_line_width: 0.5,
@@ -563,7 +580,7 @@ impl Default for VjState {
             cpu_deck_b_enabled: false,
             gpu_deck_a_enabled: true,
             gpu_deck_b_enabled: true,
-            max_brightness: 0.95,
+            max_brightness: 0.88,
             show_time: 0.0,
             flash: 0.0,
             cue_boost: 0.0,
@@ -731,7 +748,7 @@ fn setup(
         }
     }
 
-    for index in 0..18 {
+    for index in 0..DECK_GHOSTS {
         commands.spawn((
             Mesh2d(quad.clone()),
             MeshMaterial2d(materials.add(transparent)),
@@ -1410,7 +1427,7 @@ fn field_frame_inputs(state: &VjState, deck_drive: f32, beat: f32, beat_hit: f32
         ring_count: DECK_A_RINGS as u32,
         tile_cols: DECK_B_COLS as u32,
         tile_rows: DECK_B_ROWS as u32,
-        ghost_count: 18,
+        ghost_count: DECK_GHOSTS as u32,
     }
 }
 
@@ -1523,10 +1540,11 @@ fn update_visuals(
             1.0
         };
 
-        let mut hue = element.seed * 360.0 + t * 18.0;
+        let mut hue = element.seed * 360.0 + t * VIS_HUE_DRIFT;
         let mut alpha = deck_alpha * reactive_gain;
-        let mut lightness = 0.54;
-        let saturation = 0.78 + intensity_drive * 0.12;
+        // #232: darker base + wider range later → clearer contrast, less wash.
+        let mut lightness = VIS_LIGHTNESS_BASE;
+        let saturation = (VIS_SAT_BASE + intensity_drive * VIS_SAT_INTENSITY).clamp(0.35, 0.88);
 
         let fdeck = field_deck_of(element.deck);
         let finputs = field_frame_inputs(
@@ -1599,16 +1617,18 @@ fn update_visuals(
         };
         // Max brightness is a crossfade-deck master (beams/tiles only). Rings, ghosts,
         // and the GPU shader layer have their own opacity/brightness controls.
+        // #232: keep a soft floor so lowering max_brightness deepens blacks instead of crushing to mud.
         let crossfade_master = match element.kind {
-            VisualKind::Beam | VisualKind::Tile => state.max_brightness,
+            VisualKind::Beam | VisualKind::Tile => state.max_brightness.clamp(0.15, 1.0),
             _ => 1.0,
         };
         let alpha = ((alpha + strobe_boost) * crossfade_master).clamp(0.0, 1.0);
-        let lightness = lightness
+        let lightness = (lightness
             * match element.kind {
-                VisualKind::Beam | VisualKind::Tile => 0.45 + state.max_brightness * 0.55,
+                VisualKind::Beam | VisualKind::Tile => 0.38 + state.max_brightness * 0.52,
                 _ => 1.0,
-            };
+            })
+        .clamp(VIS_PALETTE_L_FLOOR, VIS_PALETTE_L_CEIL);
         if let Some(material) = materials.get_mut(&material_handle.0) {
             material.color = palette_color(
                 state.palette_r,
@@ -1927,7 +1947,10 @@ fn palette_color(
     let mix = (phase - 0.5).abs() * 2.0;
     let rgb = base.lerp(accent, mix);
     let gray = Vec3::splat(rgb.dot(Vec3::new(0.299, 0.587, 0.114)));
-    let rgb = gray.lerp(rgb, saturation.clamp(0.0, 1.0)) * lightness.clamp(0.0, 0.92);
+    // #232: wider usable lightness range with a hard ceiling below pure white
+    // so highlights keep contrast and blacks are not crushed by neon clip.
+    let rgb = gray.lerp(rgb, saturation.clamp(0.0, 1.0))
+        * lightness.clamp(VIS_PALETTE_L_FLOOR, VIS_PALETTE_L_CEIL);
 
     Color::srgba(rgb.x, rgb.y, rgb.z, alpha)
 }

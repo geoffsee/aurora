@@ -168,11 +168,12 @@ impl Default for FieldFrameInputs {
             bass_activity: 0.0,
             melodic_activity: 0.0,
             osc_connected: false,
-            beam_count: 72,
-            ring_count: 8,
-            tile_cols: 14,
-            tile_rows: 8,
-            ghost_count: 18,
+            // #232 calm defaults — match sparser main.rs pools when callers omit counts.
+            beam_count: 56,
+            ring_count: 7,
+            tile_cols: 12,
+            tile_rows: 7,
+            ghost_count: 14,
         }
     }
 }
@@ -540,6 +541,12 @@ fn supernova_params(field: &CompiledFieldDef) -> (f32, f32, f32) {
 }
 
 /// Deterministic supernova_burst poses for every FieldPool.
+///
+/// Shared radial phase: `theta = fraction * TAU + t * spin`, radius expands with
+/// beat/intensity and falls with `decay`. Each pool reinterprets that shell.
+///
+/// #232 visual quality: calmer density, damped wobble, softer ghosts, more
+/// negative space on tiles, and lightness ceilings that preserve blacks.
 pub fn pose_supernova_burst(
     pool: FieldPool,
     element_index: usize,
@@ -552,36 +559,40 @@ pub fn pose_supernova_burst(
     let (intensity, spin, decay) = supernova_params(field);
     let t = inputs.t * inputs.speed.max(0.05);
     let energy = clamp(
-        inputs.intensity_drive * (0.55 + intensity * 0.7) * (0.7 + inputs.deck_drive * 0.5),
+        inputs.intensity_drive * (0.5 + intensity * 0.6) * (0.65 + inputs.deck_drive * 0.45),
         0.15,
-        2.4,
+        2.0,
     );
-    let burst = (inputs.beat_hit * 0.85 + inputs.cue_hit * 0.45 + inputs.flash * 0.35
-        + inputs.bass * 0.25)
-        .clamp(0.0, 1.8);
-    let shell = 1.0 + burst * (1.35 - decay * 0.55) + inputs.depth * 0.35;
+    let burst = (inputs.beat_hit * 0.75 + inputs.cue_hit * 0.38 + inputs.flash * 0.28
+        + inputs.bass * 0.2)
+        .clamp(0.0, 1.55);
+    let shell = 1.0 + burst * (1.2 - decay * 0.5) + inputs.depth * 0.3;
 
     match pool {
         FieldPool::Beams => {
             let n = inputs.beam_count.max(1) as f32;
             let fraction = element_index as f32 / n;
             let layer = (element_index % 12) as f32 / 11.0;
-            let theta = fraction * TAU + t * (0.35 + spin * 0.85) + seed * 0.17;
-            let r = (90.0 + layer * 210.0 * decay.powf(0.65) + shell * 95.0 + inputs.bass * 40.0)
-                * (0.55 + intensity * 0.55);
-            let wobble = wave(t * 2.1 + seed * 9.0) - 0.5;
-            let px = theta.cos() * r + theta.sin() * wobble * 28.0 * inputs.depth;
-            let py = theta.sin() * r - theta.cos() * wobble * 18.0 * inputs.depth;
+            let theta = fraction * TAU + t * (0.28 + spin * 0.7) + seed * 0.14;
+            let r = (100.0 + layer * 200.0 * decay.powf(0.65) + shell * 85.0 + inputs.bass * 32.0)
+                * (0.55 + intensity * 0.5);
+            // Damped high-frequency wobble (#232).
+            let wobble = wave(t * 1.45 + seed * 6.0) - 0.5;
+            let px = theta.cos() * r + theta.sin() * wobble * 18.0 * inputs.depth;
+            let py = theta.sin() * r - theta.cos() * wobble * 12.0 * inputs.depth;
             let pz = 2.0 + fraction;
-            let rot = theta + spin * 0.15 * layer;
-            let sx = 3.5 + 22.0 * energy * (0.35 + burst * 0.65) + inputs.high * 4.0;
-            let sy = 160.0
-                + 220.0 * energy * (0.4 + (1.0 - layer) * 0.6)
-                + burst * 90.0
-                + inputs.deck_drive * 60.0;
-            let alpha = (0.35 + intensity * 0.55 + burst * 0.35) * (0.55 + (1.0 - layer * 0.35));
-            let hue = seed * 360.0 + t * 22.0 * spin.abs().max(0.15) + layer * 40.0 + burst * 50.0;
-            let lightness = 0.5 + burst * 0.12 + intensity * 0.08 + inputs.high * 0.04;
+            let rot = theta + spin * 0.12 * layer;
+            let sx = 3.0 + 18.0 * energy * (0.32 + burst * 0.55) + inputs.high * 3.0;
+            let sy = 140.0
+                + 180.0 * energy * (0.38 + (1.0 - layer) * 0.55)
+                + burst * 70.0
+                + inputs.deck_drive * 48.0;
+            // Index/layer falloff: fewer simultaneous bright sticks.
+            let alpha = (0.28 + intensity * 0.45 + burst * 0.28)
+                * (0.5 + (1.0 - layer * 0.42))
+                * (1.0 - fraction * 0.32);
+            let hue = seed * 320.0 + t * 16.0 * spin.abs().max(0.15) + layer * 32.0 + burst * 40.0;
+            let lightness = 0.46 + burst * 0.1 + intensity * 0.07 + inputs.high * 0.03;
             FieldPose {
                 px,
                 py,
@@ -589,9 +600,9 @@ pub fn pose_supernova_burst(
                 rot,
                 sx,
                 sy,
-                alpha: alpha.clamp(0.0, 1.5),
+                alpha: alpha.clamp(0.0, 1.2),
                 hue,
-                lightness: lightness.clamp(0.2, 0.92),
+                lightness: lightness.clamp(0.12, 0.86),
             }
         }
         FieldPool::Rings => {
@@ -601,16 +612,17 @@ pub fn pose_supernova_burst(
             } else {
                 0.0
             };
-            let phase = (t * (0.55 + (1.0 - decay) * 0.9) + layer * decay).fract();
+            // Expanding concentric shells — phase advances with decay so outer rings lag.
+            let phase = (t * (0.42 + (1.0 - decay) * 0.75) + layer * decay).fract();
             let expand = phase * shell;
-            let base = 140.0 + inputs.deck_drive * 40.0 + inputs.bass * 50.0;
-            let size = (base * (0.55 + expand * 0.9 + layer * 0.12) * (0.7 + intensity * 0.45))
+            let base = 150.0 + inputs.deck_drive * 34.0 + inputs.bass * 42.0;
+            let size = (base * (0.55 + expand * 0.85 + layer * 0.1) * (0.68 + intensity * 0.4))
                 .max(1.0);
-            let rot = -t * (0.18 + spin * 0.35);
-            let glow = (1.0 - layer) * (1.0 - phase).powf(0.8 + decay);
-            let alpha = (0.04 + 0.28 * glow * glow) * (0.5 + intensity * 0.6 + burst * 0.35);
-            let hue = 40.0 + layer * 50.0 + t * 12.0 * spin.abs().max(0.1) + burst * 30.0;
-            let lightness = 0.52 + glow * 0.1 + inputs.mid * 0.04;
+            let rot = -t * (0.14 + spin * 0.28);
+            let glow = (1.0 - layer) * (1.0 - phase).powf(0.85 + decay);
+            let alpha = (0.03 + 0.2 * glow * glow) * (0.45 + intensity * 0.5 + burst * 0.28);
+            let hue = 40.0 + layer * 42.0 + t * 10.0 * spin.abs().max(0.1) + burst * 24.0;
+            let lightness = 0.48 + glow * 0.08 + inputs.mid * 0.03;
             FieldPose {
                 px: 0.0,
                 py: 0.0,
@@ -618,9 +630,9 @@ pub fn pose_supernova_burst(
                 rot,
                 sx: size,
                 sy: size,
-                alpha: alpha.clamp(0.0, 1.2),
+                alpha: alpha.clamp(0.0, 0.95),
                 hue,
-                lightness: lightness.clamp(0.2, 0.92),
+                lightness: lightness.clamp(0.12, 0.86),
             }
         }
         FieldPool::Tiles => {
@@ -640,18 +652,27 @@ pub fn pose_supernova_burst(
             let cy = v - 0.5;
             let dist = (cx * cx + cy * cy).sqrt();
             let ang = cy.atan2(cx);
-            let ring_phase =
-                (dist * 2.8 - t * (1.1 + spin.abs() * 0.4) * (0.5 + decay) + burst * 0.5).rem_euclid(1.0);
-            let pulse = (1.0 - ring_phase).powf(1.2 + decay) * shell;
-            let px = cx * STAGE_WIDTH * (0.85 + pulse * 0.2 * intensity);
-            let py = cy * STAGE_HEIGHT * (0.85 + pulse * 0.2 * intensity);
-            let rot = ang + spin * 0.25 * pulse + t * spin * 0.05;
-            let cell = (28.0 + pulse * 55.0 * intensity + energy * 12.0).max(2.0);
-            let sx = cell * (0.55 + (1.0 - dist).max(0.0) * 0.5);
-            let sy = cell * (0.9 + pulse * 0.8);
-            let alpha = (0.2 + intensity * 0.55 + pulse * 0.55) * (0.45 + (1.0 - dist) * 0.55);
-            let hue = ang.to_degrees() + t * 18.0 + pulse * 60.0 + seed * 40.0;
-            let lightness = 0.48 + pulse * 0.14 + inputs.high * 0.05;
+            // Grid cells ride an outward pulse ring from center.
+            let ring_phase = (dist * 2.5
+                - t * (0.85 + spin.abs() * 0.32) * (0.5 + decay)
+                + burst * 0.4)
+                .rem_euclid(1.0);
+            let pulse = (1.0 - ring_phase).powf(1.3 + decay) * shell;
+            let stage_w = 1280.0_f32;
+            let stage_h = 720.0_f32;
+            // Slightly more spacing / less fill.
+            let px = cx * stage_w * (0.9 + pulse * 0.15 * intensity);
+            let py = cy * stage_h * (0.9 + pulse * 0.15 * intensity);
+            let rot = ang + spin * 0.2 * pulse + t * spin * 0.04;
+            let cell = (22.0 + pulse * 42.0 * intensity + energy * 9.0).max(2.0);
+            let sx = cell * (0.48 + (1.0 - dist).max(0.0) * 0.42);
+            let sy = cell * (0.8 + pulse * 0.65);
+            // Outer cells quieter → negative space around the pulse crest.
+            let alpha = (0.14 + intensity * 0.42 + pulse * 0.45)
+                * (0.35 + (1.0 - dist) * 0.55)
+                * if (col + row) % 2 == 0 { 1.0 } else { 0.42 };
+            let hue = ang.to_degrees() + t * 14.0 + pulse * 48.0 + seed * 32.0;
+            let lightness = 0.44 + pulse * 0.12 + inputs.high * 0.04;
             FieldPose {
                 px,
                 py,
@@ -659,33 +680,35 @@ pub fn pose_supernova_burst(
                 rot,
                 sx,
                 sy,
-                alpha: alpha.clamp(0.0, 1.5),
+                alpha: alpha.clamp(0.0, 1.15),
                 hue,
-                lightness: lightness.clamp(0.2, 0.92),
+                lightness: lightness.clamp(0.12, 0.86),
             }
         }
         FieldPool::Ghost => {
             let n = inputs.ghost_count.max(1) as f32;
             let fraction = element_index as f32 / n;
-            let life_rate = 0.28 + (1.0 - decay) * 0.7 + inputs.feedback * 0.55 + inputs.speed * 0.08;
+            // Soft trailing echoes — quieter than pre-#232 so trails support the burst.
+            let life_rate =
+                0.22 + (1.0 - decay) * 0.55 + inputs.feedback * 0.45 + inputs.speed * 0.06;
             let life = (t * life_rate + seed * 4.1 + fraction).fract();
-            let trail = (1.0 - life).powf(1.4 + decay * 1.2);
-            let echo_r = (70.0 + fraction * 160.0 + shell * 80.0 * (1.0 - life))
-                * (0.5 + intensity * 0.6)
-                * (0.35 + inputs.feedback.max(inputs.flash * 0.5));
-            let theta = fraction * TAU + t * (0.12 + spin * 0.55) - life * spin * 0.8;
+            let trail = (1.0 - life).powf(1.55 + decay * 1.25);
+            let echo_r = (75.0 + fraction * 150.0 + shell * 70.0 * (1.0 - life))
+                * (0.48 + intensity * 0.52)
+                * (0.3 + inputs.feedback.max(inputs.flash * 0.45));
+            let theta = fraction * TAU + t * (0.1 + spin * 0.45) - life * spin * 0.7;
             let px = theta.cos() * echo_r;
             let py = theta.sin() * echo_r * 0.62;
-            let rot = theta + life * 0.4;
-            let sx = (40.0 + 200.0 * trail * intensity + burst * 40.0)
-                * (0.3 + inputs.feedback.max(inputs.flash * 0.4));
-            let sy = (14.0 + 120.0 * trail * (0.5 + intensity) + inputs.bass * 20.0)
-                * (0.3 + inputs.feedback.max(inputs.flash * 0.4));
+            let rot = theta + life * 0.35;
+            let sx = (32.0 + 160.0 * trail * intensity + burst * 30.0)
+                * (0.28 + inputs.feedback.max(inputs.flash * 0.35));
+            let sy = (12.0 + 95.0 * trail * (0.5 + intensity) + inputs.bass * 16.0)
+                * (0.28 + inputs.feedback.max(inputs.flash * 0.35));
             let alpha = trail
-                * (0.08 + intensity * 0.28 + inputs.feedback * 0.35 + inputs.flash * 0.2)
-                * (0.5 + burst * 0.4);
-            let hue = seed * 200.0 + t * 14.0 + life * 90.0 + fraction * 40.0;
-            let lightness = 0.55 + trail * 0.1 + inputs.mid * 0.04;
+                * (0.05 + intensity * 0.2 + inputs.feedback * 0.26 + inputs.flash * 0.14)
+                * (0.42 + burst * 0.32);
+            let hue = seed * 180.0 + t * 11.0 + life * 75.0 + fraction * 32.0;
+            let lightness = 0.5 + trail * 0.08 + inputs.mid * 0.03;
             FieldPose {
                 px,
                 py,
@@ -693,9 +716,9 @@ pub fn pose_supernova_burst(
                 rot,
                 sx: sx.max(1.0),
                 sy: sy.max(1.0),
-                alpha: alpha.clamp(0.0, 1.2),
+                alpha: alpha.clamp(0.0, 0.85),
                 hue,
-                lightness: lightness.clamp(0.2, 0.92),
+                lightness: lightness.clamp(0.12, 0.86),
             }
         }
     }
@@ -3787,36 +3810,38 @@ mod tests {
 
     #[test]
     fn golden_poses_match_snapshot() {
-        // Pinned expected values for the sample field @ t=1.25 (supernova).
+        // Pinned expected values for the sample field @ t=1.25 (computed once from
+        // this implementation). UPDATE_FIELD_GOLDS=1 prints a fresh table.
+        // #232 calm retune — refresh with UPDATE_FIELD_GOLDS=1 if pose math changes again.
         let expected: &[(FieldPool, usize, FieldPose)] = &[
             (
                 FieldPool::Beams,
                 0,
                 FieldPose {
-                    px: 199.374_01,
-                    py: 204.596_44,
+                    px: 199.840_84,
+                    py: 149.103_29,
                     pz: 2.0,
-                    rot: 0.809_375_05,
-                    sx: 24.733_96,
-                    sy: 547.738_04,
-                    alpha: 1.5,
-                    hue: 35.125,
-                    lightness: 0.641_200_07,
+                    rot: 0.656_25,
+                    sx: 14.745_8,
+                    sy: 389.062_9,
+                    alpha: 1.2,
+                    hue: 24.52,
+                    lightness: 0.572_800_04,
                 },
             ),
             (
                 FieldPool::Beams,
                 17,
                 FieldPose {
-                    px: -323.988_4,
-                    py: 151.519_62,
-                    pz: 2.236_111_2,
-                    rot: 2.712_698_5,
-                    sx: 24.733_96,
-                    sy: 465.964_02,
-                    alpha: 1.423_595_5,
-                    hue: 891.746_8,
-                    lightness: 0.641_200_07,
+                    px: -303.951_63,
+                    py: 77.947_19,
+                    pz: 2.303_571_5,
+                    rot: 2.908_796_5,
+                    sx: 14.745_8,
+                    sy: 339.384_7,
+                    alpha: 0.954_567_43,
+                    hue: 784.345_5,
+                    lightness: 0.572_800_04,
                 },
             ),
             (
@@ -3826,12 +3851,12 @@ mod tests {
                     px: 0.0,
                     py: 0.0,
                     pz: 18.0,
-                    rot: -0.378_125,
-                    sx: 162.496_52,
-                    sy: 162.496_52,
-                    alpha: 0.274_220_6,
-                    hue: 60.55,
-                    lightness: 0.613_294_8,
+                    rot: -0.297_5,
+                    sx: 353.074_92,
+                    sy: 353.074_92,
+                    alpha: 0.030_936_684,
+                    hue: 54.887,
+                    lightness: 0.491_838_5,
                 },
             ),
             (
@@ -3840,73 +3865,73 @@ mod tests {
                 FieldPose {
                     px: 0.0,
                     py: 0.0,
-                    pz: 17.571_428,
-                    rot: -0.378_125,
-                    sx: 257.995_82,
-                    sy: 257.995_82,
-                    alpha: 0.076_063_73,
-                    hue: 81.978_58,
-                    lightness: 0.560_299_46,
+                    pz: 17.5,
+                    rot: -0.297_5,
+                    sx: 175.255_05,
+                    sy: 175.255_05,
+                    alpha: 0.057_449_527,
+                    hue: 75.887,
+                    lightness: 0.517_942_8,
                 },
             ),
             (
                 FieldPool::Tiles,
                 0,
                 FieldPose {
-                    px: -594.708_2,
-                    py: -334.523_38,
+                    px: -597.405_9,
+                    py: -336.040_8,
                     pz: 8.707_107,
-                    rot: -2.295_804_3,
-                    sx: 46.065_403,
-                    sy: 82.820_91,
-                    alpha: 0.572_651_4,
-                    hue: -86.089_485,
-                    lightness: 0.551_624_54,
+                    rot: -2.321_351_8,
+                    sx: 24.904_955,
+                    sy: 39.691_624,
+                    alpha: 0.321_726_32,
+                    hue: -105.607_84,
+                    lightness: 0.477_730_36,
                 },
             ),
             (
                 FieldPool::Tiles,
                 45,
                 FieldPose {
-                    px: -344.601_62,
-                    py: -51.426_51,
-                    pz: 8.278_544,
-                    rot: -2.787_489,
-                    sx: 77.952_614,
-                    sy: 134.081_68,
-                    alpha: 0.976_539_4,
-                    hue: 477.945_3,
-                    lightness: 0.606_635_5,
+                    px: -283.525_5,
+                    py: 0.0,
+                    pz: 8.227_273,
+                    rot: 3.197_783_7,
+                    sx: 42.503_296,
+                    sy: 61.243_374,
+                    alpha: 0.594_215_7,
+                    hue: 680.511_2,
+                    lightness: 0.514_328,
                 },
             ),
             (
                 FieldPool::Ghost,
                 0,
                 FieldPose {
-                    px: 166.217_25,
-                    py: 35.428_387,
+                    px: 67.232_31,
+                    py: 3.596_313_5,
                     pz: -8.0,
-                    rot: 0.416_125,
-                    sx: 151.986_16,
-                    sy: 112.717_76,
-                    alpha: 0.229_944_6,
-                    hue: 36.625,
-                    lightness: 0.622_263_13,
+                    rot: 0.422_937_48,
+                    sx: 39.789_745,
+                    sy: 17.661_463,
+                    alpha: 0.000_113_545_62,
+                    hue: 85.937_5,
+                    lightness: 0.509_042,
                 },
             ),
             (
                 FieldPool::Ghost,
                 7,
                 FieldPose {
-                    px: -198.168_17,
-                    py: 53.496_376,
-                    pz: -7.611_111,
-                    rot: 2.878_292_8,
-                    sx: 115.520_294,
-                    sy: 78.682_945,
-                    alpha: 0.144_054_41,
-                    hue: 640.210_45,
-                    lightness: 0.599_753_3,
+                    px: -192.724_35,
+                    py: -32.510_372,
+                    pz: -7.5,
+                    rot: 3.487_565,
+                    sx: 109.293_47,
+                    sy: 81.855_87,
+                    alpha: 0.118_707_43,
+                    hue: 563.562_4,
+                    lightness: 0.552_920_64,
                 },
             ),
         ];
