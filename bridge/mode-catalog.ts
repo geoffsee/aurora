@@ -28,6 +28,8 @@ export type CatalogEntry = {
   source: CatalogSource;
   legacyIndex?: number;
   label?: string;
+  /** Operator UI grouping hint from preset.json (`uiGroup`). */
+  uiGroup?: string;
 };
 
 export type CatalogSnapshot = {
@@ -110,7 +112,7 @@ export function resolveDataDirs(opts: {
 export function parsePresetMeta(
   raw: unknown,
   folderSlug: string,
-): { id: string; label?: string; legacyIndex?: number } | null {
+): { id: string; label?: string; legacyIndex?: number; uiGroup?: string } | null {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
 
@@ -137,7 +139,12 @@ export function parsePresetMeta(
     legacyIndex = n;
   }
 
-  return { id, label, legacyIndex };
+  let uiGroup: string | undefined;
+  if (typeof o.uiGroup === 'string' && o.uiGroup.trim() !== '') {
+    uiGroup = o.uiGroup.trim();
+  }
+
+  return { id, label, legacyIndex, uiGroup };
 }
 
 /**
@@ -205,6 +212,7 @@ export function scanDeckCatalog(deckRoot: string, source: CatalogSource): Catalo
       source,
       ...(meta.legacyIndex !== undefined ? { legacyIndex: meta.legacyIndex } : {}),
       ...(meta.label !== undefined ? { label: meta.label } : {}),
+      ...(meta.uiGroup !== undefined ? { uiGroup: meta.uiGroup } : {}),
     });
   }
 
@@ -241,6 +249,7 @@ export function catalogContentHash(decks: CatalogSnapshot['decks']): string {
           e.path,
           e.label ?? '',
           e.legacyIndex === undefined ? '' : String(e.legacyIndex),
+          e.uiGroup ?? '',
         ].join('\t'),
       );
     }

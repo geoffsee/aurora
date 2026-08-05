@@ -125,5 +125,26 @@ export const migrateControlState = (state: unknown): unknown => {
       gpuDeckBEnabled: gpuEnabled,
     });
   }
+  // v13 → v14: deck pack slugs alongside legacy int modes. Empty until catalog
+  // resolve fills them (bridge coerce / show-preset migration).
+  if (s.schemaVersion === 13) {
+    return migrateControlState({
+      ...s,
+      schemaVersion: 14,
+      deckAPresetSlug: typeof s.deckAPresetSlug === 'string' ? s.deckAPresetSlug : '',
+      deckBPresetSlug: typeof s.deckBPresetSlug === 'string' ? s.deckBPresetSlug : '',
+    });
+  }
+  // v14 → v15: explicit Reload active counters (projector re-fetches compiled).
+  if (s.schemaVersion === 14) {
+    return migrateControlState({
+      ...s,
+      schemaVersion: 15,
+      deckAReloadActiveVersion:
+        typeof s.deckAReloadActiveVersion === 'number' ? s.deckAReloadActiveVersion : 0,
+      deckBReloadActiveVersion:
+        typeof s.deckBReloadActiveVersion === 'number' ? s.deckBReloadActiveVersion : 0,
+    });
+  }
   return state;
 };

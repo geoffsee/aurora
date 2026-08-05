@@ -16,6 +16,15 @@ import {
   createWebSocketTransport,
 } from '../../../shared/bridge-transport.ts';
 import { DEMO_AUDIO_INTERVAL_MS, generateDemoAudioFrame } from '../../../shared/demo-audio.ts';
+import {
+  type CatalogLikeEntry,
+  type DeckCatalogs,
+  migrateDeckSlugsInState,
+} from '../../../shared/resolve-deck-selection.ts';
+
+/** Mirror of bridge/mode-api MODES_CATALOG_WS_ADDRESS (avoid importing bridge Node code). */
+const MODES_CATALOG_WS_ADDRESS = '/aurora/modes/catalog';
+
 import { webgpuSecureContextError } from '../../../shared/secure-context.ts';
 import { isStaticHosting } from '../../../shared/static-hosting.ts';
 import {
@@ -26,6 +35,12 @@ import {
 } from '../lib/banners.ts';
 import { MAX_GPU_SHADER_INDEX, MIDI_CC_INTEGER_PARAMS } from '../lib/constants.ts';
 import { cuePresets } from '../lib/cues.ts';
+import {
+  type DeckSide,
+  deckModePatch,
+  deckPresetSlugPatch,
+  deckReloadActivePatch,
+} from '../lib/deck-mode.ts';
 import { defaultDiagnostics, defaultOscMeters, defaultState } from '../lib/default-state.ts';
 import { clamp01, clampInt } from '../lib/math.ts';
 import {
@@ -42,6 +57,19 @@ import {
   saveMidiBindings,
   scaleCcToParam,
 } from '../lib/midi.ts';
+import {
+  activeSlugStatus,
+  applyMenuCatalogUpdate,
+  deckIdFromSide,
+  type HeldCompiled,
+  holdCompiled,
+  holdingBannerText,
+  legacyFallbackMenuEntries,
+  type MenuCatalogEntry,
+  type MenuCatalogSnapshot,
+  parsePublicCatalog,
+} from '../lib/mode-catalog-menu.ts';
+import { fetchCompiledMode, fetchModesCatalog } from '../lib/modes-api-client.ts';
 import { applyBrowserAudio, applyDemo, applyTrackData } from '../lib/osc-track-data.ts';
 import { hexToRgb, syncPaletteFromHue, syncPaletteFromRgb } from '../lib/palette.ts';
 import {
@@ -58,7 +86,12 @@ import {
   savePresetsToStorage,
 } from '../lib/presets.ts';
 import { bridgeWebSocketUrl } from '../lib/projector-url.ts';
-import { clearSessionState, loadSessionState, saveSessionState } from '../lib/session-state.ts';
+import {
+  clearSessionState,
+  loadSessionState,
+  resolveSessionDeckSlugs,
+  saveSessionState,
+} from '../lib/session-state.ts';
 import {
   findMidiCcTrigger,
   findMidiNoteTrigger,
@@ -76,6 +109,16 @@ import type {
   RecordingFrame,
   TriggerBinding,
 } from '../lib/types.ts';
+
+export type ModeMenuState = {
+  /** Live catalog available (false → launchpad uses legacy VISUAL_MODES fallback). */
+  catalogLive: boolean;
+  menuEpoch: number | null;
+  deckAEntries: MenuCatalogEntry[];
+  deckBEntries: MenuCatalogEntry[];
+  holdingA: boolean;
+  holdingB: boolean;
+};
 
 type ControlsContextValue = {
   state: ControlState;
@@ -97,12 +140,18 @@ type ControlsContextValue = {
   recording: RecordingFrame[];
   isReplayLooping: boolean;
   latencyP95: number | null;
+  modeMenu: ModeMenuState;
+  reloadBusy: { A: boolean; B: boolean };
   setTransitionDurationMs: (ms: number) => void;
   setPendingCurve: (key: InterpolatedKey, mode: CurveMode) => void;
   updateState: (
     patch: Partial<ControlState> | ((prev: ControlState) => Partial<ControlState>),
     options?: { record?: boolean; bumpCue?: boolean },
   ) => void;
+  /** Select a catalog pack for a deck (slug path; falls back to int for legacy-*). */
+  selectDeckPreset: (side: DeckSide, slug: string) => void;
+  /** Explicit Reload active — re-fetch compiled for current slug/epoch. */
+  reloadActiveDeck: (side: DeckSide) => void;
   publish: (options?: { record?: boolean }) => void;
   queueCue: (name: string) => void;
   recallPreset: (slot: number) => void;
@@ -170,6 +219,14 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
   const [recording, setRecording] = useState<RecordingFrame[]>([]);
   const [isReplayLooping, setIsReplayLooping] = useState(false);
   const [latencyP95, setLatencyP95] = useState<number | null>(null);
+  const [menuCatalog, setMenuCatalog] = useState<MenuCatalogSnapshot | null>(null);
+  const [catalogLive, setCatalogLive] = useState(false);
+  const [holdingA, setHoldingA] = useState(false);
+  const [holdingB, setHoldingB] = useState(false);
+  const [reloadBusy, setReloadBusy] = useState<{ A: boolean; B: boolean }>({
+    A: false,
+    B: false,
+  });
 
   const stateRef = useRef(state);
   const oscRef = useRef(osc);
@@ -193,6 +250,14 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const micStartingRef = useRef(false);
   const midiAccessRef = useRef<MIDIAccess | null>(null);
+  const modeCatalogsRef = useRef<DeckCatalogs | null>(null);
+  const deckSlugMigrationDoneRef = useRef(false);
+  /** Last-known-good compiled wire per deck (menu updates never clear this). */
+  const activeCompiledRef = useRef<{
+    'deck-a': HeldCompiled | null;
+    'deck-b': HeldCompiled | null;
+  }>({ 'deck-a': null, 'deck-b': null });
+  const menuEpochRef = useRef(0);
 
   stateRef.current = state;
   oscRef.current = osc;
@@ -223,6 +288,86 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const applyMenuSnapshot = useCallback(
+    (snapshot: MenuCatalogSnapshot, opts?: { fromWs?: boolean }) => {
+      // Menu-only update: never auto-swap the held compiled payload (#241 hot-reload rule).
+      const prevA = activeCompiledRef.current['deck-a'];
+      const prevB = activeCompiledRef.current['deck-b'];
+      const updateA = applyMenuCatalogUpdate(
+        { menuEpoch: menuEpochRef.current, activeCompiled: prevA },
+        snapshot,
+      );
+      const updateB = applyMenuCatalogUpdate(
+        { menuEpoch: menuEpochRef.current, activeCompiled: prevB },
+        snapshot,
+      );
+      menuEpochRef.current = snapshot.epoch;
+      activeCompiledRef.current['deck-a'] = updateA.activeCompiled;
+      activeCompiledRef.current['deck-b'] = updateB.activeCompiled;
+
+      const catalogs: DeckCatalogs = {
+        'deck-a': snapshot.decks['deck-a'],
+        'deck-b': snapshot.decks['deck-b'],
+      };
+      modeCatalogsRef.current = catalogs;
+      setMenuCatalog(snapshot);
+      setCatalogLive(true);
+
+      // Holding banners: active slug removed → hold last compiled, do not clear selection.
+      const slugA = stateRef.current.deckAPresetSlug ?? '';
+      const slugB = stateRef.current.deckBPresetSlug ?? '';
+      const missingA = activeSlugStatus(slugA, snapshot.decks['deck-a']) === 'missing';
+      const missingB = activeSlugStatus(slugB, snapshot.decks['deck-b']) === 'missing';
+      setHoldingA(missingA);
+      setHoldingB(missingB);
+      if (missingA && slugA) {
+        addBanner(holdingBannerText(slugA), 'warn');
+      }
+      if (missingB && slugB) {
+        addBanner(holdingBannerText(slugB), 'warn');
+      }
+
+      // One-shot session/show-preset migration: int-only → slug when possible.
+      if (deckSlugMigrationDoneRef.current) return;
+      deckSlugMigrationDoneRef.current = true;
+      const { patch, warnings } = resolveSessionDeckSlugs(stateRef.current, catalogs);
+      for (const warning of warnings) {
+        addBanner(warning, 'warn');
+      }
+      const cur = stateRef.current;
+      if (
+        patch.deckAMode !== cur.deckAMode ||
+        patch.deckBMode !== cur.deckBMode ||
+        patch.deckAPresetSlug !== cur.deckAPresetSlug ||
+        patch.deckBPresetSlug !== cur.deckBPresetSlug
+      ) {
+        setState((prev) => {
+          const next = { ...prev, ...patch };
+          stateRef.current = next;
+          return next;
+        });
+        queueMicrotask(() => publish({ record: false }));
+      }
+      void opts;
+    },
+    [addBanner, publish],
+  );
+
+  /** Resolve helpers still need DeckCatalogs; keep a thin wrapper for WS/path. */
+  const applyModeCatalog = useCallback(
+    (catalogs: DeckCatalogs, meta?: { epoch?: number }) => {
+      const snapshot: MenuCatalogSnapshot = {
+        epoch: meta?.epoch ?? Math.max(1, menuEpochRef.current || 1),
+        decks: {
+          'deck-a': [...catalogs['deck-a']],
+          'deck-b': [...catalogs['deck-b']],
+        },
+      };
+      applyMenuSnapshot(snapshot, { fromWs: true });
+    },
+    [applyMenuSnapshot],
+  );
+
   const updateState = useCallback(
     (
       patch: Partial<ControlState> | ((prev: ControlState) => Partial<ControlState>),
@@ -230,9 +375,32 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     ) => {
       setState((prev) => {
         const delta = typeof patch === 'function' ? patch(prev) : patch;
-        const next = { ...prev, ...delta };
+        let next = { ...prev, ...delta };
         if (delta.trackMapping) {
           next.trackMapping = { ...prev.trackMapping, ...delta.trackMapping };
+        }
+        // When the catalog is known, keep slug/mode pairs consistent on local edits.
+        const catalogs = modeCatalogsRef.current;
+        if (
+          catalogs &&
+          (delta.deckAMode !== undefined ||
+            delta.deckBMode !== undefined ||
+            delta.deckAPresetSlug !== undefined ||
+            delta.deckBPresetSlug !== undefined)
+        ) {
+          const resolved = migrateDeckSlugsInState(next, catalogs, {
+            deckAMode: prev.deckAMode,
+            deckBMode: prev.deckBMode,
+            deckAPresetSlug: prev.deckAPresetSlug ?? '',
+            deckBPresetSlug: prev.deckBPresetSlug ?? '',
+          });
+          next = {
+            ...next,
+            deckAMode: resolved.deckAMode,
+            deckBMode: resolved.deckBMode,
+            deckAPresetSlug: resolved.deckAPresetSlug,
+            deckBPresetSlug: resolved.deckBPresetSlug,
+          };
         }
         if (options?.bumpCue) {
           next.cueVersion = prev.cueVersion + 1;
@@ -259,6 +427,76 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       queueMicrotask(() => publish(options));
     },
     [publish],
+  );
+
+  const selectDeckPreset = useCallback(
+    (side: DeckSide, slug: string) => {
+      const trimmed = slug.trim();
+      if (!trimmed) return;
+      // Legacy fallback entries use synthetic `legacy-N` slugs → int patch.
+      const legacyMatch = /^legacy-(\d+)$/.exec(trimmed);
+      if (legacyMatch) {
+        const mode = Number(legacyMatch[1]);
+        updateState(deckModePatch(side, mode), { bumpCue: true });
+        return;
+      }
+      updateState(deckPresetSlugPatch(side, trimmed), { bumpCue: true });
+      // Clear holding banner for this deck on explicit reselect.
+      if (side === 'A') setHoldingA(false);
+      else setHoldingB(false);
+
+      // Prefetch compiled so last-known-good is warm (projector also fetches on slug change).
+      const deck = deckIdFromSide(side);
+      const epoch = menuEpochRef.current > 0 ? menuEpochRef.current : undefined;
+      void fetchCompiledMode({ deck, slug: trimmed, epoch }).then((result) => {
+        if (result.ok) {
+          const held = holdCompiled(deck, trimmed, epoch ?? 0, result.wire);
+          if (held) activeCompiledRef.current[deck] = held;
+        } else {
+          addBanner(`Compile failed for ${deck}/${trimmed}: ${result.error}`, 'error');
+        }
+      });
+    },
+    [addBanner, updateState],
+  );
+
+  const reloadActiveDeck = useCallback(
+    (side: DeckSide) => {
+      const cur = stateRef.current;
+      const slug =
+        side === 'A' ? (cur.deckAPresetSlug ?? '').trim() : (cur.deckBPresetSlug ?? '').trim();
+      if (!slug) {
+        addBanner(`No active preset on deck ${side} to reload`, 'warn');
+        return;
+      }
+      // Synthetic legacy slugs: nothing to compile from the mode API.
+      if (slug.startsWith('legacy-')) {
+        addBanner('Reload active is only available for catalog packs', 'warn');
+        return;
+      }
+      const version =
+        side === 'A' ? (cur.deckAReloadActiveVersion ?? 0) : (cur.deckBReloadActiveVersion ?? 0);
+      updateState(deckReloadActivePatch(side, version), { record: false });
+
+      const deck = deckIdFromSide(side);
+      const epoch = menuEpochRef.current > 0 ? menuEpochRef.current : undefined;
+      setReloadBusy((prev) => ({ ...prev, [side]: true }));
+      void fetchCompiledMode({ deck, slug, epoch })
+        .then((result) => {
+          if (result.ok) {
+            const held = holdCompiled(deck, slug, epoch ?? 0, result.wire);
+            if (held) activeCompiledRef.current[deck] = held;
+            if (side === 'A') setHoldingA(false);
+            else setHoldingB(false);
+          } else {
+            addBanner(`Reload active failed for ${deck}/${slug}: ${result.error}`, 'error');
+          }
+        })
+        .finally(() => {
+          setReloadBusy((prev) => ({ ...prev, [side]: false }));
+        });
+    },
+    [addBanner, updateState],
   );
 
   const syncFromRemote = useCallback((next: Partial<ControlState>) => {
@@ -345,7 +583,27 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       const preset = normalizePreset(presets[`slot-${n}`]);
       if (!preset) return;
       const from = cloneState(stateRef.current);
-      const to = preparePresetTarget(preset.state);
+      let to = preparePresetTarget(preset.state);
+      // Int-only show presets: resolve slugs when catalog is available; banner on fail.
+      const catalogs = modeCatalogsRef.current;
+      if (catalogs) {
+        const resolved = migrateDeckSlugsInState(to, catalogs, {
+          deckAMode: from.deckAMode,
+          deckBMode: from.deckBMode,
+          deckAPresetSlug: from.deckAPresetSlug ?? '',
+          deckBPresetSlug: from.deckBPresetSlug ?? '',
+        });
+        for (const warning of resolved.warnings) {
+          addBanner(warning, 'warn');
+        }
+        to = {
+          ...to,
+          deckAMode: resolved.deckAMode,
+          deckBMode: resolved.deckBMode,
+          deckAPresetSlug: resolved.deckAPresetSlug,
+          deckBPresetSlug: resolved.deckBPresetSlug,
+        };
+      }
       const curves = normalizePresetCurves(preset.curves);
       setPendingCurves(curves);
       setActivePresetIndex(n);
@@ -393,7 +651,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
         tick();
       }
     },
-    [publish, refreshPresetGrid, transitionDurationMs],
+    [addBanner, publish, refreshPresetGrid, transitionDurationMs],
   );
 
   const savePresetToSlot = useCallback(
@@ -796,6 +1054,25 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       if (frame?.address === '/aurora/control/state' && args[0] && typeof args[0] === 'object') {
         syncFromRemote(args[0] as Partial<ControlState>);
       }
+      if (frame?.address === MODES_CATALOG_WS_ADDRESS && args[0] && typeof args[0] === 'object') {
+        // Full public catalog snapshot — menu refresh only (no renderer auto-swap).
+        const parsed = parsePublicCatalog(args[0]);
+        if (parsed) {
+          applyMenuSnapshot(parsed, { fromWs: true });
+        } else {
+          const snap = args[0] as {
+            epoch?: number;
+            decks?: { 'deck-a'?: CatalogLikeEntry[]; 'deck-b'?: CatalogLikeEntry[] };
+          };
+          const decks = snap.decks;
+          if (decks && Array.isArray(decks['deck-a']) && Array.isArray(decks['deck-b'])) {
+            applyModeCatalog(
+              { 'deck-a': decks['deck-a'], 'deck-b': decks['deck-b'] },
+              { epoch: typeof snap.epoch === 'number' ? snap.epoch : undefined },
+            );
+          }
+        }
+      }
       if (
         frame?.address === '/aurora/server/diagnostics' &&
         args[0] &&
@@ -899,6 +1176,8 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     },
     [
       addBanner,
+      applyMenuSnapshot,
+      applyModeCatalog,
       executeTriggerAction,
       flushPendingCue,
       pendingCurves,
@@ -959,6 +1238,25 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     if (err) addBanner(err, 'error');
   }, [addBanner]);
 
+  // Initial catalog fetch (WS also pushes on connect / epoch bump).
+  useEffect(() => {
+    if (staticPreview.current) return;
+    let cancelled = false;
+    void fetchModesCatalog().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        applyMenuSnapshot(result.catalog);
+      } else {
+        // Graceful degradation: launchpad falls back to VISUAL_MODES.
+        addBanner(`Mode catalog unavailable: ${result.error}`, 'warn');
+        setCatalogLive(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [addBanner, applyMenuSnapshot]);
+
   useEffect(() => {
     const timer = setTimeout(() => saveSessionState(state), 300);
     return () => clearTimeout(timer);
@@ -993,6 +1291,29 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [applyFrame]);
 
+  const fallbackEntries = useMemo(() => legacyFallbackMenuEntries(), []);
+
+  const modeMenu = useMemo<ModeMenuState>(() => {
+    if (catalogLive && menuCatalog) {
+      return {
+        catalogLive: true,
+        menuEpoch: menuCatalog.epoch,
+        deckAEntries: menuCatalog.decks['deck-a'],
+        deckBEntries: menuCatalog.decks['deck-b'],
+        holdingA,
+        holdingB,
+      };
+    }
+    return {
+      catalogLive: false,
+      menuEpoch: null,
+      deckAEntries: fallbackEntries,
+      deckBEntries: fallbackEntries,
+      holdingA: false,
+      holdingB: false,
+    };
+  }, [catalogLive, fallbackEntries, holdingA, holdingB, menuCatalog]);
+
   const value = useMemo<ControlsContextValue>(
     () => ({
       state,
@@ -1014,9 +1335,13 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       recording,
       isReplayLooping,
       latencyP95,
+      modeMenu,
+      reloadBusy,
       setTransitionDurationMs,
       setPendingCurve,
       updateState,
+      selectDeckPreset,
+      reloadActiveDeck,
       publish,
       queueCue,
       recallPreset,
@@ -1057,8 +1382,12 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       recording,
       isReplayLooping,
       latencyP95,
+      modeMenu,
+      reloadBusy,
       setPendingCurve,
       updateState,
+      selectDeckPreset,
+      reloadActiveDeck,
       publish,
       queueCue,
       recallPreset,

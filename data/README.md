@@ -28,6 +28,8 @@ Full ceiling messaging and the ID table: [`docs/mode-primitives.md`](../docs/mod
 
 Bundled builtins cover **all legacy control-bus modes 0–48** (49 presets) **per deck**, duplicated strictly under `deck-a/` and `deck-b/` (no shared library). Labels, character briefs, and `uiGroup` come from `shared/visual-mode-catalog.ts`. Folder names are kebab-case slugs derived from the catalog labels (`Beams` → `beams`, `CalabiYau` → `calabi-yau`).
 
+**Non-legacy extras** (no `legacyIndex`, slug-only on the control bus) may ship alongside the 0–48 set. PR6 adds `supernova` on both decks — FieldRuntime `supernova_burst` vertical slice (`suppressLegacyField: true`). Select via `deckAPresetSlug` / `deckBPresetSlug` = `"supernova"` (not VST/MIDI int). The generate script preserves known extras under `EXTRA_BUNDLED_SLUGS`.
+
 Regenerate after catalog renames:
 
 ```bash
@@ -35,7 +37,7 @@ bun run scripts/generate-bundled-mode-presets.ts
 bun run scripts/generate-bundled-mode-presets.ts --check   # CI / drift guard
 ```
 
-The engine still matches legacy indices in Rust match arms; these folders are the catalog/metadata source for scan, compile, and later HTTP APIs. Modes 25–48 may be metadata-only (`engine-module` / `mesh-primary` / `fullscreen-primary`) until their backends ship.
+The engine still matches legacy indices in Rust match arms; these folders are the catalog/metadata source for scan, compile, and later HTTP APIs. Modes 25–48 may be metadata-only (`engine-module` / `mesh-primary` / `fullscreen-primary`) until their backends ship. DSL-backed packs with an implemented FieldRuntime primitive skip those match arms when a compiled wire is active.
 
 ## Layout
 
@@ -235,6 +237,28 @@ HTTP (visual server `:3000`, see `bridge/mode-api.ts`):
 - `GET /api/data/e/<epoch>/decks/deck-{a|b}/<slug>/...` — sandboxed assets for retained epochs
 
 On epoch bump the bridge broadcasts `/aurora/modes/catalog` over the WebSocket. The last ~4 epochs of assets/compile cache are retained.
+
+## Control bus: slugs vs legacy ints
+
+`ControlState` carries both:
+
+| Field | Role |
+| --- | --- |
+| `deckAMode` / `deckBMode` | Legacy VisualMode int (`0`–`48`, or `-1` for slug-only packs) |
+| `deckAPresetSlug` / `deckBPresetSlug` | Pack identity from the deck catalog |
+
+Resolution is centralized in `shared/resolve-deck-selection.ts` (`resolveDeckSelection`):
+
+1. **Non-empty slug wins** — mode is set from `legacyIndex`, or `-1` when the pack has none.
+2. **Int-only** (VST / MIDI / launchpad) — maps to a slug only when some catalog entry on that deck has a matching `legacyIndex`. Never invents a non-legacy slug from an int.
+3. **Both present** — slug wins.
+4. Empty slug string is treated as absent.
+
+### VST / MIDI limitation
+
+VST parameters and MIDI CCs only send **legacy integers**. They can only select packs that declare `legacyIndex` in `preset.json`. Packs without `legacyIndex` (non-legacy overlays) are **not** reachable via VST/MIDI — use the controls page slug path (future dynamic launchpad, #241) or an explicit `deckAPresetSlug` / `deckBPresetSlug` write on the control bus.
+
+Concurrent last-writer-wins is unchanged: the bridge still coerces each full state update; mode-only updates from VST do not get masked by a carried-over previous slug.
 
 ---
 

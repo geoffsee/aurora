@@ -32,7 +32,10 @@ JSON-serializable `CompiledModeWire`:
 - Clamps known params; strips unknown keys
 - Fails if required params are missing
 
-No WASM ingest here (PR6 / FieldRuntime). No disk scan here (PR1 / PR3).
+WASM ingest of `CompiledModeWire` is off-frame (PR6 / FieldRuntime): the
+projector fetches `/api/modes/compiled` on slug change / reload-active and calls
+`aurora_set_compiled_mode(deck, json)`. Parse failures keep the previous active
+definition. Disk/catalog epoch bumps alone do not swap the active renderer.
 
 ## Engine capabilities
 
@@ -74,3 +77,10 @@ bun run modes:validate ./my-modes   # overlay root
 - `scripts/modes-validate.ts` — offline pack scan CLI (`bun run modes:validate`)
 - `docs/mode-primitives.md` — primitive table + ceiling
 - `data/README.md` — data-dir operator/author guide
+- `shared/resolve-deck-selection.ts` — control-bus slug ↔ legacy int resolution (#238)
+
+## Control bus (PR4 / #238)
+
+Live `ControlState` carries both `deckAMode`/`deckBMode` (legacy int) and
+`deckAPresetSlug`/`deckBPresetSlug`. See `data/README.md` § “Control bus: slugs vs
+legacy ints”. VST/MIDI only select packs that declare `legacyIndex`.

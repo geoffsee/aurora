@@ -53,6 +53,8 @@ const FORBIDDEN_MAPPING_TARGETS: ReadonlySet<string> = new Set([
   'crossfade',
   'deckAMode',
   'deckBMode',
+  'deckAPresetSlug',
+  'deckBPresetSlug',
   'activeShader',
   'deckAGpuShader',
   'deckBGpuShader',

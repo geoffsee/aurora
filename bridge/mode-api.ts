@@ -69,6 +69,8 @@ export type PublicCatalogEntry = {
   source: CatalogSource;
   legacyIndex?: number;
   label?: string;
+  /** Operator UI grouping hint from preset.json. */
+  uiGroup?: string;
 };
 
 export type PublicCatalogSnapshot = {
@@ -89,6 +91,7 @@ function publicEntry(e: CatalogEntry): PublicCatalogEntry {
   };
   if (e.legacyIndex !== undefined) out.legacyIndex = e.legacyIndex;
   if (e.label !== undefined) out.label = e.label;
+  if (e.uiGroup !== undefined) out.uiGroup = e.uiGroup;
   return out;
 }
 

@@ -42,7 +42,9 @@ export const VST_OSC_CONTRACT = contract;
 // v11: added Figure model catalog and motion/halo controls
 // v12: added figureAssetPath for optional remote glTF/GLB loading
 // v13: added independent CPU/GPU enable switches for Deck A and Deck B
-export const CONTROL_STATE_SCHEMA_VERSION = 13;
+// v14: added deckAPresetSlug / deckBPresetSlug (pack identity alongside legacy int modes)
+// v15: added deckAReloadActiveVersion / deckBReloadActiveVersion (explicit re-fetch compiled)
+export const CONTROL_STATE_SCHEMA_VERSION = 15;
 
 export type AudioCurveShape = 'linear' | 'exponential' | 'logarithmic';
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
