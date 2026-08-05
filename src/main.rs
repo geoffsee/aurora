@@ -1,6 +1,8 @@
+mod engine_modules;
 mod field_runtime;
 mod mode_catalog;
 mod mode_director;
+mod mode_disposition;
 mod model_layer;
 
 use std::f32::consts::TAU;
@@ -15,6 +17,7 @@ use bevy::{
     window::{PresentMode, PrimaryWindow, WindowResolution},
     winit::WinitSettings,
 };
+use engine_modules::pose_for_mode as engine_pose_for_mode;
 use field_runtime::{
     FieldDeck, FieldFrameInputs, FieldPool, FieldRuntime, drain_pending as drain_field_pending,
     primitive_id_for_legacy_index, queue_compiled_json,
@@ -1560,6 +1563,21 @@ fn update_visuals(
                     alpha *= pose.alpha.clamp(0.0, 1.5);
                     hue = pose.hue;
                     lightness = pose.lightness;
+                } else if let Some(pose) = engine_pose_for_mode(
+                    deck_mode,
+                    FieldPool::Beams,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
                 } else if field_runtime.suppress_legacy(fdeck) {
                     alpha = 0.0;
                 } else {
@@ -1619,407 +1637,33 @@ fn update_visuals(
                     VisualMode::Figure => {
                         mode_alpha = 0.0;
                     }
-                    VisualMode::Hypercube => {
-                        let cell = (element.index % 8) as f32;
-                        let edge = (element.index / 8) as f32;
-                        let a1 = t * 1.15 + cell * TAU / 8.0;
-                        let a2 = t * 0.75 + edge * 0.85 + bass * 0.5;
-                        let r1 = 180.0 + beat_hit * 50.0;
-                        let r2 = 100.0 + mid * 45.0;
-                        px = a1.cos() * r1 + a2.cos() * r2 * 0.6;
-                        py = a1.sin() * r1 * 0.75 + a2.sin() * r2 * 0.5;
-                        rot = a1 + a2;
-                        sx = 3.5 + beat_hit * 7.0;
-                        sy = 70.0 + edge * 10.0 + energy * 50.0;
-                        mode_hue = cell * 40.0 + a1.to_degrees() * 0.2;
-                        mode_alpha = 0.8;
-                    }
-                    VisualMode::CalabiYau => {
-                        let a = seed * TAU + t * 0.22;
-                        let lobes = 3.0 + (element.index % 5) as f32;
-                        let r = 90.0
-                            + (a * lobes).sin().abs() * 260.0
-                            + mid * 90.0
-                            + wave(t * 0.6 + seed) * 50.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + (a * lobes).cos() * 0.5;
-                        sx = 12.0 + mid * 24.0;
-                        sy = 50.0 + energy * 90.0 + high * 40.0;
-                        mode_hue = a.to_degrees() * 0.15 + mid * 40.0;
-                        mode_alpha = 0.55 + mid * 0.3 + high * 0.15;
-                    }
-                    VisualMode::Quasicrystal => {
-                        let k = 5.0;
-                        let a = fraction * TAU * k + t * 0.35;
-                        let mut rx = 0.0_f32;
-                        let mut ry = 0.0_f32;
-                        for i in 0..5 {
-                            let ang = i as f32 * TAU / k + t * 0.12;
-                            let phase = (fraction * 8.0 + t + i as f32).cos();
-                            rx += ang.cos() * phase;
-                            ry += ang.sin() * phase;
-                        }
-                        px = rx * (110.0 + high * 90.0) + a.cos() * 50.0;
-                        py = ry * (85.0 + high * 70.0) + a.sin() * 40.0;
-                        rot = a;
-                        sx = 4.0 + high * 14.0 + beat_hit * 10.0;
-                        sy = 40.0 + high * 70.0 + energy * 40.0;
-                        mode_hue = fraction * 200.0 + high * 60.0;
-                        mode_alpha = 0.55 + high * 0.4;
-                    }
-                    VisualMode::PenroseTiling => {
-                        let phi = 1.618_034_f32;
-                        let c = (element.index % 12) as f32;
-                        let r = (element.index / 12) as f32;
-                        let alt = ((element.index % 2) as f32);
-                        px = (c - 5.5) * 48.0 * phi.recip() * 2.0 + alt * 20.0;
-                        py = (r - 3.0) * 55.0 + (1.0 - alt) * 16.0;
-                        rot = alt * TAU * 0.2 + (element.index % 5) as f32 * 0.15;
-                        sx = 5.0 + (element.index % 5) as f32 * 2.5;
-                        sy = 70.0 + alt * 35.0 + energy * 40.0;
-                        mode_hue = 62.0 + alt * 50.0;
-                        mode_alpha = 0.8;
-                    }
-                    VisualMode::SierpinskiTriangle => {
-                        let bits = element.index as u32;
-                        let show = bits & (bits >> 1) == 0;
-                        let mut ix = 0.0_f32;
-                        let mut iy = 0.5_f32;
-                        let mut n = element.index + 1;
-                        for _ in 0..10 {
-                            let corner = n % 3;
-                            n /= 3;
-                            let (cx, cy) = match corner {
-                                0 => (-0.5_f32, -0.4_f32),
-                                1 => (0.5_f32, -0.4_f32),
-                                _ => (0.0_f32, 0.55_f32),
-                            };
-                            ix = (ix + cx) * 0.5;
-                            iy = (iy + cy) * 0.5;
-                        }
-                        px = ix * STAGE_WIDTH * 0.9;
-                        py = iy * STAGE_HEIGHT * 0.9;
-                        rot = t * 0.25 + fraction;
-                        sx = 5.0 + beat_hit * 8.0;
-                        sy = 50.0 + energy * 60.0;
-                        mode_hue = fraction * 90.0;
-                        mode_alpha = if show { 0.9 } else { 0.0 };
-                    }
-                    VisualMode::TetrahedralMatrix => {
-                        let elev = ((element.index % 3) as f32);
-                        let a = fraction * TAU + elev * 0.8 + t * 0.28;
-                        let r = 80.0 + elev * 100.0 + (element.index % 9) as f32 * 18.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7 + elev * 35.0 - 45.0;
-                        pz = 2.0 + elev * 12.0;
-                        rot = a + elev;
-                        sx = 4.0 + elev * 2.5;
-                        sy = 55.0 + elev * 25.0 + energy * 45.0;
-                        mode_hue = 62.0 + elev * 35.0;
-                        mode_alpha = 0.75 + elev * 0.08;
-                    }
-                    VisualMode::BorromeanRings => {
-                        let ring = (element.index % 3) as f32;
-                        let along = (element.index / 3) as f32 / 24.0 * TAU + t * (1.3 + bass);
-                        let r = 160.0 + bass * 50.0;
-                        let cx = (ring - 1.0) * 100.0;
-                        let cy = ((ring + 1.0) % 3.0 - 1.0) * 45.0;
-                        px = cx + along.cos() * r;
-                        py = cy + along.sin() * r * 0.45 + (ring - 1.0) * along.sin() * 35.0;
-                        rot = along + ring;
-                        sx = 5.0 + beat_hit * 10.0;
-                        sy = 60.0 + energy * 70.0;
-                        mode_hue = ring * 100.0 + along.to_degrees() * 0.2;
-                        mode_alpha = 0.75;
-                    }
-                    VisualMode::Torus => {
-                        let major = fraction * TAU + t * 0.45;
-                        let minor = (element.index as f32 * 0.65 + t * 1.3) % TAU;
-                        let r_major = 200.0 + depth * 120.0;
-                        let r_minor = 65.0 + bass * 45.0;
-                        px = (r_major + r_minor * minor.cos()) * major.cos();
-                        py = (r_major + r_minor * minor.cos()) * major.sin() * 0.55;
-                        pz = 2.0 + minor.sin() * 25.0;
-                        rot = major + minor;
-                        sx = 4.0 + minor.cos().abs() * 7.0;
-                        sy = 45.0 + r_minor * 0.45 + energy * 40.0;
-                        mode_hue = 15.0 + minor.to_degrees() * 0.3;
-                        mode_alpha = 0.7 + minor.cos().abs() * 0.25;
-                    }
-                    VisualMode::PermutationGroups => {
-                        let slots = DECK_A_BEAMS.max(1);
-                        let beat_step = (t * state.bpm / 60.0).floor() as usize;
-                        let dest = (element.index * 11 + beat_step * 5) % slots;
-                        let df = dest as f32 / n;
-                        let a = df * TAU;
-                        let r = 80.0 + (dest % 12) as f32 * 28.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.75;
-                        rot = a + t * 0.1;
-                        sx = 6.0 + beat_hit * 12.0;
-                        sy = 70.0 + energy * 70.0;
-                        mode_hue = dest as f32 * 4.0;
-                        mode_alpha = 0.85;
-                    }
-                    VisualMode::SymmetryGroups => {
-                        let qx = ((fraction * 2.0 - 1.0) as f32).abs();
-                        let qy = ((layer * 2.0 - 1.0) as f32).abs();
-                        let sx_sign = if element.index % 2 == 0 { 1.0 } else { -1.0 };
-                        let sy_sign = if (element.index / 2) % 2 == 0 { 1.0 } else { -1.0 };
-                        px = sx_sign * qx * STAGE_WIDTH * 0.48;
-                        py = sy_sign * qy * STAGE_HEIGHT * 0.48;
-                        rot = (qx + qy) * 2.5 + t * 0.35;
-                        sx = 5.0 + high * 12.0;
-                        sy = 80.0 + energy * 90.0;
-                        mode_hue = 130.0 + qx * 80.0;
-                        mode_alpha = 0.75 + high * 0.25;
-                    }
-                    VisualMode::LieAlgebras => {
-                        let x0 = (fraction - 0.5) * STAGE_WIDTH;
-                        let y0 = (layer - 0.5) * STAGE_HEIGHT;
-                        let ang = t * 0.45 + y0 * 0.004 + x0 * 0.003;
-                        px = x0 + ang.cos() * 55.0;
-                        py = y0 + ang.sin() * 55.0;
-                        rot = ang;
-                        sx = 3.5;
-                        sy = 55.0 + energy * 60.0 + mid * 30.0;
-                        mode_hue = 140.0 + ang.to_degrees() * 0.2;
-                        mode_alpha = 0.75;
-                    }
-                    VisualMode::LatticeTheory => {
-                        let rank = element.index % 8;
-                        let along = (element.index / 8) as f32 / 9.0;
-                        px = (along - 0.5) * STAGE_WIDTH * 0.9;
-                        py = (rank as f32 / 7.0 - 0.5) * STAGE_HEIGHT * 0.9;
-                        rot = 0.0;
-                        if element.index % 3 == 0 {
-                            sx = 60.0 + mid * 40.0;
-                            sy = 5.0;
-                        } else {
-                            sx = 8.0 + (rank % 3) as f32 * 4.0;
-                            sy = 28.0 + energy * 35.0;
-                        }
-                        mode_hue = 62.0 + rank as f32 * 15.0;
-                        mode_alpha = 0.8;
-                    }
-                    VisualMode::GraphTheory => {
-                        let nodes = 16.max(1);
-                        let node = element.index % nodes;
-                        let a = node as f32 / nodes as f32 * TAU + t * 0.18;
-                        let r = 180.0 + mid * 50.0;
-                        if element.index % 3 == 0 {
-                            px = a.cos() * r;
-                            py = a.sin() * r * 0.75;
-                            rot = 0.0;
-                            sx = 14.0 + beat_hit * 12.0;
-                            sy = 14.0 + beat_hit * 12.0;
-                        } else {
-                            let a2 = (node as f32 + 1.0 + (element.index % 5) as f32) / nodes as f32
-                                * TAU
-                                + t * 0.18;
-                            let x1 = a.cos() * r;
-                            let y1 = a.sin() * r * 0.75;
-                            let x2 = a2.cos() * r;
-                            let y2 = a2.sin() * r * 0.75;
-                            px = (x1 + x2) * 0.5;
-                            py = (y1 + y2) * 0.5;
-                            rot = (y2 - y1).atan2(x2 - x1);
-                            let dist = ((x2 - x1).hypot(y2 - y1)).max(1.0);
-                            sx = 3.0 + high * 5.0;
-                            sy = dist * 0.92;
-                        }
-                        mode_hue = 40.0 + node as f32 * 18.0;
-                        mode_alpha = 0.7 + high * 0.3;
-                    }
-                    VisualMode::DesignTheory => {
-                        let block = element.index % 6;
-                        let bx = (block % 3) as f32 - 1.0;
-                        let by = (block / 3) as f32 - 0.5;
-                        px = bx * 300.0 + (fraction - 0.5) * 90.0;
-                        py = by * 240.0 + (layer - 0.5) * 70.0;
-                        rot = 0.0;
-                        sx = 90.0 + state.feedback * 50.0;
-                        sy = 20.0 + wobble * 18.0;
-                        mode_hue = block as f32 * 55.0;
-                        mode_alpha = 0.25 + state.feedback * 0.4 + osc_drive * 0.2;
-                    }
-                    VisualMode::MandelbrotSet => {
-                        let a = fraction * TAU + t * 0.12;
-                        let zoom = 1.0 + intensity_drive * 1.6 + bass * 0.9;
-                        let r = (25.0 + (fraction * 14.0).fract() * 340.0) / zoom.sqrt()
-                            + wave(t * 0.3 + fraction) * 25.0;
-                        px = a.cos() * r * 1.25;
-                        py = a.sin() * r * 0.95;
-                        rot = a + TAU * 0.25;
-                        sx = 3.5 + (1.0 - fraction) * 10.0;
-                        sy = 35.0 + (1.0 - fraction) * 120.0 * energy;
-                        mode_hue = 200.0 + fraction * 80.0 + mid * 40.0;
-                        mode_alpha = 0.6 + (1.0 - fraction) * 0.35;
-                    }
-                    VisualMode::JuliaSets => {
-                        let c_a = t * (0.45 + mid * 0.65);
-                        let a = fraction * TAU * 2.0 + c_a;
-                        let r = 70.0 + (a * 2.0 + c_a).sin().abs() * 300.0 + high * 70.0;
-                        px = a.cos() * r + c_a.cos() * 50.0;
-                        py = a.sin() * r * 0.7 + c_a.sin() * 35.0;
-                        rot = a;
-                        sx = 5.0 + high * 14.0;
-                        sy = 55.0 + mid * 60.0 + energy * 50.0;
-                        mode_hue = c_a.to_degrees() + fraction * 100.0;
-                        mode_alpha = 0.6 + high * 0.35;
-                    }
-                    VisualMode::LorenzAttractor => {
-                        let mut lx = 0.1 + seed * 0.4;
-                        let mut ly = seed * 0.8 - 0.4;
-                        let mut lz = 1.0 + fraction * 2.0;
-                        let dt_l = 0.008 * (1.0 + state.speed);
-                        let steps = 50 + (element.index % 25);
-                        for _ in 0..steps {
-                            let dx = 10.0 * (ly - lx);
-                            let dy = lx * (28.0 - lz) - ly;
-                            let dz = lx * ly - (8.0 / 3.0) * lz;
-                            lx += dx * dt_l;
-                            ly += dy * dt_l;
-                            lz += dz * dt_l;
-                        }
-                        let spin = t * 0.55;
-                        px = (lx * spin.cos() - ly * spin.sin()) * 20.0;
-                        py = (lz - 25.0) * 14.0 + (lx * spin.sin() + ly * spin.cos()) * 7.0;
-                        rot = ly.atan2(lx) + spin;
-                        sx = 4.0 + state.osc_pulse * 10.0;
-                        sy = 28.0 + energy * 45.0 + beat_hit * 25.0;
-                        mode_hue = 20.0 + lz * 8.0;
-                        mode_alpha = 0.6 + osc_drive * 0.35;
-                    }
-                    VisualMode::Functors => {
-                        let left = element.index % 2 == 0;
-                        let slot = ((element.index / 2) as f32) / (n * 0.5).max(1.0);
-                        if element.index % 5 == 0 {
-                            let y0 = (slot - 0.5) * STAGE_HEIGHT * 0.9;
-                            px = 0.0;
-                            py = y0 * 0.5 + wave(t * 0.8 + slot) * 12.0;
-                            rot = TAU * 0.25 + (wave(t + slot) - 0.5) * 0.3;
-                            sx = 4.0;
-                            sy = STAGE_WIDTH * 0.3;
-                            mode_hue = 100.0 + high * 40.0;
-                        } else if left {
-                            px = -STAGE_WIDTH * 0.34;
-                            py = (slot - 0.5) * STAGE_HEIGHT * 0.9;
-                            rot = 0.0;
-                            sx = 12.0;
-                            sy = 22.0 + energy * 14.0;
-                            mode_hue = 180.0;
-                        } else {
-                            px = STAGE_WIDTH * 0.34;
-                            py = (slot - 0.5) * STAGE_HEIGHT * 0.9 + wave(t + slot) * 25.0;
-                            rot = 0.0;
-                            sx = 12.0;
-                            sy = 22.0 + energy * 14.0;
-                            mode_hue = 40.0;
-                        }
-                        mode_alpha = 0.75 + high * 0.2;
-                    }
-                    VisualMode::ModularArithmetic => {
-                        let modulus = 10 + (bass * 6.0) as i32;
-                        let class = element.index as i32 % modulus;
-                        let a = class as f32 / modulus as f32 * TAU - TAU * 0.25 + t * 0.06;
-                        let r = 220.0 + (element.index / modulus.max(1) as usize) as f32 * 28.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.85;
-                        rot = a + TAU * 0.25;
-                        let lit = if class == ((t * state.bpm / 60.0) as i32).rem_euclid(modulus) {
-                            1.0
-                        } else {
-                            0.35
-                        };
-                        sx = 6.0 + lit * 12.0;
-                        sy = 45.0 + lit * 70.0 + energy * 30.0;
-                        mode_hue = class as f32 * (360.0 / modulus as f32);
-                        mode_alpha = 0.4 + lit * 0.55;
-                    }
-                    VisualMode::PAdicNumbers => {
-                        let depth_i = (element.index % 7) as f32;
-                        let a = (element.index / 7) as f32 * 0.85 + t * 0.12 * (depth_i + 1.0);
-                        let r = 45.0 * 1.5_f32.powf(depth_i) + wave(t + depth_i) * 12.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.8;
-                        rot = a;
-                        sx = 3.0 + (6.0 - depth_i).max(0.0) * 2.5;
-                        sy = 28.0 + (6.0 - depth_i).max(1.0) * 18.0 + energy * 25.0;
-                        mode_hue = depth_i * 45.0;
-                        mode_alpha = 0.4 + (1.0 - depth_i / 7.0) * 0.5;
-                    }
-                    VisualMode::VectorSpaces => {
-                        let kind = element.index % 4;
-                        match kind {
-                            0 => {
-                                px = (fraction - 0.5) * STAGE_WIDTH * 0.75;
-                                py = 0.0;
-                                rot = 0.0;
-                                sx = 5.0;
-                                sy = STAGE_WIDTH * 0.4;
-                            }
-                            1 => {
-                                px = 0.0;
-                                py = (layer - 0.5) * STAGE_HEIGHT * 0.75;
-                                rot = TAU * 0.25;
-                                sx = 5.0;
-                                sy = STAGE_HEIGHT * 0.4;
-                            }
-                            _ => {
-                                let shear = mid * 0.8 + wave(t * 0.5) * 0.3;
-                                px = (fraction - 0.5) * STAGE_WIDTH * 0.65
-                                    + (layer - 0.5) * STAGE_WIDTH * shear * 0.35;
-                                py = (layer - 0.5) * STAGE_HEIGHT * 0.65;
-                                rot = shear * 0.4;
-                                sx = 3.5;
-                                sy = 40.0 + energy * 45.0;
-                            }
-                        }
-                        mode_hue = 20.0 + kind as f32 * 30.0;
-                        mode_alpha = 0.75;
-                    }
-                    VisualMode::Eigenvectors => {
-                        let pump = (beat * TAU).sin().abs();
-                        let axis: f32 = if element.index % 2 == 0 { 0.35 } else { -0.55 };
-                        let along = (fraction - 0.5) * 2.0;
-                        px = along * 450.0 * axis.cos() * (0.6 + pump);
-                        py = along * 320.0 * axis.sin() * (0.6 + pump);
-                        rot = axis;
-                        sx = 5.0 + pump * 18.0;
-                        sy = 55.0 + pump * 160.0 + beat_hit * 50.0;
-                        mode_hue = 80.0 + pump * 80.0;
-                        mode_alpha = 0.55 + pump * 0.4;
-                    }
-                    VisualMode::BooleanLattices => {
-                        let bit = element.index & 15;
-                        let xbits = (bit & 1) as f32
-                            + ((bit >> 1) & 1) as f32 * 0.5
-                            + ((bit >> 2) & 1) as f32 * 0.25;
-                        let ybits = ((bit >> 3) & 1) as f32
-                            + ((bit >> 2) & 1) as f32 * 0.4
-                            + ((bit >> 1) & 1) as f32 * 0.2;
-                        px = (xbits - 0.9) * 380.0 + (fraction - 0.5) * 30.0;
-                        py = (ybits - 0.5) * 300.0 + (layer - 0.5) * 30.0;
-                        rot = (bit as f32) * 0.35;
-                        let ones = bit.count_ones() as f32;
-                        sx = 5.0 + ones * 3.0;
-                        sy = 40.0 + ones * 22.0 + energy * 30.0;
-                        mode_hue = bit as f32 * 22.0;
-                        mode_alpha = 0.35 + ones * 0.1 + state.feedback * 0.2;
-                    }
-                    VisualMode::Forcing => {
-                        let depth_i = (element.index % 9) as f32;
-                        let branch = ((element.index / 9) as f32) / 8.0;
-                        let spread = depth_i * 75.0 + beat_hit * 45.0;
-                        px = (branch - 0.5) * spread * 2.8;
-                        py = STAGE_HEIGHT * 0.42 - depth_i * 52.0;
-                        rot = (branch - 0.5) * 0.85;
-                        sx = 4.0 + (8.0 - depth_i).max(0.0);
-                        sy = 45.0 + (8.0 - depth_i) * 10.0 + energy * 35.0;
-                        mode_hue = depth_i * 30.0 + bass * 40.0;
-                        mode_alpha = 0.45 + (1.0 - depth_i / 9.0) * 0.5;
+                    
+                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
+                    VisualMode::Hypercube
+                    | VisualMode::CalabiYau
+                    | VisualMode::Quasicrystal
+                    | VisualMode::PenroseTiling
+                    | VisualMode::SierpinskiTriangle
+                    | VisualMode::TetrahedralMatrix
+                    | VisualMode::BorromeanRings
+                    | VisualMode::Torus
+                    | VisualMode::PermutationGroups
+                    | VisualMode::SymmetryGroups
+                    | VisualMode::LieAlgebras
+                    | VisualMode::LatticeTheory
+                    | VisualMode::GraphTheory
+                    | VisualMode::DesignTheory
+                    | VisualMode::MandelbrotSet
+                    | VisualMode::JuliaSets
+                    | VisualMode::LorenzAttractor
+                    | VisualMode::Functors
+                    | VisualMode::ModularArithmetic
+                    | VisualMode::PAdicNumbers
+                    | VisualMode::VectorSpaces
+                    | VisualMode::Eigenvectors
+                    | VisualMode::BooleanLattices
+                    | VisualMode::Forcing => {
+                        mode_alpha = 0.0;
                     }
                 }
 
@@ -2049,6 +1693,25 @@ fn update_visuals(
                     element.row,
                     &finputs,
                     field_fallback,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
+                    alpha *= state.ring_opacity;
+                    if !state.rings_enabled {
+                        alpha = 0.0;
+                    }
+                } else if let Some(pose) = engine_pose_for_mode(
+                    deck_mode,
+                    FieldPool::Rings,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -2103,7 +1766,7 @@ fn update_visuals(
                     | VisualMode::Comet
                     | VisualMode::Bloom => (0.0, 0.0, 0.0, 0.0),
                     VisualMode::Figure => (1.0, 1.0, 0.0, 0.0),
-                    // Mathematical concepts - use Beams defaults
+                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
                     VisualMode::Hypercube
                     | VisualMode::CalabiYau
                     | VisualMode::Quasicrystal
@@ -2127,7 +1790,7 @@ fn update_visuals(
                     | VisualMode::VectorSpaces
                     | VisualMode::Eigenvectors
                     | VisualMode::BooleanLattices
-                    | VisualMode::Forcing => (0.9, 0.8, 0.55, 1.0),
+                    | VisualMode::Forcing => (0.0, 0.0, 0.0, 0.0),
                 };
 
                 let base_radius = 220.0
@@ -2172,6 +1835,21 @@ fn update_visuals(
                     element.row,
                     &finputs,
                     field_fallback,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
+                } else if let Some(pose) = engine_pose_for_mode(
+                    deck_mode,
+                    FieldPool::Tiles,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -2248,436 +1926,32 @@ fn update_visuals(
                     VisualMode::Figure => {
                         mode_alpha = 0.0;
                     }
-                    // ——— tesseract-ish: dual-radius spinning frame ———
-                    VisualMode::Hypercube => {
-                        let cell = (element.index % 8) as f32;
-                        let edge = (element.index / 8) as f32;
-                        let a1 = t * 1.1 + cell * TAU / 8.0;
-                        let a2 = t * 0.7 + edge * 0.9 + bass * 0.5;
-                        let r1 = 160.0 + beat_hit * 40.0;
-                        let r2 = 90.0 + mid * 40.0;
-                        px = a1.cos() * r1 + a2.cos() * r2 * 0.6;
-                        py = a1.sin() * r1 * 0.75 + a2.sin() * r2 * 0.5;
-                        rot = a1 + a2;
-                        sx = 3.5 + beat_hit * 6.0;
-                        sy = 55.0 + edge * 8.0 + energy * 40.0;
-                        mode_hue = cell * 40.0 + a1.to_degrees() * 0.2;
-                        mode_alpha = 0.75;
-                    }
-                    // ——— organic multi-lobe fold ———
-                    VisualMode::CalabiYau => {
-                        let a = seed * TAU + t * 0.2;
-                        let lobes = 3.0 + (element.index % 4) as f32;
-                        let r = 80.0
-                            + (a * lobes).sin().abs() * 220.0
-                            + mid * 80.0
-                            + wave(t * 0.6 + seed) * 40.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + (a * lobes).cos() * 0.5;
-                        sx = 10.0 + mid * 20.0;
-                        sy = 35.0 + energy * 70.0 + high * 30.0;
-                        mode_hue = a.to_degrees() * 0.15 + mid * 40.0;
-                        mode_alpha = 0.55 + mid * 0.3 + high * 0.15;
-                    }
-                    // ——— 5-fold quasi interference points ———
-                    VisualMode::Quasicrystal => {
-                        let k = 5.0;
-                        let a = fraction * TAU * k + t * 0.3;
-                        let mut rx = 0.0_f32;
-                        let mut ry = 0.0_f32;
-                        for i in 0..5 {
-                            let ang = i as f32 * TAU / k + t * 0.1;
-                            let phase = (px * 0.01 + fraction * 6.0 + t + i as f32).cos();
-                            rx += ang.cos() * phase;
-                            ry += ang.sin() * phase;
-                        }
-                        px = rx * (90.0 + high * 80.0) + a.cos() * 40.0;
-                        py = ry * (70.0 + high * 60.0) + a.sin() * 30.0;
-                        rot = a;
-                        sx = 4.0 + high * 12.0 + beat_hit * 8.0;
-                        sy = 28.0 + high * 50.0 + energy * 30.0;
-                        mode_hue = fraction * 200.0 + high * 60.0;
-                        mode_alpha = 0.5 + high * 0.4;
-                    }
-                    // ——— rhomb-ish diamond orientations (not square tiles) ———
-                    VisualMode::PenroseTiling => {
-                        let phi = 1.618_034_f32;
-                        let gx = (col - cols * 0.5) * 48.0 * phi.recip() * 2.0;
-                        let gy = (row - rows * 0.5) * 42.0;
-                        let alt = ((element.col + element.row) % 2) as f32;
-                        px = gx + alt * 18.0;
-                        py = gy + (1.0 - alt) * 14.0;
-                        rot = alt * TAU * 0.2 + (element.index % 5) as f32 * 0.15;
-                        sx = 5.0 + (element.index % 5) as f32 * 2.0;
-                        sy = 45.0 + alt * 25.0 + energy * 30.0;
-                        mode_hue = 62.0 + alt * 50.0;
-                        mode_alpha = 0.75;
-                    }
-                    // ——— recursive triangle IFS points ———
-                    VisualMode::SierpinskiTriangle => {
-                        let bits = element.index as u32;
-                        let show = bits & (bits >> 1) == 0;
-                        // Map index through IFS-ish triangle corners
-                        let mut ix = 0.0_f32;
-                        let mut iy = 0.5_f32;
-                        let mut n = element.index + 1;
-                        for _ in 0..8 {
-                            let corner = n % 3;
-                            n /= 3;
-                            let (cx, cy) = match corner {
-                                0 => (-0.5_f32, -0.4_f32),
-                                1 => (0.5_f32, -0.4_f32),
-                                _ => (0.0_f32, 0.55_f32),
-                            };
-                            ix = (ix + cx) * 0.5;
-                            iy = (iy + cy) * 0.5;
-                        }
-                        px = ix * STAGE_WIDTH * 0.85;
-                        py = iy * STAGE_HEIGHT * 0.85;
-                        rot = t * 0.2 + fraction;
-                        sx = 4.0 + beat_hit * 6.0;
-                        sy = 30.0 + energy * 40.0;
-                        mode_hue = fraction * 90.0;
-                        mode_alpha = if show { 0.85 } else { 0.0 };
-                    }
-                    // ——— 3-layer tetrahedral node cloud ———
-                    VisualMode::TetrahedralMatrix => {
-                        let elev = ((element.col + 2 * element.row) % 3) as f32;
-                        let a = fraction * TAU + elev * 0.7 + t * 0.25;
-                        let r = 70.0 + elev * 90.0 + (element.index % 7) as f32 * 20.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7 + elev * 30.0 - 40.0;
-                        pz = 6.0 + elev * 10.0;
-                        rot = a + elev;
-                        sx = 4.0 + elev * 2.0;
-                        sy = 40.0 + elev * 20.0 + energy * 35.0;
-                        mode_hue = 62.0 + elev * 35.0;
-                        mode_alpha = 0.7 + elev * 0.1;
-                    }
-                    // ——— three linked ring paths ———
-                    VisualMode::BorromeanRings => {
-                        let ring = (element.index % 3) as f32;
-                        let along = (element.index / 3) as f32 / 40.0 * TAU + t * (1.2 + bass);
-                        let r = 140.0 + bass * 40.0;
-                        let cx = (ring - 1.0) * 90.0;
-                        let cy = ((ring + 1.0) % 3.0 - 1.0) * 40.0;
-                        px = cx + along.cos() * r;
-                        py = cy + along.sin() * r * 0.45 + (ring - 1.0) * along.sin() * 30.0;
-                        rot = along + ring;
-                        sx = 5.0 + beat_hit * 8.0;
-                        sy = 45.0 + energy * 50.0;
-                        mode_hue = ring * 100.0 + along.to_degrees() * 0.2;
-                        mode_alpha = 0.7;
-                    }
-                    // ——— torus: major/minor circle sampling ———
-                    VisualMode::Torus => {
-                        let major = fraction * TAU + t * 0.4;
-                        let minor = (element.index as f32 * 0.7 + t * 1.2) % TAU;
-                        let r_major = 180.0 + state.depth * 100.0;
-                        let r_minor = 55.0 + bass * 40.0;
-                        px = (r_major + r_minor * minor.cos()) * major.cos();
-                        py = (r_major + r_minor * minor.cos()) * major.sin() * 0.55;
-                        // fake Z as scale/offset
-                        pz = 8.0 + minor.sin() * 20.0;
-                        rot = major + minor;
-                        sx = 4.0 + minor.cos().abs() * 6.0;
-                        sy = 35.0 + r_minor * 0.4 + energy * 30.0;
-                        mode_hue = 15.0 + minor.to_degrees() * 0.3;
-                        mode_alpha = 0.65 + minor.cos().abs() * 0.25;
-                    }
-                    // ——— discrete slot permute on beats ———
-                    VisualMode::PermutationGroups => {
-                        let slots = (DECK_B_COLS * DECK_B_ROWS).max(1);
-                        let beat_step = (t * state.bpm / 60.0).floor() as usize;
-                        let dest = (element.index * 7 + beat_step * 3) % slots;
-                        let dc = (dest % DECK_B_COLS) as f32;
-                        let dr = (dest / DECK_B_COLS) as f32;
-                        px = (dc / cols.max(1.0) - 0.5) * STAGE_WIDTH * 0.9;
-                        py = (dr / rows.max(1.0) - 0.5) * STAGE_HEIGHT * 0.9;
-                        rot = (dest as f32) * 0.2 + t * 0.1;
-                        sx = 6.0 + beat_hit * 10.0;
-                        sy = 40.0 + energy * 50.0;
-                        mode_hue = dest as f32 * 5.0;
-                        mode_alpha = 0.8;
-                    }
-                    // ——— 4-fold kaleidoscope ———
-                    VisualMode::SymmetryGroups => {
-                        let qx = (u - 0.5).abs();
-                        let qy = (v - 0.5).abs();
-                        let sx_sign = if element.col % 2 == 0 { 1.0 } else { -1.0 };
-                        let sy_sign = if element.row % 2 == 0 { 1.0 } else { -1.0 };
-                        px = sx_sign * qx * STAGE_WIDTH * 0.95;
-                        py = sy_sign * qy * STAGE_HEIGHT * 0.95;
-                        rot = (qx + qy) * 2.0 + t * 0.3;
-                        sx = 5.0 + high * 10.0;
-                        sy = 50.0 + energy * 60.0;
-                        mode_hue = 130.0 + qx * 80.0;
-                        mode_alpha = 0.7 + high * 0.25;
-                    }
-                    // ——— streamline field ———
-                    VisualMode::LieAlgebras => {
-                        let x0 = (u - 0.5) * STAGE_WIDTH;
-                        let y0 = (v - 0.5) * STAGE_HEIGHT;
-                        // rotate vector field
-                        let ang = t * 0.4 + y0 * 0.004 + x0 * 0.003;
-                        px = x0 + ang.cos() * 40.0;
-                        py = y0 + ang.sin() * 40.0;
-                        rot = ang;
-                        sx = 3.5;
-                        sy = 35.0 + energy * 45.0 + mid * 20.0;
-                        mode_hue = 140.0 + ang.to_degrees() * 0.2;
-                        mode_alpha = 0.7;
-                    }
-                    // ——— layered Hasse-like ranks ———
-                    VisualMode::LatticeTheory => {
-                        let rank = element.row;
-                        let along = col / cols.max(1.0);
-                        px = (along - 0.5) * STAGE_WIDTH * 0.85;
-                        py = (rank as f32 / rows.max(1.0) - 0.5) * STAGE_HEIGHT * 0.9;
-                        rot = 0.0;
-                        sx = 8.0 + (rank % 3) as f32 * 4.0;
-                        sy = 20.0 + energy * 25.0;
-                        // connectors as short horizontals
-                        if element.col % 2 == 1 {
-                            sx = 50.0 + mid * 30.0;
-                            sy = 4.0;
-                        }
-                        mode_hue = 62.0 + rank as f32 * 15.0;
-                        mode_alpha = 0.75;
-                    }
-                    // ——— node + thin edge segments ———
-                    VisualMode::GraphTheory => {
-                        let nodes = 12.max(1);
-                        let node = element.index % nodes;
-                        let a = node as f32 / nodes as f32 * TAU + t * 0.15;
-                        let r = 160.0 + mid * 40.0;
-                        if element.index % 3 == 0 {
-                            // node
-                            px = a.cos() * r;
-                            py = a.sin() * r * 0.75;
-                            rot = 0.0;
-                            sx = 12.0 + beat_hit * 10.0;
-                            sy = 12.0 + beat_hit * 10.0;
-                        } else {
-                            // edge between node and next
-                            let a2 = (node as f32 + 1.0 + (element.index % 5) as f32) / nodes as f32
-                                * TAU
-                                + t * 0.15;
-                            let x1 = a.cos() * r;
-                            let y1 = a.sin() * r * 0.75;
-                            let x2 = a2.cos() * r;
-                            let y2 = a2.sin() * r * 0.75;
-                            px = (x1 + x2) * 0.5;
-                            py = (y1 + y2) * 0.5;
-                            rot = (y2 - y1).atan2(x2 - x1);
-                            let dist = ((x2 - x1).hypot(y2 - y1)).max(1.0);
-                            sx = 3.0 + high * 4.0;
-                            sy = dist * 0.9;
-                        }
-                        mode_hue = 40.0 + node as f32 * 20.0;
-                        mode_alpha = 0.65 + high * 0.3;
-                    }
-                    // ——— block color bands ———
-                    VisualMode::DesignTheory => {
-                        let block = element.index % 6;
-                        let bx = (block % 3) as f32 - 1.0;
-                        let by = (block / 3) as f32 - 0.5;
-                        px = bx * 280.0 + (u - 0.5) * 80.0;
-                        py = by * 220.0 + (v - 0.5) * 60.0;
-                        rot = 0.0;
-                        sx = 70.0 + state.feedback * 40.0;
-                        sy = 18.0 + pulse * 15.0;
-                        mode_hue = block as f32 * 55.0;
-                        mode_alpha = 0.25 + state.feedback * 0.4 + osc_drive * 0.2;
-                    }
-                    // ——— nested zoom rings (fractal stand-in) ———
-                    VisualMode::MandelbrotSet => {
-                        let a = fraction * TAU + t * 0.1;
-                        let zoom = 1.0 + intensity_drive * 1.5 + bass * 0.8;
-                        let r = (20.0 + (fraction * 12.0).fract() * 300.0) / zoom.sqrt()
-                            + wave(t * 0.3 + fraction) * 20.0;
-                        px = a.cos() * r * 1.2;
-                        py = a.sin() * r * 0.9;
-                        rot = a + TAU * 0.25;
-                        sx = 3.0 + (1.0 - fraction) * 8.0;
-                        sy = 25.0 + (1.0 - fraction) * 90.0 * energy;
-                        mode_hue = 200.0 + fraction * 80.0 + mid * 40.0;
-                        mode_alpha = 0.55 + (1.0 - fraction) * 0.35;
-                    }
-                    // ——— julia: orbiting seed lobes ———
-                    VisualMode::JuliaSets => {
-                        let c_a = t * (0.4 + mid * 0.6);
-                        let a = fraction * TAU * 2.0 + c_a;
-                        let r = 60.0 + (a * 2.0 + c_a).sin().abs() * 280.0 + high * 60.0;
-                        px = a.cos() * r + c_a.cos() * 40.0;
-                        py = a.sin() * r * 0.7 + c_a.sin() * 30.0;
-                        rot = a;
-                        sx = 5.0 + high * 12.0;
-                        sy = 40.0 + mid * 50.0 + energy * 40.0;
-                        mode_hue = c_a.to_degrees() + fraction * 100.0;
-                        mode_alpha = 0.55 + high * 0.35;
-                    }
-                    // ——— Lorenz ribbon (Euler integration per element) ———
-                    VisualMode::LorenzAttractor => {
-                        // Distinct initial conditions per element; short integrated path sample.
-                        let mut lx = 0.1 + seed * 0.4;
-                        let mut ly = seed * 0.8 - 0.4;
-                        let mut lz = 1.0 + fraction * 2.0;
-                        let dt_l = 0.008 * (1.0 + state.speed);
-                        let steps = 40 + (element.index % 20);
-                        for _ in 0..steps {
-                            let dx = 10.0 * (ly - lx);
-                            let dy = lx * (28.0 - lz) - ly;
-                            let dz = lx * ly - (8.0 / 3.0) * lz;
-                            lx += dx * dt_l;
-                            ly += dy * dt_l;
-                            lz += dz * dt_l;
-                        }
-                        // Spin the projection with time
-                        let spin = t * 0.5;
-                        px = (lx * spin.cos() - ly * spin.sin()) * 18.0;
-                        py = (lz - 25.0) * 12.0 + (lx * spin.sin() + ly * spin.cos()) * 6.0;
-                        rot = (ly).atan2(lx) + spin;
-                        sx = 4.0 + state.osc_pulse * 8.0;
-                        sy = 20.0 + energy * 35.0 + beat_hit * 20.0;
-                        mode_hue = 20.0 + lz * 8.0;
-                        mode_alpha = 0.55 + osc_drive * 0.35;
-                    }
-                    // ——— source→target map (two columns + bridging strokes) ———
-                    VisualMode::Functors => {
-                        let left = element.index % 2 == 0;
-                        let slot = (element.index / 2) as f32 / (rows.max(1.0));
-                        if left {
-                            px = -STAGE_WIDTH * 0.32;
-                            py = (slot - 0.5) * STAGE_HEIGHT * 0.9;
-                            rot = 0.0;
-                            sx = 10.0;
-                            sy = 16.0 + energy * 10.0;
-                            mode_hue = 180.0;
-                        } else {
-                            px = STAGE_WIDTH * 0.32;
-                            py = (slot - 0.5) * STAGE_HEIGHT * 0.9 + wave(t + slot) * 20.0;
-                            rot = 0.0;
-                            sx = 10.0;
-                            sy = 16.0 + energy * 10.0;
-                            mode_hue = 40.0;
-                        }
-                        // half the elements are arrows
-                        if element.row % 3 == 0 && !left {
-                            let y0 = (slot - 0.5) * STAGE_HEIGHT * 0.9;
-                            px = 0.0;
-                            py = y0 * 0.5 + wave(t * 0.8 + slot) * 10.0;
-                            rot = TAU * 0.25 + (wave(t + slot) - 0.5) * 0.3;
-                            sx = 4.0;
-                            sy = STAGE_WIDTH * 0.28;
-                            mode_hue = 100.0 + high * 40.0;
-                        }
-                        mode_alpha = 0.7 + high * 0.2;
-                    }
-                    // ——— modular clock ———
-                    VisualMode::ModularArithmetic => {
-                        let modulus = 8 + (bass * 4.0) as i32;
-                        let class = element.index as i32 % modulus;
-                        let a = class as f32 / modulus as f32 * TAU - TAU * 0.25 + t * 0.05;
-                        let r = 200.0 + (element.index / modulus.max(1) as usize) as f32 * 30.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.85;
-                        rot = a + TAU * 0.25;
-                        let lit = if class == ((t * state.bpm / 60.0) as i32).rem_euclid(modulus) {
-                            1.0
-                        } else {
-                            0.35
-                        };
-                        sx = 6.0 + lit * 10.0;
-                        sy = 30.0 + lit * 50.0 + energy * 20.0;
-                        mode_hue = class as f32 * (360.0 / modulus as f32);
-                        mode_alpha = 0.4 + lit * 0.55;
-                    }
-                    // ——— nested disks hierarchy ———
-                    VisualMode::PAdicNumbers => {
-                        let depth_i = (element.index % 6) as f32;
-                        let a = (element.index / 6) as f32 * 0.9 + t * 0.1 * (depth_i + 1.0);
-                        let r = 40.0 * 1.55_f32.powf(depth_i) + wave(t + depth_i) * 10.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.8;
-                        rot = a;
-                        sx = 3.0 + (5.0 - depth_i).max(0.0) * 2.0;
-                        sy = 20.0 + (5.0 - depth_i).max(1.0) * 15.0 + energy * 20.0;
-                        mode_hue = depth_i * 45.0;
-                        mode_alpha = 0.4 + (1.0 - depth_i / 6.0) * 0.5;
-                    }
-                    // ——— basis axes + span grid lines ———
-                    VisualMode::VectorSpaces => {
-                        let kind = element.index % 4;
-                        match kind {
-                            0 => {
-                                // e1 axis
-                                px = (u - 0.5) * STAGE_WIDTH * 0.7;
-                                py = 0.0;
-                                rot = 0.0;
-                                sx = 4.0;
-                                sy = STAGE_WIDTH * 0.35;
-                            }
-                            1 => {
-                                // e2 axis
-                                px = 0.0;
-                                py = (v - 0.5) * STAGE_HEIGHT * 0.7;
-                                rot = TAU * 0.25;
-                                sx = 4.0;
-                                sy = STAGE_HEIGHT * 0.35;
-                            }
-                            _ => {
-                                // span samples
-                                let shear = mid * 0.8 + wave(t * 0.5) * 0.3;
-                                px = (u - 0.5) * STAGE_WIDTH * 0.6 + (v - 0.5) * STAGE_WIDTH * shear * 0.3;
-                                py = (v - 0.5) * STAGE_HEIGHT * 0.6;
-                                rot = shear * 0.4;
-                                sx = 3.0;
-                                sy = 25.0 + energy * 30.0;
-                            }
-                        }
-                        mode_hue = 20.0 + kind as f32 * 30.0;
-                        mode_alpha = 0.7;
-                    }
-                    // ——— stretch along preferred axes ———
-                    VisualMode::Eigenvectors => {
-                        let pump = (beat * TAU).sin().abs();
-                        let axis: f32 = if element.index % 2 == 0 { 0.35 } else { -0.55 };
-                        let along = (fraction - 0.5) * 2.0;
-                        px = along * 400.0 * axis.cos() * (0.6 + pump);
-                        py = along * 300.0 * axis.sin() * (0.6 + pump);
-                        rot = axis;
-                        sx = 5.0 + pump * 15.0;
-                        sy = 40.0 + pump * 120.0 + beat_hit * 40.0;
-                        mode_hue = 80.0 + pump * 80.0;
-                        mode_alpha = 0.55 + pump * 0.4;
-                    }
-                    // ——— subset hypercube faces as staggered ranks ———
-                    VisualMode::BooleanLattices => {
-                        let bit = element.index & 7;
-                        let xbits = (bit & 1) as f32 + ((bit >> 1) & 1) as f32 * 0.5;
-                        let ybits = ((bit >> 2) & 1) as f32 + ((bit >> 1) & 1) as f32 * 0.35;
-                        px = (xbits - 0.75) * 350.0 + (u - 0.5) * 40.0;
-                        py = (ybits - 0.5) * 280.0 + (v - 0.5) * 40.0;
-                        rot = (bit as f32) * 0.4;
-                        sx = 5.0 + (bit.count_ones() as f32) * 3.0;
-                        sy = 30.0 + (bit.count_ones() as f32) * 20.0 + energy * 25.0;
-                        mode_hue = bit as f32 * 40.0;
-                        mode_alpha = 0.35 + (bit.count_ones() as f32) * 0.12 + state.feedback * 0.2;
-                    }
-                    // ——— expanding condition tree ———
-                    VisualMode::Forcing => {
-                        let depth_i = (element.row).min(7) as f32;
-                        let branch = col / cols.max(1.0);
-                        let spread = depth_i * 70.0 + beat_hit * 40.0;
-                        px = (branch - 0.5) * spread * 2.5;
-                        py = STAGE_HEIGHT * 0.4 - depth_i * 55.0;
-                        rot = (branch - 0.5) * 0.8;
-                        sx = 4.0 + (7.0 - depth_i).max(0.0);
-                        sy = 35.0 + (7.0 - depth_i) * 8.0 + energy * 30.0;
-                        mode_hue = depth_i * 30.0 + bass * 40.0;
-                        mode_alpha = 0.45 + (1.0 - depth_i / 8.0) * 0.45;
+                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
+                    VisualMode::Hypercube
+                    | VisualMode::CalabiYau
+                    | VisualMode::Quasicrystal
+                    | VisualMode::PenroseTiling
+                    | VisualMode::SierpinskiTriangle
+                    | VisualMode::TetrahedralMatrix
+                    | VisualMode::BorromeanRings
+                    | VisualMode::Torus
+                    | VisualMode::PermutationGroups
+                    | VisualMode::SymmetryGroups
+                    | VisualMode::LieAlgebras
+                    | VisualMode::LatticeTheory
+                    | VisualMode::GraphTheory
+                    | VisualMode::DesignTheory
+                    | VisualMode::MandelbrotSet
+                    | VisualMode::JuliaSets
+                    | VisualMode::LorenzAttractor
+                    | VisualMode::Functors
+                    | VisualMode::ModularArithmetic
+                    | VisualMode::PAdicNumbers
+                    | VisualMode::VectorSpaces
+                    | VisualMode::Eigenvectors
+                    | VisualMode::BooleanLattices
+                    | VisualMode::Forcing => {
+                        mode_alpha = 0.0;
                     }
                 }
 
@@ -2702,6 +1976,21 @@ fn update_visuals(
                     element.row,
                     &finputs,
                     field_fallback,
+                ) {
+                    transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
+                    transform.rotation = Quat::from_rotation_z(pose.rot);
+                    transform.scale = Vec3::new(pose.sx.max(1.0), pose.sy.max(1.0), 1.0);
+                    alpha *= pose.alpha.clamp(0.0, 1.5);
+                    hue = pose.hue;
+                    lightness = pose.lightness;
+                } else if let Some(pose) = engine_pose_for_mode(
+                    deck_mode,
+                    FieldPool::Ghost,
+                    element.index,
+                    element.seed,
+                    element.col,
+                    element.row,
+                    &finputs,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -2778,7 +2067,7 @@ fn update_visuals(
                     VisualMode::Figure => {
                         alpha = 0.0;
                     }
-                    // Mathematical concepts - fall through to Beams
+                    // Modes 25–48: engine_modules only (PR12 / #246). Exhaustiveness stubs.
                     VisualMode::Hypercube
                     | VisualMode::CalabiYau
                     | VisualMode::Quasicrystal
@@ -2802,7 +2091,9 @@ fn update_visuals(
                     | VisualMode::VectorSpaces
                     | VisualMode::Eigenvectors
                     | VisualMode::BooleanLattices
-                    | VisualMode::Forcing => {}
+                    | VisualMode::Forcing => {
+                        alpha = 0.0;
+                    }
                 }
 
                 hue += fraction * 90.0;

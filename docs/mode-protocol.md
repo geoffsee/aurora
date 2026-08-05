@@ -99,3 +99,7 @@ bun run modes:validate ./my-modes   # overlay root
 Live `ControlState` carries both `deckAMode`/`deckBMode` (legacy int) and
 `deckAPresetSlug`/`deckBPresetSlug`. See `data/README.md` § “Control bus: slugs vs
 legacy ints”. VST/MIDI only select packs that declare `legacyIndex`.
+
+## Engine-module ceiling (PR12 / #246)
+
+Modes with disposition `engine-module` (and field ports for mesh/fullscreen-primary until pack backends land) live in the Rust engine (`src/engine_modules/`). They are **not authorable without a rebuild**: novel layout math requires an engine PR. Catalog folders still exist for uniform UX (`data/decks/.../preset.json`), and packs may only compose already-shipped field primitives, mesh refs, and supported shaders.
