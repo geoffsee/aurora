@@ -72,6 +72,11 @@ import {
 } from './automation-bridge.ts';
 import { selectTempoSource } from './clock-arbiter.ts';
 import {
+  installAuroraLookArchive,
+  readLookArchiveFromRequest,
+  resolveLookImportDataDir,
+} from './look-import.ts';
+import {
   deriveBpmFromTimestamps,
   MIDI_CLOCK_TICK,
   MIDI_CLOCK_TIMEOUT_MS,
@@ -1622,6 +1627,60 @@ const visualServer = Bun.serve({
       const assetResponse = modeApi.handleAssetRequest(pathname);
       if (assetResponse) return assetResponse;
       return Response.json({ error: 'invalid mode asset path' }, { status: 400 });
+    }
+
+    // Import `.aurora-look` archive → dual-deck packs under AURORA_DATA_DIR.
+    if (request.method === 'POST' && pathname === '/api/looks/import') {
+      const dataDir = resolveLookImportDataDir();
+      if (!dataDir) {
+        return Response.json(
+          {
+            ok: false,
+            errors: [
+              {
+                path: 'AURORA_DATA_DIR',
+                message:
+                  'not set; look import writes only to the override data dir (never bundled data/)',
+              },
+            ],
+          },
+          { status: 503 },
+        );
+      }
+
+      const body = await readLookArchiveFromRequest(request, url);
+      if (!body.ok) {
+        return Response.json({ ok: false, errors: body.errors }, { status: body.status });
+      }
+
+      const result = installAuroraLookArchive(body.bytes, {
+        dataDir,
+        remapAuthoring: body.remapAuthoring,
+      });
+      if (!result.ok) {
+        return Response.json(result, { status: 400 });
+      }
+
+      const catalog = rescanModeCatalog();
+      console.log(
+        `[looks] imported slug=${result.slug} overwritten=${result.overwritten} dataDir=${dataDir}`,
+      );
+      return Response.json({
+        ok: true,
+        slug: result.slug,
+        label: result.label,
+        uiGroup: result.uiGroup,
+        decks: result.decks,
+        paths: result.paths,
+        overwritten: result.overwritten,
+        wgslFile: result.wgslFile,
+        wgslForm: result.wgslForm,
+        catalog: {
+          epoch: catalog.epoch,
+          contentHash: catalog.contentHash,
+          scannedAt: catalog.scannedAt,
+        },
+      });
     }
 
     const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);

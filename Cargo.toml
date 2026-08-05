@@ -4,7 +4,12 @@ version = "0.1.2"
 edition = "2024"
 
 [workspace]
-members = [".", "plugins/aurora-vst", "plugins/aurora-vst/xtask"]
+members = [
+  ".",
+  "plugins/aurora-vst",
+  "plugins/aurora-vst/xtask",
+  "lab/preset-studio",
+]
 resolver = "2"
 
 [dependencies]
