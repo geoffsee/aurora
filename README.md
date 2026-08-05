@@ -170,12 +170,31 @@ VST_CONTROL_RECV_PORT=12000 aurora
 
 The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, trails, depth, palette, ring opacity, and max brightness; toggle parameters for rings, strobe, strobe lockout, blackout, freeze, beat sync, bar sync, and demo mode; deck mode parameters for Beams/Tunnel/Burst/Mirror/Wash; and momentary parameters for flash, reset, and the cue presets.
 
+## Mode packs (filesystem catalog)
+
+Visualization packs live under `data/decks/` (bundled) with an optional
+`AURORA_DATA_DIR` overlay. Packs are **params + shaders + meshes** on registered
+field primitives — novel field math needs an engine PR. See:
+
+- [`data/README.md`](data/README.md) — layout, overlay, slug/atomic-replace rules, operator reload/fallback, static vs bridged
+- [`docs/mode-protocol.md`](docs/mode-protocol.md) — authoring vs wire vs engine version axes
+- [`docs/mode-primitives.md`](docs/mode-primitives.md) — permanent primitive IDs, param table, product ceiling
+
+Validate packs offline (no bridge / WASM):
+
+```bash
+bun run modes:validate              # scan ./data
+bun run modes:validate ./my-modes   # overlay root with decks/deck-a|deck-b
+```
+
 ## Layout
 
 - `src/main.rs` – Bevy app compiled to WebAssembly.
 - `bridge/index.ts` – Bun server hosting the projector page, the controls page, and the OSC/WebSocket bridge.
 - `web/index.html` / `web/styles.css` – projector output (port `8443` via Caddy).
 - `web/controls/` – controls app (port `8444` via Caddy).
+- `data/` – bundled deck preset catalog + authoring guide (`data/README.md`).
+- `docs/mode-protocol.md` / `docs/mode-primitives.md` – mode pack protocol and primitive ceiling.
 - `deploy/` – `Caddyfile` + `muxox.toml` for the container entrypoint.
 - `Dockerfile` – `ghcr.io/geoffsee/aurora` image (muxox + Caddy + Bun).
 - `plugins/aurora-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.

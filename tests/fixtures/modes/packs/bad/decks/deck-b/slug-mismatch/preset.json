@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "other-slug",
+  "slug": "other-slug",
+  "label": "Mismatch",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "beams",
+    "params": { "intensity": 1 }
+  }
+}

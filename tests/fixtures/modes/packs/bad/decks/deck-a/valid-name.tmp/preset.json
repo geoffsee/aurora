@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "valid-name",
+  "slug": "valid-name",
+  "label": "Should be skipped as .tmp",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "beams",
+    "params": { "intensity": 1 }
+  }
+}

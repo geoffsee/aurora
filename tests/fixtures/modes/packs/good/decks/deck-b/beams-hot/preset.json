@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "beams-hot",
+  "slug": "beams-hot",
+  "label": "Beams Hot",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "beams",
+    "params": { "intensity": 1 }
+  },
+  "legacyIndex": 0
+}
