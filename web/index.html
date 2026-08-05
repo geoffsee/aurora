@@ -90,6 +90,8 @@
         gridShapeMix: 0.5,
         deckAMode: 0,
         deckBMode: 1,
+        deckAPresetSlug: "beams",
+        deckBPresetSlug: "tunnel",
         rings: false,
         ringOpacity: 0.35,
         strobe: false,
@@ -376,8 +378,15 @@
         controlState.gridDiamond = next.gridDiamond === undefined ? controlState.gridDiamond : clamp01(next.gridDiamond);
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
-        controlState.deckAMode = clampInt(next.deckAMode, 0, 48, controlState.deckAMode);
-        controlState.deckBMode = clampInt(next.deckBMode, 0, 48, controlState.deckBMode);
+        // Allow -1 for non-legacy pack slugs (no legacyIndex); bridge resolves pairs.
+        controlState.deckAMode = clampInt(next.deckAMode, -1, 48, controlState.deckAMode);
+        controlState.deckBMode = clampInt(next.deckBMode, -1, 48, controlState.deckBMode);
+        if (typeof next.deckAPresetSlug === "string") {
+          controlState.deckAPresetSlug = next.deckAPresetSlug;
+        }
+        if (typeof next.deckBPresetSlug === "string") {
+          controlState.deckBPresetSlug = next.deckBPresetSlug;
+        }
         controlState.deckAGpuShader = clampInt(next.deckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckAGpuShader);
         controlState.deckBGpuShader = clampInt(next.deckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckBGpuShader);
         controlState.rings = next.rings !== false;
@@ -576,6 +585,8 @@
       window.__auroraControlGridShapeMix = () => controlState.gridShapeMix;
       window.__auroraControlDeckAMode = () => controlState.deckAMode;
       window.__auroraControlDeckBMode = () => controlState.deckBMode;
+      window.__auroraControlDeckAPresetSlug = () => controlState.deckAPresetSlug || "";
+      window.__auroraControlDeckBPresetSlug = () => controlState.deckBPresetSlug || "";
       window.__auroraControlRings = () => controlState.rings;
       window.__auroraControlRingOpacity = () => controlState.ringOpacity;
       window.__auroraControlStrobe = () => controlState.strobe;

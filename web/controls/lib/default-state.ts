@@ -27,6 +27,8 @@ export function defaultState(): ControlState {
     gridShapeMix: 0.5,
     deckAMode: 0,
     deckBMode: 1,
+    deckAPresetSlug: 'beams',
+    deckBPresetSlug: 'tunnel',
     rings: false,
     ringOpacity: 0.35,
     strobe: false,

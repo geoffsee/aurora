@@ -16,6 +16,14 @@ import {
   createWebSocketTransport,
 } from '../../../shared/bridge-transport.ts';
 import { DEMO_AUDIO_INTERVAL_MS, generateDemoAudioFrame } from '../../../shared/demo-audio.ts';
+import {
+  type CatalogLikeEntry,
+  type DeckCatalogs,
+  migrateDeckSlugsInState,
+} from '../../../shared/resolve-deck-selection.ts';
+
+/** Mirror of bridge/mode-api MODES_CATALOG_WS_ADDRESS (avoid importing bridge Node code). */
+const MODES_CATALOG_WS_ADDRESS = '/aurora/modes/catalog';
 import { webgpuSecureContextError } from '../../../shared/secure-context.ts';
 import { isStaticHosting } from '../../../shared/static-hosting.ts';
 import {
@@ -58,7 +66,12 @@ import {
   savePresetsToStorage,
 } from '../lib/presets.ts';
 import { bridgeWebSocketUrl } from '../lib/projector-url.ts';
-import { clearSessionState, loadSessionState, saveSessionState } from '../lib/session-state.ts';
+import {
+  clearSessionState,
+  loadSessionState,
+  resolveSessionDeckSlugs,
+  saveSessionState,
+} from '../lib/session-state.ts';
 import {
   findMidiCcTrigger,
   findMidiNoteTrigger,
@@ -193,6 +206,8 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const micStartingRef = useRef(false);
   const midiAccessRef = useRef<MIDIAccess | null>(null);
+  const modeCatalogsRef = useRef<DeckCatalogs | null>(null);
+  const deckSlugMigrationDoneRef = useRef(false);
 
   stateRef.current = state;
   oscRef.current = osc;
@@ -223,6 +238,34 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const applyModeCatalog = useCallback(
+    (catalogs: DeckCatalogs) => {
+      modeCatalogsRef.current = catalogs;
+      // One-shot session/show-preset migration: int-only → slug when possible.
+      if (deckSlugMigrationDoneRef.current) return;
+      deckSlugMigrationDoneRef.current = true;
+      const { patch, warnings } = resolveSessionDeckSlugs(stateRef.current, catalogs);
+      for (const warning of warnings) {
+        addBanner(warning, 'warn');
+      }
+      const cur = stateRef.current;
+      if (
+        patch.deckAMode !== cur.deckAMode ||
+        patch.deckBMode !== cur.deckBMode ||
+        patch.deckAPresetSlug !== cur.deckAPresetSlug ||
+        patch.deckBPresetSlug !== cur.deckBPresetSlug
+      ) {
+        setState((prev) => {
+          const next = { ...prev, ...patch };
+          stateRef.current = next;
+          return next;
+        });
+        queueMicrotask(() => publish({ record: false }));
+      }
+    },
+    [addBanner, publish],
+  );
+
   const updateState = useCallback(
     (
       patch: Partial<ControlState> | ((prev: ControlState) => Partial<ControlState>),
@@ -230,9 +273,32 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     ) => {
       setState((prev) => {
         const delta = typeof patch === 'function' ? patch(prev) : patch;
-        const next = { ...prev, ...delta };
+        let next = { ...prev, ...delta };
         if (delta.trackMapping) {
           next.trackMapping = { ...prev.trackMapping, ...delta.trackMapping };
+        }
+        // When the catalog is known, keep slug/mode pairs consistent on local edits.
+        const catalogs = modeCatalogsRef.current;
+        if (
+          catalogs &&
+          (delta.deckAMode !== undefined ||
+            delta.deckBMode !== undefined ||
+            delta.deckAPresetSlug !== undefined ||
+            delta.deckBPresetSlug !== undefined)
+        ) {
+          const resolved = migrateDeckSlugsInState(next, catalogs, {
+            deckAMode: prev.deckAMode,
+            deckBMode: prev.deckBMode,
+            deckAPresetSlug: prev.deckAPresetSlug ?? '',
+            deckBPresetSlug: prev.deckBPresetSlug ?? '',
+          });
+          next = {
+            ...next,
+            deckAMode: resolved.deckAMode,
+            deckBMode: resolved.deckBMode,
+            deckAPresetSlug: resolved.deckAPresetSlug,
+            deckBPresetSlug: resolved.deckBPresetSlug,
+          };
         }
         if (options?.bumpCue) {
           next.cueVersion = prev.cueVersion + 1;
@@ -345,7 +411,27 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       const preset = normalizePreset(presets[`slot-${n}`]);
       if (!preset) return;
       const from = cloneState(stateRef.current);
-      const to = preparePresetTarget(preset.state);
+      let to = preparePresetTarget(preset.state);
+      // Int-only show presets: resolve slugs when catalog is available; banner on fail.
+      const catalogs = modeCatalogsRef.current;
+      if (catalogs) {
+        const resolved = migrateDeckSlugsInState(to, catalogs, {
+          deckAMode: from.deckAMode,
+          deckBMode: from.deckBMode,
+          deckAPresetSlug: from.deckAPresetSlug ?? '',
+          deckBPresetSlug: from.deckBPresetSlug ?? '',
+        });
+        for (const warning of resolved.warnings) {
+          addBanner(warning, 'warn');
+        }
+        to = {
+          ...to,
+          deckAMode: resolved.deckAMode,
+          deckBMode: resolved.deckBMode,
+          deckAPresetSlug: resolved.deckAPresetSlug,
+          deckBPresetSlug: resolved.deckBPresetSlug,
+        };
+      }
       const curves = normalizePresetCurves(preset.curves);
       setPendingCurves(curves);
       setActivePresetIndex(n);
@@ -393,7 +479,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
         tick();
       }
     },
-    [publish, refreshPresetGrid, transitionDurationMs],
+    [addBanner, publish, refreshPresetGrid, transitionDurationMs],
   );
 
   const savePresetToSlot = useCallback(
@@ -796,6 +882,18 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       if (frame?.address === '/aurora/control/state' && args[0] && typeof args[0] === 'object') {
         syncFromRemote(args[0] as Partial<ControlState>);
       }
+      if (frame?.address === MODES_CATALOG_WS_ADDRESS && args[0] && typeof args[0] === 'object') {
+        const snap = args[0] as {
+          decks?: { 'deck-a'?: CatalogLikeEntry[]; 'deck-b'?: CatalogLikeEntry[] };
+        };
+        const decks = snap.decks;
+        if (decks && Array.isArray(decks['deck-a']) && Array.isArray(decks['deck-b'])) {
+          applyModeCatalog({
+            'deck-a': decks['deck-a'],
+            'deck-b': decks['deck-b'],
+          });
+        }
+      }
       if (
         frame?.address === '/aurora/server/diagnostics' &&
         args[0] &&
@@ -899,6 +997,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     },
     [
       addBanner,
+      applyModeCatalog,
       executeTriggerAction,
       flushPendingCue,
       pendingCurves,

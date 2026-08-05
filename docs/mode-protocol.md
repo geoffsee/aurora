@@ -74,3 +74,10 @@ bun run modes:validate ./my-modes   # overlay root
 - `scripts/modes-validate.ts` — offline pack scan CLI (`bun run modes:validate`)
 - `docs/mode-primitives.md` — primitive table + ceiling
 - `data/README.md` — data-dir operator/author guide
+- `shared/resolve-deck-selection.ts` — control-bus slug ↔ legacy int resolution (#238)
+
+## Control bus (PR4 / #238)
+
+Live `ControlState` carries both `deckAMode`/`deckBMode` (legacy int) and
+`deckAPresetSlug`/`deckBPresetSlug`. See `data/README.md` § “Control bus: slugs vs
+legacy ints”. VST/MIDI only select packs that declare `legacyIndex`.
