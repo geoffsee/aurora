@@ -59,6 +59,8 @@ export function Panel({
   return (
     <Box
       gridArea={area}
+      minW={0}
+      maxW="100%"
       borderWidth="1px"
       borderColor="whiteAlpha.200"
       borderRadius="lg"

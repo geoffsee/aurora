@@ -146,5 +146,26 @@ export const migrateControlState = (state: unknown): unknown => {
         typeof s.deckBReloadActiveVersion === 'number' ? s.deckBReloadActiveVersion : 0,
     });
   }
+  // v15 → v16: per-deck performance axes (launchpad knobs). Seed both decks from
+  // the global intensity/depth/feedback/speed so behavior matches pre-v16 until
+  // the operator diverges a deck.
+  if (s.schemaVersion === 15) {
+    const intensity = typeof s.intensity === 'number' ? s.intensity : 0.82;
+    const depth = typeof s.depth === 'number' ? s.depth : 0;
+    const feedback = typeof s.feedback === 'number' ? s.feedback : 0.22;
+    const speed = typeof s.speed === 'number' ? s.speed : 1;
+    return migrateControlState({
+      ...s,
+      schemaVersion: 16,
+      deckAIntensity: typeof s.deckAIntensity === 'number' ? s.deckAIntensity : intensity,
+      deckADepth: typeof s.deckADepth === 'number' ? s.deckADepth : depth,
+      deckAFeedback: typeof s.deckAFeedback === 'number' ? s.deckAFeedback : feedback,
+      deckASpeed: typeof s.deckASpeed === 'number' ? s.deckASpeed : speed,
+      deckBIntensity: typeof s.deckBIntensity === 'number' ? s.deckBIntensity : intensity,
+      deckBDepth: typeof s.deckBDepth === 'number' ? s.deckBDepth : depth,
+      deckBFeedback: typeof s.deckBFeedback === 'number' ? s.deckBFeedback : feedback,
+      deckBSpeed: typeof s.deckBSpeed === 'number' ? s.deckBSpeed : speed,
+    });
+  }
   return state;
 };

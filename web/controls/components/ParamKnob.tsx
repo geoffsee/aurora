@@ -45,16 +45,28 @@ export const ParamKnob = memo(function ParamKnob({
   accent?: string;
 }) {
   const [localValue, setLocalValue] = useState(value);
+  /** React state so mid-drag re-renders ignore external `value` clobber. */
+  const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ startY: number; startValue: number } | null>(null);
-  const dragging = dragRef.current !== null;
+  const lastEmittedRef = useRef(value);
   const range = Math.max(max - min, Number.EPSILON);
   const percent = Math.max(0, Math.min(1, (localValue - min) / range));
   const pointerAngle = START_ANGLE + percent * SWEEP_ANGLE;
   const progressLength = ARC_LENGTH * percent;
 
   useEffect(() => {
-    if (!dragging && Math.abs(value - localValue) > 1e-6) setLocalValue(value);
+    // While dragging, localValue is authoritative — bridge/WS echo must not snap the needle.
+    if (!dragging && Math.abs(value - localValue) > 1e-6) {
+      setLocalValue(value);
+      lastEmittedRef.current = value;
+    }
   }, [value, localValue, dragging]);
+
+  const emitIfChanged = (next: number) => {
+    if (Math.abs(next - lastEmittedRef.current) < 1e-9) return;
+    lastEmittedRef.current = next;
+    onChange(next);
+  };
 
   const progressStroke = accent && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#998862';
 
@@ -92,19 +104,21 @@ export const ParamKnob = memo(function ParamKnob({
           event.preventDefault();
           event.currentTarget.setPointerCapture(event.pointerId);
           dragRef.current = { startY: event.clientY, startValue: localValue };
+          setDragging(true);
         }}
         onPointerMove={(event) => {
           const drag = dragRef.current;
           if (!drag) return;
           const next = valueFromDrag(drag.startValue, event.clientY - drag.startY, min, max, step);
           setLocalValue(next);
+          // Live commit so the show tracks the drag (not only on release).
+          emitIfChanged(next);
         }}
         onPointerUp={(event) => {
           const drag = dragRef.current;
           dragRef.current = null;
+          setDragging(false);
           event.currentTarget.releasePointerCapture(event.pointerId);
-          // Commit the final value only on release — avoids bridge round-trip
-          // overwriting the local position mid-drag.
           if (drag) {
             const finalValue = valueFromDrag(
               drag.startValue,
@@ -113,11 +127,13 @@ export const ParamKnob = memo(function ParamKnob({
               max,
               step,
             );
-            onChange(finalValue);
+            setLocalValue(finalValue);
+            emitIfChanged(finalValue);
           }
         }}
         onPointerCancel={() => {
           dragRef.current = null;
+          setDragging(false);
         }}
         onKeyDown={(event) => {
           if (
@@ -135,7 +151,7 @@ export const ParamKnob = memo(function ParamKnob({
                 ? max
                 : valueFromDrag(localValue, event.key === 'ArrowUp' ? -1 : 1, min, max, step, 1);
           setLocalValue(next);
-          onChange(next);
+          emitIfChanged(next);
         }}
       >
         <svg
@@ -207,7 +223,7 @@ export const ParamKnob = memo(function ParamKnob({
           onChange={(event) => {
             const next = Number(event.target.value);
             setLocalValue(next);
-            onChange(next);
+            emitIfChanged(next);
           }}
           style={{
             position: 'absolute',

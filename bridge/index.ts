@@ -117,6 +117,15 @@ type ControlState = {
   intensity: number;
   feedback: number;
   depth: number;
+  /** Per-deck instrument axes (launchpad knobs). */
+  deckAIntensity: number;
+  deckADepth: number;
+  deckAFeedback: number;
+  deckASpeed: number;
+  deckBIntensity: number;
+  deckBDepth: number;
+  deckBFeedback: number;
+  deckBSpeed: number;
   palette: number;
   paletteR: number;
   paletteG: number;
@@ -390,6 +399,14 @@ const defaultControlState = (): ControlState => ({
   intensity: 0.82,
   feedback: 0.22,
   depth: 0,
+  deckAIntensity: 0.82,
+  deckADepth: 0,
+  deckAFeedback: 0.22,
+  deckASpeed: 1,
+  deckBIntensity: 0.82,
+  deckBDepth: 0,
+  deckBFeedback: 0.22,
+  deckBSpeed: 1,
   palette: 0.38,
   paletteR: DEFAULT_PALETTE_RGB.r,
   paletteG: DEFAULT_PALETTE_RGB.g,
@@ -575,6 +592,14 @@ const coerceControlState = (state: unknown): ControlState => {
     intensity: clamp(source.intensity, 0.05, 1.5, defaults.intensity),
     feedback: clamp(source.feedback, 0, 1, defaults.feedback),
     depth: clamp(source.depth, 0, 1, defaults.depth),
+    deckAIntensity: clamp(source.deckAIntensity, 0.05, 1.5, defaults.deckAIntensity),
+    deckADepth: clamp(source.deckADepth, 0, 1, defaults.deckADepth),
+    deckAFeedback: clamp(source.deckAFeedback, 0, 1, defaults.deckAFeedback),
+    deckASpeed: clamp(source.deckASpeed, 0.1, 3, defaults.deckASpeed),
+    deckBIntensity: clamp(source.deckBIntensity, 0.05, 1.5, defaults.deckBIntensity),
+    deckBDepth: clamp(source.deckBDepth, 0, 1, defaults.deckBDepth),
+    deckBFeedback: clamp(source.deckBFeedback, 0, 1, defaults.deckBFeedback),
+    deckBSpeed: clamp(source.deckBSpeed, 0.1, 3, defaults.deckBSpeed),
     palette: paletteColor.palette,
     paletteR: paletteColor.r,
     paletteG: paletteColor.g,
@@ -1115,16 +1140,16 @@ const applyVstControlMessage = (msg: OscMsg) => {
         mergeControlState({ bpm: value });
         break;
       case 'speed':
-        mergeControlState({ speed: value });
+        mergeControlState({ speed: value, deckASpeed: value, deckBSpeed: value });
         break;
       case 'intensity':
-        mergeControlState({ intensity: value });
+        mergeControlState({ intensity: value, deckAIntensity: value, deckBIntensity: value });
         break;
       case 'feedback':
-        mergeControlState({ feedback: value });
+        mergeControlState({ feedback: value, deckAFeedback: value, deckBFeedback: value });
         break;
       case 'depth':
-        mergeControlState({ depth: value });
+        mergeControlState({ depth: value, deckADepth: value, deckBDepth: value });
         break;
       case 'hue':
       case 'palette':

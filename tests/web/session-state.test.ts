@@ -143,6 +143,43 @@ test('v13 int-only session migrates to v14 with empty slugs', () => {
   expect(loaded.deckBPresetSlug).toBe('');
 });
 
+test('v15 session seeds per-deck axes from globals on load', () => {
+  localStorage.setItem(
+    SESSION_STATE_KEY,
+    JSON.stringify({
+      schemaVersion: 15,
+      intensity: 1.05,
+      depth: 0.25,
+      feedback: 0.4,
+      speed: 1.4,
+      crossfade: 0.2,
+    }),
+  );
+  const loaded = loadSessionState();
+  expect(loaded.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(loaded.deckAIntensity).toBe(1.05);
+  expect(loaded.deckBIntensity).toBe(1.05);
+  expect(loaded.deckADepth).toBe(0.25);
+  expect(loaded.deckBDepth).toBe(0.25);
+  expect(loaded.deckAFeedback).toBe(0.4);
+  expect(loaded.deckBFeedback).toBe(0.4);
+  expect(loaded.deckASpeed).toBe(1.4);
+  expect(loaded.deckBSpeed).toBe(1.4);
+});
+
+test('defaultState includes independent deck axes at schema version', () => {
+  const state = defaultState();
+  expect(state.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(state.deckAIntensity).toBe(state.intensity);
+  expect(state.deckBIntensity).toBe(state.intensity);
+  expect(state.deckADepth).toBe(state.depth);
+  expect(state.deckBDepth).toBe(state.depth);
+  expect(state.deckAFeedback).toBe(state.feedback);
+  expect(state.deckBFeedback).toBe(state.feedback);
+  expect(state.deckASpeed).toBe(state.speed);
+  expect(state.deckBSpeed).toBe(state.speed);
+});
+
 test('resolveSessionDeckSlugs maps int-only state when catalog has legacyIndex', () => {
   const state = {
     ...defaultState(),

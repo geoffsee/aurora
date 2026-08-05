@@ -44,7 +44,8 @@ export const VST_OSC_CONTRACT = contract;
 // v13: added independent CPU/GPU enable switches for Deck A and Deck B
 // v14: added deckAPresetSlug / deckBPresetSlug (pack identity alongside legacy int modes)
 // v15: added deckAReloadActiveVersion / deckBReloadActiveVersion (explicit re-fetch compiled)
-export const CONTROL_STATE_SCHEMA_VERSION = 15;
+// v16: per-deck intensity/depth/feedback/speed for launchpad instrument knobs
+export const CONTROL_STATE_SCHEMA_VERSION = 16;
 
 export type AudioCurveShape = 'linear' | 'exponential' | 'logarithmic';
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [

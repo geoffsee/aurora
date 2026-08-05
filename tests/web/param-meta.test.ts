@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
   buildParamPatch,
+  DECK_A_KNOB_PARAMS,
+  DECK_B_KNOB_PARAMS,
   FIGURE_KNOB_PARAMS,
   isMappableParam,
   KNOB_STRIP_PARAMS,
@@ -26,6 +28,70 @@ describe('buildParamPatch palette', () => {
     expect(patch.paletteB).toBe(0.2);
     expect(typeof patch.palette).toBe('number');
   });
+
+  test('global intensity/depth/feedback/speed also seed both decks', () => {
+    expect(buildParamPatch('intensity', 1.1)).toEqual({
+      intensity: 1.1,
+      deckAIntensity: 1.1,
+      deckBIntensity: 1.1,
+    });
+    expect(buildParamPatch('depth', 0.4)).toMatchObject({
+      depth: 0.4,
+      deckADepth: 0.4,
+      deckBDepth: 0.4,
+    });
+    expect(buildParamPatch('feedback', 0.5)).toMatchObject({
+      feedback: 0.5,
+      deckAFeedback: 0.5,
+      deckBFeedback: 0.5,
+    });
+    expect(buildParamPatch('speed', 1.5)).toMatchObject({
+      speed: 1.5,
+      deckASpeed: 1.5,
+      deckBSpeed: 1.5,
+    });
+  });
+
+  test('per-deck knobs only write their own field', () => {
+    expect(buildParamPatch('deckAIntensity', 0.9)).toEqual({ deckAIntensity: 0.9 });
+    expect(buildParamPatch('deckBSpeed', 2)).toEqual({ deckBSpeed: 2 });
+    expect(buildParamPatch('deckADepth', 0.3)).toEqual({ deckADepth: 0.3 });
+    expect(buildParamPatch('deckBFeedback', 0.6)).toEqual({ deckBFeedback: 0.6 });
+  });
+});
+
+describe('deck launchpad knobs', () => {
+  test('each deck has intensity, depth, trails, and speed', () => {
+    expect(DECK_A_KNOB_PARAMS).toEqual([
+      'deckAIntensity',
+      'deckADepth',
+      'deckAFeedback',
+      'deckASpeed',
+    ]);
+    expect(DECK_B_KNOB_PARAMS).toEqual([
+      'deckBIntensity',
+      'deckBDepth',
+      'deckBFeedback',
+      'deckBSpeed',
+    ]);
+  });
+
+  test('deck param ranges match the corresponding global masters', () => {
+    for (const [globalKey, deckKey] of [
+      ['intensity', 'deckAIntensity'],
+      ['depth', 'deckADepth'],
+      ['feedback', 'deckAFeedback'],
+      ['speed', 'deckASpeed'],
+      ['intensity', 'deckBIntensity'],
+      ['depth', 'deckBDepth'],
+      ['feedback', 'deckBFeedback'],
+      ['speed', 'deckBSpeed'],
+    ] as const) {
+      expect(PARAM_META[deckKey].min).toBe(PARAM_META[globalKey].min);
+      expect(PARAM_META[deckKey].max).toBe(PARAM_META[globalKey].max);
+      expect(PARAM_META[deckKey].step).toBe(PARAM_META[globalKey].step);
+    }
+  });
 });
 
 describe('knob strip coverage', () => {
@@ -38,17 +104,29 @@ describe('knob strip coverage', () => {
       expect(KNOB_STRIP_PARAMS).not.toContain(key);
       expect(MAPPABLE_PARAMS).toContain(key);
     }
-    // Everything mappable is either on the strip or figure-only.
+    for (const key of DECK_A_KNOB_PARAMS) {
+      expect(KNOB_STRIP_PARAMS).not.toContain(key);
+      expect(MAPPABLE_PARAMS).toContain(key);
+    }
+    for (const key of DECK_B_KNOB_PARAMS) {
+      expect(KNOB_STRIP_PARAMS).not.toContain(key);
+      expect(MAPPABLE_PARAMS).toContain(key);
+    }
+    // Everything mappable is strip, figure-only, or deck-launchpad.
     for (const key of MAPPABLE_PARAMS) {
       const onStrip = (KNOB_STRIP_PARAMS as readonly string[]).includes(key);
       const figureOnly = (FIGURE_KNOB_PARAMS as readonly string[]).includes(key);
-      expect(onStrip || figureOnly).toBe(true);
+      const deckOnly =
+        (DECK_A_KNOB_PARAMS as readonly string[]).includes(key) ||
+        (DECK_B_KNOB_PARAMS as readonly string[]).includes(key);
+      expect(onStrip || figureOnly || deckOnly).toBe(true);
     }
   });
 
   test('isMappableParam guards unknown names', () => {
     expect(isMappableParam('palette')).toBe(true);
     expect(isMappableParam('morph')).toBe(true);
+    expect(isMappableParam('deckAIntensity')).toBe(true);
     expect(isMappableParam('not-a-param')).toBe(false);
   });
 });
