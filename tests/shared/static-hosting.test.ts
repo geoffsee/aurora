@@ -4,6 +4,8 @@ import {
 	geoffseePagesProjectorUrl,
 	isGeoffseeGithubPages,
 	isStaticHosting,
+	staticModesApiBase,
+	staticSitePathPrefix,
 } from "../../shared/static-hosting.ts";
 
 describe("isStaticHosting", () => {
@@ -65,5 +67,25 @@ describe("geoffseePagesNav urls", () => {
 		expect(geoffseePagesProjectorUrl({ href: "https://geoffsee.github.io/aurora/controls/" })).toBe(
 			"https://geoffsee.github.io/aurora/",
 		);
+	});
+});
+
+describe("staticSitePathPrefix / staticModesApiBase", () => {
+	test("strips /controls so projector and controls share the Pages root", () => {
+		expect(staticSitePathPrefix({ pathname: "/aurora/controls/" })).toBe("/aurora");
+		expect(staticSitePathPrefix({ pathname: "/aurora/" })).toBe("/aurora");
+		expect(staticSitePathPrefix({ pathname: "/aurora/index.html" })).toBe("/aurora");
+		expect(staticSitePathPrefix({ pathname: "/" })).toBe("");
+	});
+
+	test("builds catalog base under project Pages path", () => {
+		expect(
+			staticModesApiBase({
+				protocol: "https:",
+				hostname: "geoffsee.github.io",
+				port: "",
+				pathname: "/aurora/controls/",
+			}),
+		).toBe("https://geoffsee.github.io/aurora");
 	});
 });
