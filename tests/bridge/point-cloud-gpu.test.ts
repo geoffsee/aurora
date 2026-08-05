@@ -36,8 +36,12 @@ describe('point-cloud GPU pack compile', () => {
       const fs = compiled.wire.layers.find((l) => l.kind === 'fullscreen');
       expect(fs?.ref).toBe('point_cloud.wgsl');
       expect(typeof fs?.wgsl).toBe('string');
-      expect(fs!.wgsl!.length).toBeGreaterThan(200);
-      expect(fs!.wgsl).toMatch(/@fragment/);
+      const wgsl = fs?.wgsl ?? '';
+      expect(wgsl.length).toBeGreaterThan(200);
+      expect(wgsl).toMatch(/@fragment/);
+      // Operator animation bus for the cloud.
+      expect(wgsl).toMatch(/pack_drive/);
+      expect(wgsl).toMatch(/drive_intensity|pack_drive\.x/);
     }
   });
 });

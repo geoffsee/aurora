@@ -3,7 +3,7 @@
   "id": "point-cloud",
   "slug": "point-cloud",
   "label": "Point Cloud",
-  "character": "GPU star-field — dense hashed point shells with bass breath and high-band sparkle. Fullscreen fragment particles, not CPU sprites.",
+  "character": "GPU star-field point cloud. Animate with: Speed=spin, Intensity=density, Trails=twinkle sustain, 3D Lines=scatter/depth, Color/GPU sat-bright=palette, Max Bright=gain.",
   "uiGroup": "field-motion",
   "disposition": "fullscreen-primary",
   "layers": [
@@ -13,5 +13,7 @@
     }
   ],
   "suppressLegacyField": true,
-  "engineMinCapabilities": ["dual-fullscreen"]
+  "engineMinCapabilities": [
+    "dual-fullscreen"
+  ]
 }
