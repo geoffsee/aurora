@@ -32,6 +32,7 @@ export const ParamKnob = memo(function ParamKnob({
   step,
   onChange,
   format,
+  accent,
 }: {
   label: string;
   value: number;
@@ -40,6 +41,8 @@ export const ParamKnob = memo(function ParamKnob({
   step: number;
   onChange: (value: number) => void;
   format?: (value: number) => string;
+  /** Optional progress-arc color (e.g. live palette hex for Color knobs). */
+  accent?: string;
 }) {
   const [localValue, setLocalValue] = useState(value);
   const dragRef = useRef<{ startY: number; startValue: number } | null>(null);
@@ -53,8 +56,10 @@ export const ParamKnob = memo(function ParamKnob({
     if (!dragging && Math.abs(value - localValue) > 1e-6) setLocalValue(value);
   }, [value, localValue, dragging]);
 
+  const progressStroke = accent && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#998862';
+
   return (
-    <Box minW="82px" textAlign="center">
+    <Box minW="82px" flex="0 0 auto" textAlign="center">
       <Text
         fontSize="xs"
         fontWeight="600"
@@ -101,7 +106,13 @@ export const ParamKnob = memo(function ParamKnob({
           // Commit the final value only on release — avoids bridge round-trip
           // overwriting the local position mid-drag.
           if (drag) {
-            const finalValue = valueFromDrag(drag.startValue, event.clientY - drag.startY, min, max, step);
+            const finalValue = valueFromDrag(
+              drag.startValue,
+              event.clientY - drag.startY,
+              min,
+              max,
+              step,
+            );
             onChange(finalValue);
           }
         }}
@@ -150,19 +161,20 @@ export const ParamKnob = memo(function ParamKnob({
             cy={CENTER}
             r={RADIUS}
             fill="none"
-            stroke="#998862"
+            stroke={progressStroke}
             strokeWidth="7"
             strokeLinecap="butt"
             strokeDasharray={`${progressLength} ${CIRCUMFERENCE}`}
             transform={`rotate(${START_ANGLE} ${CENTER} ${CENTER})`}
           />
           {Array.from({ length: 5 }, (_, index) => {
-            const angle = ((START_ANGLE + (index / 4) * SWEEP_ANGLE) * Math.PI) / 180;
+            const deg = START_ANGLE + (index / 4) * SWEEP_ANGLE;
+            const angle = (deg * Math.PI) / 180;
             const outer = RADIUS + 7;
             const inner = RADIUS + 3;
             return (
               <line
-                key={index}
+                key={`tick-${deg}`}
                 x1={CENTER + Math.cos(angle) * inner}
                 y1={CENTER + Math.sin(angle) * inner}
                 x2={CENTER + Math.cos(angle) * outer}

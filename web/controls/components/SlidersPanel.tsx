@@ -3,18 +3,42 @@ import { useCallback, useMemo } from 'react';
 import { useControls } from '../context/ControlsContext.tsx';
 import { deckGpuShaderPatch } from '../lib/deck-gpu-shader.ts';
 import { deckGpuShaderModePatch, deckVisibilityPatch } from '../lib/deck-mode.ts';
+import { rgbToHex } from '../lib/palette.ts';
+import {
+  buildParamPatch,
+  KNOB_STRIP_PARAMS,
+  type MappableParam,
+  PARAM_META,
+} from '../lib/param-meta.ts';
 import { DeckModeLaunchpad } from './DeckModeLaunchpad.tsx';
 import { ParamKnob } from './ParamKnob.tsx';
 import { ShaderLaunchpad } from './ShaderLaunchpad.tsx';
 import { Panel } from './ui.tsx';
 
+function numericStateValue(state: Record<string, unknown>, key: MappableParam): number {
+  const v = state[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
 export function SlidersPanel() {
   const { state, updateState, modeMenu, selectDeckPreset, reloadActiveDeck, reloadBusy } =
     useControls();
 
-  const fmt1 = useCallback((v: number) => v.toFixed(1), []);
   const fmt2 = useCallback((v: number) => v.toFixed(2), []);
   const fmtPct = useCallback((v: number) => `${Math.round(v * 100)}%`, []);
+
+  const paletteHex = useMemo(
+    () => rgbToHex(state.paletteR, state.paletteG, state.paletteB),
+    [state.paletteR, state.paletteG, state.paletteB],
+  );
+
+  const onKnobChange = useCallback(
+    (key: MappableParam, value: number) => {
+      const meta = PARAM_META[key];
+      updateState(buildParamPatch(key, value, state), meta.bumpCue ? { bumpCue: true } : undefined);
+    },
+    [state, updateState],
+  );
 
   const figureKnobs = useMemo(
     () => (
@@ -31,7 +55,7 @@ export function SlidersPanel() {
         <ParamKnob
           label="Spin"
           value={state.figureSpin}
-          min={-2}
+          min={0}
           max={2}
           step={0.01}
           format={fmt2}
@@ -70,134 +94,41 @@ export function SlidersPanel() {
 
   return (
     <Box gridArea="pads">
-      <SimpleGrid columns={{ base: 4, sm: 6, lg: 14 }} gap={{ base: 2, md: 3 }} mb={4}>
-        <ParamKnob
-          label="BPM"
-          value={state.bpm}
-          min={60}
-          max={190}
-          step={0.1}
-          format={fmt1}
-          onChange={(bpm) => updateState({ bpm })}
-        />
-        <ParamKnob
-          label="Speed"
-          value={state.speed}
-          min={0.1}
-          max={3}
-          step={0.01}
-          format={fmt2}
-          onChange={(speed) => updateState({ speed })}
-        />
-        <ParamKnob
-          label="Intensity"
-          value={state.intensity}
-          min={0.05}
-          max={1.5}
-          step={0.01}
-          format={fmt2}
-          onChange={(intensity) => updateState({ intensity })}
-        />
-        <ParamKnob
-          label="Trails"
-          value={state.feedback}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmt2}
-          onChange={(feedback) => updateState({ feedback })}
-        />
-        <ParamKnob
-          label="3D Lines"
-          value={state.depth}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmt2}
-          onChange={(depth) => updateState({ depth })}
-        />
-        <ParamKnob
-          label="Ring Opacity"
-          value={state.ringOpacity}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(ringOpacity) => updateState({ ringOpacity })}
-        />
-        <ParamKnob
-          label="Color"
-          value={state.palette}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmt2}
-          onChange={(palette) => updateState({ palette })}
-        />
-        <ParamKnob
-          label="Grid Density"
-          value={state.gridDensity}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(gridDensity) => updateState({ gridDensity })}
-        />
-        <ParamKnob
-          label="Grid Diamond"
-          value={state.gridDiamond}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(gridDiamond) => updateState({ gridDiamond })}
-        />
-        <ParamKnob
-          label="Grid Lines"
-          value={state.gridLineWidth}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(gridLineWidth) => updateState({ gridLineWidth })}
-        />
-        <ParamKnob
-          label="Grid Shape"
-          value={state.gridShapeMix}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(gridShapeMix) => updateState({ gridShapeMix })}
-        />
-        <ParamKnob
-          label="GPU Saturation"
-          value={state.paletteSaturation}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(paletteSaturation) => updateState({ paletteSaturation })}
-        />
-        <ParamKnob
-          label="GPU Brightness"
-          value={state.paletteBrightness}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(paletteBrightness) => updateState({ paletteBrightness })}
-        />
-        <ParamKnob
-          label="Max Brightness"
-          value={state.maxBrightness}
-          min={0}
-          max={1}
-          step={0.01}
-          format={fmtPct}
-          onChange={(maxBrightness) => updateState({ maxBrightness })}
-        />
-      </SimpleGrid>
+      <Box
+        mb={4}
+        overflowX="auto"
+        overflowY="hidden"
+        pb={2}
+        css={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(153,136,98,0.55) transparent',
+          WebkitOverflowScrolling: 'touch',
+        }}
+        aria-label="Parameter knobs"
+      >
+        <Flex gap={{ base: 2, md: 3 }} minW="min-content" align="flex-start" pr={2}>
+          {KNOB_STRIP_PARAMS.map((key) => {
+            const meta = PARAM_META[key];
+            const accent =
+              key === 'palette' || key === 'paletteR' || key === 'paletteG' || key === 'paletteB'
+                ? paletteHex
+                : undefined;
+            return (
+              <ParamKnob
+                key={key}
+                label={meta.knobLabel ?? meta.label}
+                value={numericStateValue(state as unknown as Record<string, unknown>, key)}
+                min={meta.min}
+                max={meta.max}
+                step={meta.step}
+                format={meta.format}
+                accent={accent}
+                onChange={(v) => onKnobChange(key, v)}
+              />
+            );
+          })}
+        </Flex>
+      </Box>
       <Grid
         templateColumns={{ base: '1fr', md: 'repeat(2, minmax(0, 1fr))' }}
         gap={3}
