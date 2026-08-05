@@ -24,6 +24,7 @@ import {
 
 /** Mirror of bridge/mode-api MODES_CATALOG_WS_ADDRESS (avoid importing bridge Node code). */
 const MODES_CATALOG_WS_ADDRESS = '/aurora/modes/catalog';
+
 import { webgpuSecureContextError } from '../../../shared/secure-context.ts';
 import { isStaticHosting } from '../../../shared/static-hosting.ts';
 import {

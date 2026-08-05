@@ -101,8 +101,7 @@ export function resolveDeckSelection(
   const rawSlug = patch[slugKey];
   const hasSlug = isNonEmptySlug(rawSlug);
   const rawMode = patch[modeKey];
-  const hasMode =
-    rawMode !== undefined && rawMode !== null && Number.isFinite(Number(rawMode));
+  const hasMode = rawMode !== undefined && rawMode !== null && Number.isFinite(Number(rawMode));
 
   // Slug wins when non-empty (including when both slug and int are present).
   if (hasSlug) {
@@ -203,12 +202,7 @@ export function resolveDeckSelectionFromState(
   previous: PreviousDeckSelection,
   catalog: readonly CatalogLikeEntry[],
 ): ResolvedDeck {
-  return resolveDeckSelection(
-    deck,
-    effectiveDeckPatch(deck, source, previous),
-    previous,
-    catalog,
-  );
+  return resolveDeckSelection(deck, effectiveDeckPatch(deck, source, previous), previous, catalog);
 }
 
 export type DeckSlugFields = {
@@ -227,18 +221,8 @@ export function resolveBothDeckSelections(
   previous: { deckA: PreviousDeckSelection; deckB: PreviousDeckSelection },
   catalogs: DeckCatalogs,
 ): DeckSlugFields & { warnings: string[] } {
-  const a = resolveDeckSelectionFromState(
-    'deck-a',
-    source,
-    previous.deckA,
-    catalogs['deck-a'],
-  );
-  const b = resolveDeckSelectionFromState(
-    'deck-b',
-    source,
-    previous.deckB,
-    catalogs['deck-b'],
-  );
+  const a = resolveDeckSelectionFromState('deck-a', source, previous.deckA, catalogs['deck-a']);
+  const b = resolveDeckSelectionFromState('deck-b', source, previous.deckB, catalogs['deck-b']);
   const warnings: string[] = [];
   if (a.warning) warnings.push(a.warning);
   if (b.warning) warnings.push(b.warning);
