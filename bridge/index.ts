@@ -133,6 +133,10 @@ type ControlState = {
   deckAPresetSlug: string;
   /** Pack slug for deck B (authoritative with deckBMode via resolveDeckSelection). */
   deckBPresetSlug: string;
+  /** Explicit Reload active counter for deck A (projector re-fetches compiled). */
+  deckAReloadActiveVersion: number;
+  /** Explicit Reload active counter for deck B. */
+  deckBReloadActiveVersion: number;
   rings: boolean;
   ringOpacity: number;
   strobe: boolean;
@@ -402,6 +406,8 @@ const defaultControlState = (): ControlState => ({
   // against the live catalog so overrides stay consistent.
   deckAPresetSlug: 'beams',
   deckBPresetSlug: 'tunnel',
+  deckAReloadActiveVersion: 0,
+  deckBReloadActiveVersion: 0,
   rings: false,
   ringOpacity: 0.35,
   strobe: false,
@@ -583,6 +589,18 @@ const coerceControlState = (state: unknown): ControlState => {
     deckBMode: clampDeckMode(deckResolved.deckBMode, defaults.deckBMode),
     deckAPresetSlug: normalizePresetSlug(deckResolved.deckAPresetSlug, defaults.deckAPresetSlug),
     deckBPresetSlug: normalizePresetSlug(deckResolved.deckBPresetSlug, defaults.deckBPresetSlug),
+    deckAReloadActiveVersion: clampInt(
+      source.deckAReloadActiveVersion,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      previous.deckAReloadActiveVersion ?? defaults.deckAReloadActiveVersion,
+    ),
+    deckBReloadActiveVersion: clampInt(
+      source.deckBReloadActiveVersion,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      previous.deckBReloadActiveVersion ?? defaults.deckBReloadActiveVersion,
+    ),
     rings: source.rings !== false,
     ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
     strobe: Boolean(source.strobe),

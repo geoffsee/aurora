@@ -43,6 +43,13 @@ export type ControlState = {
   deckAPresetSlug: string;
   /** Pack slug for deck B (resolved with deckBMode on the bridge). */
   deckBPresetSlug: string;
+  /**
+   * Bumped by explicit "Reload active" on deck A so the projector re-fetches
+   * compiled for the current slug at the current catalog epoch (#241).
+   */
+  deckAReloadActiveVersion: number;
+  /** Same as deckAReloadActiveVersion for deck B. */
+  deckBReloadActiveVersion: number;
   rings: boolean;
   ringOpacity: number;
   strobe: boolean;

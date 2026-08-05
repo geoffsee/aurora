@@ -316,11 +316,26 @@ test('v13 state gains empty deck preset slugs', () => {
     deckBMode: 1,
   };
   const migrated = migrateControlState(input) as Record<string, unknown>;
-  expect(migrated.schemaVersion).toBe(14);
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
   expect(migrated.deckAPresetSlug).toBe('');
   expect(migrated.deckBPresetSlug).toBe('');
   expect(migrated.deckAMode).toBe(0);
   expect(migrated.deckBMode).toBe(1);
+  expect(migrated.deckAReloadActiveVersion).toBe(0);
+  expect(migrated.deckBReloadActiveVersion).toBe(0);
+});
+
+test('v14 state gains reload-active counters', () => {
+  const input = {
+    schemaVersion: 14,
+    deckAPresetSlug: 'beams',
+    deckBPresetSlug: 'tunnel',
+  };
+  const migrated = migrateControlState(input) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(15);
+  expect(migrated.deckAReloadActiveVersion).toBe(0);
+  expect(migrated.deckBReloadActiveVersion).toBe(0);
+  expect(migrated.deckAPresetSlug).toBe('beams');
 });
 
 test('null passes through unchanged', () => {

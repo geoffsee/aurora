@@ -92,6 +92,8 @@
         deckBMode: 1,
         deckAPresetSlug: "beams",
         deckBPresetSlug: "tunnel",
+        deckAReloadActiveVersion: 0,
+        deckBReloadActiveVersion: 0,
         rings: false,
         ringOpacity: 0.35,
         strobe: false,
@@ -357,6 +359,82 @@
         oscState.lastEnvelopeAt = now;
       }
 
+      // Last-known-good compiled mode wire per deck (FieldRuntime / #240 consumes later).
+      // Menu/catalog epoch updates never clear these — only reselect/reload replaces them.
+      const compiledHold = {
+        "deck-a": { wireJson: "", slug: "", epoch: 0, seq: 0 },
+        "deck-b": { wireJson: "", slug: "", epoch: 0, seq: 0 },
+      };
+      let compiledFetchSeqA = 0;
+      let compiledFetchSeqB = 0;
+
+      function compiledUrl(deck, slug, epoch) {
+        const params = new URLSearchParams({ deck, slug });
+        if (Number.isInteger(epoch) && epoch > 0) params.set("epoch", String(epoch));
+        return `/api/modes/compiled?${params.toString()}`;
+      }
+
+      async function fetchAndHoldCompiled(deck, slug, reason) {
+        const trimmed = typeof slug === "string" ? slug.trim() : "";
+        if (!trimmed || trimmed.startsWith("legacy-")) return;
+        const seqKey = deck === "deck-a" ? "A" : "B";
+        const seq = seqKey === "A" ? ++compiledFetchSeqA : ++compiledFetchSeqB;
+        try {
+          const res = await fetch(compiledUrl(deck, trimmed), {
+            method: "GET",
+            headers: { accept: "application/json" },
+            cache: "no-store",
+          });
+          if (!res.ok) {
+            // Hold last good on compile/missing failure (show-safe).
+            console.warn(
+              `[compiled] ${reason} failed for ${deck}/${trimmed}: HTTP ${res.status} — holding last good`,
+            );
+            return;
+          }
+          const wire = await res.json();
+          // Drop stale responses if a newer fetch started.
+          const latest = seqKey === "A" ? compiledFetchSeqA : compiledFetchSeqB;
+          if (seq !== latest) return;
+          const epoch =
+            wire && typeof wire === "object" && Number.isFinite(Number(wire.epoch))
+              ? Math.floor(Number(wire.epoch))
+              : 0;
+          compiledHold[deck] = {
+            wireJson: JSON.stringify(wire),
+            slug: trimmed,
+            epoch,
+            seq,
+          };
+        } catch (err) {
+          console.warn(
+            `[compiled] ${reason} error for ${deck}/${trimmed}:`,
+            err instanceof Error ? err.message : err,
+          );
+        }
+      }
+
+      function maybeFetchCompiled(deck, prevSlug, prevReloadVersion) {
+        const slug =
+          deck === "deck-a" ? controlState.deckAPresetSlug : controlState.deckBPresetSlug;
+        const reload =
+          deck === "deck-a"
+            ? controlState.deckAReloadActiveVersion
+            : controlState.deckBReloadActiveVersion;
+        const hold = compiledHold[deck];
+        const slugChanged = typeof slug === "string" && slug !== prevSlug;
+        const reloadBumped = reload !== prevReloadVersion && reload > prevReloadVersion;
+        // Warm hold on first control frame when we have a slug but no compiled yet.
+        const needsInitial = Boolean(slug) && !hold.wireJson && hold.slug !== slug;
+        if (slugChanged) {
+          void fetchAndHoldCompiled(deck, slug, "slug-change");
+        } else if (reloadBumped) {
+          void fetchAndHoldCompiled(deck, slug, "reload-active");
+        } else if (needsInitial) {
+          void fetchAndHoldCompiled(deck, slug, "initial");
+        }
+      }
+
       function applyControlState(next) {
         if (!next || typeof next !== "object") return;
 
@@ -379,6 +457,10 @@
         controlState.gridLineWidth = next.gridLineWidth === undefined ? controlState.gridLineWidth : clamp01(next.gridLineWidth);
         controlState.gridShapeMix = next.gridShapeMix === undefined ? controlState.gridShapeMix : clamp01(next.gridShapeMix);
         // Allow -1 for non-legacy pack slugs (no legacyIndex); bridge resolves pairs.
+        const prevSlugA = controlState.deckAPresetSlug;
+        const prevSlugB = controlState.deckBPresetSlug;
+        const prevReloadA = controlState.deckAReloadActiveVersion;
+        const prevReloadB = controlState.deckBReloadActiveVersion;
         controlState.deckAMode = clampInt(next.deckAMode, -1, 48, controlState.deckAMode);
         controlState.deckBMode = clampInt(next.deckBMode, -1, 48, controlState.deckBMode);
         if (typeof next.deckAPresetSlug === "string") {
@@ -387,6 +469,22 @@
         if (typeof next.deckBPresetSlug === "string") {
           controlState.deckBPresetSlug = next.deckBPresetSlug;
         }
+        controlState.deckAReloadActiveVersion = clampInt(
+          next.deckAReloadActiveVersion,
+          0,
+          Number.MAX_SAFE_INTEGER,
+          controlState.deckAReloadActiveVersion,
+        );
+        controlState.deckBReloadActiveVersion = clampInt(
+          next.deckBReloadActiveVersion,
+          0,
+          Number.MAX_SAFE_INTEGER,
+          controlState.deckBReloadActiveVersion,
+        );
+        // Compiled delivery path (#241): fetch on slug change or explicit Reload active.
+        // Catalog epoch bumps do NOT auto-swap the held compiled payload.
+        maybeFetchCompiled("deck-a", prevSlugA, prevReloadA);
+        maybeFetchCompiled("deck-b", prevSlugB, prevReloadB);
         controlState.deckAGpuShader = clampInt(next.deckAGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckAGpuShader);
         controlState.deckBGpuShader = clampInt(next.deckBGpuShader, 0, MAX_GPU_SHADER_INDEX, controlState.deckBGpuShader);
         controlState.rings = next.rings !== false;
@@ -587,6 +685,18 @@
       window.__auroraControlDeckBMode = () => controlState.deckBMode;
       window.__auroraControlDeckAPresetSlug = () => controlState.deckAPresetSlug || "";
       window.__auroraControlDeckBPresetSlug = () => controlState.deckBPresetSlug || "";
+      window.__auroraControlDeckAReloadActiveVersion = () => controlState.deckAReloadActiveVersion || 0;
+      window.__auroraControlDeckBReloadActiveVersion = () => controlState.deckBReloadActiveVersion || 0;
+      /**
+       * Last-known-good CompiledModeWire JSON for deck A (empty string if none).
+       * FieldRuntime (#240) should read this on apply; catalog epoch alone never clears it.
+       */
+      window.__auroraCompiledDeckA = () => compiledHold["deck-a"].wireJson || "";
+      window.__auroraCompiledDeckB = () => compiledHold["deck-b"].wireJson || "";
+      window.__auroraCompiledDeckASlug = () => compiledHold["deck-a"].slug || "";
+      window.__auroraCompiledDeckBSlug = () => compiledHold["deck-b"].slug || "";
+      window.__auroraCompiledDeckAEpoch = () => compiledHold["deck-a"].epoch || 0;
+      window.__auroraCompiledDeckBEpoch = () => compiledHold["deck-b"].epoch || 0;
       window.__auroraControlRings = () => controlState.rings;
       window.__auroraControlRingOpacity = () => controlState.ringOpacity;
       window.__auroraControlStrobe = () => controlState.strobe;

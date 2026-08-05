@@ -29,6 +29,8 @@ export function defaultState(): ControlState {
     deckBMode: 1,
     deckAPresetSlug: 'beams',
     deckBPresetSlug: 'tunnel',
+    deckAReloadActiveVersion: 0,
+    deckBReloadActiveVersion: 0,
     rings: false,
     ringOpacity: 0.35,
     strobe: false,
