@@ -17,7 +17,7 @@ use bevy::{
 };
 use field_runtime::{
     FieldDeck, FieldFrameInputs, FieldPool, FieldRuntime, drain_pending as drain_field_pending,
-    queue_compiled_json,
+    primitive_id_for_legacy_index, queue_compiled_json,
 };
 use mode_catalog::VisualMode;
 use mode_director::{ModeDirector, ModeDirectorInputs, resolve_director};
@@ -1238,6 +1238,9 @@ fn field_frame_inputs(state: &VjState, deck_drive: f32, beat: f32, beat_hit: f32
         cue_hit,
         intensity_drive,
         motion_drive,
+        bass_activity: state.bass_activity.clamp(0.0, 1.0),
+        melodic_activity: state.melodic_activity.clamp(0.0, 1.0),
+        osc_connected: state.osc_connected,
         beam_count: DECK_A_BEAMS as u32,
         ring_count: DECK_A_RINGS as u32,
         tile_cols: DECK_B_COLS as u32,
@@ -1371,11 +1374,13 @@ fn update_visuals(
             intensity_drive,
             motion_drive,
         );
+        // Family A (0–23): FieldRuntime always handles these, even without a compiled
+        // wire (VST int-only shows). Compiled wire wins when present.
+        let field_fallback = primitive_id_for_legacy_index(deck_mode.as_control());
 
         match element.kind {
             VisualKind::Beam => {
-                // FieldRuntime DSL path (PR6): when a compiled field primitive is active
-                // for this deck, skip the legacy VisualMode match entirely.
+                // FieldRuntime DSL path (PR6/PR8/PR9): compiled field or Family A fallback.
                 if let Some(pose) = field_runtime.pose(
                     fdeck,
                     FieldPool::Beams,
@@ -1384,6 +1389,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -1420,347 +1426,32 @@ fn update_visuals(
                 let mut mode_hue = 0.0_f32;
 
                 match deck_mode {
-                    VisualMode::Beams => {
-                        let spin = t
-                            * (0.18
-                                + intensity_drive * 0.14
-                                + deck_drive * 0.2
-                                + depth * 0.15
-                                + mid * 0.25
-                                + high * 0.15);
-                        let a = fraction * TAU + spin;
-                        let r = depth * (layer - 0.5) * (130.0 + wobble * 70.0) + bass_activity * 14.0;
-                        let side = depth * (wobble - 0.5) * 60.0
-                            + melodic_activity * 10.0 * wave(t * 9.0 + fraction);
-                        px = a.cos() * r - a.sin() * side;
-                        py = a.sin() * r + a.cos() * side;
-                        rot = a + depth * (layer - 0.5) * 0.28;
-                        sx = 4.0
-                            + 28.0 * (wobble * energy * 0.5 + beat_hit * 0.7)
-                            + bass * 4.0
-                            + high * wave(t * 12.0 + seed) * 2.5
-                            + depth * layer * 14.0;
-                        sy = 280.0
-                            + 200.0 * wave(t * 1.2 + fraction * TAU * 3.0) * field_live
-                            + deck_drive * 140.0
-                            + bass * 50.0
-                            + depth * layer * 220.0;
-                        pz = 2.0 + fraction + layer * depth * 24.0;
-                        mode_hue = fraction * 180.0;
-                        mode_alpha = 0.85;
-                    }
-                    VisualMode::Tunnel => {
-                        let ring = (element.index % 12) as f32;
-                        let spoke = (element.index / 12) as f32;
-                        let a = spoke / 6.0 * TAU + t * (0.4 + depth * 0.5);
-                        let r = 50.0 + ring * 42.0 + depth * 90.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.8;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + ring * 1.5 + beat_hit * 8.0;
-                        sy = 80.0 + ring * 22.0 + beat_hit * 60.0 + depth * 40.0;
-                        pz = 2.0 + ring * 4.0;
-                        mode_hue = 10.0 + ring * 14.0;
-                        mode_alpha = 0.5 + (1.0 - ring / 12.0) * 0.5;
-                    }
-                    VisualMode::Burst => {
-                        let a = fraction * TAU + seed * 3.0;
-                        let burst = (beat_hit * 2.8 + cue_hit * 1.4).clamp(0.0, 2.5);
-                        let r = 30.0 + burst * 320.0 + fraction * 100.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a;
-                        sx = 6.0 + burst * 40.0;
-                        sy = 40.0 + burst * 200.0 + high * 50.0;
-                        mode_hue = 210.0 + burst * 45.0;
-                        mode_alpha = 0.4 + burst * 0.7;
-                    }
-                    VisualMode::Mirror => {
-                        let side = if element.index % 2 == 0 { -1.0 } else { 1.0 };
-                        let a = (fraction * 0.5) * TAU + t * 0.2;
-                        let r = 80.0 + layer * 200.0 + mid * 40.0;
-                        px = side * (a.cos().abs() * r + 40.0);
-                        py = a.sin() * r * 0.85;
-                        rot = if side < 0.0 { -a } else { a };
-                        sx = 6.0 + high * 12.0;
-                        sy = 120.0 + energy * 160.0 + wobble * 80.0;
-                        mode_hue = 130.0 + side * 40.0;
-                        mode_alpha = 0.7 + high * 0.3;
-                    }
-                    VisualMode::Wash => {
-                        let a = fraction * TAU + t * 0.08;
-                        px = a.cos() * (40.0 + layer * 30.0);
-                        py = (fraction - 0.5) * STAGE_HEIGHT * 0.7 + wave(t * 0.45 + fraction) * 40.0;
-                        rot = 0.0;
-                        sx = 200.0 + state.feedback * 280.0 + energy * 60.0;
-                        sy = 18.0 + wave(t * 0.45 + fraction) * 25.0 + trail_gain * 30.0;
-                        pz = -2.0 + layer * 0.5;
-                        mode_hue = 30.0 + fraction * 40.0;
-                        mode_alpha = 0.14 + state.feedback * 0.45 + osc_drive * 0.22;
-                    }
-                    VisualMode::Strobe => {
-                        let a = fraction * TAU + t * 0.5;
-                        let r = 70.0 + fraction * 400.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 10.0 + beat_hit * 35.0;
-                        sy = 140.0 + bass_activity * 100.0;
-                        let gate = if bass_activity + beat_hit > 0.38 { 1.0 } else { 0.1 };
-                        mode_alpha = gate;
-                        mode_hue = beat_hit * 120.0 + fraction * 60.0;
-                    }
-                    VisualMode::Swarm => {
-                        px = (t * 1.7 + seed * 11.0).sin() * 420.0
-                            + (t * 3.1 + seed * 5.0).sin() * 50.0;
-                        py = (t * 2.1 + seed * 7.0).cos() * 280.0
-                            + (t * 2.8 + seed * 4.0).cos() * 40.0;
-                        rot = seed * 6.0 + t * 0.6;
-                        sx = 6.0 + high * 14.0;
-                        sy = 50.0 + energy * 90.0 + wave(t * 2.0 + seed * 5.0) * 40.0;
-                        mode_hue = seed * 360.0;
-                        mode_alpha = 0.75;
-                    }
-                    VisualMode::Orbit => {
-                        let lane = (element.index % 8) as f32;
-                        let a = t * (0.45 + seed * 0.4) + seed * TAU + lane * 0.2;
-                        let r = 100.0 + lane * 55.0 + layer * 40.0 + bass * 50.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.75;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + mid * 8.0;
-                        sy = 90.0 + energy * 80.0;
-                        mode_hue = 130.0 + lane * 20.0;
-                        mode_alpha = 0.85;
-                    }
-                    VisualMode::Pulse => {
-                        let pump = (beat * TAU).sin().abs();
-                        let a = fraction * TAU;
-                        let r = 50.0 + fraction * 380.0 * (0.5 + pump * 0.95);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + pump * 30.0 + beat_hit * 20.0;
-                        sy = 80.0 + pump * 220.0;
-                        mode_hue = 80.0 + pump * 80.0;
-                        mode_alpha = 0.45 + pump * 0.6;
-                    }
-                    VisualMode::Spiral => {
-                        let a = fraction * TAU * 4.0 + t * 0.45;
-                        let r = 40.0 + fraction * 450.0 + bass * 70.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.78;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + high * 10.0;
-                        sy = 100.0 + fraction * 120.0 + energy * 60.0;
-                        mode_hue = 1.0 + fraction * 200.0;
-                        mode_alpha = 0.8;
-                    }
-                    VisualMode::Ripple => {
-                        let a = fraction * TAU;
-                        let phase = t * (1.6 + bass * 2.0) - fraction * 10.0;
-                        let wave_r = ((phase.sin() + 1.0) * 0.5) * 480.0 + 50.0;
-                        px = a.cos() * wave_r;
-                        py = a.sin() * wave_r * 0.72;
-                        rot = a + TAU * 0.25;
-                        sx = 6.0 + phase.sin().abs() * 16.0;
-                        sy = 40.0 + phase.sin().abs() * 120.0;
-                        mode_hue = 40.0 + phase.to_degrees() * 0.2;
-                        mode_alpha = 0.35 + phase.sin().abs() * 0.65;
-                    }
-                    VisualMode::Shatter => {
-                        let a = seed * TAU + t * (2.2 + high * 3.5);
-                        let r = 100.0 + high * 320.0 + (t * 5.0 + seed * 11.0).sin().abs() * 220.0;
-                        px = a.cos() * r + (t * 12.0 + seed).sin() * 60.0;
-                        py = a.sin() * r * 0.7 + (t * 10.0 + seed).cos() * 50.0;
-                        rot = a * 2.2 + t * 3.5;
-                        sx = 4.0 + high * 22.0;
-                        sy = 35.0 + high * 140.0 + beat_hit * 50.0;
-                        mode_hue = seed * 200.0 + high * 90.0;
-                        mode_alpha = 0.3 + high * 0.7 + beat_hit * 0.3;
-                    }
-                    VisualMode::Flux => {
-                        let flow = wave(t * (1.0 + mid * 1.3) + fraction * 4.0);
-                        px = (fraction - 0.5) * STAGE_WIDTH * 0.9 + flow * 220.0;
-                        py = ((element.index % 12) as f32 / 11.0 - 0.5) * STAGE_HEIGHT * 0.85;
-                        rot = flow * 0.4;
-                        sx = 50.0 + mid * 70.0;
-                        sy = 16.0 + energy * 28.0;
-                        mode_hue = 50.0 + mid * 80.0 + flow * 40.0;
-                        mode_alpha = 0.65 + mid * 0.3;
-                    }
-                    VisualMode::Lattice => {
-                        let vertical = element.index % 2 == 0;
-                        let cols = 12.0_f32;
-                        let rows = 6.0_f32;
-                        let c = (element.index % 12) as f32;
-                        let r = (element.index / 12) as f32;
-                        if vertical {
-                            px = (c / (cols - 1.0) - 0.5) * STAGE_WIDTH * 0.95;
-                            py = (r / rows.max(1.0) - 0.5) * STAGE_HEIGHT * 0.2;
-                            rot = 0.0;
-                            sx = 4.0 + beat_hit * 5.0;
-                            sy = STAGE_HEIGHT * (0.55 + wobble * 0.15);
-                        } else {
-                            px = (c / cols - 0.5) * STAGE_WIDTH * 0.2;
-                            py = (r / rows.max(1.0) - 0.5) * STAGE_HEIGHT * 0.9;
-                            rot = TAU * 0.25;
-                            sx = 4.0 + beat_hit * 5.0;
-                            sy = STAGE_WIDTH * (0.4 + wobble * 0.1);
-                        }
-                        mode_hue = 62.0 + (element.index % 4) as f32 * 20.0;
-                        mode_alpha = 0.75;
-                    }
-                    VisualMode::Drift => {
-                        let a = seed * TAU + t * 0.1;
-                        let r = 120.0 + fraction * 300.0;
-                        px = a.cos() * r + wave(t * 0.22 + seed) * 90.0;
-                        py = a.sin() * r * 0.55 + wave(t * 0.18 + seed * 2.0) * 55.0;
-                        rot = a * 0.35;
-                        sx = 40.0 + energy * 50.0;
-                        sy = 22.0 + trail_gain * 40.0;
-                        mode_hue = 32.0 + mid * 40.0;
-                        mode_alpha = 0.4 + state.feedback * 0.35;
-                    }
-                    // Squall: diagonal rain curtains + fork lightning on hits (not generic chaos).
-                    VisualMode::Storm => {
-                        let wind = 0.55 + bass * 0.55 + mid * 0.25;
-                        let fall = (t * (2.4 + state.speed * 0.9 + high * 1.4) + seed * 6.0).fract();
-                        let lane = (fraction * 14.0 + seed * 3.0) % 1.0;
-                        let is_bolt = element.index % 11 == 0;
-                        if is_bolt {
-                            // Fork lightning: tall jagged verticals that flash with the hit.
-                            let bolt_x = (lane - 0.5) * STAGE_WIDTH * 1.05
-                                + (t * 17.0 + seed * 9.0).sin() * 28.0;
-                            let jag = (t * 40.0 + seed * 13.0).sin() * (18.0 + high * 30.0);
-                            px = bolt_x + jag * 0.35;
-                            py = (0.5 - fall) * STAGE_HEIGHT * 1.1;
-                            rot = (jag * 0.02) + (seed - 0.5) * 0.25;
-                            sx = 3.0 + beat_hit * 14.0 + state.osc_pulse * 10.0;
-                            sy = STAGE_HEIGHT
-                                * (0.35 + beat_hit * 0.55 + bass_activity * 0.25)
-                                + cue_hit * 80.0;
-                            mode_hue = 195.0 + high * 40.0 + beat_hit * 50.0;
-                            mode_alpha = 0.08
-                                + beat_hit * 0.95
-                                + cue_hit * 0.7
-                                + state.osc_pulse * 0.45;
-                        } else {
-                            // Rain: long thin streaks sweeping diagonally with wind.
-                            px = (lane - 0.5) * STAGE_WIDTH * 1.15
-                                + fall * wind * 220.0
-                                + (seed - 0.5) * 40.0;
-                            py = (0.55 - fall) * STAGE_HEIGHT * 1.25;
-                            rot = -0.55 - wind * 0.35 + high * 0.1;
-                            sx = 2.2 + high * 3.5 + beat_hit * 2.0;
-                            sy = 70.0
-                                + energy * 50.0
-                                + bass * 40.0
-                                + (1.0 - fall) * 60.0;
-                            mode_hue = 200.0 + mid * 25.0 + layer * 20.0;
-                            mode_alpha = 0.28
-                                + (1.0 - fall) * 0.45
-                                + high * 0.2
-                                + beat_hit * 0.15;
-                        }
-                    }
-                    VisualMode::Echo => {
-                        let lag = (t * (0.5 + trail_gain) + fraction * 2.0).fract();
-                        let a = fraction * TAU + t * 0.35 - lag * 2.5;
-                        let r = 70.0 + fraction * 380.0 * (1.0 - lag * 0.5);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 4.0 + (1.0 - lag) * 12.0;
-                        sy = 60.0 + (1.0 - lag) * 140.0 * trail_gain.max(0.15);
-                        mode_hue = lag * 100.0;
-                        mode_alpha = if trail_gain > 0.02 {
-                            (1.0 - lag).powf(1.5) * (0.5 + trail_gain)
-                        } else {
-                            0.3 + wobble * 0.4
-                        };
-                    }
-                    VisualMode::Vortex => {
-                        let pull = 0.3 + bass * 1.3 + beat_hit * 0.7;
-                        let a = fraction * TAU * 3.0 + t * (2.2 + pull * 2.6);
-                        let r = (450.0 - fraction * 380.0) * (1.0 - pull * 0.25).max(0.35);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.75;
-                        rot = a * 1.4;
-                        sx = 4.0 + pull * 12.0;
-                        sy = 70.0 + pull * 120.0;
-                        mode_hue = a.to_degrees() * 0.5 + pull * 40.0;
-                        mode_alpha = 0.55 + pull * 0.4;
-                    }
-                    VisualMode::Fracture => {
-                        let arm = (element.index % 10) as f32;
-                        let a = arm / 10.0 * TAU + high * 0.5 + beat_hit * 0.4;
-                        let r = 40.0 + (element.index / 10) as f32 * 48.0 + high * 120.0;
-                        px = a.cos() * r + (t * 9.0 + seed).sin() * high * 50.0;
-                        py = a.sin() * r * 0.8;
-                        rot = a + TAU * 0.15;
-                        sx = 3.5 + high * 16.0;
-                        sy = 50.0 + high * 140.0 + beat_hit * 60.0;
-                        mode_hue = arm * 36.0 + high * 90.0;
-                        mode_alpha = 0.4 + high * 0.55;
-                    }
-                    VisualMode::Nebula => {
-                        let a = seed * TAU + t * 0.12;
-                        let r = 50.0 + fraction * 320.0;
-                        px = a.cos() * r + wave(t * 0.5 + seed) * mid * 70.0;
-                        py = a.sin() * r * 0.65 + wave(t * 0.4 + seed * 2.0) * high * 50.0;
-                        rot = a * 0.2;
-                        sx = 60.0 + energy * 100.0 + mid * 50.0;
-                        sy = 40.0 + energy * 70.0 + high * 40.0;
-                        mode_hue = 20.0 + mid * 50.0;
-                        mode_alpha = 0.22 + (mid + high) * 0.25 + state.feedback * 0.2;
-                    }
-                    VisualMode::Prism => {
-                        let band = (element.index % 3) as f32 - 1.0;
-                        let a = fraction * TAU + t * 0.28;
-                        let r = 90.0 + fraction * 340.0;
-                        px = a.cos() * r + band * (60.0 + high * 80.0);
-                        py = a.sin() * r * 0.7 + band * 25.0;
-                        rot = a + band * 0.2;
-                        sx = 6.0 + high * 14.0;
-                        sy = 70.0 + mid * 80.0 + energy * 50.0;
-                        mode_hue = band * 90.0 + fraction * 140.0;
-                        mode_alpha = 0.55 + high * 0.35;
-                    }
-                    VisualMode::Scanner => {
-                        let scan = ((t * (0.5 + state.speed * 0.18 + high * 0.55) + seed).fract()
-                            * 2.0)
-                            - 1.0;
-                        px = wave(t * 0.75 + fraction * 5.0) * STAGE_WIDTH * 0.18;
-                        py = scan * STAGE_HEIGHT * 0.45 + layer * 8.0;
-                        rot = if element.index % 2 == 0 { 0.0 } else { TAU * 0.25 };
-                        sx = STAGE_WIDTH * (0.4 + high * 0.15);
-                        sy = 8.0 + state.osc_pulse * 28.0 + beat_hit * 16.0;
-                        mode_hue = 175.0 + scan * 70.0;
-                        mode_alpha = 0.5 + high * 0.4 + state.osc_pulse * 0.35;
-                    }
-                    VisualMode::Comet => {
-                        let a = t * (1.1 + bass * 2.2 + state.speed * 0.25) + fraction * TAU;
-                        let r = 50.0 + fraction * 470.0 + beat_hit * 70.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.55;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + high * 10.0;
-                        sy = 120.0 + bass * 180.0 + trail_gain * 120.0 + beat_hit * 60.0;
-                        mode_hue = a.to_degrees() * 0.3 + bass * 55.0;
-                        mode_alpha = 0.42 + bass * 0.55 + beat_hit * 0.3;
-                    }
-                    VisualMode::Bloom => {
-                        let a = fraction * TAU + t * 0.15;
-                        let bloom = wave(t * 0.35 + fraction) + beat_hit * 0.55 + cue_hit * 0.35;
-                        let r = 35.0 + fraction * 300.0 * (0.7 + bloom * 0.65);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a;
-                        sx = 25.0 + bloom * 80.0 + state.feedback * 50.0;
-                        sy = 55.0 + bloom * 140.0 + mid * 50.0;
-                        mode_hue = 25.0 + bloom * 40.0 + mid * 35.0;
-                        mode_alpha = 0.22 + bloom * 0.5 + state.feedback * 0.28;
+                    // Family A (0–23): FieldRuntime only (compiled wire or VST fallback).
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit
+                    | VisualMode::Pulse
+                    | VisualMode::Spiral
+                    | VisualMode::Ripple
+                    | VisualMode::Shatter
+                    | VisualMode::Flux
+                    | VisualMode::Lattice
+                    | VisualMode::Drift
+                    | VisualMode::Storm
+                    | VisualMode::Echo
+                    | VisualMode::Vortex
+                    | VisualMode::Fracture
+                    | VisualMode::Nebula
+                    | VisualMode::Prism
+                    | VisualMode::Scanner
+                    | VisualMode::Comet
+                    | VisualMode::Bloom => {
+                        mode_alpha = 0.0;
                     }
                     VisualMode::Figure => {
                         mode_alpha = 0.0;
@@ -2194,6 +1885,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -2217,82 +1909,36 @@ fn update_visuals(
                 };
                 let ring_pulse = wave(t * 2.4);
                 let beat_swell = beat_hit * 0.7 + cue_hit * 0.4;
-                let pump = (beat * TAU).sin().abs();
 
                 // Per-mode feel WITHOUT moving the ring off-centre or onto multiple
                 // radii (that is exactly what read as a web). Only radius, halo spread,
                 // alpha, and an on/off gate change per mode; the ring stays centred.
                 let (radius_gain, halo_gain, alpha_gain, mode_gate) = match deck_mode {
-                    VisualMode::Tunnel => (0.92 + state.depth * 0.18, 0.9, 0.65, 1.0),
-                    VisualMode::Burst => (0.96 + beat_hit * 0.32 + cue_hit * 0.18, 1.0, 0.72, 1.0),
-                    VisualMode::Mirror => (0.9, 0.65, 0.58 + mid * 0.28, 1.0),
-                    VisualMode::Wash => (1.02 + state.feedback * 0.18, 1.4, 0.44, 1.0),
-                    VisualMode::Strobe => (
-                        0.9 + bass_activity * 0.22,
-                        0.8,
-                        0.75,
-                        if (bass_activity + beat_hit * 1.2).clamp(0.0, 1.0) > 0.35 {
-                            1.0
-                        } else {
-                            0.0
-                        },
-                    ),
-                    VisualMode::Swarm => (0.88 + ring_pulse * 0.05, 1.1, 0.5, 1.0),
-                    VisualMode::Orbit => (0.92, 0.9, 0.6, 1.0),
-                    VisualMode::Pulse => (0.78 + pump * 0.22 + beat_hit * 0.14, 0.8, 0.42 + pump * 0.32, 1.0),
-                    VisualMode::Spiral => (0.9, 1.05, 0.55, 1.0),
-                    VisualMode::Ripple => (0.84 + bass * 0.2, 1.05, 0.58 + bass * 0.22, 1.0),
-                    VisualMode::Shatter => (0.94, 0.72, 0.48 + high * 0.35, if high > 0.45 { 1.0 } else { 0.35 }),
-                    VisualMode::Flux => (0.9, 1.0, 0.56 + mid * 0.24, 1.0),
-                    VisualMode::Lattice => (0.88, 0.82, 0.62, 1.0),
-                    VisualMode::Drift => (0.96, 1.15, 0.38, 1.0),
-                    VisualMode::Storm => (
-                        0.82 + osc_drive * 0.18,
-                        0.95,
-                        0.5 + state.osc_pulse * 0.35,
-                        if osc_drive + state.osc_pulse > 0.55 {
-                            1.0
-                        } else {
-                            0.25
-                        },
-                    ),
-                    VisualMode::Echo => (
-                        0.95 + state.feedback * 0.25 + high * 0.12,
-                        1.25,
-                        0.48 + state.osc_pulse * 0.3,
-                        1.0,
-                    ),
-                    VisualMode::Vortex => (
-                        0.78 + bass * 0.32,
-                        0.85,
-                        0.52 + bass_activity * 0.2,
-                        if bass + beat_hit > 0.3 { 1.0 } else { 0.6 },
-                    ),
-                    VisualMode::Fracture => (
-                        0.88 + high * 0.18,
-                        0.7,
-                        0.42 + high * 0.38,
-                        if high > 0.38 { 1.0 } else { 0.45 },
-                    ),
-                    VisualMode::Nebula => (1.15 + mid * 0.2, 1.6, 0.32 + (mid + high) * 0.18, 1.0),
-                    VisualMode::Prism => (0.92 + high * 0.1, 0.78, 0.58 + high * 0.24, 1.0),
-                    VisualMode::Scanner => (
-                        0.84,
-                        0.72,
-                        0.45 + state.osc_pulse * 0.35,
-                        if high + state.osc_pulse > 0.32 {
-                            1.0
-                        } else {
-                            0.35
-                        },
-                    ),
-                    VisualMode::Comet => (0.86 + bass * 0.24, 0.9, 0.54 + bass * 0.22, 1.0),
-                    VisualMode::Bloom => (
-                        1.05 + beat_hit * 0.22 + cue_hit * 0.16,
-                        1.7,
-                        0.34 + state.feedback * 0.3 + beat_hit * 0.18,
-                        1.0,
-                    ),
+                    // Family A (0–23): FieldRuntime only — exhaustiveness stub.
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit
+                    | VisualMode::Pulse
+                    | VisualMode::Spiral
+                    | VisualMode::Ripple
+                    | VisualMode::Shatter
+                    | VisualMode::Flux
+                    | VisualMode::Lattice
+                    | VisualMode::Drift
+                    | VisualMode::Storm
+                    | VisualMode::Echo
+                    | VisualMode::Vortex
+                    | VisualMode::Fracture
+                    | VisualMode::Nebula
+                    | VisualMode::Prism
+                    | VisualMode::Scanner
+                    | VisualMode::Comet
+                    | VisualMode::Bloom => (0.0, 0.0, 0.0, 0.0),
                     VisualMode::Figure => (1.0, 1.0, 0.0, 0.0),
                     // Mathematical concepts - use Beams defaults
                     VisualMode::Hypercube
@@ -2319,7 +1965,6 @@ fn update_visuals(
                     | VisualMode::Eigenvectors
                     | VisualMode::BooleanLattices
                     | VisualMode::Forcing => (0.9, 0.8, 0.55, 1.0),
-                    VisualMode::Beams => (0.9, 0.8, 0.55, 1.0),
                 };
 
                 let base_radius = 220.0
@@ -2363,6 +2008,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -2409,342 +2055,32 @@ fn update_visuals(
                 let mut mode_hue = 0.0_f32;
 
                 match deck_mode {
-                    // ——— radial ray burst ———
-                    VisualMode::Beams => {
-                        let a = fraction * TAU + t * (0.2 + mid * 0.3);
-                        let r = 50.0 + fraction * 480.0 + bass * 50.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + high * 8.0 + beat_hit * 10.0;
-                        sy = 70.0 + energy * 90.0 + pulse * 40.0;
-                        mode_hue = fraction * 180.0;
-                        mode_alpha = 0.85;
-                    }
-                    // ——— concentric corridor rings ———
-                    VisualMode::Tunnel => {
-                        let ring = (element.index % 10) as f32;
-                        let spoke = (element.index / 10) as f32;
-                        let a = spoke / 12.0 * TAU + t * (0.35 + state.depth * 0.4);
-                        let r = 40.0 + ring * 48.0 + state.depth * 80.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.78;
-                        rot = a + TAU * 0.25;
-                        sx = 4.0 + ring * 1.2;
-                        sy = 36.0 + ring * 8.0 + beat_hit * 30.0;
-                        pz = 4.0 + ring * 3.0;
-                        mode_hue = 10.0 + ring * 18.0;
-                        mode_alpha = 0.55 + (1.0 - ring / 10.0) * 0.45;
-                    }
-                    // ——— explode from center on hits ———
-                    VisualMode::Burst => {
-                        let a = fraction * TAU + seed * 2.0;
-                        let r = 20.0 + (beat_hit * 2.5 + cue_hit + pulse) * 280.0 + fraction * 80.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.65;
-                        rot = a;
-                        sx = 8.0 + beat_hit * 40.0;
-                        sy = 30.0 + beat_hit * 120.0 + high * 40.0;
-                        mode_hue = 210.0 + beat_hit * 50.0;
-                        mode_alpha = 0.35 + beat_hit * 0.9 + cue_hit * 0.5;
-                    }
-                    // ——— bilateral halves ———
-                    VisualMode::Mirror => {
-                        let side = if element.col % 2 == 0 { -1.0 } else { 1.0 };
-                        px = side * (80.0 + u * 420.0 + mid * 40.0);
-                        py = (v - 0.5) * STAGE_HEIGHT * 0.9;
-                        rot = if side < 0.0 { TAU * 0.5 } else { 0.0 };
-                        sx = 7.0 + high * 10.0;
-                        sy = 50.0 + energy * 70.0;
-                        mode_hue = 130.0 + side * 40.0;
-                        mode_alpha = 0.75 + high * 0.25;
-                    }
-                    // ——— soft horizontal washes ———
-                    VisualMode::Wash => {
-                        px = (u - 0.5) * STAGE_WIDTH * 1.1;
-                        py = (v - 0.5) * STAGE_HEIGHT * 0.55 + wave(t * 0.4 + v) * 30.0;
-                        rot = 0.0;
-                        sx = 180.0 + state.feedback * 220.0 + energy * 40.0;
-                        sy = 12.0 + pulse * 18.0 + trail_gain * 20.0;
-                        mode_hue = 30.0 + v * 40.0;
-                        mode_alpha = 0.12 + state.feedback * 0.4 + osc_drive * 0.2;
-                    }
-                    // ——— hard gated flashes ———
-                    VisualMode::Strobe => {
-                        let a = fraction * TAU;
-                        let r = 60.0 + fraction * 400.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 12.0 + beat_hit * 30.0;
-                        sy = 100.0 + bass_activity * 80.0;
-                        let gate = if bass_activity + beat_hit > 0.35 { 1.0 } else { 0.08 };
-                        mode_alpha = gate;
-                        mode_hue = beat_hit * 120.0 + fraction * 60.0;
-                    }
-                    // ——— chaotic cloud of dots/sticks ———
-                    VisualMode::Swarm => {
-                        let ox = (t * 1.6 + seed * 13.0).sin() * 380.0;
-                        let oy = (t * 2.1 + seed * 9.0).cos() * 240.0;
-                        px = ox + (t * 3.0 + seed * 5.0).sin() * 40.0;
-                        py = oy + (t * 2.7 + seed * 7.0).cos() * 30.0;
-                        rot = seed * TAU + t * 0.8;
-                        sx = 6.0 + high * 12.0;
-                        sy = 24.0 + energy * 50.0 + pulse * 30.0;
-                        mode_hue = seed * 360.0;
-                        mode_alpha = 0.7;
-                    }
-                    // ——— clean orbits ———
-                    VisualMode::Orbit => {
-                        let lane = (element.index % 6) as f32;
-                        let a = t * (0.4 + seed * 0.35 + lane * 0.05) + fraction * TAU;
-                        let r = 90.0 + lane * 55.0 + bass * 40.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.72;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + mid * 6.0;
-                        sy = 40.0 + energy * 45.0;
-                        mode_hue = 130.0 + lane * 25.0;
-                        mode_alpha = 0.8;
-                    }
-                    // ——— whole field breathes ———
-                    VisualMode::Pulse => {
-                        let a = fraction * TAU;
-                        let pump = (beat * TAU).sin().abs();
-                        let r = 40.0 + fraction * 360.0 * (0.55 + pump * 0.9);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 4.0 + pump * 20.0 + beat_hit * 15.0;
-                        sy = 50.0 + pump * 140.0;
-                        mode_hue = 80.0 + pump * 80.0;
-                        mode_alpha = 0.4 + pump * 0.7;
-                    }
-                    // ——— arm spiral ———
-                    VisualMode::Spiral => {
-                        let a = fraction * TAU * 3.5 + t * 0.55;
-                        let r = 30.0 + fraction * 420.0 + bass * 60.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.75;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + high * 8.0;
-                        sy = 55.0 + fraction * 80.0 + energy * 40.0;
-                        mode_hue = fraction * 200.0 + t * 20.0;
-                        mode_alpha = 0.75;
-                    }
-                    // ——— expanding ring waves ———
-                    VisualMode::Ripple => {
-                        let a = fraction * TAU;
-                        let phase = t * (1.5 + bass * 1.8) - fraction * 8.0;
-                        let wave_r = ((phase.sin() + 1.0) * 0.5) * 420.0 + 40.0;
-                        px = a.cos() * wave_r;
-                        py = a.sin() * wave_r * 0.72;
-                        rot = a + TAU * 0.25;
-                        sx = 6.0 + phase.sin().abs() * 14.0;
-                        sy = 25.0 + phase.sin().abs() * 70.0;
-                        mode_hue = 40.0 + phase.to_degrees() * 0.2;
-                        mode_alpha = 0.35 + phase.sin().abs() * 0.65;
-                    }
-                    // ——— flying shards ———
-                    VisualMode::Shatter => {
-                        let a = seed * TAU + t * (2.0 + high * 3.0);
-                        let r = 80.0 + high * 280.0 + (t * 4.0 + seed * 9.0).sin().abs() * 200.0;
-                        px = a.cos() * r + (t * 11.0 + seed).sin() * 50.0;
-                        py = a.sin() * r * 0.7 + (t * 9.0 + seed).cos() * 40.0;
-                        rot = a * 2.0 + t * 3.0;
-                        sx = 4.0 + high * 20.0;
-                        sy = 20.0 + high * 90.0 + beat_hit * 40.0;
-                        mode_hue = seed * 200.0 + high * 80.0;
-                        mode_alpha = 0.3 + high * 0.7 + beat_hit * 0.3;
-                    }
-                    // ——— horizontal shear flow ———
-                    VisualMode::Flux => {
-                        let flow = wave(t * (0.9 + mid * 1.3) + v * 3.0);
-                        px = (u - 0.5) * STAGE_WIDTH + flow * 200.0;
-                        py = (v - 0.5) * STAGE_HEIGHT * 0.85;
-                        rot = flow * 0.35;
-                        sx = 40.0 + mid * 60.0;
-                        sy = 14.0 + energy * 20.0;
-                        mode_hue = 50.0 + mid * 80.0 + flow * 40.0;
-                        mode_alpha = 0.65 + mid * 0.3;
-                    }
-                    // ——— sparse cross-hatch lattice of thin lines ———
-                    VisualMode::Lattice => {
-                        let vertical = element.index % 2 == 0;
-                        if vertical {
-                            px = (col - (cols - 1.0) * 0.5) * (STAGE_WIDTH / cols.max(1.0)) * 1.05;
-                            py = (v - 0.5) * STAGE_HEIGHT * 0.95;
-                            rot = 0.0;
-                            sx = 3.5 + beat_hit * 4.0;
-                            sy = STAGE_HEIGHT * (0.55 + pulse * 0.2);
-                        } else {
-                            px = (u - 0.5) * STAGE_WIDTH * 0.95;
-                            py = (row - (rows - 1.0) * 0.5) * (STAGE_HEIGHT / rows.max(1.0)) * 1.05;
-                            rot = TAU * 0.25;
-                            sx = 3.5 + beat_hit * 4.0;
-                            sy = STAGE_WIDTH * (0.35 + pulse * 0.1);
-                        }
-                        mode_hue = 62.0 + (element.index % 4) as f32 * 20.0;
-                        mode_alpha = 0.7;
-                    }
-                    // ——— slow floating haze ———
-                    VisualMode::Drift => {
-                        let a = seed * TAU + t * 0.08;
-                        let r = 100.0 + fraction * 280.0;
-                        px = a.cos() * r + wave(t * 0.2 + seed) * 80.0;
-                        py = a.sin() * r * 0.55 + wave(t * 0.15 + seed * 2.0) * 50.0;
-                        rot = a * 0.3;
-                        sx = 30.0 + energy * 40.0;
-                        sy = 18.0 + trail_gain * 30.0;
-                        mode_hue = 32.0 + mid * 40.0;
-                        mode_alpha = 0.35 + state.feedback * 0.4;
-                    }
-                    // ——— violent weather ———
-                    // Squall: diagonal rain curtains + fork lightning on hits (not generic chaos).
-                    VisualMode::Storm => {
-                        let wind = 0.55 + bass * 0.55 + mid * 0.25;
-                        let fall = (t * (2.4 + state.speed * 0.9 + high * 1.4) + seed * 6.0).fract();
-                        let lane = (fraction * 14.0 + seed * 3.0) % 1.0;
-                        let is_bolt = element.index % 9 == 0;
-                        if is_bolt {
-                            let bolt_x = (lane - 0.5) * STAGE_WIDTH * 1.05
-                                + (t * 17.0 + seed * 9.0).sin() * 28.0;
-                            let jag = (t * 40.0 + seed * 13.0).sin() * (18.0 + high * 30.0);
-                            px = bolt_x + jag * 0.35;
-                            py = (0.5 - fall) * STAGE_HEIGHT * 1.1;
-                            rot = (jag * 0.02) + (seed - 0.5) * 0.25;
-                            sx = 3.0 + beat_hit * 14.0 + state.osc_pulse * 10.0;
-                            sy = STAGE_HEIGHT
-                                * (0.35 + beat_hit * 0.55 + bass_activity * 0.25)
-                                + cue_hit * 80.0;
-                            mode_hue = 195.0 + high * 40.0 + beat_hit * 50.0;
-                            mode_alpha = 0.08
-                                + beat_hit * 0.95
-                                + cue_hit * 0.7
-                                + state.osc_pulse * 0.45;
-                        } else {
-                            px = (lane - 0.5) * STAGE_WIDTH * 1.15
-                                + fall * wind * 220.0
-                                + (seed - 0.5) * 40.0;
-                            py = (0.55 - fall) * STAGE_HEIGHT * 1.25;
-                            rot = -0.55 - wind * 0.35 + high * 0.1;
-                            sx = 2.2 + high * 3.5 + beat_hit * 2.0;
-                            sy = 55.0
-                                + energy * 45.0
-                                + bass * 35.0
-                                + (1.0 - fall) * 50.0;
-                            mode_hue = 200.0 + mid * 25.0 + fraction * 30.0;
-                            mode_alpha = 0.28
-                                + (1.0 - fall) * 0.45
-                                + high * 0.2
-                                + beat_hit * 0.15;
-                        }
-                    }
-                    // ——— delayed after-images (needs trails) ———
-                    VisualMode::Echo => {
-                        let lag = (t * (0.5 + trail_gain) + fraction * 2.0).fract();
-                        let a = fraction * TAU + t * 0.3 - lag * 2.0;
-                        let r = 60.0 + fraction * 350.0 * (1.0 - lag * 0.5);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 4.0 + (1.0 - lag) * 10.0;
-                        sy = 40.0 + (1.0 - lag) * 100.0 * trail_gain.max(0.15);
-                        mode_hue = lag * 100.0;
-                        mode_alpha = if trail_gain > 0.02 {
-                            (1.0 - lag).powf(1.5) * (0.5 + trail_gain)
-                        } else {
-                            0.25 + pulse * 0.4
-                        };
-                    }
-                    // ——— inward spiral drain ———
-                    VisualMode::Vortex => {
-                        let pull = 0.3 + bass * 1.2 + beat_hit * 0.6;
-                        let a = fraction * TAU * 3.0 + t * (2.0 + pull * 2.5);
-                        let r = (420.0 - fraction * 360.0) * (1.0 - pull * 0.25).max(0.35);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.75;
-                        rot = a * 1.4;
-                        sx = 4.0 + pull * 10.0;
-                        sy = 50.0 + pull * 90.0;
-                        mode_hue = a.to_degrees() * 0.5 + pull * 40.0;
-                        mode_alpha = 0.55 + pull * 0.4;
-                    }
-                    // ——— angular cracks ———
-                    VisualMode::Fracture => {
-                        let arm = (element.index % 8) as f32;
-                        let a = arm / 8.0 * TAU + (high * 0.4 + beat_hit) * 0.5;
-                        let r = 30.0 + (element.index / 8) as f32 * 55.0 + high * 100.0;
-                        px = a.cos() * r + (t * 8.0 + seed).sin() * high * 40.0;
-                        py = a.sin() * r * 0.8;
-                        rot = a + TAU * 0.15;
-                        sx = 3.0 + high * 15.0;
-                        sy = 35.0 + high * 100.0 + beat_hit * 50.0;
-                        mode_hue = arm * 40.0 + high * 90.0;
-                        mode_alpha = 0.4 + high * 0.55;
-                    }
-                    // ——— soft cloud blobs as wide ovals ———
-                    VisualMode::Nebula => {
-                        let a = seed * TAU + t * 0.12;
-                        let r = 40.0 + fraction * 300.0;
-                        px = a.cos() * r + wave(t * 0.5 + seed) * mid * 60.0;
-                        py = a.sin() * r * 0.65 + wave(t * 0.4 + seed * 2.0) * high * 40.0;
-                        rot = a * 0.2;
-                        sx = 50.0 + energy * 80.0 + mid * 40.0;
-                        sy = 30.0 + energy * 50.0 + high * 30.0;
-                        mode_hue = 20.0 + mid * 50.0;
-                        mode_alpha = 0.2 + (mid + high) * 0.25 + state.feedback * 0.2;
-                    }
-                    // ——— 3-way hue split fans ———
-                    VisualMode::Prism => {
-                        let band = (element.index % 3) as f32 - 1.0;
-                        let a = fraction * TAU + t * 0.25;
-                        let r = 80.0 + fraction * 320.0;
-                        px = a.cos() * r + band * (50.0 + high * 70.0);
-                        py = a.sin() * r * 0.7 + band * 20.0;
-                        rot = a + band * 0.2;
-                        sx = 6.0 + high * 12.0;
-                        sy = 45.0 + mid * 60.0 + energy * 40.0;
-                        mode_hue = band * 90.0 + fraction * 120.0;
-                        mode_alpha = 0.55 + high * 0.35;
-                    }
-                    // ——— horizontal scan beams ———
-                    VisualMode::Scanner => {
-                        let scan = ((t * (0.55 + state.speed * 0.2 + high * 0.5) + seed).fract()
-                            * 2.0)
-                            - 1.0;
-                        px = wave(t * 0.7 + fraction * 4.0) * STAGE_WIDTH * 0.2;
-                        py = scan * STAGE_HEIGHT * 0.45 + (row - rows * 0.5) * 6.0;
-                        rot = 0.0;
-                        sx = STAGE_WIDTH * (0.35 + high * 0.15);
-                        sy = 6.0 + state.osc_pulse * 20.0 + beat_hit * 12.0;
-                        mode_hue = 175.0 + scan * 70.0;
-                        mode_alpha = 0.45 + high * 0.4 + state.osc_pulse * 0.35;
-                    }
-                    // ——— long trailing comets ———
-                    VisualMode::Comet => {
-                        let a = t * (1.1 + bass * 2.0 + state.speed * 0.2) + fraction * TAU;
-                        let r = 40.0 + fraction * 450.0 + beat_hit * 60.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.55;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + high * 8.0;
-                        sy = 80.0 + bass * 140.0 + trail_gain * 100.0 + beat_hit * 50.0;
-                        mode_hue = a.to_degrees() * 0.3 + bass * 50.0;
-                        mode_alpha = 0.4 + bass * 0.5 + beat_hit * 0.3;
-                    }
-                    // ——— soft radial bloom ———
-                    VisualMode::Bloom => {
-                        let a = fraction * TAU + t * 0.15;
-                        let bloom = wave(t * 0.35 + fraction) + beat_hit * 0.5;
-                        let r = 30.0 + fraction * 280.0 * (0.7 + bloom * 0.6);
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a;
-                        sx = 20.0 + bloom * 60.0 + state.feedback * 40.0;
-                        sy = 40.0 + bloom * 100.0 + mid * 40.0;
-                        mode_hue = 25.0 + bloom * 40.0 + mid * 30.0;
-                        mode_alpha = 0.2 + bloom * 0.5 + state.feedback * 0.25;
+                    // Family A (0–23): FieldRuntime only (compiled wire or VST fallback).
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit
+                    | VisualMode::Pulse
+                    | VisualMode::Spiral
+                    | VisualMode::Ripple
+                    | VisualMode::Shatter
+                    | VisualMode::Flux
+                    | VisualMode::Lattice
+                    | VisualMode::Drift
+                    | VisualMode::Storm
+                    | VisualMode::Echo
+                    | VisualMode::Vortex
+                    | VisualMode::Fracture
+                    | VisualMode::Nebula
+                    | VisualMode::Prism
+                    | VisualMode::Scanner
+                    | VisualMode::Comet
+                    | VisualMode::Bloom => {
+                        mode_alpha = 0.0;
                     }
                     VisualMode::Figure => {
                         mode_alpha = 0.0;
@@ -3202,6 +2538,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -3247,177 +2584,32 @@ fn update_visuals(
                 );
 
                 match deck_mode {
-                    VisualMode::Tunnel => {
-                        transform.rotation = Quat::from_rotation_z(angle + fraction * TAU * 0.5);
-                        transform.scale.x *= 0.55 + state.depth;
-                        transform.scale.y *= 1.4 + fraction;
-                    }
-                    VisualMode::Burst => {
-                        transform.scale.x *= 0.35 + beat_hit * 2.4 + cue_hit;
-                        transform.scale.y *= 1.0 + beat_hit * 1.6;
-                        alpha *= 0.45 + beat_hit;
-                    }
-                    VisualMode::Mirror => {
-                        transform.translation.x = if element.index % 2 == 0 {
-                            transform.translation.x.abs()
-                        } else {
-                            -transform.translation.x.abs()
-                        };
-                        transform.scale.x *= 0.75;
-                        alpha *= 1.1;
-                    }
-                    VisualMode::Wash => {
-                        transform.scale.x *= 1.8;
-                        transform.scale.y *= 2.2 + state.feedback;
-                        alpha *= 1.35;
-                    }
-                    VisualMode::Strobe => {
-                        // Use transient envelope for flashing, not sustained bass level.
-                        let gate = (bass_activity + beat_hit).clamp(0.0, 1.0);
-                        let on = if gate > 0.28 { 1.0 } else { 0.0 };
-                        alpha *= on;
-                        transform.scale.x *= 1.0 + bass_activity * 0.6;
-                    }
-                    VisualMode::Swarm => {
-                        let dx = (t * 1.0 + fraction * 17.0).sin() * 240.0;
-                        let dy = (t * 1.4 + fraction * 11.0).cos() * 100.0;
-                        transform.translation.x = dx;
-                        transform.translation.y = dy;
-                        transform.rotation = Quat::from_rotation_z(t * 0.7 + fraction * TAU);
-                    }
-                    VisualMode::Orbit => {
-                        let orbit_a = t * 0.6 + fraction * TAU;
-                        transform.translation.x = orbit_a.cos() * (180.0 + fraction * 80.0);
-                        transform.translation.y = orbit_a.sin() * (120.0 + fraction * 40.0);
-                    }
-                    VisualMode::Pulse => {
-                        let pump = (beat * TAU).sin().abs();
-                        transform.scale.x *= 0.6 + pump * 1.4;
-                        transform.scale.y *= 0.5 + pump * 2.2;
-                        alpha *= 0.4 + pump * 0.9;
-                    }
-                    VisualMode::Spiral => {
-                        let spiral_a = fraction * TAU * 3.0 + t * 0.5;
-                        transform.translation.x = spiral_a.cos() * (160.0 + fraction * 100.0);
-                        transform.translation.y = spiral_a.sin() * (160.0 + fraction * 100.0);
-                        transform.rotation = Quat::from_rotation_z(spiral_a);
-                        transform.scale.x *= 0.5;
-                    }
-                    VisualMode::Ripple => {
-                        let ripple = (fraction * 10.0 - t * (1.1 + bass * 1.8)).sin();
-                        transform.scale.x *= 1.0 + ripple.abs() * (0.5 + bass);
-                        transform.scale.y *= 0.8 + ripple.abs() * (0.8 + bass * 0.6);
-                        alpha *= 0.35 + ripple.abs() * 0.45;
-                    }
-                    VisualMode::Shatter => {
-                        let shard = (fraction * 19.0 + t * 5.0).sin();
-                        transform.translation.x += shard * (80.0 + high * 120.0);
-                        transform.scale.x *= 0.35 + shard.abs();
-                        alpha *= 0.3 + high * 0.55;
-                    }
-                    VisualMode::Flux => {
-                        let flow = wave(t * 0.7 + fraction * 4.0);
-                        transform.translation.x += flow * 90.0;
-                        transform.translation.y -= flow * 50.0;
-                        transform.rotation = Quat::from_rotation_z(flow * 0.5 + fraction);
-                    }
-                    VisualMode::Lattice => {
-                        transform.translation.x = (transform.translation.x / 80.0).round() * 80.0;
-                        transform.translation.y = (transform.translation.y / 50.0).round() * 50.0;
-                        transform.scale.x *= 0.7 + (element.index % 4) as f32 * 0.12;
-                    }
-                    VisualMode::Drift => {
-                        let drift_a = t * 0.12 + fraction * TAU;
-                        transform.translation.x = drift_a.cos() * (140.0 + fraction * 40.0);
-                        transform.translation.y = drift_a.sin() * (80.0 + fraction * 20.0);
-                        alpha *= 0.55 + state.feedback * 0.25;
-                    }
-                    VisualMode::Storm => {
-                        // Ghost layer: soft rain wash; brighten with the bolt envelope.
-                        let fall = (t * 1.8 + fraction * 3.0 + element.seed).fract();
-                        transform.translation.x += (fraction - 0.5) * 40.0 + fall * 30.0;
-                        transform.translation.y = (0.5 - fall) * STAGE_HEIGHT * 0.6;
-                        transform.rotation = Quat::from_rotation_z(-0.5);
-                        transform.scale.x *= 0.35 + high * 0.4;
-                        transform.scale.y *= 0.8 + trail_gain * 1.2 + beat_hit * 0.8;
-                        alpha *= 0.2 + trail_gain * 0.45 + beat_hit * 0.5 + state.osc_pulse * 0.25;
-                        hue += 200.0;
-                    }
-                    VisualMode::Echo if trail_gain > 0.0 => {
-                        let life2 = (t * (0.45 + trail_gain * 1.1) + fraction * 1.6).fract();
-                        let trail2 = (1.0 - life2).powf(1.8 - trail_gain * 1.1);
-                        let ex = (t * 0.6 + fraction * 1.2).sin() * trail_gain * (70.0 + 90.0);
-                        transform.translation.x += ex;
-                        transform.scale.x *= 0.35 + trail_gain * 0.7 + high * 0.3 * trail_gain;
-                        transform.scale.y *= (0.6 + trail2 * 1.6) * (0.8 + high * 0.3 * trail_gain);
-                        alpha *= (trail2 * (0.7 + trail_gain * 0.5) + high * 0.15 * trail_gain) * trail_gain;
-                    }
-                    VisualMode::Echo => {}
-                    VisualMode::Vortex => {
-                        let va = fraction * TAU * 2.2 + t * (2.6 + bass * 3.4);
-                        let vr = 110.0 - bass * 55.0;
-                        transform.translation.x = va.cos() * vr;
-                        transform.translation.y = va.sin() * (vr * 0.65);
-                        transform.rotation = Quat::from_rotation_z(va * 2.0);
-                        transform.scale.x *= 0.45 + bass * 0.8;
-                        alpha *= 0.45 + bass * 0.5 + beat_hit * 0.4;
-                    }
-                    VisualMode::Fracture => {
-                        let fj = (fraction * 23.0 + t * 9.0 + high * 6.0).sin();
-                        transform.translation.x += fj * (55.0 + high * 85.0);
-                        transform.scale.x *= 0.3 + fj.abs() * 0.8 + beat_hit;
-                        alpha *= 0.25 + high * 0.5 + state.osc_pulse * 0.3;
-                        hue += fj * 110.0;
-                    }
-                    VisualMode::Nebula => {
-                        let nd = t * 0.09 + fraction * 1.1;
-                        transform.translation.x = nd.cos() * (95.0 + mid * 40.0);
-                        transform.translation.y = nd.sin() * (55.0 + high * 35.0);
-                        transform.scale.x *= 1.4 + wave(t + fraction) * 1.6 + osc_drive * 0.8;
-                        transform.scale.y *= 0.9 + (mid + high) * 0.5;
-                        alpha *= 0.2 + (mid * 0.4 + high * 0.3) + state.feedback * 0.15;
-                    }
-                    VisualMode::Prism => {
-                        let split = (element.index % 3) as f32 - 1.0;
-                        let shimmer = wave(t * (0.8 + mid) + fraction * TAU * 2.0);
-                        transform.translation.x += split * (44.0 + high * 72.0);
-                        transform.translation.y += (shimmer - 0.5) * (34.0 + high * 44.0);
-                        transform.rotation *= Quat::from_rotation_z(split * 0.35 + shimmer * 0.28);
-                        transform.scale.x *= 0.7 + shimmer * 1.2 + high * 0.45;
-                        alpha *= 0.36 + shimmer * 0.45 + high * 0.25;
-                        hue += split * 90.0 + shimmer * 110.0;
-                    }
-                    VisualMode::Scanner => {
-                        let scan = ((t * (0.5 + state.speed * 0.16 + high * 0.6) + fraction).fract() * 2.0)
-                            - 1.0;
-                        transform.translation.x = wave(t * 0.7 + fraction * 4.0) * STAGE_WIDTH * 0.16;
-                        transform.translation.y = scan * STAGE_HEIGHT * 0.42;
-                        transform.rotation = Quat::from_rotation_z(0.0);
-                        transform.scale.x *= 1.55 + high * 0.9;
-                        transform.scale.y *= 0.38 + state.osc_pulse * 1.4 + beat_hit * 0.6;
-                        alpha *= 0.28 + state.osc_pulse * 0.65 + high * 0.28;
-                        hue += 175.0 + scan * 65.0;
-                    }
-                    VisualMode::Comet => {
-                        let ca = t * (1.2 + bass * 2.6) + fraction * TAU * 1.4;
-                        let cr = 90.0 + fraction * 260.0 + bass * 55.0;
-                        transform.translation.x = ca.cos() * cr;
-                        transform.translation.y = ca.sin() * cr * 0.55;
-                        transform.rotation = Quat::from_rotation_z(ca + TAU * 0.25);
-                        transform.scale.x *= 0.38 + trail_gain * 0.8 + high * 0.3;
-                        transform.scale.y *= 1.15 + bass * 1.2 + beat_hit * 0.7;
-                        alpha *= 0.34 + bass * 0.48 + trail_gain * 0.36;
-                        hue += ca.to_degrees() * 0.28 + bass * 55.0;
-                    }
-                    VisualMode::Bloom => {
-                        let bloom = (wave(t * 0.32 + fraction * TAU) + beat_hit * 0.7 + cue_hit * 0.45)
-                            .clamp(0.0, 1.7);
-                        transform.translation.x *= 0.75 + bloom * 0.35;
-                        transform.translation.y *= 0.75 + bloom * 0.35;
-                        transform.scale.x *= 1.25 + bloom * 1.5 + state.feedback * 0.8;
-                        transform.scale.y *= 0.9 + bloom * 0.9 + mid * 0.35;
-                        alpha *= 0.18 + bloom * 0.45 + state.feedback * 0.3;
-                        hue += 30.0 + bloom * 35.0;
+                    // Family A (0–23): FieldRuntime only (compiled wire or VST fallback).
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit
+                    | VisualMode::Pulse
+                    | VisualMode::Spiral
+                    | VisualMode::Ripple
+                    | VisualMode::Shatter
+                    | VisualMode::Flux
+                    | VisualMode::Lattice
+                    | VisualMode::Drift
+                    | VisualMode::Storm
+                    | VisualMode::Echo
+                    | VisualMode::Vortex
+                    | VisualMode::Fracture
+                    | VisualMode::Nebula
+                    | VisualMode::Prism
+                    | VisualMode::Scanner
+                    | VisualMode::Comet
+                    | VisualMode::Bloom => {
+                        alpha = 0.0;
                     }
                     // Mesh catalog owns the look; hide CPU geometry for this deck.
                     VisualMode::Figure => {
@@ -3448,7 +2640,6 @@ fn update_visuals(
                     | VisualMode::Eigenvectors
                     | VisualMode::BooleanLattices
                     | VisualMode::Forcing => {}
-                    VisualMode::Beams => {}
                 }
 
                 hue += fraction * 90.0;
