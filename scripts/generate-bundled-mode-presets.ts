@@ -134,7 +134,7 @@ function expectedPresets(): Map<string, ModePreset> {
  * (e.g. PR6 FieldRuntime vertical-slice `supernova`). Generate/check must not
  * delete or flag these as stale.
  */
-const EXTRA_BUNDLED_SLUGS = new Set(['supernova']);
+const EXTRA_BUNDLED_SLUGS = new Set(['supernova', 'point-cloud']);
 
 function writeDeck(deckId: (typeof DECK_IDS)[number], presets: Map<string, ModePreset>): number {
   const deckRoot = join(DECKS_ROOT, deckId);

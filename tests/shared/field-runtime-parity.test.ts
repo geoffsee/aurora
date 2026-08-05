@@ -53,6 +53,47 @@ const FAMILY_A_MODES = [
   { slug: 'bloom', legacyIndex: 23, primitiveId: FIELD_PRIMITIVE_IDS.bloom },
 ] as const;
 
+describe('FieldRuntime / point_cloud particulate field', () => {
+  test('bundled point-cloud presets validate and compile for both decks', () => {
+    for (const deck of ['deck-a', 'deck-b'] as const) {
+      const path = resolve(REPO_ROOT, `data/decks/${deck}/point-cloud/preset.json`);
+      const raw = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+      const validated = validateModePreset(raw);
+      expect(validated.ok, `${deck}: ${!validated.ok ? validated.errors.join('; ') : ''}`).toBe(
+        true,
+      );
+      if (!validated.ok) return;
+
+      const compiled = compileModePreset(validated.value, {
+        epoch: 1,
+        deck,
+        assetBase: `/api/data/e/1/decks/${deck}/point-cloud/`,
+      });
+      expect(compiled.ok).toBe(true);
+      if (!compiled.ok) return;
+
+      const wire: CompiledModeWire = compiled.value;
+      expect(wire.wireVersion).toBe(COMPILED_MODE_WIRE_VERSION);
+      expect(wire.slug).toBe('point-cloud');
+      expect(wire.suppressLegacyField).toBe(true);
+      expect(wire.field?.primitiveId).toBe(FIELD_PRIMITIVE_IDS.point_cloud);
+      expect(wire.field?.primitiveName).toBe('point_cloud');
+      expect(wire.field?.params.intensity).toBeCloseTo(0.92);
+      expect(wire.field?.params.density).toBeCloseTo(0.58);
+      expect(wire.field?.params.swirl).toBeCloseTo(0.4);
+      expect(wire.field?.params.scatter).toBeCloseTo(0.48);
+      expect(wire.field?.params.sparkle).toBeCloseTo(0.62);
+    }
+  });
+
+  test('point_cloud permanent id is 2 and is not a Family A legacy map entry', () => {
+    expect(FIELD_PRIMITIVE_IDS.point_cloud).toBe(2);
+    const familyIds = new Set(FAMILY_A_MODES.map((m) => m.primitiveId as number));
+    expect(familyIds.has(FIELD_PRIMITIVE_IDS.point_cloud)).toBe(false);
+    expect(FIELD_POOLS).toHaveLength(4);
+  });
+});
+
 describe('FieldRuntime / supernova vertical slice', () => {
   test('bundled supernova presets validate and compile for both decks', () => {
     for (const deck of ['deck-a', 'deck-b'] as const) {

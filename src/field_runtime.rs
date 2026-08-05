@@ -1,6 +1,7 @@
 //! FieldRuntime — DSL-backed poses for the four CPU field pools.
 //!
 //! PR6 (#240): `supernova_burst` (id 1) vertical slice.
+//! `point_cloud` (id 2): dense audio-reactive particulate field (all four pools).
 //! PR8 (#242): Family A modes 0–7 (`beams`…`orbit`, ids 10–17) for **all four**
 //! pools.
 //! PR9 (#243): Family A modes 8–15 (`pulse`…`storm`, ids 18–25) for **all four**
@@ -26,6 +27,8 @@ use bevy::prelude::Resource;
 
 /// Must stay in lockstep with `FIELD_PRIMITIVE_IDS.supernova_burst` in TS.
 pub const PRIMITIVE_SUPERNOVA_BURST: u32 = 1;
+/// Must stay in lockstep with `FIELD_PRIMITIVE_IDS.point_cloud` in TS.
+pub const PRIMITIVE_POINT_CLOUD: u32 = 2;
 
 // Family A (legacy indices 0–7) — permanent ids 10–17.
 pub const PRIMITIVE_BEAMS: u32 = 10;
@@ -395,6 +398,7 @@ pub fn is_implemented_primitive(id: u32) -> bool {
     matches!(
         id,
         PRIMITIVE_SUPERNOVA_BURST
+            | PRIMITIVE_POINT_CLOUD
             | PRIMITIVE_BEAMS
             | PRIMITIVE_TUNNEL
             | PRIMITIVE_BURST
@@ -425,6 +429,7 @@ pub fn is_implemented_primitive(id: u32) -> bool {
 pub fn primitive_name(id: u32) -> &'static str {
     match id {
         PRIMITIVE_SUPERNOVA_BURST => "supernova_burst",
+        PRIMITIVE_POINT_CLOUD => "point_cloud",
         PRIMITIVE_BEAMS => "beams",
         PRIMITIVE_TUNNEL => "tunnel",
         PRIMITIVE_BURST => "burst",
@@ -473,6 +478,9 @@ fn pose_for_field(
     Some(match field.primitive_id {
         PRIMITIVE_SUPERNOVA_BURST => {
             pose_supernova_burst(pool, element_index, seed, col, row, field, inputs)
+        }
+        PRIMITIVE_POINT_CLOUD => {
+            pose_point_cloud(pool, element_index, seed, col, row, field, inputs)
         }
         PRIMITIVE_BEAMS => pose_beams(pool, element_index, seed, col, row, field, inputs),
         PRIMITIVE_TUNNEL => pose_tunnel(pool, element_index, seed, col, row, field, inputs),
@@ -529,6 +537,206 @@ fn field_live_energy(inputs: &FieldFrameInputs) -> (f32, f32) {
 
 fn intensity_param(field: &CompiledFieldDef) -> f32 {
     clamp(param(field, "intensity", 1.0), 0.0, 1.0)
+}
+
+// ── point_cloud — all four pools ─────────────────────────────────────────────
+
+fn point_cloud_params(field: &CompiledFieldDef) -> (f32, f32, f32, f32, f32) {
+    let intensity = clamp(param(field, "intensity", 0.9), 0.0, 1.0);
+    let density = clamp(param(field, "density", 0.55), 0.0, 1.0);
+    let swirl = clamp(param(field, "swirl", 0.35), -2.0, 2.0);
+    let scatter = clamp(param(field, "scatter", 0.45), 0.0, 1.0);
+    let sparkle = clamp(param(field, "sparkle", 0.55), 0.0, 1.0);
+    (intensity, density, swirl, scatter, sparkle)
+}
+
+/// Deterministic hash in 0..1 from a seed (no allocation).
+fn hash01(x: f32) -> f32 {
+    let n = (x * 12.9898 + 78.233).sin() * 43758.5453;
+    n.fract().abs()
+}
+
+/// Audio-reactive particulate cloud.
+///
+/// Reuses the four CPU sprite pools as points: short beam stubs, soft ring orbs,
+/// tile dots, and ghost particles. Layout is a swirling 3D-ish shell with bass
+/// breathing, high-band sparkle, and calm #232 lightness ceilings.
+pub fn pose_point_cloud(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let (intensity, density, swirl, scatter, sparkle) = point_cloud_params(field);
+    let t = inputs.t * inputs.speed.max(0.05);
+    let breath = 1.0 + inputs.bass * 0.22 + inputs.beat_hit * 0.18 + inputs.cue_hit * 0.12;
+    let energy = clamp(
+        inputs.intensity_drive * (0.55 + intensity * 0.55) * (0.7 + inputs.deck_drive * 0.4),
+        0.2,
+        2.0,
+    );
+    let spark = (inputs.high * 0.65 + inputs.mid * 0.2 + inputs.flash * 0.35) * sparkle;
+    let core_pull = 0.35 + density * 0.65;
+
+    match pool {
+        FieldPool::Beams => {
+            // Near-points: short thin stubs on a star-field sphere.
+            let n = inputs.beam_count.max(1) as f32;
+            let i = element_index as f32;
+            let u = hash01(seed * 17.1 + i * 0.73);
+            let v = hash01(seed * 9.3 + i * 1.91);
+            let w = hash01(seed * 3.7 + i * 2.41);
+            let theta = u * TAU + t * (0.12 + swirl * 0.55);
+            let phi = (v * 2.0 - 1.0).clamp(-1.0, 1.0).acos(); // 0..PI polar
+            let r_base = (80.0 + w * 280.0 * (1.2 - density * 0.55)) * breath;
+            let jitter = (hash01(i + t * 0.15 + seed) - 0.5) * scatter * 48.0;
+            let r = r_base + jitter + inputs.pulse * 18.0;
+            let px = theta.cos() * phi.sin() * r;
+            let py = phi.cos() * r * 0.72 + (wave(t * 0.7 + seed * 4.0) - 0.5) * scatter * 22.0;
+            let pz = 4.0 + w * 6.0;
+            let rot = theta + swirl * 0.08;
+            // Tiny stubs — read as points more than beams.
+            let point = 2.2 + energy * 1.4 + spark * 2.2;
+            let sx = point * (0.7 + spark * 0.5);
+            let sy = point * (0.85 + intensity * 0.25) + spark * 1.5;
+            let alpha = (0.18 + intensity * 0.42 + spark * 0.35)
+                * (0.45 + (1.0 - (r / 420.0).clamp(0.0, 1.0)) * 0.55 * core_pull)
+                * (0.55 + (1.0 - (i / n)) * 0.35);
+            let hue = seed * 280.0 + t * 8.0 * swirl.abs().max(0.1) + spark * 50.0 + u * 40.0;
+            let lightness = 0.48 + spark * 0.12 + intensity * 0.06 + inputs.high * 0.04;
+            FieldPose {
+                px,
+                py,
+                pz,
+                rot,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: alpha.clamp(0.0, 1.15),
+                hue,
+                lightness: lightness.clamp(0.12, 0.9),
+            }
+        }
+        FieldPool::Rings => {
+            // Soft dust orbs on layered shells (ring sprites scaled as round-ish blobs).
+            let n = inputs.ring_count.max(1) as f32;
+            let layer = if n > 1.0 {
+                element_index as f32 / (n - 1.0)
+            } else {
+                0.0
+            };
+            let phase = (t * (0.18 + swirl.abs() * 0.12) + layer * 0.37 + seed).fract();
+            let shell = (90.0 + layer * 95.0 + phase * 40.0 * scatter) * breath * (0.75 + density * 0.35);
+            // Small round marks, not huge expanding rings.
+            let size = (14.0 + (1.0 - layer) * 10.0 + energy * 4.0 + spark * 8.0)
+                * (0.55 + intensity * 0.5);
+            let ang = t * (0.08 + swirl * 0.2) + layer * TAU * 0.17 + seed * 2.0;
+            let px = ang.cos() * shell * 0.08 * scatter;
+            let py = ang.sin() * shell * 0.05 * scatter;
+            let glow = (1.0 - layer) * (0.55 + phase * 0.45);
+            let alpha = (0.04 + 0.16 * glow + spark * 0.12) * (0.5 + intensity * 0.5);
+            let hue = 200.0 + layer * 28.0 + t * 6.0 + spark * 30.0;
+            let lightness = 0.5 + glow * 0.06 + spark * 0.05;
+            FieldPose {
+                px,
+                py,
+                pz: 16.0 - layer,
+                rot: ang,
+                sx: size.max(1.0),
+                sy: size.max(1.0),
+                alpha: alpha.clamp(0.0, 0.85),
+                hue,
+                lightness: lightness.clamp(0.12, 0.88),
+            }
+        }
+        FieldPool::Tiles => {
+            // Dot lattice with depth parallax and audio displacement.
+            let cols = inputs.tile_cols.max(1) as f32;
+            let rows = inputs.tile_rows.max(1) as f32;
+            let u = if cols > 1.0 {
+                col as f32 / (cols - 1.0)
+            } else {
+                0.5
+            };
+            let v = if rows > 1.0 {
+                row as f32 / (rows - 1.0)
+            } else {
+                0.5
+            };
+            let cx = u - 0.5;
+            let cy = v - 0.5;
+            let dist = (cx * cx + cy * cy).sqrt();
+            let ang = cy.atan2(cx);
+            let h = hash01(col as f32 * 12.1 + row as f32 * 7.7 + seed * 3.0);
+            let swirl_ang = ang + t * (0.15 + swirl * 0.4) + h * scatter * 0.8;
+            let radius = dist * (1.05 - density * 0.35) * breath;
+            let stage_w = STAGE_WIDTH;
+            let stage_h = STAGE_HEIGHT;
+            let jitter_x = (hash01(h + t * 0.11) - 0.5) * scatter * 36.0;
+            let jitter_y = (hash01(h * 2.3 + t * 0.09) - 0.5) * scatter * 28.0;
+            let px = swirl_ang.cos() * radius * stage_w * 0.92 + jitter_x + inputs.mid * cx * 12.0;
+            let py = swirl_ang.sin() * radius * stage_h * 0.92 + jitter_y + inputs.bass * cy * 10.0;
+            // Tiny squares → point-like cells; checker thins density for calm.
+            let point = (3.2 + energy * 2.8 + spark * 3.5 + (1.0 - dist) * 1.5 * intensity)
+                * (0.65 + density * 0.45);
+            let parity = if (col + row) % 2 == 0 { 1.0 } else { 0.38 };
+            let alpha = (0.12 + intensity * 0.4 + spark * 0.28)
+                * (0.4 + (1.0 - dist).max(0.0) * 0.6)
+                * parity
+                * (0.7 + core_pull * 0.3);
+            let hue = ang.to_degrees() + t * 10.0 + h * 60.0 + spark * 40.0;
+            let lightness = 0.46 + spark * 0.1 + intensity * 0.05 + (1.0 - dist) * 0.04;
+            FieldPose {
+                px,
+                py,
+                pz: 6.0 + dist * 4.0 + h,
+                rot: swirl_ang * 0.15,
+                sx: point.max(1.0),
+                sy: point.max(1.0),
+                alpha: alpha.clamp(0.0, 1.1),
+                hue,
+                lightness: lightness.clamp(0.12, 0.9),
+            }
+        }
+        FieldPool::Ghost => {
+            // Primary particle stream — soft trailing points in a turbulent cloud.
+            let n = inputs.ghost_count.max(1) as f32;
+            let i = element_index as f32;
+            let fraction = i / n;
+            let u = hash01(seed * 5.1 + i * 1.37);
+            let v = hash01(seed * 2.9 + i * 2.11);
+            let life = (t * (0.18 + inputs.feedback * 0.25 + density * 0.12) + u * 3.0 + fraction)
+                .fract();
+            let trail = (1.0 - life).powf(1.35);
+            let theta = u * TAU + t * (0.22 + swirl * 0.65) + life * swirl * 0.4;
+            let elev = (v * 2.0 - 1.0) * (0.55 + scatter * 0.35);
+            let r = (55.0 + fraction * 200.0 * (1.15 - density * 0.4) + life * 40.0 * scatter)
+                * breath
+                * (0.55 + intensity * 0.5);
+            let px = theta.cos() * r * (1.0 - elev.abs() * 0.25);
+            let py = theta.sin() * r * 0.68 + elev * 120.0 * scatter + (wave(t + u * 6.0) - 0.5) * 18.0;
+            let point = (6.0 + 28.0 * trail * intensity + spark * 14.0 + inputs.pulse * 6.0)
+                * (0.4 + inputs.feedback.max(0.25));
+            let alpha = trail
+                * (0.08 + intensity * 0.28 + spark * 0.22 + inputs.feedback * 0.18)
+                * (0.5 + (1.0 - fraction) * 0.5);
+            let hue = seed * 200.0 + t * 12.0 + life * 80.0 + spark * 45.0 + fraction * 25.0;
+            let lightness = 0.5 + trail * 0.08 + spark * 0.06;
+            FieldPose {
+                px,
+                py,
+                pz: -6.0 + fraction * 3.0,
+                rot: theta * 0.2,
+                sx: point.max(1.0),
+                sy: point.max(1.0),
+                alpha: alpha.clamp(0.0, 0.95),
+                hue,
+                lightness: lightness.clamp(0.12, 0.9),
+            }
+        }
+    }
 }
 
 // ── supernova_burst — all four pools ─────────────────────────────────────────
@@ -3751,6 +3959,54 @@ mod tests {
             let pose = pose_supernova_burst(pool, 0, 0.1, 1, 1, &field, &inputs);
             assert_pose_sane(&pose, &format!("supernova {pool:?}"));
         }
+    }
+
+    fn sample_point_cloud_field() -> CompiledFieldDef {
+        let mut params = HashMap::new();
+        params.insert("intensity".into(), 0.92);
+        params.insert("density".into(), 0.58);
+        params.insert("swirl".into(), 0.4);
+        params.insert("scatter".into(), 0.48);
+        params.insert("sparkle".into(), 0.62);
+        CompiledFieldDef {
+            primitive_id: PRIMITIVE_POINT_CLOUD,
+            primitive_name: "point_cloud".into(),
+            params,
+        }
+    }
+
+    #[test]
+    fn point_cloud_covers_all_four_pools() {
+        let field = sample_point_cloud_field();
+        let inputs = sample_inputs(0.75);
+        for pool in [
+            FieldPool::Beams,
+            FieldPool::Rings,
+            FieldPool::Tiles,
+            FieldPool::Ghost,
+        ] {
+            let pose = pose_point_cloud(pool, 2, 0.22, 3, 1, &field, &inputs);
+            assert_pose_sane(&pose, &format!("point_cloud {pool:?}"));
+            // Point-like: scales stay modest (not giant beam sticks / wash tiles).
+            assert!(
+                pose.sx < 80.0 && pose.sy < 80.0,
+                "point_cloud {pool:?} scale too large: sx={} sy={}",
+                pose.sx,
+                pose.sy
+            );
+        }
+    }
+
+    #[test]
+    fn point_cloud_is_implemented_and_named() {
+        assert!(is_implemented_primitive(PRIMITIVE_POINT_CLOUD));
+        assert_eq!(primitive_name(PRIMITIVE_POINT_CLOUD), "point_cloud");
+        let rt = FieldRuntime::default();
+        let inputs = sample_inputs(0.5);
+        // Without a compiled wire, point_cloud is slug-only (no legacy fallback id).
+        assert!(rt
+            .pose(FieldDeck::A, FieldPool::Ghost, 0, 0.1, 0, 0, &inputs, None)
+            .is_none());
     }
 
     #[test]

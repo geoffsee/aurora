@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "point-cloud",
+  "slug": "point-cloud",
+  "label": "Point Cloud",
+  "character": "Dense audio-reactive particulate field — swirling star-shell with bass breath and high-band sparkle across beams, rings, tiles, and ghost.",
+  "uiGroup": "field-motion",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "point_cloud",
+    "params": {
+      "intensity": 0.92,
+      "density": 0.58,
+      "swirl": 0.4,
+      "scatter": 0.48,
+      "sparkle": 0.62
+    }
+  },
+  "layers": [],
+  "suppressLegacyField": true,
+  "engineMinCapabilities": ["field-runtime"]
+}

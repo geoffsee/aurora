@@ -26,10 +26,11 @@ describe('stageStaticModeCatalog', () => {
     dirs.push(outRoot);
 
     const result = stageStaticModeCatalog({ appRoot: repoRoot, outRoot });
-    expect(result.compiledCount).toBe(100);
+    // 49 legacy + supernova + point-cloud per deck → 51 × 2 = 102 compiled wires.
+    expect(result.compiledCount).toBe(102);
     expect(result.catalog.epoch).toBeGreaterThanOrEqual(1);
-    expect(result.catalog.decks['deck-a']).toHaveLength(50);
-    expect(result.catalog.decks['deck-b']).toHaveLength(50);
+    expect(result.catalog.decks['deck-a']).toHaveLength(51);
+    expect(result.catalog.decks['deck-b']).toHaveLength(51);
 
     const catalogPath = join(outRoot, 'api/modes/catalog.json');
     expect(existsSync(catalogPath)).toBe(true);
@@ -39,6 +40,7 @@ describe('stageStaticModeCatalog', () => {
     };
     expect(catalog.contentHash).toBe(result.catalog.contentHash);
     expect(catalog.decks['deck-a'].some((e) => e.slug === 'beams')).toBe(true);
+    expect(catalog.decks['deck-a'].some((e) => e.slug === 'point-cloud')).toBe(true);
 
     const beams = JSON.parse(
       readFileSync(join(outRoot, 'api/modes/compiled/deck-a/beams.json'), 'utf8'),
@@ -48,5 +50,6 @@ describe('stageStaticModeCatalog', () => {
     expect(beams.deck).toBe('deck-a');
 
     expect(existsSync(join(outRoot, 'api/modes/compiled/deck-b/tunnel.json'))).toBe(true);
+    expect(existsSync(join(outRoot, 'api/modes/compiled/deck-a/point-cloud.json'))).toBe(true);
   });
 });
