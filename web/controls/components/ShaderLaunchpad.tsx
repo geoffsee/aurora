@@ -2,7 +2,7 @@ import { Box, Button, Flex, Grid, Text } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
 import { SHADER_OPTIONS } from '../lib/constants.ts';
 
-type ShaderAccent = 'cyan' | 'pink' | 'purple';
+type ShaderAccent = 'yellow' | 'teal' | 'purple';
 
 type ShaderLaunchpadProps = {
   value: number;

@@ -87,6 +87,14 @@ unsafe extern "C" {
     fn browser_control_freeze() -> bool;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlShowGpuPalette)]
     fn browser_control_show_gpu_palette() -> bool;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCpuDeckAEnabled)]
+    fn browser_control_cpu_deck_a_enabled() -> bool;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlCpuDeckBEnabled)]
+    fn browser_control_cpu_deck_b_enabled() -> bool;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlGpuDeckAEnabled)]
+    fn browser_control_gpu_deck_a_enabled() -> bool;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlGpuDeckBEnabled)]
+    fn browser_control_gpu_deck_b_enabled() -> bool;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlMaxBrightness)]
     fn browser_control_max_brightness() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlFlashVersion)]
@@ -383,6 +391,10 @@ struct VjState {
     blackout: bool,
     freeze: bool,
     show_gpu_palette: bool,
+    cpu_deck_a_enabled: bool,
+    cpu_deck_b_enabled: bool,
+    gpu_deck_a_enabled: bool,
+    gpu_deck_b_enabled: bool,
     max_brightness: f32,
     show_time: f32,
     flash: f32,
@@ -445,6 +457,10 @@ impl Default for VjState {
             freeze: false,
             // Dual GPU decks on by default: Aurora Curtains × Aurora Crown.
             show_gpu_palette: true,
+            cpu_deck_a_enabled: false,
+            cpu_deck_b_enabled: false,
+            gpu_deck_a_enabled: true,
+            gpu_deck_b_enabled: true,
             max_brightness: 0.95,
             show_time: 0.0,
             flash: 0.0,
@@ -1107,6 +1123,10 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.blackout = browser_control_blackout();
         state.freeze = browser_control_freeze();
         state.show_gpu_palette = browser_control_show_gpu_palette();
+        state.cpu_deck_a_enabled = browser_control_cpu_deck_a_enabled();
+        state.cpu_deck_b_enabled = browser_control_cpu_deck_b_enabled();
+        state.gpu_deck_a_enabled = browser_control_gpu_deck_a_enabled();
+        state.gpu_deck_b_enabled = browser_control_gpu_deck_b_enabled();
         state.max_brightness = browser_control_max_brightness().clamp(0.0, 1.0);
 
         if flash_version != state.last_control_flash_version {
@@ -1338,21 +1358,12 @@ fn update_visuals(
     } else {
         0.0
     };
-    // Dual GPU deck mode (and Topo solo) owns the frame — hide CPU geometry so
-    // it doesn't stack on top of fullscreen aurora / shader layers.
-    let gpu_shader_solo = state.show_gpu_palette
-        || (!state.show_gpu_palette && state.active_shader == GPU_SHADER_TOPO_LINES_UI_INDEX);
-    let blackout = if state.blackout || gpu_shader_solo {
-        0.0
-    } else {
-        1.0
-    };
-
     for (element, mut transform, material_handle) in &mut query {
-        let deck_alpha = match element.deck {
-            Deck::A => 1.0 - state.crossfade,
-            Deck::B => state.crossfade,
-        } * blackout;
+        let (deck_mix, cpu_enabled) = match element.deck {
+            Deck::A => (1.0 - state.crossfade, state.cpu_deck_a_enabled),
+            Deck::B => (state.crossfade, state.cpu_deck_b_enabled),
+        };
+        let deck_alpha = deck_mix * if state.blackout || !cpu_enabled { 0.0 } else { 1.0 };
         let deck_drive = match element.deck {
             Deck::A => state.osc_deck_a,
             Deck::B => state.osc_deck_b,
@@ -2685,8 +2696,8 @@ fn update_palette_material(
     mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
     mut gpu_quads: Query<(&GpuShaderQuad, &mut Visibility)>,
 ) {
-    // Active whenever OSC is delivering audio; show_gpu_palette forces it on without OSC.
-    let active = state.osc_connected || state.show_gpu_palette;
+    let any_gpu_enabled = state.gpu_deck_a_enabled || state.gpu_deck_b_enabled;
+    let active = state.osc_connected || any_gpu_enabled;
     let energy = if active {
         state.osc_energy.max(0.0)
     } else {
@@ -2730,16 +2741,24 @@ fn update_palette_material(
         0.0,
     );
 
-    // GPU deck A/B layers: when show_gpu_palette is on we drive two fullscreen
+    // GPU deck A/B layers: independently drive the enabled fullscreen
     // palette quads (indices 10/11) and crossfade their alphas via palette_extra.w.
     // Max brightness scales that crossfade mix only — not palette_brightness.
-    if state.show_gpu_palette {
+    if any_gpu_enabled {
         let a_var = palette_variant_from_ui(state.deck_a_gpu_shader);
         let b_var = palette_variant_from_ui(state.deck_b_gpu_shader);
         let cross = state.crossfade.clamp(0.0, 1.0);
         let master = state.max_brightness.clamp(0.0, 1.0);
-        let alpha_a = ((1.0 - cross) * master).clamp(0.0, 1.0);
-        let alpha_b = (cross * master).clamp(0.0, 1.0);
+        let alpha_a = if state.gpu_deck_a_enabled {
+            ((1.0 - cross) * master).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let alpha_b = if state.gpu_deck_b_enabled {
+            (cross * master).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
 
         let params_a = Vec4::new(display_hue, state.show_time, a_var, aspect);
         let params_b = Vec4::new(display_hue, state.show_time, b_var, aspect);
@@ -2768,7 +2787,9 @@ fn update_palette_material(
 
         // Show only the deck layers; hide classic single-shader quads.
         for (quad, mut vis) in &mut gpu_quads {
-            *vis = if quad.index == 10 || quad.index == 11 {
+            *vis = if (quad.index == 10 && state.gpu_deck_a_enabled)
+                || (quad.index == 11 && state.gpu_deck_b_enabled)
+            {
                 Visibility::Inherited
             } else {
                 Visibility::Hidden
@@ -2777,56 +2798,13 @@ fn update_palette_material(
         return;
     }
 
-    // Legacy single-shader picker path (active when GPU palette is not forced on).
-    // UI indices follow SHADER_OPTIONS (Shadertoy at 0, grid at 5); palette variant
-    // ids keep their legacy numbering via palette_variant_from_ui().
-    let (quad_index, palette_variant) = resolve_gpu_shader(state.active_shader);
+    // Neither GPU deck is enabled, so hide every GPU layer and leave the frame
+    // to the independently-enabled CPU decks.
+    for (_, mut vis) in &mut gpu_quads {
+        *vis = Visibility::Hidden;
+    }
+    return;
 
-    let params = Vec4::new(display_hue, state.show_time, palette_variant, aspect);
-    let grid_params = Vec4::new(
-        state.palette_r,
-        state.palette_g,
-        state.show_time,
-        state.palette_b,
-    );
-    let palette_extra = Vec4::new(
-        palette_extra_base.x,
-        palette_extra_base.y,
-        palette_extra_base.z,
-        1.0,
-    );
-
-    if let Some(mat) = palette_materials.get_mut(&palette_handle.0) {
-        mat.params = params;
-        mat.palette_extra = palette_extra;
-        mat.audio_uniforms = audio_uniforms;
-        mat.palette_rgb = palette_rgb;
-    }
-    if let Some(mat) = grid_materials.get_mut(&grid_handle.0) {
-        mat.params = grid_params;
-        mat.palette_extra = palette_extra;
-        mat.audio_uniforms = audio_uniforms;
-        mat.grid_extra = Vec4::new(
-            state.grid_density,
-            state.grid_diamond,
-            state.grid_line_width,
-            state.grid_shape_mix,
-        );
-    }
-    if let Some(mat) = imported_materials.get_mut(&imported_handle.0) {
-        mat.params = params;
-        mat.palette_extra = palette_extra;
-        mat.audio_uniforms = audio_uniforms;
-        mat.palette_rgb = palette_rgb;
-    }
-
-    for (quad, mut vis) in &mut gpu_quads {
-        *vis = if quad.index == quad_index {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-    }
 }
 
 fn beat_phase(state: &VjState) -> f32 {

@@ -1,29 +1,25 @@
 import { Box, Grid } from '@chakra-ui/react';
+import { useState } from 'react';
 import { CrossfadePanel } from './components/CrossfadePanel.tsx';
 import { CuesPanel } from './components/CuesPanel.tsx';
 import { ErrorBanners } from './components/ErrorBanners.tsx';
 import { GeoffseePagesNav } from './components/GeoffseePagesNav.tsx';
 import { AudioCurvesPanel, MappingPanel } from './components/MappingPanel.tsx';
-import { MasterPanel } from './components/MasterPanel.tsx';
 import { MetersPanel } from './components/MetersPanel.tsx';
 import { MidiCcPanel, TriggersPanel } from './components/MidiTriggersPanel.tsx';
-import { ModelsPanel } from './components/ModelsPanel.tsx';
 import { PreviewPanel } from './components/PreviewPanel.tsx';
 import { AudioControlPanel, RehearsalPanel } from './components/RehearsalPanel.tsx';
+import { SettingsModal } from './components/SettingsModal.tsx';
 import { SlidersPanel } from './components/SlidersPanel.tsx';
 import { StatusHeader } from './components/StatusHeader.tsx';
 import { ControlsProvider } from './context/ControlsContext.tsx';
 
-// Stage row: large preview + crossfade fill the old dead zone.
-// Pads row: three launchpads only. Params/cues sit below for balance.
 const gridAreas = `
   "head head head head head head head head head head head head"
   "prev prev prev prev prev prev prev prev hero hero hero hero"
   "pads pads pads pads pads pads pads pads pads pads pads pads"
+  "map  map  map  map  reh  reh  reh  reh  reh  reh  reh  reh"
   "cues cues cues cues cues cues cues cues cues cues cues cues"
-  "slid slid slid slid slid slid slid slid slid slid slid slid"
-  "modl modl modl modl modl modl modl modl modl modl modl modl"
-  "mast mast mast mast mast map map map map reh reh reh"
   "audc audc audc audc audc audc audc audc audc audc audc audc"
   "midi midi midi midi midi midi midi midi midi midi midi midi"
   "trig trig trig trig trig trig trig trig trig trig trig trig"
@@ -32,13 +28,15 @@ const gridAreas = `
 `;
 
 export function App() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
     <ControlsProvider>
       <Box
         minH="100vh"
         bgGradient="to-b"
-        gradientFrom="#07080f"
-        gradientTo="#0c0e1a"
+        gradientFrom="#090804"
+        gradientTo="#0e0b0b"
         color="gray.50"
         px={{ base: 2, md: 4 }}
         py={3}
@@ -51,13 +49,11 @@ export function App() {
           gap={3}
           alignItems="stretch"
         >
-          <StatusHeader />
+          <StatusHeader onSettings={() => setSettingsOpen(true)} />
           <PreviewPanel />
           <CrossfadePanel />
           <SlidersPanel />
           <CuesPanel />
-          <ModelsPanel />
-          <MasterPanel />
           <MappingPanel />
           <RehearsalPanel />
           <AudioControlPanel />
@@ -68,6 +64,7 @@ export function App() {
         </Grid>
         <ErrorBanners />
         <GeoffseePagesNav />
+        <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       </Box>
     </ControlsProvider>
   );

@@ -2,13 +2,14 @@ import { Box, Button, Flex, Grid, Text } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
 import { VISUAL_MODES } from '../lib/constants.ts';
 
-type DeckAccent = 'cyan' | 'pink' | 'purple';
+type DeckAccent = 'yellow' | 'teal' | 'purple';
 
 type DeckModeLaunchpadProps = {
   value: number;
   label: string;
   colorPalette: DeckAccent;
   onChange: (value: number) => void;
+  figureControls?: React.ReactNode;
 };
 
 type Category =
@@ -67,6 +68,7 @@ export function DeckModeLaunchpad({
   label,
   colorPalette,
   onChange,
+  figureControls,
 }: DeckModeLaunchpadProps) {
   const [activeCategory, setActiveCategory] = useState<Category>(() => categoryForIndex(value));
 
@@ -161,6 +163,11 @@ export function DeckModeLaunchpad({
           );
         })}
       </Grid>
+      {figureControls && activeCategory === 'figure' && (
+        <Box mt={2} pt={3} borderTop="1px solid" borderColor="whiteAlpha.200">
+          {figureControls}
+        </Box>
+      )}
     </Box>
   );
 }

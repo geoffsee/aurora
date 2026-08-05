@@ -1,9 +1,9 @@
-import { Box, Flex, Text } from '@chakra-ui/react';
+import { Box, Button, Flex, Text } from '@chakra-ui/react';
 import { useControls } from '../context/ControlsContext.tsx';
 import { CLOCK_LABELS } from '../lib/constants.ts';
 import { Panel, StatusPill } from './ui.tsx';
 
-export function StatusHeader() {
+export function StatusHeader({ onSettings }: { onSettings: () => void }) {
   const {
     bridgeStatus,
     state,
@@ -91,6 +91,19 @@ export function StatusHeader() {
           >
             P95 {latencyP95 === null ? '—ms' : `${latencyP95.toFixed(0)}ms`}
           </StatusPill>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onSettings}
+            aria-label="Settings"
+            title="Settings"
+            fontSize="lg"
+            minW="2.5rem"
+            h="2.5rem"
+            p={0}
+          >
+            ⚙️
+          </Button>
         </Flex>
       </Flex>
       {pendingCue ? (

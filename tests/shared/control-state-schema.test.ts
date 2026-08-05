@@ -1,306 +1,312 @@
-import { expect, test } from "vitest";
-import { migrateControlState } from "../../shared/control-state-schema.ts";
+import { expect, test } from 'vitest';
+import { migrateControlState } from '../../shared/control-state-schema.ts';
+import { CONTROL_STATE_SCHEMA_VERSION } from '../../shared/osc-validation.ts';
 
 const DEFAULT_EMA_ALPHAS = {
-	energy: 0.12,
-	bass: 0.08,
-	mid: 0.15,
-	high: 0.65,
-	pulse: 0.85,
+  energy: 0.12,
+  bass: 0.08,
+  mid: 0.15,
+  high: 0.65,
+  pulse: 0.85,
 };
 const DEFAULT_BAND_CURVES = {
-	energy: "linear",
-	bass: "linear",
-	mid: "linear",
-	high: "linear",
+  energy: 'linear',
+  bass: 'linear',
+  mid: 'linear',
+  high: 'linear',
 };
 
-test("v1 state is upgraded through v2..v9 with activeShader=0, bandCurves, emaAlphas, morph, audioControlMode, paletteR/G/B, and outputs added", () => {
-	const result = migrateControlState({
-		schemaVersion: 1,
-		crossfade: 0.5,
-	}) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.activeShader).toBe(0);
-	expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
-	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
-	expect(result.morph).toBe(0);
-	expect(result.audioControlMode).toBe(false);
-	expect(result.paletteR).toBeTypeOf("number");
-	expect(result.paletteG).toBeTypeOf("number");
-	expect(result.paletteB).toBeTypeOf("number");
-	expect(result.audioTransientAutomation).toBe(false);
-	expect(result.outputs).toEqual([]);
+test('v1 state is upgraded through v2..v9 with activeShader=0, bandCurves, emaAlphas, morph, audioControlMode, paletteR/G/B, and outputs added', () => {
+  const result = migrateControlState({
+    schemaVersion: 1,
+    crossfade: 0.5,
+  }) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.activeShader).toBe(0);
+  expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
+  expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
+  expect(result.morph).toBe(0);
+  expect(result.audioControlMode).toBe(false);
+  expect(result.paletteR).toBeTypeOf('number');
+  expect(result.paletteG).toBeTypeOf('number');
+  expect(result.paletteB).toBeTypeOf('number');
+  expect(result.audioTransientAutomation).toBe(false);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v2 state is upgraded through v3..v9", () => {
-	const result = migrateControlState({
-		schemaVersion: 2,
-		activeShader: 1,
-	}) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.activeShader).toBe(1);
-	expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
-	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
-	expect(result.morph).toBe(0);
-	expect(result.audioControlMode).toBe(false);
-	expect(result.outputs).toEqual([]);
+test('v2 state is upgraded through v3..v9', () => {
+  const result = migrateControlState({
+    schemaVersion: 2,
+    activeShader: 1,
+  }) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.activeShader).toBe(1);
+  expect(result.bandCurves).toEqual(DEFAULT_BAND_CURVES);
+  expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
+  expect(result.morph).toBe(0);
+  expect(result.audioControlMode).toBe(false);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v3 state is upgraded through v4..v9 with emaAlphas, morph, audioControlMode, and outputs added", () => {
-	const input = {
-		schemaVersion: 3,
-		activeShader: 1,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "logarithmic",
-			high: "linear",
-		},
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.activeShader).toBe(1);
-	expect(result.bandCurves).toEqual(input.bandCurves);
-	expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
-	expect(result.morph).toBe(0);
-	expect(result.audioControlMode).toBe(false);
-	expect(result.outputs).toEqual([]);
+test('v3 state is upgraded through v4..v9 with emaAlphas, morph, audioControlMode, and outputs added', () => {
+  const input = {
+    schemaVersion: 3,
+    activeShader: 1,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'logarithmic',
+      high: 'linear',
+    },
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.activeShader).toBe(1);
+  expect(result.bandCurves).toEqual(input.bandCurves);
+  expect(result.emaAlphas).toEqual(DEFAULT_EMA_ALPHAS);
+  expect(result.morph).toBe(0);
+  expect(result.audioControlMode).toBe(false);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v4 state is upgraded to v9 with morph, audioControlMode, and outputs added", () => {
-	const input = {
-		schemaVersion: 4,
-		activeShader: 1,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "logarithmic",
-			high: "linear",
-		},
-		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.emaAlphas).toEqual(input.emaAlphas);
-	expect(result.morph).toBe(0);
-	expect(result.audioControlMode).toBe(false);
-	expect(result.outputs).toEqual([]);
+test('v4 state is upgraded to v9 with morph, audioControlMode, and outputs added', () => {
+  const input = {
+    schemaVersion: 4,
+    activeShader: 1,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'logarithmic',
+      high: 'linear',
+    },
+    emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.emaAlphas).toEqual(input.emaAlphas);
+  expect(result.morph).toBe(0);
+  expect(result.audioControlMode).toBe(false);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v3 state with legacy flat emaAlpha* fields carries them forward into emaAlphas", () => {
-	const input = {
-		schemaVersion: 3,
-		activeShader: 1,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "linear",
-			high: "linear",
-		},
-		emaAlphaBass: 0.1,
-		emaAlphaEnergy: 0.3,
-		emaAlphaMid: 0.2,
-		emaAlphaHigh: 0.4,
-		emaAlphaPulse: 0.5,
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.emaAlphas).toEqual({
-		energy: 0.3,
-		bass: 0.1,
-		mid: 0.2,
-		high: 0.4,
-		pulse: 0.5,
-	});
-	expect(result.morph).toBe(0);
-	expect(result.audioControlMode).toBe(false);
-	expect(result.outputs).toEqual([]);
+test('v3 state with legacy flat emaAlpha* fields carries them forward into emaAlphas', () => {
+  const input = {
+    schemaVersion: 3,
+    activeShader: 1,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'linear',
+      high: 'linear',
+    },
+    emaAlphaBass: 0.1,
+    emaAlphaEnergy: 0.3,
+    emaAlphaMid: 0.2,
+    emaAlphaHigh: 0.4,
+    emaAlphaPulse: 0.5,
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.emaAlphas).toEqual({
+    energy: 0.3,
+    bass: 0.1,
+    mid: 0.2,
+    high: 0.4,
+    pulse: 0.5,
+  });
+  expect(result.morph).toBe(0);
+  expect(result.audioControlMode).toBe(false);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v5 state is upgraded to v9 with audioControlMode and outputs added", () => {
-	const input = {
-		schemaVersion: 5,
-		activeShader: 1,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "logarithmic",
-			high: "linear",
-		},
-		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
-		morph: 0.4,
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.activeShader).toBe(1);
-	expect(result.emaAlphas).toEqual(input.emaAlphas);
-	expect(result.morph).toBe(0.4);
-	expect(result.audioControlMode).toBe(false);
-	expect(result.audioTransientAutomation).toBe(false);
-	expect(result.outputs).toEqual([]);
+test('v5 state is upgraded to v9 with audioControlMode and outputs added', () => {
+  const input = {
+    schemaVersion: 5,
+    activeShader: 1,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'logarithmic',
+      high: 'linear',
+    },
+    emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+    morph: 0.4,
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.activeShader).toBe(1);
+  expect(result.emaAlphas).toEqual(input.emaAlphas);
+  expect(result.morph).toBe(0.4);
+  expect(result.audioControlMode).toBe(false);
+  expect(result.audioTransientAutomation).toBe(false);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v6 state is upgraded to v9 with paletteR/G/B derived from legacy palette hue and outputs added", () => {
-	const input = {
-		schemaVersion: 6,
-		activeShader: 1,
-		palette: 0.5,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "logarithmic",
-			high: "linear",
-		},
-		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
-		morph: 0.4,
-		audioControlMode: true,
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.paletteR).toBeTypeOf("number");
-	expect(result.paletteG).toBeTypeOf("number");
-	expect(result.paletteB).toBeTypeOf("number");
-	expect(result.outputs).toEqual([]);
+test('v6 state is upgraded to v9 with paletteR/G/B derived from legacy palette hue and outputs added', () => {
+  const input = {
+    schemaVersion: 6,
+    activeShader: 1,
+    palette: 0.5,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'logarithmic',
+      high: 'linear',
+    },
+    emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+    morph: 0.4,
+    audioControlMode: true,
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.paletteR).toBeTypeOf('number');
+  expect(result.paletteG).toBeTypeOf('number');
+  expect(result.paletteB).toBeTypeOf('number');
+  expect(result.outputs).toEqual([]);
 });
 
-test("v7 state is upgraded to v9 with audioTransientAutomation and outputs added", () => {
-	const input = {
-		schemaVersion: 7,
-		activeShader: 1,
-		paletteR: 0.2,
-		paletteG: 0.4,
-		paletteB: 0.8,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "logarithmic",
-			high: "linear",
-		},
-		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
-		morph: 0.4,
-		audioControlMode: true,
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.audioControlMode).toBe(true);
-	expect(result.audioTransientAutomation).toBe(false);
-	expect(result.outputs).toEqual([]);
+test('v7 state is upgraded to v9 with audioTransientAutomation and outputs added', () => {
+  const input = {
+    schemaVersion: 7,
+    activeShader: 1,
+    paletteR: 0.2,
+    paletteG: 0.4,
+    paletteB: 0.8,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'logarithmic',
+      high: 'linear',
+    },
+    emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+    morph: 0.4,
+    audioControlMode: true,
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.audioControlMode).toBe(true);
+  expect(result.audioTransientAutomation).toBe(false);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v8 state is upgraded to v9 with outputs added", () => {
-	const input = {
-		schemaVersion: 8,
-		activeShader: 1,
-		paletteR: 0.2,
-		paletteG: 0.4,
-		paletteB: 0.8,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "logarithmic",
-			high: "linear",
-		},
-		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
-		morph: 0.4,
-		audioControlMode: true,
-		audioTransientAutomation: true,
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.audioTransientAutomation).toBe(true);
-	expect(result.outputs).toEqual([]);
+test('v8 state is upgraded to v9 with outputs added', () => {
+  const input = {
+    schemaVersion: 8,
+    activeShader: 1,
+    paletteR: 0.2,
+    paletteG: 0.4,
+    paletteB: 0.8,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'logarithmic',
+      high: 'linear',
+    },
+    emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+    morph: 0.4,
+    audioControlMode: true,
+    audioTransientAutomation: true,
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.audioTransientAutomation).toBe(true);
+  expect(result.outputs).toEqual([]);
 });
 
-test("v9 state is upgraded to v12 with layer weights and Figure controls", () => {
-	const input = {
-		schemaVersion: 9,
-		activeShader: 1,
-		paletteR: 0.2,
-		paletteG: 0.4,
-		paletteB: 0.8,
-		bandCurves: {
-			energy: "exponential",
-			bass: "linear",
-			mid: "logarithmic",
-			high: "linear",
-		},
-		emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
-		morph: 0.4,
-		audioControlMode: true,
-		audioTransientAutomation: true,
-		outputs: [],
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.outputs).toEqual([]);
-	for (let i = 0; i < 8; i++) {
-		expect(result[`layerWeight${i}`]).toBe(0);
-	}
-	expect(result.figureModel).toBe(0);
-	expect(result.figureScale).toBe(1);
-	expect(result.figureSpin).toBe(0.35);
-	expect(result.figureHalo).toBe(0.75);
-	expect(result.figureAudio).toBe(1);
-	expect(result.figureAssetPath).toBe("");
+test('v9 state is upgraded to v12 with layer weights and Figure controls', () => {
+  const input = {
+    schemaVersion: 9,
+    activeShader: 1,
+    paletteR: 0.2,
+    paletteG: 0.4,
+    paletteB: 0.8,
+    bandCurves: {
+      energy: 'exponential',
+      bass: 'linear',
+      mid: 'logarithmic',
+      high: 'linear',
+    },
+    emaAlphas: { energy: 0.2, bass: 0.1, mid: 0.3, high: 0.4, pulse: 0.5 },
+    morph: 0.4,
+    audioControlMode: true,
+    audioTransientAutomation: true,
+    outputs: [],
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.outputs).toEqual([]);
+  for (let i = 0; i < 8; i++) {
+    expect(result[`layerWeight${i}`]).toBe(0);
+  }
+  expect(result.figureModel).toBe(0);
+  expect(result.figureScale).toBe(1);
+  expect(result.figureSpin).toBe(0.35);
+  expect(result.figureHalo).toBe(0.75);
+  expect(result.figureAudio).toBe(1);
+  expect(result.figureAssetPath).toBe('');
 });
 
-test("v10 state is upgraded to v12 with Figure defaults", () => {
-	const input = {
-		schemaVersion: 10,
-		activeShader: 1,
-		outputs: [],
-		layerWeight0: 0,
-		layerWeight1: 0,
-		layerWeight2: 0,
-		layerWeight3: 0,
-		layerWeight4: 0,
-		layerWeight5: 0,
-		layerWeight6: 0,
-		layerWeight7: 0,
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.figureModel).toBe(0);
-	expect(result.figureScale).toBe(1);
-	expect(result.figureSpin).toBe(0.35);
-	expect(result.figureHalo).toBe(0.75);
-	expect(result.figureAudio).toBe(1);
-	expect(result.figureAssetPath).toBe("");
+test('v10 state is upgraded to v12 with Figure defaults', () => {
+  const input = {
+    schemaVersion: 10,
+    activeShader: 1,
+    outputs: [],
+    layerWeight0: 0,
+    layerWeight1: 0,
+    layerWeight2: 0,
+    layerWeight3: 0,
+    layerWeight4: 0,
+    layerWeight5: 0,
+    layerWeight6: 0,
+    layerWeight7: 0,
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.figureModel).toBe(0);
+  expect(result.figureScale).toBe(1);
+  expect(result.figureSpin).toBe(0.35);
+  expect(result.figureHalo).toBe(0.75);
+  expect(result.figureAudio).toBe(1);
+  expect(result.figureAssetPath).toBe('');
 });
 
-test("v11 state is upgraded to v12 with an empty remote asset path", () => {
-	const input = {
-		schemaVersion: 11,
-		activeShader: 1,
-		outputs: [],
-		layerWeight0: 0,
-		layerWeight1: 0,
-		layerWeight2: 0,
-		layerWeight3: 0,
-		layerWeight4: 0,
-		layerWeight5: 0,
-		layerWeight6: 0,
-		layerWeight7: 0,
-		figureModel: 0,
-		figureScale: 1.2,
-		figureSpin: 0.5,
-		figureHalo: 0.8,
-		figureAudio: 0.9,
-	};
-	const result = migrateControlState(input) as Record<string, unknown>;
-	expect(result.schemaVersion).toBe(12);
-	expect(result.figureAssetPath).toBe("");
+test('v11 state is upgraded to v12 with an empty remote asset path', () => {
+  const input = {
+    schemaVersion: 11,
+    activeShader: 1,
+    outputs: [],
+    layerWeight0: 0,
+    layerWeight1: 0,
+    layerWeight2: 0,
+    layerWeight3: 0,
+    layerWeight4: 0,
+    layerWeight5: 0,
+    layerWeight6: 0,
+    layerWeight7: 0,
+    figureModel: 0,
+    figureScale: 1.2,
+    figureSpin: 0.5,
+    figureHalo: 0.8,
+    figureAudio: 0.9,
+  };
+  const result = migrateControlState(input) as Record<string, unknown>;
+  expect(result.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(result.figureAssetPath).toBe('');
 });
 
-test("v12 state passes through unchanged", () => {
-	const input = {
-		schemaVersion: 12,
-		figureAssetPath: "https://cdn.example.com/figure.glb",
-	};
-	expect(migrateControlState(input)).toBe(input);
+test('v12 state passes through unchanged', () => {
+  const input = {
+    schemaVersion: 12,
+    figureAssetPath: 'https://cdn.example.com/figure.glb',
+  };
+  const migrated = migrateControlState(input) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(13);
+  expect(migrated.cpuDeckAEnabled).toBe(false);
+  expect(migrated.cpuDeckBEnabled).toBe(false);
+  expect(migrated.gpuDeckAEnabled).toBe(false);
+  expect(migrated.gpuDeckBEnabled).toBe(false);
 });
 
-test("null passes through unchanged", () => {
-	expect(migrateControlState(null)).toBeNull();
+test('null passes through unchanged', () => {
+  expect(migrateControlState(null)).toBeNull();
 });

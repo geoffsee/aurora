@@ -128,6 +128,10 @@ type ControlState = {
   freeze: boolean;
   maxBrightness: number;
   showGpuPalette: boolean;
+  cpuDeckAEnabled: boolean;
+  cpuDeckBEnabled: boolean;
+  gpuDeckAEnabled: boolean;
+  gpuDeckBEnabled: boolean;
   beatSync: boolean;
   barSync: boolean;
   demoMode: boolean;
@@ -224,6 +228,8 @@ let latestControlState: ControlState | null = null;
 // broadcastControl doesn't treat that write as a fresh external weight edit.
 let applyingLayerWeights = false;
 let latestOscFrameAt = 0;
+let lastUdpErrorMessage = '';
+let lastUdpErrorAt = 0;
 let latestVstControlAt = 0;
 let midiClockTimestamps: number[] = [];
 let lastMidiClockAt = 0;
@@ -347,6 +353,10 @@ const defaultControlState = (): ControlState => ({
   maxBrightness: 0.95,
   // Dual GPU borealis: Aurora Curtains (A) × Aurora Crown (B).
   showGpuPalette: true,
+  cpuDeckAEnabled: false,
+  cpuDeckBEnabled: false,
+  gpuDeckAEnabled: true,
+  gpuDeckBEnabled: true,
   beatSync: true,
   barSync: false,
   demoMode: false,
@@ -505,6 +515,10 @@ const coerceControlState = (state: unknown): ControlState => {
     freeze: Boolean(source.freeze),
     maxBrightness: clamp(source.maxBrightness, 0, 1, defaults.maxBrightness),
     showGpuPalette: source.showGpuPalette === true,
+    cpuDeckAEnabled: source.cpuDeckAEnabled === true,
+    cpuDeckBEnabled: source.cpuDeckBEnabled === true,
+    gpuDeckAEnabled: source.gpuDeckAEnabled !== false,
+    gpuDeckBEnabled: source.gpuDeckBEnabled !== false,
     beatSync: source.beatSync !== false,
     barSync: Boolean(source.barSync),
     demoMode: Boolean(source.demoMode),
@@ -1774,9 +1788,18 @@ udp.on('message', (msg: OscMsg) => {
   if (msg.address === OSC_ADDRESSES.BEAT && isAbletonLinkActive()) return;
   broadcast(msg);
 });
-udp.on('error', (error: Error) => {
+udp.on('error', (error: Error & { code?: string }) => {
   console.error('OSC error:', error.message);
-  broadcastError(`OSC UDP error: ${error.message}`);
+  // EINVAL = destination unreachable (e.g. Docker subnet when Ableton isn't running).
+  // These fire on every send attempt and are unrecoverable — suppress to avoid spam.
+  if (error.code === 'EINVAL') return;
+  const message = `OSC UDP error: ${error.message}`;
+  const now = Date.now();
+  if (message !== lastUdpErrorMessage || now - lastUdpErrorAt > 5000) {
+    lastUdpErrorMessage = message;
+    lastUdpErrorAt = now;
+    broadcastError(message);
+  }
 });
 udp.open();
 

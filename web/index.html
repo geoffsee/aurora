@@ -98,6 +98,10 @@
         freeze: false,
         maxBrightness: 0.95,
         showGpuPalette: true,
+        cpuDeckAEnabled: false,
+        cpuDeckBEnabled: false,
+        gpuDeckAEnabled: true,
+        gpuDeckBEnabled: true,
         beatSync: true,
         barSync: false,
         demoMode: false,
@@ -386,6 +390,10 @@
           ? controlState.maxBrightness
           : Math.max(0, Math.min(1, Number(next.maxBrightness)));
         controlState.showGpuPalette = Boolean(next.showGpuPalette);
+        controlState.cpuDeckAEnabled = Boolean(next.cpuDeckAEnabled);
+        controlState.cpuDeckBEnabled = Boolean(next.cpuDeckBEnabled);
+        controlState.gpuDeckAEnabled = next.gpuDeckAEnabled !== false;
+        controlState.gpuDeckBEnabled = next.gpuDeckBEnabled !== false;
         controlState.beatSync = next.beatSync !== false;
         controlState.barSync = Boolean(next.barSync);
         controlState.demoMode = Boolean(next.demoMode);
@@ -576,6 +584,10 @@
       window.__auroraControlFreeze = () => controlState.freeze;
       window.__auroraControlMaxBrightness = () => controlState.maxBrightness;
       window.__auroraControlShowGpuPalette = () => controlState.showGpuPalette;
+      window.__auroraControlCpuDeckAEnabled = () => controlState.cpuDeckAEnabled;
+      window.__auroraControlCpuDeckBEnabled = () => controlState.cpuDeckBEnabled;
+      window.__auroraControlGpuDeckAEnabled = () => controlState.gpuDeckAEnabled;
+      window.__auroraControlGpuDeckBEnabled = () => controlState.gpuDeckBEnabled;
       window.__auroraControlBeatSync = () => controlState.beatSync;
       window.__auroraControlBarSync = () => controlState.barSync;
       window.__auroraControlDemoMode = () => controlState.demoMode;

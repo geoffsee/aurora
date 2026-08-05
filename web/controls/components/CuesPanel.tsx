@@ -48,7 +48,7 @@ export function CuesPanel() {
 		<Panel area="cues">
 			<SectionTitle
 				title="Cues"
-				badge={<Badge colorPalette="cyan">{quantizeLabel}</Badge>}
+				badge={<Badge colorPalette="yellow">{quantizeLabel}</Badge>}
 			/>
 			<Grid templateColumns="repeat(3, 1fr)" gap={2} mb={3}>
 				{CUE_NAMES.map((cue) => (
@@ -68,7 +68,7 @@ export function CuesPanel() {
 				<Button
 					size="lg"
 					variant={state.beatSync ? "solid" : "surface"}
-					colorPalette="cyan"
+					colorPalette="yellow"
 					onClick={() => updateState({ beatSync: !state.beatSync })}
 					aria-pressed={state.beatSync}
 				>

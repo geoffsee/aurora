@@ -77,7 +77,7 @@ export function MidiCcPanel() {
 				size="lg"
 				mb={3}
 				variant={midiEnabled ? "solid" : "surface"}
-				colorPalette="cyan"
+				colorPalette="yellow"
 				aria-pressed={midiEnabled}
 				onClick={enableMidi}
 			>

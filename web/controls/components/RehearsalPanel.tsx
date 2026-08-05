@@ -81,7 +81,7 @@ export function AudioControlPanel() {
 				<Button
 					size="lg"
 					variant={state.audioControlMode ? "solid" : "surface"}
-					colorPalette="cyan"
+					colorPalette="yellow"
 					aria-pressed={state.audioControlMode}
 					onClick={() =>
 						updateState({ audioControlMode: !state.audioControlMode })
