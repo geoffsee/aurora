@@ -71,6 +71,12 @@ describe('FIELD_PRIMITIVE_IDS registry', () => {
     expect(fieldPrimitiveName(1)).toBe('supernova_burst');
   });
 
+  test('point_cloud is permanent id 2', () => {
+    expect(FIELD_PRIMITIVE_IDS.point_cloud).toBe(2);
+    expect(fieldPrimitiveId('point_cloud')).toBe(2);
+    expect(fieldPrimitiveName(2)).toBe('point_cloud');
+  });
+
   test('isFieldPrimitiveName accepts registered names only', () => {
     expect(isFieldPrimitiveName('supernova_burst')).toBe(true);
     expect(isFieldPrimitiveName('beams')).toBe(true);

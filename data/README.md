@@ -28,7 +28,12 @@ Full ceiling messaging and the ID table: [`docs/mode-primitives.md`](../docs/mod
 
 Bundled builtins cover **all legacy control-bus modes 0–48** (49 presets) **per deck**, duplicated strictly under `deck-a/` and `deck-b/` (no shared library). Labels, character briefs, and `uiGroup` come from `shared/visual-mode-catalog.ts`. Folder names are kebab-case slugs derived from the catalog labels (`Beams` → `beams`, `CalabiYau` → `calabi-yau`).
 
-**Non-legacy extras** (no `legacyIndex`, slug-only on the control bus) may ship alongside the 0–48 set. PR6 adds `supernova` on both decks — FieldRuntime `supernova_burst` vertical slice (`suppressLegacyField: true`). Select via `deckAPresetSlug` / `deckBPresetSlug` = `"supernova"` (not VST/MIDI int). The generate script preserves known extras under `EXTRA_BUNDLED_SLUGS`.
+**Non-legacy extras** (no `legacyIndex`, slug-only on the control bus) may ship alongside the 0–48 set:
+
+- `supernova` — FieldRuntime `supernova_burst` vertical slice (`suppressLegacyField: true`)
+- `point-cloud` — FieldRuntime `point_cloud` particulate field (`suppressLegacyField: true`)
+
+Select via `deckAPresetSlug` / `deckBPresetSlug` (not VST/MIDI int). The generate script preserves known extras under `EXTRA_BUNDLED_SLUGS`.
 
 Regenerate after catalog renames:
 

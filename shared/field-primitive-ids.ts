@@ -19,6 +19,8 @@
 export const FIELD_PRIMITIVE_IDS = {
   // PR6 vertical slice — novel pack example (not a legacy catalog index).
   supernova_burst: 1,
+  // Novel particulate field — dense audio-reactive point cloud (not a legacy index).
+  point_cloud: 2,
 
   // Family A (legacy modes 0–23) — registered early so PR5/PR8–10 can compile
   // builtins without renumbering. Order follows control-bus index, not ID order.

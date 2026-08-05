@@ -21,8 +21,8 @@ const REPO_ROOT = resolve(import.meta.dirname, '../..');
 const BUNDLED_DATA = join(REPO_ROOT, 'data');
 /** Legacy control-bus modes 0–48 (49 builtins) per deck. */
 const EXPECTED_LEGACY_BUILTIN_COUNT = MAX_VISUAL_MODE_INDEX + 1;
-/** Non-legacy vertical-slice packs bundled alongside legacy (PR6 supernova). */
-const EXPECTED_EXTRA_SLUGS = ['supernova'] as const;
+/** Non-legacy vertical-slice packs bundled alongside legacy (supernova, point-cloud). */
+const EXPECTED_EXTRA_SLUGS = ['supernova', 'point-cloud'] as const;
 const EXPECTED_BUNDLED_COUNT = EXPECTED_LEGACY_BUILTIN_COUNT + EXPECTED_EXTRA_SLUGS.length;
 
 const tempRoots: string[] = [];
@@ -202,7 +202,7 @@ describe('mergeCatalog', () => {
 });
 
 describe('bundled builtins (modes 0–48 + extras)', () => {
-  test('scan lists legacy 0–48 plus non-legacy extras (supernova) per deck', () => {
+  test('scan lists legacy 0–48 plus non-legacy extras (supernova, point-cloud) per deck', () => {
     const snap = loadModeCatalog({ appRoot: REPO_ROOT, env: {} });
     expect(VISUAL_MODE_CATALOG).toHaveLength(EXPECTED_LEGACY_BUILTIN_COUNT);
 
