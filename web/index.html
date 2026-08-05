@@ -20,6 +20,7 @@
         isControlBridgeConnected,
         isOscBridgeConnected,
         mountGeoffseePagesNav,
+        projectorCompiledModeUrl,
         webgpuSecureContextError,
       } from "./dist/projector-bridge.js";
 
@@ -55,6 +56,14 @@
       const compiledSlugApplied = { "deck-a": "", "deck-b": "" };
       /** In-flight fetch tokens so stale responses do not clobber a newer slug. */
       const compiledFetchGen = { "deck-a": 0, "deck-b": 0 };
+      /**
+       * Last-known-good compiled wire per deck for window getters.
+       * Catalog epoch bumps never clear this; failed fetches leave prior values.
+       */
+      const compiledHold = {
+        "deck-a": { slug: "", epoch: 0, wireJson: "" },
+        "deck-b": { slug: "", epoch: 0, wireJson: "" },
+      };
       const oscState = {
         connected: false,
         bridgeReady: false,
@@ -387,7 +396,7 @@
         const gen = ++compiledFetchGen[key];
         compiledSlugApplied[key] = clean;
         try {
-          const url = `/api/modes/compiled?deck=${encodeURIComponent(key)}&slug=${encodeURIComponent(clean)}`;
+          const url = projectorCompiledModeUrl(key, clean);
           const res = await fetch(url, { cache: "no-store" });
           if (gen !== compiledFetchGen[key]) return; // superseded
           if (!res.ok) {
@@ -400,7 +409,13 @@
           const ok = auroraSetCompiledMode(deck, json);
           if (!ok) {
             console.warn(`[field-runtime] aurora_set_compiled_mode rejected deck=${deck}`);
+            return;
           }
+          const epoch =
+            wire && typeof wire === "object" && Number.isFinite(Number(wire.epoch))
+              ? Number(wire.epoch)
+              : 0;
+          compiledHold[key] = { slug: clean, epoch, wireJson: json };
         } catch (err) {
           console.warn(`[field-runtime] compile fetch failed for ${key}/${clean}:`, err);
         }

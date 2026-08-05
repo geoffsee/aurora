@@ -199,9 +199,14 @@ No shared library folder. Duplicate pack trees under `deck-a/` and `deck-b/` whe
 | Path | What you get |
 | --- | --- |
 | **Bridged** (`aurora`, `aurora --native`) | Bun bridge, data-dir catalog, OSC/VST, controls ↔ projector round-trip, compile/apply path (as PRs land) |
-| **Static / GitHub Pages** | HTML/CSS + wasm projector only. **No** bridge, **no** live data-dir overlay, **no** controls OSC round-trip |
+| **Static / GitHub Pages** | HTML/CSS + wasm projector + **shipped bundled catalog** (read-only). **No** bridge, **no** live data-dir overlay, **no** Ableton/VST control bus |
 
-Deploy (`.github/workflows/deploy.yml`) publishes the static front-end for demos. Show operation uses the bridged stack.
+Deploy (`.github/workflows/deploy.yml`) stages `dist/api/modes/catalog.json` and
+`dist/api/modes/compiled/{deck}/{slug}.json` from the repo `data/decks` trees via
+`bun run stage:static-catalog` / `scripts/stage-static-mode-catalog.ts`. Controls
+and the projector load those path-based files when `isStaticHosting()` is true
+(e.g. `*.github.io`). Operator overrides under `AURORA_DATA_DIR` still require
+the bridged stack. Show operation uses the bridged stack.
 
 ---
 

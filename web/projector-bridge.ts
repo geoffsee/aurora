@@ -10,9 +10,36 @@ import {
   geoffseePagesControlsUrl,
   isGeoffseeGithubPages,
   isStaticHosting,
+  staticModesApiBase,
+  staticSitePathPrefix,
 } from '../shared/static-hosting.ts';
 
-export { isControlBridgeConnected, isOscBridgeConnected, webgpuSecureContextError };
+export {
+  isControlBridgeConnected,
+  isOscBridgeConnected,
+  isStaticHosting,
+  staticModesApiBase,
+  staticSitePathPrefix,
+  webgpuSecureContextError,
+};
+
+/**
+ * URL for a deck's CompiledModeWire.
+ * Static Pages: `{siteBase}/api/modes/compiled/{deck}/{slug}.json`
+ * Bridge: `/api/modes/compiled?deck=&slug=`
+ */
+export function projectorCompiledModeUrl(
+  deck: 'deck-a' | 'deck-b',
+  slug: string,
+  loc: Pick<Location, 'protocol' | 'hostname' | 'port' | 'pathname' | 'search'> = location,
+): string {
+  const clean = typeof slug === 'string' ? slug.trim() : '';
+  if (isStaticHosting(loc)) {
+    return `${staticModesApiBase(loc)}/api/modes/compiled/${deck}/${encodeURIComponent(clean)}.json`;
+  }
+  const params = new URLSearchParams({ deck, slug: clean });
+  return `/api/modes/compiled?${params.toString()}`;
+}
 
 /** True when an embedded preview can share the controls page origin. */
 export function shouldUseBroadcastChannel(

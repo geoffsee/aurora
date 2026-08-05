@@ -25,6 +25,7 @@
     "build:cli": "bun run aurora.bun.build.ts",
     "dry-run": "bun run scripts/dry-run.ts",
     "modes:validate": "bun run scripts/modes-validate.ts",
+    "stage:static-catalog": "bun run scripts/stage-static-mode-catalog.ts",
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",
     "test:web": "vitest run",

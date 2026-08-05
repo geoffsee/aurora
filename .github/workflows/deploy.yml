@@ -63,6 +63,10 @@ jobs:
           cp -R assets/shaders/. dist/assets/shaders/
           # Web-safe glTF pack only (ship:true in models/manifest.json, ~5 MB).
           bun run scripts/stage-web-models.ts
+          # Bundled mode catalog + precompiled CompiledModeWire for static Pages
+          # (controls launchpad + projector field-runtime without the Bun bridge).
+          bun run scripts/stage-static-mode-catalog.ts
+          test -f dist/api/modes/catalog.json
           # In dev, the Bun server serves web/ plus the root dist/pkg bundle so the HTML imports
           # `./dist/pkg/aurora.js`. In the Pages bundle, HTML and WASM sit
           # together, so the WASM lives at `./pkg/aurora.js`.

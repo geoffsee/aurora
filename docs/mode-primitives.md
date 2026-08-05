@@ -19,7 +19,7 @@ A **mode pack** on disk is params + optional shader/mesh layers over **already-s
 
 **Ceiling copy for UI and docs:** packs configure **params, shaders, and meshes** against registered primitives. **Novel field math requires an engine PR** — there is no user-scripting or pack-local primitive bytecode path in v1.
 
-Static GitHub Pages hosts only the projector front-end. Bridged show stacks (`aurora` / `aurora --native`) are where the data-dir catalog, compile path, and live control bus run. See [Static vs bridged](../data/README.md#static-vs-bridged).
+Static GitHub Pages ships the projector front-end plus a **read-only bundled catalog** (`api/modes/catalog.json` and precompiled wires). Bridged show stacks (`aurora` / `aurora --native`) are where the live data-dir overlay, hot rescan, and control bus run. See [Static vs bridged](../data/README.md#static-vs-bridged).
 
 ## Permanent ID rules
 
