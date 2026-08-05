@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   buildParamPatch,
+  FIGURE_KNOB_PARAMS,
   isMappableParam,
   KNOB_STRIP_PARAMS,
   MAPPABLE_PARAMS,
@@ -28,12 +29,20 @@ describe('buildParamPatch palette', () => {
 });
 
 describe('knob strip coverage', () => {
-  test('strip lists every mappable param exactly once', () => {
+  test('strip lists unique non-figure mappable params', () => {
     expect(new Set(KNOB_STRIP_PARAMS).size).toBe(KNOB_STRIP_PARAMS.length);
-    expect(KNOB_STRIP_PARAMS).toHaveLength(MAPPABLE_PARAMS.length);
-    for (const key of MAPPABLE_PARAMS) {
-      expect(KNOB_STRIP_PARAMS).toContain(key);
+    for (const key of KNOB_STRIP_PARAMS) {
       expect(PARAM_META[key].min).toBeLessThan(PARAM_META[key].max);
+    }
+    for (const key of FIGURE_KNOB_PARAMS) {
+      expect(KNOB_STRIP_PARAMS).not.toContain(key);
+      expect(MAPPABLE_PARAMS).toContain(key);
+    }
+    // Everything mappable is either on the strip or figure-only.
+    for (const key of MAPPABLE_PARAMS) {
+      const onStrip = (KNOB_STRIP_PARAMS as readonly string[]).includes(key);
+      const figureOnly = (FIGURE_KNOB_PARAMS as readonly string[]).includes(key);
+      expect(onStrip || figureOnly).toBe(true);
     }
   });
 

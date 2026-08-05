@@ -35,7 +35,7 @@ Static GitHub Pages ships the projector front-end plus a **read-only bundled cat
 | Name | ID | Notes |
 | --- | ---: | --- |
 | `supernova_burst` | 1 | PR6 vertical-slice example (not a legacy catalog index) |
-| `point_cloud` | 2 | Dense audio-reactive particulate field (not a legacy catalog index) |
+| `point_cloud` | 2 | **Reserved** (not a CPU pose). Shipped look is GPU pack `point-cloud` fullscreen WGSL |
 | `beams` | 10 | Family A (legacy control-bus index 0) |
 | `tunnel` | 11 | Family A |
 | `burst` | 12 | Family A |
@@ -72,11 +72,7 @@ Only keys listed here survive `compileModePreset`. Unknown keys are allowed in a
 | `supernova_burst` | `intensity` | 0.85 | 0 | 1 | yes |
 | `supernova_burst` | `spin` | 0.4 | −2 | 2 | |
 | `supernova_burst` | `decay` | 0.55 | 0.01 | 1 | |
-| `point_cloud` | `intensity` | 0.9 | 0 | 1 | yes |
-| `point_cloud` | `density` | 0.55 | 0 | 1 | |
-| `point_cloud` | `swirl` | 0.35 | −2 | 2 | |
-| `point_cloud` | `scatter` | 0.45 | 0 | 1 | |
-| `point_cloud` | `sparkle` | 0.55 | 0 | 1 | |
+| `point_cloud` | *(reserved — no CPU params; GPU pack uses control bus + audio uniforms)* | | | | |
 | `beams` | `intensity` | 1 | 0 | 1 | |
 | `tunnel` | `intensity` | 1 | 0 | 1 | |
 | `tunnel` | `depth` | 0.5 | 0 | 1 | |

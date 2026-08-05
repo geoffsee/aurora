@@ -31,7 +31,7 @@ Bundled builtins cover **all legacy control-bus modes 0–48** (49 presets) **pe
 **Non-legacy extras** (no `legacyIndex`, slug-only on the control bus) may ship alongside the 0–48 set:
 
 - `supernova` — FieldRuntime `supernova_burst` vertical slice (`suppressLegacyField: true`)
-- `point-cloud` — FieldRuntime `point_cloud` particulate field (`suppressLegacyField: true`)
+- `point-cloud` — GPU fullscreen pack (`point_cloud.wgsl`), not a CPU field primitive
 
 Select via `deckAPresetSlug` / `deckBPresetSlug` (not VST/MIDI int). The generate script preserves known extras under `EXTRA_BUNDLED_SLUGS`.
 

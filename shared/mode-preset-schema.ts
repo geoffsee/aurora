@@ -141,17 +141,8 @@ export const FIELD_PRIMITIVE_PARAM_SPECS: Readonly<
     spin: { default: 0.4, min: -2, max: 2 },
     decay: { default: 0.55, min: 0.01, max: 1 },
   },
-  point_cloud: {
-    intensity: { default: 0.9, min: 0, max: 1, required: true },
-    /** How tightly particles pack toward the center (0 = open field, 1 = dense core). */
-    density: { default: 0.55, min: 0, max: 1 },
-    /** Orbital / swirl rate around the cloud center. */
-    swirl: { default: 0.35, min: -2, max: 2 },
-    /** Spatial noise / scatter amplitude. */
-    scatter: { default: 0.45, min: 0, max: 1 },
-    /** High-band sparkle contribution (0 = calm, 1 = glittering). */
-    sparkle: { default: 0.55, min: 0, max: 1 },
-  },
+  // Reserved id only — no CPU field params. Pack uses fullscreen WGSL.
+  point_cloud: {},
   // Family A stubs — minimal intensity so compile has a real clamp surface.
   // Deepen param surfaces in Family migration PRs (#242–#244).
   beams: { intensity: { default: 1, min: 0, max: 1 } },

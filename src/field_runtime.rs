@@ -1,7 +1,8 @@
 //! FieldRuntime — DSL-backed poses for the four CPU field pools.
 //!
 //! PR6 (#240): `supernova_burst` (id 1) vertical slice.
-//! `point_cloud` (id 2): dense audio-reactive particulate field (all four pools).
+//! `point_cloud` (id 2) is reserved permanently but **not** a FieldRuntime pose
+//! path — the shipped pack is GPU fullscreen WGSL (`fullscreen-primary`).
 //! PR8 (#242): Family A modes 0–7 (`beams`…`orbit`, ids 10–17) for **all four**
 //! pools.
 //! PR9 (#243): Family A modes 8–15 (`pulse`…`storm`, ids 18–25) for **all four**
@@ -27,7 +28,8 @@ use bevy::prelude::Resource;
 
 /// Must stay in lockstep with `FIELD_PRIMITIVE_IDS.supernova_burst` in TS.
 pub const PRIMITIVE_SUPERNOVA_BURST: u32 = 1;
-/// Must stay in lockstep with `FIELD_PRIMITIVE_IDS.point_cloud` in TS.
+/// Permanent reserved id (mirrors `FIELD_PRIMITIVE_IDS.point_cloud` in TS).
+/// Not implemented as a CPU field pose — GPU pack only. Never reassign.
 pub const PRIMITIVE_POINT_CLOUD: u32 = 2;
 
 // Family A (legacy indices 0–7) — permanent ids 10–17.
@@ -217,6 +219,10 @@ impl ModeDisposition {
     pub fn is_mesh_primary(self) -> bool {
         matches!(self, Self::MeshPrimary)
     }
+
+    pub fn is_fullscreen_primary(self) -> bool {
+        matches!(self, Self::FullscreenPrimary)
+    }
 }
 
 /// One mesh layer from CompiledModeWire.layers (kind == "mesh").
@@ -277,12 +283,18 @@ impl FieldRuntime {
     }
 
     /// True when ModeDirector should zero legacy_field_weight for this deck:
-    /// mesh-primary disposition, or suppress + at least one mesh layer.
+    /// mesh-primary / fullscreen-primary disposition, suppress + mesh layer,
+    /// or suppress + pack fullscreen WGSL (GPU owns the look).
     pub fn should_zero_legacy_field(&self, deck: FieldDeck) -> bool {
         match self.active(deck) {
             Some(a) => {
                 a.disposition.is_mesh_primary()
+                    || a.disposition.is_fullscreen_primary()
                     || (a.suppress_legacy_field && !a.mesh_layers.is_empty())
+                    || (a.suppress_legacy_field
+                        && a.fullscreen_wgsl
+                            .as_ref()
+                            .is_some_and(|s| !s.is_empty()))
             }
             None => false,
         }
@@ -398,7 +410,7 @@ pub fn is_implemented_primitive(id: u32) -> bool {
     matches!(
         id,
         PRIMITIVE_SUPERNOVA_BURST
-            | PRIMITIVE_POINT_CLOUD
+            // PRIMITIVE_POINT_CLOUD intentionally omitted — GPU fullscreen pack only.
             | PRIMITIVE_BEAMS
             | PRIMITIVE_TUNNEL
             | PRIMITIVE_BURST
@@ -478,9 +490,6 @@ fn pose_for_field(
     Some(match field.primitive_id {
         PRIMITIVE_SUPERNOVA_BURST => {
             pose_supernova_burst(pool, element_index, seed, col, row, field, inputs)
-        }
-        PRIMITIVE_POINT_CLOUD => {
-            pose_point_cloud(pool, element_index, seed, col, row, field, inputs)
         }
         PRIMITIVE_BEAMS => pose_beams(pool, element_index, seed, col, row, field, inputs),
         PRIMITIVE_TUNNEL => pose_tunnel(pool, element_index, seed, col, row, field, inputs),
@@ -3961,54 +3970,6 @@ mod tests {
         }
     }
 
-    fn sample_point_cloud_field() -> CompiledFieldDef {
-        let mut params = HashMap::new();
-        params.insert("intensity".into(), 0.92);
-        params.insert("density".into(), 0.58);
-        params.insert("swirl".into(), 0.4);
-        params.insert("scatter".into(), 0.48);
-        params.insert("sparkle".into(), 0.62);
-        CompiledFieldDef {
-            primitive_id: PRIMITIVE_POINT_CLOUD,
-            primitive_name: "point_cloud".into(),
-            params,
-        }
-    }
-
-    #[test]
-    fn point_cloud_covers_all_four_pools() {
-        let field = sample_point_cloud_field();
-        let inputs = sample_inputs(0.75);
-        for pool in [
-            FieldPool::Beams,
-            FieldPool::Rings,
-            FieldPool::Tiles,
-            FieldPool::Ghost,
-        ] {
-            let pose = pose_point_cloud(pool, 2, 0.22, 3, 1, &field, &inputs);
-            assert_pose_sane(&pose, &format!("point_cloud {pool:?}"));
-            // Point-like: scales stay modest (not giant beam sticks / wash tiles).
-            assert!(
-                pose.sx < 80.0 && pose.sy < 80.0,
-                "point_cloud {pool:?} scale too large: sx={} sy={}",
-                pose.sx,
-                pose.sy
-            );
-        }
-    }
-
-    #[test]
-    fn point_cloud_is_implemented_and_named() {
-        assert!(is_implemented_primitive(PRIMITIVE_POINT_CLOUD));
-        assert_eq!(primitive_name(PRIMITIVE_POINT_CLOUD), "point_cloud");
-        let rt = FieldRuntime::default();
-        let inputs = sample_inputs(0.5);
-        // Without a compiled wire, point_cloud is slug-only (no legacy fallback id).
-        assert!(rt
-            .pose(FieldDeck::A, FieldPool::Ghost, 0, 0.1, 0, 0, &inputs, None)
-            .is_none());
-    }
-
     #[test]
     fn family_a_0_23_covers_all_four_pools() {
         let inputs = sample_inputs(1.25);
@@ -4553,6 +4514,9 @@ mod tests {
             rt.fullscreen_wgsl(FieldDeck::B),
             Some("// deck-b-shader-bbb")
         );
+        // GPU pack owns the look — CPU field pools must not also paint.
+        assert!(rt.should_zero_legacy_field(FieldDeck::A));
+        assert!(rt.should_zero_legacy_field(FieldDeck::B));
         // Only first fullscreen layer is consumed (N=1 per pack).
         let multi = r#"{
             "wireVersion": 1, "epoch": 2, "slug": "stack",
