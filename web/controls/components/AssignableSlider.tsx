@@ -16,8 +16,8 @@ export function AssignableKnob({ defaultParam = 'intensity' }: { defaultParam?: 
   const value = Number(state[param]);
 
   const onChange = useCallback(
-    (v: number) => updateState(buildParamPatch(param, v), { bumpCue: meta.bumpCue }),
-    [updateState, param, meta.bumpCue],
+    (v: number) => updateState(buildParamPatch(param, v, state), { bumpCue: meta.bumpCue }),
+    [updateState, param, meta.bumpCue, state],
   );
 
   return (
