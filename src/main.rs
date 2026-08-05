@@ -17,7 +17,7 @@ use bevy::{
 };
 use field_runtime::{
     FieldDeck, FieldFrameInputs, FieldPool, FieldRuntime, drain_pending as drain_field_pending,
-    queue_compiled_json,
+    primitive_id_for_legacy_index, queue_compiled_json,
 };
 use mode_catalog::VisualMode;
 use mode_director::{ModeDirector, ModeDirectorInputs, resolve_director};
@@ -1162,6 +1162,9 @@ fn field_frame_inputs(state: &VjState, deck_drive: f32, beat: f32, beat_hit: f32
         cue_hit,
         intensity_drive,
         motion_drive,
+        bass_activity: state.bass_activity.clamp(0.0, 1.0),
+        melodic_activity: state.melodic_activity.clamp(0.0, 1.0),
+        osc_connected: state.osc_connected,
         beam_count: DECK_A_BEAMS as u32,
         ring_count: DECK_A_RINGS as u32,
         tile_cols: DECK_B_COLS as u32,
@@ -1289,11 +1292,13 @@ fn update_visuals(
             intensity_drive,
             motion_drive,
         );
+        // Family A (0–7): FieldRuntime always handles these, even without a compiled
+        // wire (VST int-only shows). Compiled wire wins when present.
+        let field_fallback = primitive_id_for_legacy_index(deck_mode.as_control());
 
         match element.kind {
             VisualKind::Beam => {
-                // FieldRuntime DSL path (PR6): when a compiled field primitive is active
-                // for this deck, skip the legacy VisualMode match entirely.
+                // FieldRuntime DSL path (PR6/PR8): compiled field or Family A fallback.
                 if let Some(pose) = field_runtime.pose(
                     fdeck,
                     FieldPool::Beams,
@@ -1302,6 +1307,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -1338,118 +1344,16 @@ fn update_visuals(
                 let mut mode_hue = 0.0_f32;
 
                 match deck_mode {
-                    VisualMode::Beams => {
-                        let spin = t
-                            * (0.18
-                                + intensity_drive * 0.14
-                                + deck_drive * 0.2
-                                + depth * 0.15
-                                + mid * 0.25
-                                + high * 0.15);
-                        let a = fraction * TAU + spin;
-                        let r = depth * (layer - 0.5) * (130.0 + wobble * 70.0) + bass_activity * 14.0;
-                        let side = depth * (wobble - 0.5) * 60.0
-                            + melodic_activity * 10.0 * wave(t * 9.0 + fraction);
-                        px = a.cos() * r - a.sin() * side;
-                        py = a.sin() * r + a.cos() * side;
-                        rot = a + depth * (layer - 0.5) * 0.28;
-                        sx = 4.0
-                            + 28.0 * (wobble * energy * 0.5 + beat_hit * 0.7)
-                            + bass * 4.0
-                            + high * wave(t * 12.0 + seed) * 2.5
-                            + depth * layer * 14.0;
-                        sy = 280.0
-                            + 200.0 * wave(t * 1.2 + fraction * TAU * 3.0) * field_live
-                            + deck_drive * 140.0
-                            + bass * 50.0
-                            + depth * layer * 220.0;
-                        pz = 2.0 + fraction + layer * depth * 24.0;
-                        mode_hue = fraction * 180.0;
-                        mode_alpha = 0.85;
-                    }
-                    VisualMode::Tunnel => {
-                        let ring = (element.index % 12) as f32;
-                        let spoke = (element.index / 12) as f32;
-                        let a = spoke / 6.0 * TAU + t * (0.4 + depth * 0.5);
-                        let r = 50.0 + ring * 42.0 + depth * 90.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.8;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + ring * 1.5 + beat_hit * 8.0;
-                        sy = 80.0 + ring * 22.0 + beat_hit * 60.0 + depth * 40.0;
-                        pz = 2.0 + ring * 4.0;
-                        mode_hue = 10.0 + ring * 14.0;
-                        mode_alpha = 0.5 + (1.0 - ring / 12.0) * 0.5;
-                    }
-                    VisualMode::Burst => {
-                        let a = fraction * TAU + seed * 3.0;
-                        let burst = (beat_hit * 2.8 + cue_hit * 1.4).clamp(0.0, 2.5);
-                        let r = 30.0 + burst * 320.0 + fraction * 100.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a;
-                        sx = 6.0 + burst * 40.0;
-                        sy = 40.0 + burst * 200.0 + high * 50.0;
-                        mode_hue = 210.0 + burst * 45.0;
-                        mode_alpha = 0.4 + burst * 0.7;
-                    }
-                    VisualMode::Mirror => {
-                        let side = if element.index % 2 == 0 { -1.0 } else { 1.0 };
-                        let a = (fraction * 0.5) * TAU + t * 0.2;
-                        let r = 80.0 + layer * 200.0 + mid * 40.0;
-                        px = side * (a.cos().abs() * r + 40.0);
-                        py = a.sin() * r * 0.85;
-                        rot = if side < 0.0 { -a } else { a };
-                        sx = 6.0 + high * 12.0;
-                        sy = 120.0 + energy * 160.0 + wobble * 80.0;
-                        mode_hue = 130.0 + side * 40.0;
-                        mode_alpha = 0.7 + high * 0.3;
-                    }
-                    VisualMode::Wash => {
-                        let a = fraction * TAU + t * 0.08;
-                        px = a.cos() * (40.0 + layer * 30.0);
-                        py = (fraction - 0.5) * STAGE_HEIGHT * 0.7 + wave(t * 0.45 + fraction) * 40.0;
-                        rot = 0.0;
-                        sx = 200.0 + state.feedback * 280.0 + energy * 60.0;
-                        sy = 18.0 + wave(t * 0.45 + fraction) * 25.0 + trail_gain * 30.0;
-                        pz = -2.0 + layer * 0.5;
-                        mode_hue = 30.0 + fraction * 40.0;
-                        mode_alpha = 0.14 + state.feedback * 0.45 + osc_drive * 0.22;
-                    }
-                    VisualMode::Strobe => {
-                        let a = fraction * TAU + t * 0.5;
-                        let r = 70.0 + fraction * 400.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 10.0 + beat_hit * 35.0;
-                        sy = 140.0 + bass_activity * 100.0;
-                        let gate = if bass_activity + beat_hit > 0.38 { 1.0 } else { 0.1 };
-                        mode_alpha = gate;
-                        mode_hue = beat_hit * 120.0 + fraction * 60.0;
-                    }
-                    VisualMode::Swarm => {
-                        px = (t * 1.7 + seed * 11.0).sin() * 420.0
-                            + (t * 3.1 + seed * 5.0).sin() * 50.0;
-                        py = (t * 2.1 + seed * 7.0).cos() * 280.0
-                            + (t * 2.8 + seed * 4.0).cos() * 40.0;
-                        rot = seed * 6.0 + t * 0.6;
-                        sx = 6.0 + high * 14.0;
-                        sy = 50.0 + energy * 90.0 + wave(t * 2.0 + seed * 5.0) * 40.0;
-                        mode_hue = seed * 360.0;
-                        mode_alpha = 0.75;
-                    }
-                    VisualMode::Orbit => {
-                        let lane = (element.index % 8) as f32;
-                        let a = t * (0.45 + seed * 0.4) + seed * TAU + lane * 0.2;
-                        let r = 100.0 + lane * 55.0 + layer * 40.0 + bass * 50.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.75;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + mid * 8.0;
-                        sy = 90.0 + energy * 80.0;
-                        mode_hue = 130.0 + lane * 20.0;
-                        mode_alpha = 0.85;
+                    // Family A (0–7): FieldRuntime only (compiled wire or VST fallback).
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit => {
+                        mode_alpha = 0.0;
                     }
                     VisualMode::Pulse => {
                         let pump = (beat * TAU).sin().abs();
@@ -2112,6 +2016,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -2141,22 +2046,15 @@ fn update_visuals(
                 // radii (that is exactly what read as a web). Only radius, halo spread,
                 // alpha, and an on/off gate change per mode; the ring stays centred.
                 let (radius_gain, halo_gain, alpha_gain, mode_gate) = match deck_mode {
-                    VisualMode::Tunnel => (0.92 + state.depth * 0.18, 0.9, 0.65, 1.0),
-                    VisualMode::Burst => (0.96 + beat_hit * 0.32 + cue_hit * 0.18, 1.0, 0.72, 1.0),
-                    VisualMode::Mirror => (0.9, 0.65, 0.58 + mid * 0.28, 1.0),
-                    VisualMode::Wash => (1.02 + state.feedback * 0.18, 1.4, 0.44, 1.0),
-                    VisualMode::Strobe => (
-                        0.9 + bass_activity * 0.22,
-                        0.8,
-                        0.75,
-                        if (bass_activity + beat_hit * 1.2).clamp(0.0, 1.0) > 0.35 {
-                            1.0
-                        } else {
-                            0.0
-                        },
-                    ),
-                    VisualMode::Swarm => (0.88 + ring_pulse * 0.05, 1.1, 0.5, 1.0),
-                    VisualMode::Orbit => (0.92, 0.9, 0.6, 1.0),
+                    // Family A (0–7): FieldRuntime only — exhaustiveness stub.
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit => (0.0, 0.0, 0.0, 0.0),
                     VisualMode::Pulse => (0.78 + pump * 0.22 + beat_hit * 0.14, 0.8, 0.42 + pump * 0.32, 1.0),
                     VisualMode::Spiral => (0.9, 1.05, 0.55, 1.0),
                     VisualMode::Ripple => (0.84 + bass * 0.2, 1.05, 0.58 + bass * 0.22, 1.0),
@@ -2237,7 +2135,6 @@ fn update_visuals(
                     | VisualMode::Eigenvectors
                     | VisualMode::BooleanLattices
                     | VisualMode::Forcing => (0.9, 0.8, 0.55, 1.0),
-                    VisualMode::Beams => (0.9, 0.8, 0.55, 1.0),
                 };
 
                 let base_radius = 220.0
@@ -2281,6 +2178,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -2327,103 +2225,16 @@ fn update_visuals(
                 let mut mode_hue = 0.0_f32;
 
                 match deck_mode {
-                    // ——— radial ray burst ———
-                    VisualMode::Beams => {
-                        let a = fraction * TAU + t * (0.2 + mid * 0.3);
-                        let r = 50.0 + fraction * 480.0 + bass * 50.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + high * 8.0 + beat_hit * 10.0;
-                        sy = 70.0 + energy * 90.0 + pulse * 40.0;
-                        mode_hue = fraction * 180.0;
-                        mode_alpha = 0.85;
-                    }
-                    // ——— concentric corridor rings ———
-                    VisualMode::Tunnel => {
-                        let ring = (element.index % 10) as f32;
-                        let spoke = (element.index / 10) as f32;
-                        let a = spoke / 12.0 * TAU + t * (0.35 + state.depth * 0.4);
-                        let r = 40.0 + ring * 48.0 + state.depth * 80.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.78;
-                        rot = a + TAU * 0.25;
-                        sx = 4.0 + ring * 1.2;
-                        sy = 36.0 + ring * 8.0 + beat_hit * 30.0;
-                        pz = 4.0 + ring * 3.0;
-                        mode_hue = 10.0 + ring * 18.0;
-                        mode_alpha = 0.55 + (1.0 - ring / 10.0) * 0.45;
-                    }
-                    // ——— explode from center on hits ———
-                    VisualMode::Burst => {
-                        let a = fraction * TAU + seed * 2.0;
-                        let r = 20.0 + (beat_hit * 2.5 + cue_hit + pulse) * 280.0 + fraction * 80.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.65;
-                        rot = a;
-                        sx = 8.0 + beat_hit * 40.0;
-                        sy = 30.0 + beat_hit * 120.0 + high * 40.0;
-                        mode_hue = 210.0 + beat_hit * 50.0;
-                        mode_alpha = 0.35 + beat_hit * 0.9 + cue_hit * 0.5;
-                    }
-                    // ——— bilateral halves ———
-                    VisualMode::Mirror => {
-                        let side = if element.col % 2 == 0 { -1.0 } else { 1.0 };
-                        px = side * (80.0 + u * 420.0 + mid * 40.0);
-                        py = (v - 0.5) * STAGE_HEIGHT * 0.9;
-                        rot = if side < 0.0 { TAU * 0.5 } else { 0.0 };
-                        sx = 7.0 + high * 10.0;
-                        sy = 50.0 + energy * 70.0;
-                        mode_hue = 130.0 + side * 40.0;
-                        mode_alpha = 0.75 + high * 0.25;
-                    }
-                    // ——— soft horizontal washes ———
-                    VisualMode::Wash => {
-                        px = (u - 0.5) * STAGE_WIDTH * 1.1;
-                        py = (v - 0.5) * STAGE_HEIGHT * 0.55 + wave(t * 0.4 + v) * 30.0;
-                        rot = 0.0;
-                        sx = 180.0 + state.feedback * 220.0 + energy * 40.0;
-                        sy = 12.0 + pulse * 18.0 + trail_gain * 20.0;
-                        mode_hue = 30.0 + v * 40.0;
-                        mode_alpha = 0.12 + state.feedback * 0.4 + osc_drive * 0.2;
-                    }
-                    // ——— hard gated flashes ———
-                    VisualMode::Strobe => {
-                        let a = fraction * TAU;
-                        let r = 60.0 + fraction * 400.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.7;
-                        rot = a + TAU * 0.25;
-                        sx = 12.0 + beat_hit * 30.0;
-                        sy = 100.0 + bass_activity * 80.0;
-                        let gate = if bass_activity + beat_hit > 0.35 { 1.0 } else { 0.08 };
-                        mode_alpha = gate;
-                        mode_hue = beat_hit * 120.0 + fraction * 60.0;
-                    }
-                    // ——— chaotic cloud of dots/sticks ———
-                    VisualMode::Swarm => {
-                        let ox = (t * 1.6 + seed * 13.0).sin() * 380.0;
-                        let oy = (t * 2.1 + seed * 9.0).cos() * 240.0;
-                        px = ox + (t * 3.0 + seed * 5.0).sin() * 40.0;
-                        py = oy + (t * 2.7 + seed * 7.0).cos() * 30.0;
-                        rot = seed * TAU + t * 0.8;
-                        sx = 6.0 + high * 12.0;
-                        sy = 24.0 + energy * 50.0 + pulse * 30.0;
-                        mode_hue = seed * 360.0;
-                        mode_alpha = 0.7;
-                    }
-                    // ——— clean orbits ———
-                    VisualMode::Orbit => {
-                        let lane = (element.index % 6) as f32;
-                        let a = t * (0.4 + seed * 0.35 + lane * 0.05) + fraction * TAU;
-                        let r = 90.0 + lane * 55.0 + bass * 40.0;
-                        px = a.cos() * r;
-                        py = a.sin() * r * 0.72;
-                        rot = a + TAU * 0.25;
-                        sx = 5.0 + mid * 6.0;
-                        sy = 40.0 + energy * 45.0;
-                        mode_hue = 130.0 + lane * 25.0;
-                        mode_alpha = 0.8;
+                    // Family A (0–7): FieldRuntime only (compiled wire or VST fallback).
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit => {
+                        mode_alpha = 0.0;
                     }
                     // ——— whole field breathes ———
                     VisualMode::Pulse => {
@@ -3120,6 +2931,7 @@ fn update_visuals(
                     element.col,
                     element.row,
                     &finputs,
+                    field_fallback,
                 ) {
                     transform.translation = Vec3::new(pose.px, pose.py, pose.pz);
                     transform.rotation = Quat::from_rotation_z(pose.rot);
@@ -3165,48 +2977,16 @@ fn update_visuals(
                 );
 
                 match deck_mode {
-                    VisualMode::Tunnel => {
-                        transform.rotation = Quat::from_rotation_z(angle + fraction * TAU * 0.5);
-                        transform.scale.x *= 0.55 + state.depth;
-                        transform.scale.y *= 1.4 + fraction;
-                    }
-                    VisualMode::Burst => {
-                        transform.scale.x *= 0.35 + beat_hit * 2.4 + cue_hit;
-                        transform.scale.y *= 1.0 + beat_hit * 1.6;
-                        alpha *= 0.45 + beat_hit;
-                    }
-                    VisualMode::Mirror => {
-                        transform.translation.x = if element.index % 2 == 0 {
-                            transform.translation.x.abs()
-                        } else {
-                            -transform.translation.x.abs()
-                        };
-                        transform.scale.x *= 0.75;
-                        alpha *= 1.1;
-                    }
-                    VisualMode::Wash => {
-                        transform.scale.x *= 1.8;
-                        transform.scale.y *= 2.2 + state.feedback;
-                        alpha *= 1.35;
-                    }
-                    VisualMode::Strobe => {
-                        // Use transient envelope for flashing, not sustained bass level.
-                        let gate = (bass_activity + beat_hit).clamp(0.0, 1.0);
-                        let on = if gate > 0.28 { 1.0 } else { 0.0 };
-                        alpha *= on;
-                        transform.scale.x *= 1.0 + bass_activity * 0.6;
-                    }
-                    VisualMode::Swarm => {
-                        let dx = (t * 1.0 + fraction * 17.0).sin() * 240.0;
-                        let dy = (t * 1.4 + fraction * 11.0).cos() * 100.0;
-                        transform.translation.x = dx;
-                        transform.translation.y = dy;
-                        transform.rotation = Quat::from_rotation_z(t * 0.7 + fraction * TAU);
-                    }
-                    VisualMode::Orbit => {
-                        let orbit_a = t * 0.6 + fraction * TAU;
-                        transform.translation.x = orbit_a.cos() * (180.0 + fraction * 80.0);
-                        transform.translation.y = orbit_a.sin() * (120.0 + fraction * 40.0);
+                    // Family A (0–7): FieldRuntime only (compiled wire or VST fallback).
+                    VisualMode::Beams
+                    | VisualMode::Tunnel
+                    | VisualMode::Burst
+                    | VisualMode::Mirror
+                    | VisualMode::Wash
+                    | VisualMode::Strobe
+                    | VisualMode::Swarm
+                    | VisualMode::Orbit => {
+                        alpha = 0.0;
                     }
                     VisualMode::Pulse => {
                         let pump = (beat * TAU).sin().abs();
@@ -3366,7 +3146,6 @@ fn update_visuals(
                     | VisualMode::Eigenvectors
                     | VisualMode::BooleanLattices
                     | VisualMode::Forcing => {}
-                    VisualMode::Beams => {}
                 }
 
                 hue += fraction * 90.0;
