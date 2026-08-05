@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "bloom",
+  "slug": "bloom",
+  "label": "Bloom",
+  "disposition": "field-primitive",
+  "character": "Soft radial glow—mid and feedback as body.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 23,
+  "field": {
+    "primitive": "bloom"
+  }
+}

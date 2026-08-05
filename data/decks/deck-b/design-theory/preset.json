@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "design-theory",
+  "slug": "design-theory",
+  "label": "DesignTheory",
+  "disposition": "engine-module",
+  "character": "Balanced blocks—set partitions as visual rhythm.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 38,
+  "engineModule": "design-theory"
+}

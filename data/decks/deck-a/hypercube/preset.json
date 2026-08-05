@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "hypercube",
+  "slug": "hypercube",
+  "label": "Hypercube",
+  "disposition": "mesh-primary",
+  "character": "Projected higher-dimensional frame—spin and unfold as performance.",
+  "uiGroup": "structured-space",
+  "legacyIndex": 25,
+  "suppressLegacyField": true
+}

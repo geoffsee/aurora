@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "spiral",
+  "slug": "spiral",
+  "label": "Spiral",
+  "disposition": "field-primitive",
+  "character": "Arm winding—fractional twist over time.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 9,
+  "field": {
+    "primitive": "spiral"
+  }
+}

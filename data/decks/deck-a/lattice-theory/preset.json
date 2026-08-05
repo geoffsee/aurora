@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "lattice-theory",
+  "slug": "lattice-theory",
+  "label": "LatticeTheory",
+  "disposition": "engine-module",
+  "character": "Ordered layers—meet/join feel in a layered poset field.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 36,
+  "engineModule": "lattice-theory"
+}

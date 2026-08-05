@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "graph-theory",
+  "slug": "graph-theory",
+  "label": "GraphTheory",
+  "disposition": "engine-module",
+  "character": "Nodes and edges—connectivity flashes with the high band.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 37,
+  "engineModule": "graph-theory"
+}

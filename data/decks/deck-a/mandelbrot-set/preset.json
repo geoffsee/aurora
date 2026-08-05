@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "mandelbrot-set",
+  "slug": "mandelbrot-set",
+  "label": "MandelbrotSet",
+  "disposition": "fullscreen-primary",
+  "character": "Iterated complex space—detail and zoom as performance, not a poster.",
+  "uiGroup": "continuous-space",
+  "legacyIndex": 39,
+  "suppressLegacyField": true
+}

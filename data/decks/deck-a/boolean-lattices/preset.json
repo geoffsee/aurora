@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "boolean-lattices",
+  "slug": "boolean-lattices",
+  "label": "BooleanLattices",
+  "disposition": "mesh-primary",
+  "character": "Subset lattice—hypercube faces as inclusion order.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 47
+}

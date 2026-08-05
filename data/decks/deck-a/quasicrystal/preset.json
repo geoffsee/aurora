@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "quasicrystal",
+  "slug": "quasicrystal",
+  "label": "Quasicrystal",
+  "disposition": "fullscreen-primary",
+  "character": "Aperiodic order—interference folds with long-range pattern.",
+  "uiGroup": "continuous-space",
+  "legacyIndex": 27,
+  "suppressLegacyField": true
+}

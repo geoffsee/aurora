@@ -1,6 +1,13 @@
 {
+  "schemaVersion": 1,
   "id": "tunnel",
   "slug": "tunnel",
   "label": "Tunnel",
-  "legacyIndex": 1
+  "disposition": "field-primitive",
+  "character": "Perspective corridor—depth as the performance axis.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 1,
+  "field": {
+    "primitive": "tunnel"
+  }
 }

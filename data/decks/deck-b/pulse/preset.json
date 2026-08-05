@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "pulse",
+  "slug": "pulse",
+  "label": "Pulse",
+  "disposition": "field-primitive",
+  "character": "Breathing scale—kick and intensity as pump.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 8,
+  "field": {
+    "primitive": "pulse"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "modular-arithmetic",
+  "slug": "modular-arithmetic",
+  "label": "ModularArithmetic",
+  "disposition": "engine-module",
+  "character": "Clock arithmetic—modular jumps on the circle.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 43,
+  "engineModule": "modular-arithmetic"
+}

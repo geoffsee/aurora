@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "lorenz-attractor",
+  "slug": "lorenz-attractor",
+  "label": "LorenzAttractor",
+  "disposition": "fullscreen-primary",
+  "character": "Chaotic ribbon—integration rate and trail as craft.",
+  "uiGroup": "continuous-space",
+  "legacyIndex": 41,
+  "suppressLegacyField": true
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "symmetry-groups",
+  "slug": "symmetry-groups",
+  "label": "SymmetryGroups",
+  "disposition": "engine-module",
+  "character": "Kaleidoscopic order—symmetry count as the gesture.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 34,
+  "engineModule": "symmetry-groups"
+}

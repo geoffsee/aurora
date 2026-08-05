@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "sierpinski-triangle",
+  "slug": "sierpinski-triangle",
+  "label": "SierpinskiTriangle",
+  "disposition": "mesh-primary",
+  "character": "Recursive triangle depth—detail as the playable axis.",
+  "uiGroup": "structured-space",
+  "legacyIndex": 29,
+  "suppressLegacyField": true
+}

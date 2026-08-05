@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "torus",
+  "slug": "torus",
+  "label": "Torus",
+  "disposition": "mesh-primary",
+  "character": "Doughnut topology—major/minor radius and spin.",
+  "uiGroup": "structured-space",
+  "legacyIndex": 32,
+  "suppressLegacyField": true
+}

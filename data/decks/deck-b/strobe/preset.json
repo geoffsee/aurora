@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "strobe",
+  "slug": "strobe",
+  "label": "Strobe",
+  "disposition": "field-primitive",
+  "character": "Gated flashes—transient-led, not sustained wash.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 5,
+  "field": {
+    "primitive": "strobe"
+  }
+}

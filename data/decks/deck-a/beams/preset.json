@@ -1,6 +1,13 @@
 {
+  "schemaVersion": 1,
   "id": "beams",
   "slug": "beams",
   "label": "Beams",
-  "legacyIndex": 0
+  "disposition": "field-primitive",
+  "character": "Radial sticks—core pulse and spin field.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 0,
+  "field": {
+    "primitive": "beams"
+  }
 }

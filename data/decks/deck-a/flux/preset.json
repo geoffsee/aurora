@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "flux",
+  "slug": "flux",
+  "label": "Flux",
+  "disposition": "field-primitive",
+  "character": "Fluid shear—mid-band flow across the frame.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 12,
+  "field": {
+    "primitive": "flux"
+  }
+}

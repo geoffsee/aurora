@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "comet",
+  "slug": "comet",
+  "label": "Comet",
+  "disposition": "field-primitive",
+  "character": "Long-tail arcs—speed and trails as length.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 22,
+  "field": {
+    "primitive": "comet"
+  }
+}

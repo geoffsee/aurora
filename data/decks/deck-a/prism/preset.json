@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "prism",
+  "slug": "prism",
+  "label": "Prism",
+  "disposition": "field-primitive",
+  "character": "Hue-split facets—spectrum as structure.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 20,
+  "field": {
+    "primitive": "prism"
+  }
+}

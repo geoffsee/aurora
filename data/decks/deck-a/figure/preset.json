@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "figure",
+  "slug": "figure",
+  "label": "Figure",
+  "disposition": "mesh-primary",
+  "character": "Mesh catalog figure—body as the deck instrument.",
+  "uiGroup": "figure",
+  "legacyIndex": 24,
+  "suppressLegacyField": true,
+  "layers": [
+    {
+      "kind": "mesh",
+      "ref": "human-female"
+    }
+  ]
+}

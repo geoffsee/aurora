@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "functors",
+  "slug": "functors",
+  "label": "Functors",
+  "disposition": "engine-module",
+  "character": "Structure-preserving map—two spaces linked by a living arrow.",
+  "uiGroup": "abstract-character",
+  "legacyIndex": 42,
+  "engineModule": "functors"
+}

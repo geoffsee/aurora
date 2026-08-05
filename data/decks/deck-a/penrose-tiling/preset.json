@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "penrose-tiling",
+  "slug": "penrose-tiling",
+  "label": "PenroseTiling",
+  "disposition": "fullscreen-primary",
+  "character": "Non-repeating tile field—density and rotation as craft.",
+  "uiGroup": "continuous-space",
+  "legacyIndex": 28,
+  "suppressLegacyField": true
+}

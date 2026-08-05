@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "lie-algebras",
+  "slug": "lie-algebras",
+  "label": "LieAlgebras",
+  "disposition": "fullscreen-primary",
+  "character": "Continuous symmetry flow—streamlines and adjoint drift.",
+  "uiGroup": "abstract-character",
+  "legacyIndex": 35,
+  "suppressLegacyField": true
+}

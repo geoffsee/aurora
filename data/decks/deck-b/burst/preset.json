@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "burst",
+  "slug": "burst",
+  "label": "Burst",
+  "disposition": "field-primitive",
+  "character": "Explosive radial hits—beat as the author.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 2,
+  "field": {
+    "primitive": "burst"
+  }
+}

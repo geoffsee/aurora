@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "orbit",
+  "slug": "orbit",
+  "label": "Orbit",
+  "disposition": "field-primitive",
+  "character": "Circular paths—gravity well of the deck.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 7,
+  "field": {
+    "primitive": "orbit"
+  }
+}

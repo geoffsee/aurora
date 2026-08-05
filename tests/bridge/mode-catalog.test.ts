@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
@@ -14,9 +14,13 @@ import {
   resolveSandboxedAssetPath,
   scanDeckCatalog,
 } from '../../bridge/mode-catalog.ts';
+import { validateModePreset } from '../../shared/mode-preset-schema.ts';
+import { MAX_VISUAL_MODE_INDEX, VISUAL_MODE_CATALOG } from '../../shared/visual-mode-catalog.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 const BUNDLED_DATA = join(REPO_ROOT, 'data');
+/** Legacy control-bus modes 0–48 (49 builtins) per deck. */
+const EXPECTED_BUILTIN_COUNT = MAX_VISUAL_MODE_INDEX + 1;
 
 const tempRoots: string[] = [];
 
@@ -181,15 +185,87 @@ describe('mergeCatalog', () => {
   });
 });
 
+describe('bundled builtins (modes 0–48)', () => {
+  test('scan lists 49 presets per deck with unique legacyIndex 0–48', () => {
+    const snap = loadModeCatalog({ appRoot: REPO_ROOT, env: {} });
+    expect(VISUAL_MODE_CATALOG).toHaveLength(EXPECTED_BUILTIN_COUNT);
+
+    for (const deck of ['deck-a', 'deck-b'] as const) {
+      const entries = snap.decks[deck];
+      expect(entries).toHaveLength(EXPECTED_BUILTIN_COUNT);
+      expect(entries.every((e) => e.source === 'bundled')).toBe(true);
+
+      const indices = entries.map((e) => e.legacyIndex);
+      expect(indices.every((i) => typeof i === 'number')).toBe(true);
+      const unique = new Set(indices);
+      expect(unique.size).toBe(EXPECTED_BUILTIN_COUNT);
+      for (let i = 0; i <= MAX_VISUAL_MODE_INDEX; i++) {
+        expect(unique.has(i)).toBe(true);
+      }
+
+      // id === slug === folder name for every bundled pack
+      for (const e of entries) {
+        expect(e.id).toBe(e.slug);
+      }
+    }
+  });
+
+  test('strict per-deck duplication (same slugs/indices, separate paths)', () => {
+    const snap = loadModeCatalog({ appRoot: REPO_ROOT, env: {} });
+    const a = snap.decks['deck-a'];
+    const b = snap.decks['deck-b'];
+    expect(a.map((e) => e.slug).sort()).toEqual(b.map((e) => e.slug).sort());
+    expect(
+      a
+        .map((e) => e.legacyIndex)
+        .slice()
+        .sort((x, y) => (x ?? 0) - (y ?? 0)),
+    ).toEqual(
+      b
+        .map((e) => e.legacyIndex)
+        .slice()
+        .sort((x, y) => (x ?? 0) - (y ?? 0)),
+    );
+    // Paths must not alias a shared library tree
+    for (const ea of a) {
+      const eb = b.find((e) => e.slug === ea.slug);
+      expect(eb).toBeDefined();
+      if (!eb) continue;
+      expect(ea.path).not.toBe(eb.path);
+      expect(ea.path.includes(`${join('decks', 'deck-a')}`)).toBe(true);
+      expect(eb.path.includes(`${join('decks', 'deck-b')}`)).toBe(true);
+    }
+  });
+
+  test('each bundled preset.json validates against ModePreset schema', () => {
+    const snap = loadModeCatalog({ appRoot: REPO_ROOT, env: {} });
+    for (const deck of ['deck-a', 'deck-b'] as const) {
+      for (const entry of snap.decks[deck]) {
+        const raw = JSON.parse(readFileSync(join(entry.path, 'preset.json'), 'utf8')) as unknown;
+        const result = validateModePreset(raw);
+        expect(
+          result.ok,
+          `${deck}/${entry.slug}: ${!result.ok ? result.errors.join('; ') : ''}`,
+        ).toBe(true);
+        if (result.ok) {
+          expect(result.value.legacyIndex).toBe(entry.legacyIndex);
+          expect(result.value.id).toBe(entry.slug);
+        }
+      }
+    }
+  });
+});
+
 describe('bundled + overlay integration', () => {
   test('missing override still serves full bundled catalog', () => {
     const snap = loadModeCatalog({ appRoot: REPO_ROOT, env: {} });
     expect(snap.epoch).toBe(1);
-    expect(snap.decks['deck-a'].length).toBeGreaterThanOrEqual(2);
-    expect(snap.decks['deck-b'].length).toBeGreaterThanOrEqual(2);
+    expect(snap.decks['deck-a'].length).toBe(EXPECTED_BUILTIN_COUNT);
+    expect(snap.decks['deck-b'].length).toBe(EXPECTED_BUILTIN_COUNT);
     expect(snap.decks['deck-a'].every((e) => e.source === 'bundled')).toBe(true);
     expect(snap.decks['deck-a'].some((e) => e.slug === 'beams')).toBe(true);
     expect(snap.decks['deck-a'].some((e) => e.slug === 'tunnel')).toBe(true);
+    expect(snap.decks['deck-a'].some((e) => e.slug === 'forcing')).toBe(true);
   });
 
   test('empty override dir still serves full bundled catalog', () => {

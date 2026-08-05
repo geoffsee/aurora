@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "wash",
+  "slug": "wash",
+  "label": "Wash",
+  "disposition": "field-primitive",
+  "character": "Soft full-frame veil—trails and atmosphere.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 4,
+  "field": {
+    "primitive": "wash"
+  }
+}

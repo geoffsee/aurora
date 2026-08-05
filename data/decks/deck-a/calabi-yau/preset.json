@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "calabi-yau",
+  "slug": "calabi-yau",
+  "label": "CalabiYau",
+  "disposition": "fullscreen-primary",
+  "character": "Complex manifold character—organic fold, not soft drift wallpaper.",
+  "uiGroup": "continuous-space",
+  "legacyIndex": 26,
+  "suppressLegacyField": true
+}

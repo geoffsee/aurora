@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "swarm",
+  "slug": "swarm",
+  "label": "Swarm",
+  "disposition": "field-primitive",
+  "character": "Many-body drift—organic scatter on the field.",
+  "uiGroup": "field-motion",
+  "legacyIndex": 6,
+  "field": {
+    "primitive": "swarm"
+  }
+}

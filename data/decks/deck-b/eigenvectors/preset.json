@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "eigenvectors",
+  "slug": "eigenvectors",
+  "label": "Eigenvectors",
+  "disposition": "engine-module",
+  "character": "Preferred axes—stretch along living eigenvectors.",
+  "uiGroup": "discrete-structure",
+  "legacyIndex": 46,
+  "engineModule": "eigenvectors"
+}
