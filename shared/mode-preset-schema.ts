@@ -171,6 +171,16 @@ export const FIELD_PRIMITIVE_PARAM_SPECS: Readonly<
 
 const LAYER_KINDS = new Set<ModePresetLayerKind>(['mesh', 'fullscreen', 'field', 'accent']);
 
+/**
+ * N=2 engine slots are one fullscreen material per deck. Each pack may own at
+ * most one fullscreen layer; a third layer (second in one pack) fails compile.
+ * See PR13 / #247.
+ */
+export const MAX_FULLSCREEN_LAYERS_PER_PACK = 1;
+
+/** Soft cap on pack shader source (GLSL or WGSL) before bridge naga / wire attach. */
+export const MAX_PACK_SHADER_SOURCE_BYTES = 256 * 1024;
+
 function isModeDisposition(v: unknown): v is ModeDisposition {
   return typeof v === 'string' && (MODE_DISPOSITIONS as readonly string[]).includes(v);
 }
@@ -467,6 +477,15 @@ export function compileModePreset(
     }
     return out;
   });
+
+  // N=2 slots = one fullscreen material per deck. Reject >1 fullscreen layer
+  // per pack at pure compile (soft-fail UX aligns with Shadertoy import).
+  const fullscreenCount = layers.filter((l) => l.kind === 'fullscreen').length;
+  if (fullscreenCount > MAX_FULLSCREEN_LAYERS_PER_PACK) {
+    errors.push(
+      `at most ${MAX_FULLSCREEN_LAYERS_PER_PACK} fullscreen layer per pack (got ${fullscreenCount}); dual-deck slots are one per deck, not stacked per pack`,
+    );
+  }
 
   if (errors.length > 0) return { ok: false, errors };
 

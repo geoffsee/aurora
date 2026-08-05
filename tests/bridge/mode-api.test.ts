@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
   compileFromEntry,
+  compileFromEntryAsync,
   MODE_API_EPOCH_RETENTION,
   MODE_API_MAX_ASSET_BYTES,
   ModeApi,
@@ -210,6 +211,95 @@ describe('compileFromEntry', () => {
     const b = compileFromEntry(entry, 3, 'deck-b');
     expect(a).toEqual(b);
   });
+
+  test('async compile attaches pack fullscreen WGSL (WASM-ready)', async () => {
+    const root = tempDir();
+    const wgsl = `#import bevy_sprite::mesh2d_vertex_output::VertexOutput
+@group(2) @binding(0) var<uniform> params: vec4<f32>;
+@group(2) @binding(1) var<uniform> palette_extra: vec4<f32>;
+@group(2) @binding(2) var<uniform> audio_uniforms: vec4<f32>;
+@group(2) @binding(3) var<uniform> palette_rgb: vec4<f32>;
+@fragment
+fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
+  return vec4<f32>(0.2, 0.4, 0.9, palette_extra.w);
+}
+`;
+    const folder = writeValidPreset(
+      root,
+      'plasma',
+      {
+        disposition: 'fullscreen-primary',
+        field: undefined,
+        layers: [{ kind: 'fullscreen', ref: 'look.wgsl' }],
+        suppressLegacyField: true,
+      },
+      { 'look.wgsl': wgsl },
+    );
+    // writeValidPreset puts assets under assets/; ref should match.
+    // Re-write with ref under assets/ so sandbox resolve works.
+    writeFileSync(
+      join(folder, 'preset.json'),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          id: 'plasma',
+          slug: 'plasma',
+          label: 'Plasma',
+          disposition: 'fullscreen-primary',
+          suppressLegacyField: true,
+          layers: [{ kind: 'fullscreen', ref: 'assets/look.wgsl' }],
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(join(folder, 'assets', 'look.wgsl'), wgsl);
+
+    const entry = makeEntry(folder, 'plasma');
+    const result = await compileFromEntryAsync(entry, 4, 'deck-a');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const layer = result.wire.layers.find((l) => l.kind === 'fullscreen');
+    expect(layer?.wgsl).toBeDefined();
+    expect(layer?.wgsl).toContain('fn fragment');
+    expect(result.wire.suppressLegacyField).toBe(true);
+  });
+
+  test('>1 fullscreen layer fails compile (soft-fail errors)', () => {
+    const root = tempDir();
+    const folder = writeValidPreset(root, 'stack', {
+      disposition: 'fullscreen-primary',
+      field: undefined,
+      layers: [
+        { kind: 'fullscreen', ref: 'a.wgsl' },
+        { kind: 'fullscreen', ref: 'b.wgsl' },
+      ],
+      suppressLegacyField: true,
+    });
+    writeFileSync(
+      join(folder, 'preset.json'),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          id: 'stack',
+          slug: 'stack',
+          label: 'Stack',
+          disposition: 'fullscreen-primary',
+          suppressLegacyField: true,
+          layers: [
+            { kind: 'fullscreen', ref: 'a.wgsl' },
+            { kind: 'fullscreen', ref: 'b.wgsl' },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const result = compileFromEntry(makeEntry(folder, 'stack'), 1, 'deck-a');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => e.includes('fullscreen'))).toBe(true);
+  });
 });
 
 // ── ModeApi store ────────────────────────────────────────────────────────────
@@ -227,51 +317,53 @@ describe('ModeApi catalog + compiled', () => {
     expect(pub.decks['deck-a'][0]).not.toHaveProperty('path');
   });
 
-  test('compile cache hit returns identical wire without re-read side effects', () => {
+  test('compile cache hit returns identical wire without re-read side effects', async () => {
     const root = tempDir();
     const folder = writeValidPreset(root, 'beams');
     const api = new ModeApi(snapshotFromEntries(2, [makeEntry(folder, 'beams')]));
-    const first = api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 2 });
+    const first = await api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 2 });
     expect(first.status).toBe(200);
     // Corrupt on-disk preset; cache must still serve first compile.
     writeFileSync(join(folder, 'preset.json'), '{ not valid');
-    const second = api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 2 });
+    const second = await api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 2 });
     expect(second).toEqual(first);
   });
 
-  test('omitted epoch uses current', () => {
+  test('omitted epoch uses current', async () => {
     const root = tempDir();
     const folder = writeValidPreset(root, 'beams');
     const api = new ModeApi(snapshotFromEntries(5, [makeEntry(folder, 'beams')]));
-    const r = api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: null });
+    const r = await api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: null });
     expect(r.status).toBe(200);
     if (r.status !== 200) return;
     expect(r.wire.epoch).toBe(5);
   });
 
-  test('wrong / unretained epoch → 410', () => {
+  test('wrong / unretained epoch → 410', async () => {
     const root = tempDir();
     const folder = writeValidPreset(root, 'beams');
     const api = new ModeApi(snapshotFromEntries(1, [makeEntry(folder, 'beams')]));
-    const r = api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 99 });
+    const r = await api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 99 });
     expect(r.status).toBe(410);
   });
 
-  test('missing slug → 404', () => {
+  test('missing slug → 404', async () => {
     const root = tempDir();
     const folder = writeValidPreset(root, 'beams');
     const api = new ModeApi(snapshotFromEntries(1, [makeEntry(folder, 'beams')]));
-    const r = api.getCompiled({ deck: 'deck-a', slug: 'nope', epoch: 1 });
+    const r = await api.getCompiled({ deck: 'deck-a', slug: 'nope', epoch: 1 });
     expect(r.status).toBe(404);
   });
 
-  test('invalid deck/slug query → 400', () => {
+  test('invalid deck/slug query → 400', async () => {
     const api = new ModeApi(snapshotFromEntries(1, []));
-    expect(api.getCompiled({ deck: 'deck-c', slug: 'beams', epoch: 1 }).status).toBe(400);
-    expect(api.getCompiled({ deck: 'deck-a', slug: 'Bad_Slug', epoch: 1 }).status).toBe(400);
+    expect((await api.getCompiled({ deck: 'deck-c', slug: 'beams', epoch: 1 })).status).toBe(400);
+    expect((await api.getCompiled({ deck: 'deck-a', slug: 'Bad_Slug', epoch: 1 })).status).toBe(
+      400,
+    );
   });
 
-  test('compile fail → 422 with errors (fail-closed)', () => {
+  test('compile fail → 422 with errors (fail-closed)', async () => {
     const root = tempDir();
     const folder = join(root, 'bad');
     mkdirSync(folder, { recursive: true });
@@ -280,7 +372,7 @@ describe('ModeApi catalog + compiled', () => {
       JSON.stringify({ id: 'bad', slug: 'bad', label: 'Bad' }),
     );
     const api = new ModeApi(snapshotFromEntries(1, [makeEntry(folder, 'bad')]));
-    const r = api.getCompiled({ deck: 'deck-a', slug: 'bad', epoch: 1 });
+    const r = await api.getCompiled({ deck: 'deck-a', slug: 'bad', epoch: 1 });
     expect(r.status).toBe(422);
     if (r.status !== 422) return;
     expect(r.errors.length).toBeGreaterThan(0);
@@ -290,7 +382,7 @@ describe('ModeApi catalog + compiled', () => {
     const root = tempDir();
     const folder = writeValidPreset(root, 'beams');
     const api = new ModeApi(snapshotFromEntries(1, [makeEntry(folder, 'beams')]));
-    const res = api.handleCompiledRequest(
+    const res = await api.handleCompiledRequest(
       new URL('http://localhost/api/modes/compiled?deck=deck-a&slug=beams&epoch=1'),
     );
     expect(res.status).toBe(200);
@@ -303,7 +395,7 @@ describe('ModeApi catalog + compiled', () => {
 // ── Retention ────────────────────────────────────────────────────────────────
 
 describe('ModeApi epoch retention', () => {
-  test(`keeps last ${MODE_API_EPOCH_RETENTION} epochs; drops older`, () => {
+  test(`keeps last ${MODE_API_EPOCH_RETENTION} epochs; drops older`, async () => {
     const root = tempDir();
     const folders: string[] = [];
     for (let i = 0; i < 6; i++) {
@@ -334,18 +426,18 @@ describe('ModeApi epoch retention', () => {
     expect(retained).not.toContain(2);
 
     // Epoch 1 and 2 gone → 410; epoch 3 still served.
-    expect(api.getCompiled({ deck: 'deck-a', slug: 'mode-0', epoch: 1 }).status).toBe(410);
-    expect(api.getCompiled({ deck: 'deck-a', slug: 'mode-1', epoch: 2 }).status).toBe(410);
-    expect(api.getCompiled({ deck: 'deck-a', slug: 'mode-2', epoch: 3 }).status).toBe(200);
-    expect(api.getCompiled({ deck: 'deck-a', slug: 'mode-5', epoch: 6 }).status).toBe(200);
+    expect((await api.getCompiled({ deck: 'deck-a', slug: 'mode-0', epoch: 1 })).status).toBe(410);
+    expect((await api.getCompiled({ deck: 'deck-a', slug: 'mode-1', epoch: 2 })).status).toBe(410);
+    expect((await api.getCompiled({ deck: 'deck-a', slug: 'mode-2', epoch: 3 })).status).toBe(200);
+    expect((await api.getCompiled({ deck: 'deck-a', slug: 'mode-5', epoch: 6 })).status).toBe(200);
   });
 
-  test('same-epoch apply does not clear compile cache and returns false', () => {
+  test('same-epoch apply does not clear compile cache and returns false', async () => {
     const root = tempDir();
     const folder = writeValidPreset(root, 'beams');
     const snap1 = snapshotFromEntries(1, [makeEntry(folder, 'beams')]);
     const api = new ModeApi(snap1);
-    expect(api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 1 }).status).toBe(200);
+    expect((await api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 1 })).status).toBe(200);
 
     writeFileSync(join(folder, 'preset.json'), '{ broken');
     const advanced = api.applySnapshot({
@@ -354,10 +446,10 @@ describe('ModeApi epoch retention', () => {
     });
     expect(advanced).toBe(false);
     // Cache still holds good compile from before disk corruption.
-    expect(api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 1 }).status).toBe(200);
+    expect((await api.getCompiled({ deck: 'deck-a', slug: 'beams', epoch: 1 })).status).toBe(200);
   });
 
-  test('compile is bound to its epoch entry (no cross-epoch mix)', () => {
+  test('compile is bound to its epoch entry (no cross-epoch mix)', async () => {
     const root = tempDir();
     const a1 = writeValidPreset(root, 'shared', {
       field: { primitive: 'beams', params: { intensity: 0.1 } },
@@ -367,21 +459,21 @@ describe('ModeApi epoch retention', () => {
     });
 
     const api = new ModeApi(snapshotFromEntries(1, [makeEntry(a1, 'shared')]));
-    const r1 = api.getCompiled({ deck: 'deck-a', slug: 'shared', epoch: 1 });
+    const r1 = await api.getCompiled({ deck: 'deck-a', slug: 'shared', epoch: 1 });
     expect(r1.status).toBe(200);
     if (r1.status !== 200) return;
     expect(r1.wire.field?.params.intensity).toBe(0.1);
     expect(r1.wire.assetBase).toBe('/api/data/e/1/decks/deck-a/shared/');
 
     api.applySnapshot(snapshotFromEntries(2, [makeEntry(a2, 'shared')]));
-    const r2 = api.getCompiled({ deck: 'deck-a', slug: 'shared', epoch: 2 });
+    const r2 = await api.getCompiled({ deck: 'deck-a', slug: 'shared', epoch: 2 });
     expect(r2.status).toBe(200);
     if (r2.status !== 200) return;
     expect(r2.wire.field?.params.intensity).toBe(0.9);
     expect(r2.wire.assetBase).toBe('/api/data/e/2/decks/deck-a/shared/');
 
     // Epoch 1 selection still pure over epoch-1 entry.
-    const r1Again = api.getCompiled({ deck: 'deck-a', slug: 'shared', epoch: 1 });
+    const r1Again = await api.getCompiled({ deck: 'deck-a', slug: 'shared', epoch: 1 });
     expect(r1Again).toEqual(r1);
   });
 });

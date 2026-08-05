@@ -37,6 +37,7 @@ cargo test -p xtask --verbose
 log "cargo test -p aurora --bin aurora field_runtime"
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}" cargo test -p aurora --bin aurora field_runtime
 
+# ModeDirector legacy_field_weight (figure/mesh + fullscreen suppress) + model layer
 log "cargo test -p aurora --bin aurora mode_director"
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}" cargo test -p aurora --bin aurora mode_director
 

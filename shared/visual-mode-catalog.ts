@@ -102,8 +102,8 @@ export type VisualModeEntry = {
   /** Private: which backend layers ModeDirector may enable. */
   backends: readonly ModeBackend[];
   /**
-   * When true, future PRs may zero the legacy beam/tile field once a
-   * replacement backend owns the look. PR1 always keeps legacy field weight 1.
+   * When true, ModeDirector sets `legacy_field_weight = 0` so mesh/fullscreen
+   * (or pack) backends own the look without a double-drawn field (PR13 / #247).
    */
   suppressLegacyField: boolean;
   overlayPolicy: OverlayPolicy;

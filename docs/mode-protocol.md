@@ -40,9 +40,24 @@ definition. Disk/catalog epoch bumps alone do not swap the active renderer.
 ## Engine capabilities
 
 Packs may list tags such as `"field-runtime"` or `"dual-fullscreen"`. The engine
-reports which capabilities it supports; a compile/apply path (later PRs) can
-refuse a wire whose `engineMinCapabilities` are not met. This is **not** a single
-monolithic engine version number.
+reports which capabilities it supports; a compile/apply path can refuse a wire
+whose `engineMinCapabilities` are not met. This is **not** a single monolithic
+engine version number.
+
+## Pack fullscreen slots (PR13 / #247)
+
+- **N=2** engine material slots — one per deck (`pack_fullscreen_a` / `pack_fullscreen_b`).
+- Each pack may declare **at most one** `layers[]` entry with `kind: "fullscreen"`.
+  A second fullscreen layer fails pure compile (soft-fail / banner, same class as
+  Shadertoy import failures).
+- **Bridge compiles pack GLSL → WGSL** with naga-cli (`shared/pack-fullscreen-compile.ts`
+  reuses `transformShadertoyGlsl`). Size cap: `MAX_PACK_SHADER_SOURCE_BYTES` (256 KiB).
+  Missing naga or compile errors are **fail-closed** (422 on `/api/modes/compiled`).
+- Wire layers may carry optional `wgsl` after enrichment. **WASM receives WGSL only**.
+- `.wgsl` pack assets pass through (no naga). Static / GitHub Pages: **builtins only** —
+  no runtime pack GLSL path required on Pages.
+- ModeDirector: `suppressLegacyField` → `legacy_field_weight = 0` so mesh/fullscreen
+  primary packs do not double-draw the legacy field.
 
 ## Primitive IDs
 
