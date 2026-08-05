@@ -11,7 +11,7 @@
  * - all four pools are the FieldRuntime contract (documented; poses in Rust)
  * - failed wire must not be applied (mirror of try_set_compiled keep-previous)
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
@@ -198,6 +198,75 @@ describe('FieldRuntime / Family A modes 0–23 (#242 + #243 + #244)', () => {
         expect(wire.field?.primitiveId).toBe(mode.primitiveId);
         expect(wire.field?.primitiveName).toBe(mode.slug);
         expect(FIELD_POOLS).toHaveLength(4);
+      }
+    }
+  });
+});
+
+/**
+ * PR14 / #248 — residual four-site cleanup.
+ * Guards that `update_visuals` no longer hosts 49-way VisualMode layout matches
+ * and that the dual-path FieldRuntime flag is gone (always on).
+ */
+describe('PR14 residual cleanup (#248)', () => {
+  const mainRs = readFileSync(resolve(REPO_ROOT, 'src/main.rs'), 'utf8');
+  const fieldRuntimeRs = readFileSync(resolve(REPO_ROOT, 'src/field_runtime.rs'), 'utf8');
+
+  function extractFn(source: string, name: string): string {
+    const start = source.indexOf(`fn ${name}`);
+    expect(start, `fn ${name} present`).toBeGreaterThanOrEqual(0);
+    // Next top-level `fn ` after the body start (heuristic: line starting with "fn ").
+    const after = source.slice(start + 3);
+    const nextFn = after.search(/\nfn [a-z_]/);
+    const body = nextFn >= 0 ? source.slice(start, start + 3 + nextFn) : source.slice(start);
+    return body;
+  }
+
+  test('update_visuals has no match deck_mode / 49-way VisualMode layout arms', () => {
+    const uv = extractFn(mainRs, 'update_visuals');
+    expect(uv).not.toMatch(/match\s+deck_mode\b/);
+    // Exhaustiveness stubs that still named every mode are gone.
+    expect(uv).not.toContain('VisualMode::Hypercube');
+    expect(uv).not.toContain('VisualMode::Forcing');
+    expect(uv).not.toContain('VisualMode::Bloom');
+    expect(uv).not.toContain('VisualMode::Beams');
+    // Routing comments / FieldPool / engine path remain.
+    expect(uv).toContain('engine_pose_for_mode');
+    expect(uv).toContain('field_runtime.pose');
+    expect(uv).toContain('FieldPool::Beams');
+  });
+
+  test('FIELD_RUNTIME_DSL dual-path flag is removed (FieldRuntime always on)', () => {
+    expect(fieldRuntimeRs).not.toMatch(/pub const FIELD_RUNTIME_DSL/);
+    expect(fieldRuntimeRs).not.toMatch(/if !FIELD_RUNTIME_DSL/);
+    // Still documents the permanent-on policy.
+    expect(fieldRuntimeRs.toLowerCase()).toMatch(/always on|fieldruntime is always/);
+  });
+
+  test('bundled catalog covers every legacy index 0–48 (no dead-code-only modes)', () => {
+    for (const deck of ['deck-a', 'deck-b'] as const) {
+      const deckDir = resolve(REPO_ROOT, `data/decks/${deck}`);
+      const entries = readdirSync(deckDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+      const covered = new Set<number>();
+      for (const name of entries) {
+        try {
+          const raw = JSON.parse(readFileSync(resolve(deckDir, name, 'preset.json'), 'utf8')) as {
+            legacyIndex?: number | null;
+          };
+          if (typeof raw.legacyIndex === 'number') {
+            covered.add(raw.legacyIndex);
+          }
+        } catch {
+          // non-preset folder
+        }
+      }
+      for (let legacyIndex = 0; legacyIndex <= 48; legacyIndex++) {
+        expect(
+          covered.has(legacyIndex),
+          `${deck} missing preset for legacyIndex ${legacyIndex}`,
+        ).toBe(true);
       }
     }
   });

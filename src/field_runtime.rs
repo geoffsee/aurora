@@ -10,8 +10,9 @@
 //! `pose(..., fallback_primitive_id)` synthesized from legacy index 0–23.
 //! Completes the Family A field-motion set on FieldRuntime.
 //!
-//! Unknown / unimplemented primitive ids return `None` so the caller can fall
-//! through to remaining legacy match arms (unless `suppress_legacy_field`).
+//! Unknown / unimplemented primitive ids return `None` so the caller falls
+//! through to engine_modules (25–48) or hides the element (PR14 / #248).
+//! FieldRuntime is always on — the dual-path `FIELD_RUNTIME_DSL` flag is gone.
 
 #![allow(dead_code)] // Dual-deck slots + queue API are wired from main progressively.
 
@@ -55,9 +56,6 @@ pub const PRIMITIVE_PRISM: u32 = 30;
 pub const PRIMITIVE_SCANNER: u32 = 31;
 pub const PRIMITIVE_COMET: u32 = 32;
 pub const PRIMITIVE_BLOOM: u32 = 33;
-
-/// Feature flag: when false, `pose` always returns None (full legacy path).
-pub const FIELD_RUNTIME_DSL: bool = true;
 
 /// Wire protocol version we accept (shared/compiled-mode-wire.ts).
 pub const COMPILED_MODE_WIRE_VERSION: u32 = 1;
@@ -300,9 +298,6 @@ impl FieldRuntime {
 
     /// True when this deck has a compiled field primitive the runtime can pose.
     pub fn is_dsl_backed(&self, deck: FieldDeck) -> bool {
-        if !FIELD_RUNTIME_DSL {
-            return false;
-        }
         match self.active(deck).and_then(|a| a.field.as_ref()) {
             Some(f) => is_implemented_primitive(f.primitive_id),
             None => false,
@@ -327,7 +322,7 @@ impl FieldRuntime {
         }
     }
 
-    /// Pose one element. `None` → caller falls through to legacy (unless suppress).
+    /// Pose one element. `None` → caller tries engine_modules or hides the element.
     ///
     /// Resolution order:
     /// 1. Active compiled field if its primitive is implemented
@@ -345,9 +340,6 @@ impl FieldRuntime {
         inputs: &FieldFrameInputs,
         fallback_primitive_id: Option<u32>,
     ) -> Option<FieldPose> {
-        if !FIELD_RUNTIME_DSL {
-            return None;
-        }
         let owned_fallback;
         let field_ref: &CompiledFieldDef = if let Some(f) = self
             .active(deck)
@@ -4223,6 +4215,32 @@ mod tests {
         assert_eq!(PRIMITIVE_STORM, 25);
         assert_eq!(PRIMITIVE_ECHO, 26);
         assert_eq!(PRIMITIVE_BLOOM, 33);
+    }
+
+    /// PR14: dual-path flag is gone; pose always evaluates implemented primitives.
+    #[test]
+    fn field_runtime_always_on_without_dsl_flag() {
+        // Split the forbidden identifier so this assertion source cannot self-match.
+        let forbidden = format!("pub const FIELD_{}", "RUNTIME_DSL");
+        let src = include_str!("field_runtime.rs");
+        assert!(
+            !src.contains(&forbidden),
+            "dual-path FieldRuntime flag must be removed (always-on)"
+        );
+        let rt = FieldRuntime::default();
+        let mut inputs = FieldFrameInputs::default();
+        inputs.intensity_drive = 1.0;
+        let pose = rt.pose(
+            FieldDeck::A,
+            FieldPool::Beams,
+            0,
+            0.2,
+            0,
+            0,
+            &inputs,
+            Some(PRIMITIVE_BEAMS),
+        );
+        assert!(pose.is_some(), "Family A fallback pose must work without a flag");
     }
 
     #[test]
