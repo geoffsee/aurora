@@ -18,10 +18,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   compileFromEntry,
-  toPublicCatalog,
   type PublicCatalogSnapshot,
+  toPublicCatalog,
 } from '../bridge/mode-api.ts';
-import { loadModeCatalog, type DeckId } from '../bridge/mode-catalog.ts';
+import { type DeckId, loadModeCatalog } from '../bridge/mode-catalog.ts';
 
 export type StageStaticModeCatalogResult = {
   outRoot: string;
@@ -76,9 +76,7 @@ export function stageStaticModeCatalog(opts: {
 }
 
 const isMain =
-  typeof Bun !== 'undefined' &&
-  Bun.main &&
-  resolve(Bun.main) === resolve(import.meta.path);
+  typeof Bun !== 'undefined' && Bun.main && resolve(Bun.main) === resolve(import.meta.path);
 
 if (isMain) {
   const root = resolve(import.meta.dir, '..');

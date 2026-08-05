@@ -45,23 +45,23 @@ describe('modes-api-client static vs bridge URLs', () => {
   });
 
   test('GitHub Pages compiled wires use deck/slug.json paths', () => {
-    expect(
-      modesCompiledUrl({ deck: 'deck-a', slug: 'beams' }, pagesControls),
-    ).toBe('https://geoffsee.github.io/aurora/api/modes/compiled/deck-a/beams.json');
-    expect(
-      modesCompiledStaticUrl({ deck: 'deck-b', slug: 'tunnel' }, pagesProjector),
-    ).toBe('https://geoffsee.github.io/aurora/api/modes/compiled/deck-b/tunnel.json');
+    expect(modesCompiledUrl({ deck: 'deck-a', slug: 'beams' }, pagesControls)).toBe(
+      'https://geoffsee.github.io/aurora/api/modes/compiled/deck-a/beams.json',
+    );
+    expect(modesCompiledStaticUrl({ deck: 'deck-b', slug: 'tunnel' }, pagesProjector)).toBe(
+      'https://geoffsee.github.io/aurora/api/modes/compiled/deck-b/tunnel.json',
+    );
   });
 
   test('local bridge keeps live query-string API on projector origin', () => {
     expect(bridgeHttpOrigin(localBridge)).toBe('http://127.0.0.1:3000');
     expect(modesCatalogUrl(localBridge)).toBe('http://127.0.0.1:3000/api/modes/catalog');
     expect(modesCatalogLiveUrl(localBridge)).toBe(modesCatalogUrl(localBridge));
-    expect(
+    expect(modesCompiledUrl({ deck: 'deck-a', slug: 'beams', epoch: 2 }, localBridge)).toBe(
+      'http://127.0.0.1:3000/api/modes/compiled?deck=deck-a&slug=beams&epoch=2',
+    );
+    expect(modesCompiledLiveUrl({ deck: 'deck-a', slug: 'beams', epoch: 2 }, localBridge)).toBe(
       modesCompiledUrl({ deck: 'deck-a', slug: 'beams', epoch: 2 }, localBridge),
-    ).toBe('http://127.0.0.1:3000/api/modes/compiled?deck=deck-a&slug=beams&epoch=2');
-    expect(
-      modesCompiledLiveUrl({ deck: 'deck-a', slug: 'beams', epoch: 2 }, localBridge),
-    ).toBe(modesCompiledUrl({ deck: 'deck-a', slug: 'beams', epoch: 2 }, localBridge));
+    );
   });
 });
