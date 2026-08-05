@@ -53,8 +53,8 @@ const FAMILY_A_MODES = [
   { slug: 'bloom', legacyIndex: 23, primitiveId: FIELD_PRIMITIVE_IDS.bloom },
 ] as const;
 
-describe('FieldRuntime / point_cloud particulate field', () => {
-  test('bundled point-cloud presets validate and compile for both decks', () => {
+describe('FieldRuntime / point-cloud GPU fullscreen pack', () => {
+  test('bundled point-cloud is fullscreen-primary with pack WGSL (not CPU field)', () => {
     for (const deck of ['deck-a', 'deck-b'] as const) {
       const path = resolve(REPO_ROOT, `data/decks/${deck}/point-cloud/preset.json`);
       const raw = JSON.parse(readFileSync(path, 'utf8')) as unknown;
@@ -75,22 +75,19 @@ describe('FieldRuntime / point_cloud particulate field', () => {
       const wire: CompiledModeWire = compiled.value;
       expect(wire.wireVersion).toBe(COMPILED_MODE_WIRE_VERSION);
       expect(wire.slug).toBe('point-cloud');
+      expect(wire.disposition).toBe('fullscreen-primary');
       expect(wire.suppressLegacyField).toBe(true);
-      expect(wire.field?.primitiveId).toBe(FIELD_PRIMITIVE_IDS.point_cloud);
-      expect(wire.field?.primitiveName).toBe('point_cloud');
-      expect(wire.field?.params.intensity).toBeCloseTo(0.92);
-      expect(wire.field?.params.density).toBeCloseTo(0.58);
-      expect(wire.field?.params.swirl).toBeCloseTo(0.4);
-      expect(wire.field?.params.scatter).toBeCloseTo(0.48);
-      expect(wire.field?.params.sparkle).toBeCloseTo(0.62);
+      expect(wire.field).toBeUndefined();
+      expect(wire.layers).toHaveLength(1);
+      expect(wire.layers[0]?.kind).toBe('fullscreen');
+      expect(wire.layers[0]?.ref).toBe('point_cloud.wgsl');
     }
   });
 
-  test('point_cloud permanent id is 2 and is not a Family A legacy map entry', () => {
+  test('point_cloud permanent id stays reserved (2) but pack does not use field', () => {
     expect(FIELD_PRIMITIVE_IDS.point_cloud).toBe(2);
     const familyIds = new Set(FAMILY_A_MODES.map((m) => m.primitiveId as number));
     expect(familyIds.has(FIELD_PRIMITIVE_IDS.point_cloud)).toBe(false);
-    expect(FIELD_POOLS).toHaveLength(4);
   });
 });
 
