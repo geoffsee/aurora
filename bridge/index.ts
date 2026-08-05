@@ -42,9 +42,9 @@ import { DEFAULT_PALETTE_RGB, hueToRgb, resolvePaletteColor } from '../shared/pa
 import {
   DECK_MODE_MAX,
   DECK_MODE_MIN,
+  type DeckSelectionPatch,
   normalizePresetSlug,
   resolveBothDeckSelections,
-  type DeckSelectionPatch,
 } from '../shared/resolve-deck-selection.ts';
 import { importShadertoyUrl } from '../shared/shadertoy-import.ts';
 import {

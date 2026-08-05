@@ -131,10 +131,8 @@ export const migrateControlState = (state: unknown): unknown => {
     return migrateControlState({
       ...s,
       schemaVersion: 14,
-      deckAPresetSlug:
-        typeof s.deckAPresetSlug === 'string' ? s.deckAPresetSlug : '',
-      deckBPresetSlug:
-        typeof s.deckBPresetSlug === 'string' ? s.deckBPresetSlug : '',
+      deckAPresetSlug: typeof s.deckAPresetSlug === 'string' ? s.deckAPresetSlug : '',
+      deckBPresetSlug: typeof s.deckBPresetSlug === 'string' ? s.deckBPresetSlug : '',
     });
   }
   return state;

@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import {
+  type CatalogLikeEntry,
   effectiveDeckPatch,
   migrateDeckSlugsInState,
   resolveBothDeckSelections,
   resolveDeckSelection,
   resolveDeckSelectionFromState,
-  type CatalogLikeEntry,
 } from '../../shared/resolve-deck-selection.ts';
 
 const DECK_A: CatalogLikeEntry[] = [
@@ -83,22 +83,12 @@ describe('resolveDeckSelection — slug path', () => {
 
 describe('resolveDeckSelection — int path (VST/MIDI)', () => {
   test('int maps to slug via legacyIndex', () => {
-    const r = resolveDeckSelection(
-      'deck-a',
-      { deckAMode: 1 },
-      prev(0, 'beams'),
-      DECK_A,
-    );
+    const r = resolveDeckSelection('deck-a', { deckAMode: 1 }, prev(0, 'beams'), DECK_A);
     expect(r).toMatchObject({ mode: 1, slug: 'tunnel', source: 'int' });
   });
 
   test('int without catalog pack keeps int and clears slug (no invented non-legacy)', () => {
-    const r = resolveDeckSelection(
-      'deck-a',
-      { deckAMode: 12 },
-      prev(0, 'beams'),
-      DECK_A,
-    );
+    const r = resolveDeckSelection('deck-a', { deckAMode: 12 }, prev(0, 'beams'), DECK_A);
     expect(r.mode).toBe(12);
     expect(r.slug).toBe('');
     expect(r.source).toBe('int');
@@ -106,12 +96,7 @@ describe('resolveDeckSelection — int path (VST/MIDI)', () => {
 
   test('VST/MIDI cannot select non-legacy packs via int path', () => {
     // supernova has no legacyIndex — only reachable by slug.
-    const viaInt = resolveDeckSelection(
-      'deck-a',
-      { deckAMode: -1 },
-      prev(0, 'beams'),
-      DECK_A,
-    );
+    const viaInt = resolveDeckSelection('deck-a', { deckAMode: -1 }, prev(0, 'beams'), DECK_A);
     expect(viaInt.slug).not.toBe('supernova');
     expect(viaInt.slug).toBe('');
 
@@ -126,12 +111,7 @@ describe('resolveDeckSelection — int path (VST/MIDI)', () => {
   });
 
   test('out-of-range int is clamped into the legacy bus range', () => {
-    const r = resolveDeckSelection(
-      'deck-a',
-      { deckAMode: 99 },
-      prev(0, 'beams'),
-      DECK_A,
-    );
+    const r = resolveDeckSelection('deck-a', { deckAMode: 99 }, prev(0, 'beams'), DECK_A);
     expect(r.mode).toBe(48);
   });
 });
