@@ -556,11 +556,101 @@ fn hash01(x: f32) -> f32 {
     n.fract().abs()
 }
 
-/// Audio-reactive particulate cloud.
+/// True when a deck's active compiled field is the point_cloud primitive.
+/// Used by the renderer to swap unit quads for circle meshes.
+pub fn is_point_cloud_primitive(id: u32) -> bool {
+    id == PRIMITIVE_POINT_CLOUD
+}
+
+/// Shared star-field particle. Always **isotropic** (`sx == sy`) and **unrotated**
+/// so a unit square or unit circle mesh reads as a round point, never a stick
+/// or swirling rectangle.
+fn point_cloud_dot(
+    // Stable particle id (pool-local index, optionally salt-offset).
+    particle_id: f32,
+    seed: f32,
+    // Salt so beams/tiles/ghosts don't stack on identical hashes.
+    salt: f32,
+    intensity: f32,
+    density: f32,
+    swirl: f32,
+    scatter: f32,
+    sparkle: f32,
+    inputs: &FieldFrameInputs,
+    // Soft trail fade 0..1 (1 = full life). Ghosts use life curve; others 1.
+    life: f32,
+    // Pixel diameter at rest (before sparkle/energy).
+    base_size: f32,
+) -> FieldPose {
+    let t = inputs.t * inputs.speed.max(0.05);
+    let breath = 1.0 + inputs.bass * 0.18 + inputs.beat_hit * 0.14 + inputs.cue_hit * 0.1;
+    let spark = (inputs.high * 0.7 + inputs.mid * 0.15 + inputs.flash * 0.3) * sparkle;
+    let energy = clamp(
+        inputs.intensity_drive * (0.5 + intensity * 0.55) * (0.72 + inputs.deck_drive * 0.35),
+        0.2,
+        2.0,
+    );
+
+    // Quasi-random direction on a sphere, then slow swirl + scatter jitter.
+    let u = hash01(particle_id * 0.73 + seed * 17.1 + salt);
+    let v = hash01(particle_id * 1.91 + seed * 9.3 + salt * 1.7);
+    let w = hash01(particle_id * 2.41 + seed * 3.7 + salt * 2.3);
+    let theta0 = u * TAU;
+    let phi = (v * 2.0 - 1.0).clamp(-0.999, 0.999).acos(); // 0..PI
+    let theta = theta0 + t * (0.1 + swirl * 0.55) + life * swirl * 0.35;
+
+    // Radius: denser packs pull mass toward a soft core; scatter adds shell thickness.
+    let r_core = 40.0 + (1.0 - density) * 90.0;
+    let r_shell = 90.0 + w * (220.0 + scatter * 160.0);
+    let r = (r_core + (r_shell - r_core) * (0.15 + w * 0.85)) * breath
+        + (hash01(particle_id + t * 0.07 + salt) - 0.5) * scatter * 55.0
+        + inputs.pulse * 14.0;
+
+    let sin_phi = phi.sin();
+    let px = theta.cos() * sin_phi * r;
+    let py = phi.cos() * r * 0.68
+        + (wave(t * 0.55 + seed * 3.0 + salt) - 0.5) * scatter * 28.0
+        + elev_nudge(particle_id, seed, scatter);
+    let pz = (w - 0.5) * 8.0 + salt * 0.01;
+
+    // Real points: tiny equal diameter, no rotation. Sparkle only grows a few px.
+    let diameter = (base_size + energy * 0.9 + spark * 2.4 + intensity * 0.6)
+        * (0.75 + density * 0.35)
+        * (0.55 + life * 0.45);
+    let size = diameter.clamp(1.2, 9.0);
+
+    let radial_fade = (1.0 - (r / 520.0).clamp(0.0, 1.0)).clamp(0.2, 1.0);
+    let alpha = (0.22 + intensity * 0.48 + spark * 0.35)
+        * life
+        * radial_fade
+        * (0.55 + density * 0.45);
+    let hue = seed * 240.0 + t * 9.0 * swirl.abs().max(0.08) + spark * 55.0 + u * 50.0 + salt * 30.0;
+    let lightness = 0.5 + spark * 0.14 + intensity * 0.05 + inputs.high * 0.03;
+
+    FieldPose {
+        px,
+        py,
+        pz,
+        rot: 0.0,
+        sx: size,
+        sy: size,
+        alpha: alpha.clamp(0.0, 1.2),
+        hue,
+        lightness: lightness.clamp(0.14, 0.92),
+    }
+}
+
+fn elev_nudge(particle_id: f32, seed: f32, scatter: f32) -> f32 {
+    (hash01(particle_id * 0.51 + seed * 4.2) - 0.5) * scatter * 40.0
+}
+
+/// Audio-reactive star field / point cloud.
 ///
-/// Reuses the four CPU sprite pools as points: short beam stubs, soft ring orbs,
-/// tile dots, and ghost particles. Layout is a swirling 3D-ish shell with bass
-/// breathing, high-band sparkle, and calm #232 lightness ceilings.
+/// Every pool is the **same particle primitive**: a small isotropic disc
+/// (`sx == sy`, `rot == 0`). Pools only change particle count / seed salt so
+/// beams, tiles, rings, and ghosts all read as points — never sticks or quads.
+/// The renderer should also swap unit rectangles for circle meshes when this
+/// primitive is active (`is_point_cloud_primitive`).
 pub fn pose_point_cloud(
     pool: FieldPool,
     element_index: usize,
@@ -572,169 +662,75 @@ pub fn pose_point_cloud(
 ) -> FieldPose {
     let (intensity, density, swirl, scatter, sparkle) = point_cloud_params(field);
     let t = inputs.t * inputs.speed.max(0.05);
-    let breath = 1.0 + inputs.bass * 0.22 + inputs.beat_hit * 0.18 + inputs.cue_hit * 0.12;
-    let energy = clamp(
-        inputs.intensity_drive * (0.55 + intensity * 0.55) * (0.7 + inputs.deck_drive * 0.4),
-        0.2,
-        2.0,
-    );
-    let spark = (inputs.high * 0.65 + inputs.mid * 0.2 + inputs.flash * 0.35) * sparkle;
-    let core_pull = 0.35 + density * 0.65;
 
     match pool {
-        FieldPool::Beams => {
-            // Near-points: short thin stubs on a star-field sphere.
-            let n = inputs.beam_count.max(1) as f32;
-            let i = element_index as f32;
-            let u = hash01(seed * 17.1 + i * 0.73);
-            let v = hash01(seed * 9.3 + i * 1.91);
-            let w = hash01(seed * 3.7 + i * 2.41);
-            let theta = u * TAU + t * (0.12 + swirl * 0.55);
-            let phi = (v * 2.0 - 1.0).clamp(-1.0, 1.0).acos(); // 0..PI polar
-            let r_base = (80.0 + w * 280.0 * (1.2 - density * 0.55)) * breath;
-            let jitter = (hash01(i + t * 0.15 + seed) - 0.5) * scatter * 48.0;
-            let r = r_base + jitter + inputs.pulse * 18.0;
-            let px = theta.cos() * phi.sin() * r;
-            let py = phi.cos() * r * 0.72 + (wave(t * 0.7 + seed * 4.0) - 0.5) * scatter * 22.0;
-            let pz = 4.0 + w * 6.0;
-            let rot = theta + swirl * 0.08;
-            // Tiny stubs — read as points more than beams.
-            let point = 2.2 + energy * 1.4 + spark * 2.2;
-            let sx = point * (0.7 + spark * 0.5);
-            let sy = point * (0.85 + intensity * 0.25) + spark * 1.5;
-            let alpha = (0.18 + intensity * 0.42 + spark * 0.35)
-                * (0.45 + (1.0 - (r / 420.0).clamp(0.0, 1.0)) * 0.55 * core_pull)
-                * (0.55 + (1.0 - (i / n)) * 0.35);
-            let hue = seed * 280.0 + t * 8.0 * swirl.abs().max(0.1) + spark * 50.0 + u * 40.0;
-            let lightness = 0.48 + spark * 0.12 + intensity * 0.06 + inputs.high * 0.04;
-            FieldPose {
-                px,
-                py,
-                pz,
-                rot,
-                sx: sx.max(1.0),
-                sy: sy.max(1.0),
-                alpha: alpha.clamp(0.0, 1.15),
-                hue,
-                lightness: lightness.clamp(0.12, 0.9),
-            }
-        }
+        FieldPool::Beams => point_cloud_dot(
+            element_index as f32,
+            seed,
+            0.0,
+            intensity,
+            density,
+            swirl,
+            scatter,
+            sparkle,
+            inputs,
+            1.0,
+            2.4,
+        ),
         FieldPool::Rings => {
-            // Soft dust orbs on layered shells (ring sprites scaled as round-ish blobs).
-            let n = inputs.ring_count.max(1) as f32;
-            let layer = if n > 1.0 {
-                element_index as f32 / (n - 1.0)
-            } else {
-                0.0
-            };
-            let phase = (t * (0.18 + swirl.abs() * 0.12) + layer * 0.37 + seed).fract();
-            let shell = (90.0 + layer * 95.0 + phase * 40.0 * scatter) * breath * (0.75 + density * 0.35);
-            // Small round marks, not huge expanding rings.
-            let size = (14.0 + (1.0 - layer) * 10.0 + energy * 4.0 + spark * 8.0)
-                * (0.55 + intensity * 0.5);
-            let ang = t * (0.08 + swirl * 0.2) + layer * TAU * 0.17 + seed * 2.0;
-            let px = ang.cos() * shell * 0.08 * scatter;
-            let py = ang.sin() * shell * 0.05 * scatter;
-            let glow = (1.0 - layer) * (0.55 + phase * 0.45);
-            let alpha = (0.04 + 0.16 * glow + spark * 0.12) * (0.5 + intensity * 0.5);
-            let hue = 200.0 + layer * 28.0 + t * 6.0 + spark * 30.0;
-            let lightness = 0.5 + glow * 0.06 + spark * 0.05;
-            FieldPose {
-                px,
-                py,
-                pz: 16.0 - layer,
-                rot: ang,
-                sx: size.max(1.0),
-                sy: size.max(1.0),
-                alpha: alpha.clamp(0.0, 0.85),
-                hue,
-                lightness: lightness.clamp(0.12, 0.88),
-            }
+            // Extra shell particles (not expanding annuli).
+            point_cloud_dot(
+                element_index as f32 + 1000.0,
+                seed,
+                1.3,
+                intensity,
+                density,
+                swirl,
+                scatter,
+                sparkle,
+                inputs,
+                1.0,
+                2.0,
+            )
         }
         FieldPool::Tiles => {
-            // Dot lattice with depth parallax and audio displacement.
-            let cols = inputs.tile_cols.max(1) as f32;
-            let rows = inputs.tile_rows.max(1) as f32;
-            let u = if cols > 1.0 {
-                col as f32 / (cols - 1.0)
-            } else {
-                0.5
-            };
-            let v = if rows > 1.0 {
-                row as f32 / (rows - 1.0)
-            } else {
-                0.5
-            };
-            let cx = u - 0.5;
-            let cy = v - 0.5;
-            let dist = (cx * cx + cy * cy).sqrt();
-            let ang = cy.atan2(cx);
-            let h = hash01(col as f32 * 12.1 + row as f32 * 7.7 + seed * 3.0);
-            let swirl_ang = ang + t * (0.15 + swirl * 0.4) + h * scatter * 0.8;
-            let radius = dist * (1.05 - density * 0.35) * breath;
-            let stage_w = STAGE_WIDTH;
-            let stage_h = STAGE_HEIGHT;
-            let jitter_x = (hash01(h + t * 0.11) - 0.5) * scatter * 36.0;
-            let jitter_y = (hash01(h * 2.3 + t * 0.09) - 0.5) * scatter * 28.0;
-            let px = swirl_ang.cos() * radius * stage_w * 0.92 + jitter_x + inputs.mid * cx * 12.0;
-            let py = swirl_ang.sin() * radius * stage_h * 0.92 + jitter_y + inputs.bass * cy * 10.0;
-            // Tiny squares → point-like cells; checker thins density for calm.
-            let point = (3.2 + energy * 2.8 + spark * 3.5 + (1.0 - dist) * 1.5 * intensity)
-                * (0.65 + density * 0.45);
-            let parity = if (col + row) % 2 == 0 { 1.0 } else { 0.38 };
-            let alpha = (0.12 + intensity * 0.4 + spark * 0.28)
-                * (0.4 + (1.0 - dist).max(0.0) * 0.6)
-                * parity
-                * (0.7 + core_pull * 0.3);
-            let hue = ang.to_degrees() + t * 10.0 + h * 60.0 + spark * 40.0;
-            let lightness = 0.46 + spark * 0.1 + intensity * 0.05 + (1.0 - dist) * 0.04;
-            FieldPose {
-                px,
-                py,
-                pz: 6.0 + dist * 4.0 + h,
-                rot: swirl_ang * 0.15,
-                sx: point.max(1.0),
-                sy: point.max(1.0),
-                alpha: alpha.clamp(0.0, 1.1),
-                hue,
-                lightness: lightness.clamp(0.12, 0.9),
-            }
+            let cols = inputs.tile_cols.max(1);
+            let id = (row * cols as usize + col) as f32;
+            point_cloud_dot(
+                id,
+                seed,
+                2.7,
+                intensity,
+                density,
+                swirl,
+                scatter,
+                sparkle,
+                inputs,
+                1.0,
+                2.2,
+            )
         }
         FieldPool::Ghost => {
-            // Primary particle stream — soft trailing points in a turbulent cloud.
+            // Soft trailing points — same disc, slightly larger, life fade.
             let n = inputs.ghost_count.max(1) as f32;
-            let i = element_index as f32;
-            let fraction = i / n;
-            let u = hash01(seed * 5.1 + i * 1.37);
-            let v = hash01(seed * 2.9 + i * 2.11);
-            let life = (t * (0.18 + inputs.feedback * 0.25 + density * 0.12) + u * 3.0 + fraction)
+            let fraction = element_index as f32 / n;
+            let u = hash01(seed * 5.1 + element_index as f32 * 1.37);
+            let life = (t * (0.2 + inputs.feedback * 0.28 + density * 0.1) + u * 3.0 + fraction)
                 .fract();
-            let trail = (1.0 - life).powf(1.35);
-            let theta = u * TAU + t * (0.22 + swirl * 0.65) + life * swirl * 0.4;
-            let elev = (v * 2.0 - 1.0) * (0.55 + scatter * 0.35);
-            let r = (55.0 + fraction * 200.0 * (1.15 - density * 0.4) + life * 40.0 * scatter)
-                * breath
-                * (0.55 + intensity * 0.5);
-            let px = theta.cos() * r * (1.0 - elev.abs() * 0.25);
-            let py = theta.sin() * r * 0.68 + elev * 120.0 * scatter + (wave(t + u * 6.0) - 0.5) * 18.0;
-            let point = (6.0 + 28.0 * trail * intensity + spark * 14.0 + inputs.pulse * 6.0)
-                * (0.4 + inputs.feedback.max(0.25));
-            let alpha = trail
-                * (0.08 + intensity * 0.28 + spark * 0.22 + inputs.feedback * 0.18)
-                * (0.5 + (1.0 - fraction) * 0.5);
-            let hue = seed * 200.0 + t * 12.0 + life * 80.0 + spark * 45.0 + fraction * 25.0;
-            let lightness = 0.5 + trail * 0.08 + spark * 0.06;
-            FieldPose {
-                px,
-                py,
-                pz: -6.0 + fraction * 3.0,
-                rot: theta * 0.2,
-                sx: point.max(1.0),
-                sy: point.max(1.0),
-                alpha: alpha.clamp(0.0, 0.95),
-                hue,
-                lightness: lightness.clamp(0.12, 0.9),
-            }
+            let trail = (1.0 - life).powf(1.25);
+            point_cloud_dot(
+                element_index as f32 + 5000.0,
+                seed,
+                4.1,
+                intensity,
+                density,
+                swirl,
+                scatter,
+                sparkle,
+                inputs,
+                trail.clamp(0.08, 1.0),
+                2.8,
+            )
         }
     }
 }
@@ -3987,12 +3983,22 @@ mod tests {
         ] {
             let pose = pose_point_cloud(pool, 2, 0.22, 3, 1, &field, &inputs);
             assert_pose_sane(&pose, &format!("point_cloud {pool:?}"));
-            // Point-like: scales stay modest (not giant beam sticks / wash tiles).
+            // Real points: isotropic, unrotated, tiny diameter (not sticks/rects).
             assert!(
-                pose.sx < 80.0 && pose.sy < 80.0,
-                "point_cloud {pool:?} scale too large: sx={} sy={}",
+                (pose.sx - pose.sy).abs() < 1e-5,
+                "point_cloud {pool:?} must be isotropic: sx={} sy={}",
                 pose.sx,
                 pose.sy
+            );
+            assert!(
+                pose.rot.abs() < 1e-5,
+                "point_cloud {pool:?} must not rotate: rot={}",
+                pose.rot
+            );
+            assert!(
+                pose.sx <= 9.0,
+                "point_cloud {pool:?} diameter too large for a point: {}",
+                pose.sx
             );
         }
     }

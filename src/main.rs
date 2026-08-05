@@ -20,7 +20,7 @@ use bevy::{
 use engine_modules::pose_for_mode as engine_pose_for_mode;
 use field_runtime::{
     FieldDeck, FieldFrameInputs, FieldPool, FieldRuntime, drain_pending as drain_field_pending,
-    primitive_id_for_legacy_index, queue_compiled_json,
+    is_point_cloud_primitive, primitive_id_for_legacy_index, queue_compiled_json,
 };
 use mode_catalog::VisualMode;
 use mode_director::{ModeDirector, ModeDirectorInputs, resolve_director};
@@ -357,11 +357,12 @@ const GPU_QUAD_PACK_B: u32 = 21;
 const STAGE_WIDTH: f32 = 1280.0;
 const STAGE_HEIGHT: f32 = 720.0;
 // #232 visual quality: slightly sparser pools for breathing room (still responsive).
-const DECK_A_BEAMS: usize = 56;
-const DECK_A_RINGS: usize = 7;
-const DECK_B_COLS: usize = 12;
-const DECK_B_ROWS: usize = 7;
-const DECK_GHOSTS: usize = 14;
+// Point-cloud reuses these as isotropic dots; denser than pure field-motion sticks.
+const DECK_A_BEAMS: usize = 96;
+const DECK_A_RINGS: usize = 12;
+const DECK_B_COLS: usize = 16;
+const DECK_B_ROWS: usize = 10;
+const DECK_GHOSTS: usize = 36;
 // Slightly calmer audio→geometry coupling (smoother motion, less jitter).
 const OSC_PULSE_GAIN: f32 = 0.07;
 const AUDIO_GEOMETRY_GAIN: f32 = 0.24;
@@ -624,6 +625,15 @@ enum VisualKind {
     Ghost,
 }
 
+/// Shared meshes for CPU field sprites. Point-cloud swaps to `circle` so discs
+/// read as points instead of unit rectangles.
+#[derive(Resource, Clone)]
+struct FieldSpriteMeshes {
+    quad: Handle<Mesh>,
+    circle: Handle<Mesh>,
+    ring: Handle<Mesh>,
+}
+
 #[derive(Component)]
 struct VisualElement {
     deck: Deck,
@@ -666,9 +676,16 @@ fn setup(
     ));
 
     let quad = meshes.add(Rectangle::default());
+    // Unit disc (diameter 1) — matches unit Rectangle so the same sx/sy scale works.
+    let circle = meshes.add(Circle::new(0.5));
     // Rings render as a thin annulus. Keep it restrained; a thick, bright ring
     // reads like a target overlay rather than part of the visual texture.
     let ring_mesh = meshes.add(Annulus::new(0.94, 1.0));
+    commands.insert_resource(FieldSpriteMeshes {
+        quad: quad.clone(),
+        circle: circle.clone(),
+        ring: ring_mesh.clone(),
+    });
     let torus = meshes.add(Torus {
         minor_radius: 0.035,
         major_radius: 1.0,
@@ -1460,9 +1477,11 @@ fn update_visuals(
     state: Res<VjState>,
     director: Res<ModeDirector>,
     field_runtime: Res<FieldRuntime>,
+    sprite_meshes: Option<Res<FieldSpriteMeshes>>,
     mut query: Query<(
         &VisualElement,
         &mut Transform,
+        &mut Mesh2d,
         &MeshMaterial2d<ColorMaterial>,
     )>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -1510,7 +1529,16 @@ fn update_visuals(
     } else {
         0.0
     };
-    for (element, mut transform, material_handle) in &mut query {
+    let point_cloud_a = field_runtime
+        .active(FieldDeck::A)
+        .and_then(|a| a.field.as_ref())
+        .is_some_and(|f| is_point_cloud_primitive(f.primitive_id));
+    let point_cloud_b = field_runtime
+        .active(FieldDeck::B)
+        .and_then(|a| a.field.as_ref())
+        .is_some_and(|f| is_point_cloud_primitive(f.primitive_id));
+
+    for (element, mut transform, mut mesh2d, material_handle) in &mut query {
         let (deck_mix, cpu_enabled, instrument) = match element.deck {
             Deck::A => (
                 1.0 - state.crossfade,
@@ -1519,6 +1547,21 @@ fn update_visuals(
             ),
             Deck::B => (state.crossfade, state.cpu_deck_b_enabled, &director.deck_b),
         };
+        let deck_is_point_cloud = match element.deck {
+            Deck::A => point_cloud_a,
+            Deck::B => point_cloud_b,
+        };
+        // Point-cloud: filled discs. Other modes: sticks/tiles = unit quads, rings = annulus.
+        if let Some(ref meshes) = sprite_meshes {
+            mesh2d.0 = if deck_is_point_cloud {
+                meshes.circle.clone()
+            } else {
+                match element.kind {
+                    VisualKind::Ring => meshes.ring.clone(),
+                    _ => meshes.quad.clone(),
+                }
+            };
+        }
         // ModeDirector zeros legacy_field_weight for Figure/mesh-primary and
         // fullscreen-primary (pack fullscreen / mesh own the look).
         let deck_alpha = deck_mix
@@ -1602,8 +1645,9 @@ fn update_visuals(
             alpha = 0.0;
         }
 
-        // Pool-specific gates (not mode layout).
-        if matches!(element.kind, VisualKind::Ring) {
+        // Pool-specific gates (not mode layout). Point-cloud treats rings as dots —
+        // do not gate them on the "Rings" overlay toggle / opacity.
+        if matches!(element.kind, VisualKind::Ring) && !deck_is_point_cloud {
             alpha *= state.ring_opacity;
             if !state.rings_enabled {
                 alpha = 0.0;
