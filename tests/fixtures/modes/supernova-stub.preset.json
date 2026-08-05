@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "supernova-stub",
+  "slug": "supernova-stub",
+  "label": "Supernova Stub",
+  "character": "PR6 vertical-slice placeholder — radial burst with spin and decay.",
+  "uiGroup": "field-motion",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "supernova_burst",
+    "params": {
+      "intensity": 0.9,
+      "spin": 0.35,
+      "decay": 0.6,
+      "unknownNoise": 99
+    }
+  },
+  "layers": [],
+  "suppressLegacyField": true,
+  "engineMinCapabilities": ["field-runtime"]
+}
