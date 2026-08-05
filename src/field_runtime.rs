@@ -2,8 +2,10 @@
 //!
 //! PR6 (#240): `supernova_burst` (id 1) vertical slice.
 //! PR8 (#242): Family A modes 0–7 (`beams`…`orbit`, ids 10–17) for **all four**
+//! pools.
+//! PR9 (#243): Family A modes 8–15 (`pulse`…`storm`, ids 18–25) for **all four**
 //! pools. When no compiled wire is active, VST int-only shows still render via
-//! `pose(..., fallback_primitive_id)` synthesized from legacy index 0–7.
+//! `pose(..., fallback_primitive_id)` synthesized from legacy index 0–15.
 //!
 //! Unknown / unimplemented primitive ids return `None` so the caller can fall
 //! through to remaining legacy match arms (unless `suppress_legacy_field`).
@@ -30,6 +32,16 @@ pub const PRIMITIVE_WASH: u32 = 14;
 pub const PRIMITIVE_STROBE: u32 = 15;
 pub const PRIMITIVE_SWARM: u32 = 16;
 pub const PRIMITIVE_ORBIT: u32 = 17;
+
+// Family A (legacy indices 8–15) — permanent ids 18–25.
+pub const PRIMITIVE_PULSE: u32 = 18;
+pub const PRIMITIVE_SPIRAL: u32 = 19;
+pub const PRIMITIVE_RIPPLE: u32 = 20;
+pub const PRIMITIVE_SHATTER: u32 = 21;
+pub const PRIMITIVE_FLUX: u32 = 22;
+pub const PRIMITIVE_LATTICE: u32 = 23;
+pub const PRIMITIVE_DRIFT: u32 = 24;
+pub const PRIMITIVE_STORM: u32 = 25;
 
 /// Feature flag: when false, `pose` always returns None (full legacy path).
 pub const FIELD_RUNTIME_DSL: bool = true;
@@ -296,7 +308,7 @@ impl FieldRuntime {
     ///
     /// Resolution order:
     /// 1. Active compiled field if its primitive is implemented
-    /// 2. Else `fallback_primitive_id` (Family A VST int path for legacy 0–7)
+    /// 2. Else `fallback_primitive_id` (Family A VST int path for legacy 0–15)
     /// 3. Else `None`
     #[allow(clippy::too_many_arguments)] // pool + element identity + shared frame inputs
     pub fn pose(
@@ -332,7 +344,7 @@ impl FieldRuntime {
 }
 
 /// Map control-bus / VisualMode legacy index → permanent Family A primitive id.
-/// Indices 0–7 only; other modes stay on the legacy match until later PRs.
+/// Indices 0–15; later Family A modes stay on the legacy match until later PRs.
 pub fn primitive_id_for_legacy_index(legacy_index: i32) -> Option<u32> {
     match legacy_index {
         0 => Some(PRIMITIVE_BEAMS),
@@ -343,6 +355,14 @@ pub fn primitive_id_for_legacy_index(legacy_index: i32) -> Option<u32> {
         5 => Some(PRIMITIVE_STROBE),
         6 => Some(PRIMITIVE_SWARM),
         7 => Some(PRIMITIVE_ORBIT),
+        8 => Some(PRIMITIVE_PULSE),
+        9 => Some(PRIMITIVE_SPIRAL),
+        10 => Some(PRIMITIVE_RIPPLE),
+        11 => Some(PRIMITIVE_SHATTER),
+        12 => Some(PRIMITIVE_FLUX),
+        13 => Some(PRIMITIVE_LATTICE),
+        14 => Some(PRIMITIVE_DRIFT),
+        15 => Some(PRIMITIVE_STORM),
         _ => None,
     }
 }
@@ -359,6 +379,14 @@ pub fn is_implemented_primitive(id: u32) -> bool {
             | PRIMITIVE_STROBE
             | PRIMITIVE_SWARM
             | PRIMITIVE_ORBIT
+            | PRIMITIVE_PULSE
+            | PRIMITIVE_SPIRAL
+            | PRIMITIVE_RIPPLE
+            | PRIMITIVE_SHATTER
+            | PRIMITIVE_FLUX
+            | PRIMITIVE_LATTICE
+            | PRIMITIVE_DRIFT
+            | PRIMITIVE_STORM
     )
 }
 
@@ -373,6 +401,14 @@ pub fn primitive_name(id: u32) -> &'static str {
         PRIMITIVE_STROBE => "strobe",
         PRIMITIVE_SWARM => "swarm",
         PRIMITIVE_ORBIT => "orbit",
+        PRIMITIVE_PULSE => "pulse",
+        PRIMITIVE_SPIRAL => "spiral",
+        PRIMITIVE_RIPPLE => "ripple",
+        PRIMITIVE_SHATTER => "shatter",
+        PRIMITIVE_FLUX => "flux",
+        PRIMITIVE_LATTICE => "lattice",
+        PRIMITIVE_DRIFT => "drift",
+        PRIMITIVE_STORM => "storm",
         _ => "unknown",
     }
 }
@@ -406,6 +442,14 @@ fn pose_for_field(
         PRIMITIVE_STROBE => pose_strobe(pool, element_index, seed, col, row, field, inputs),
         PRIMITIVE_SWARM => pose_swarm(pool, element_index, seed, col, row, field, inputs),
         PRIMITIVE_ORBIT => pose_orbit(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_PULSE => pose_pulse(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_SPIRAL => pose_spiral(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_RIPPLE => pose_ripple(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_SHATTER => pose_shatter(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_FLUX => pose_flux(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_LATTICE => pose_lattice(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_DRIFT => pose_drift(pool, element_index, seed, col, row, field, inputs),
+        PRIMITIVE_STORM => pose_storm(pool, element_index, seed, col, row, field, inputs),
         _ => return None,
     })
 }
@@ -1601,6 +1645,896 @@ pub fn pose_orbit(
     }
 }
 
+
+// ── pulse (legacy 8) ─────────────────────────────────────────────────────────
+
+pub fn pose_pulse(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    let pump = (inputs.beat * TAU).sin().abs();
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let a = fraction * TAU;
+            let r = 50.0 + fraction * 380.0 * (0.5 + pump * 0.95);
+            let hue = seed * 360.0 + t * 18.0 + 80.0 + pump * 80.0;
+            FieldPose {
+                px: a.cos() * r,
+                py: a.sin() * r * 0.7,
+                pz: 2.0 + fraction,
+                rot: a + TAU * 0.25,
+                sx: 5.0 + pump * 30.0 + inputs.beat_hit * 20.0,
+                sy: 80.0 + pump * 220.0,
+                alpha: beam_post_alpha(0.45 + pump * 0.6, energy, inputs, intensity),
+                hue,
+                lightness: beam_lightness(inputs, layer),
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.78 + pump * 0.22 + inputs.beat_hit * 0.14,
+            0.8,
+            0.42 + pump * 0.32,
+            1.0,
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let n = (inputs.tile_cols.max(1) * inputs.tile_rows.max(1)) as f32;
+            let fraction = element_index as f32 / n.max(1.0);
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let a = fraction * TAU;
+            let r = 40.0 + fraction * 360.0 * (0.55 + pump * 0.9);
+            let hue = seed * 360.0 + t * 18.0 + 80.0 + pump * 80.0;
+            FieldPose {
+                px: a.cos() * r,
+                py: a.sin() * r * 0.7,
+                pz: 8.0,
+                rot: a + TAU * 0.25,
+                sx: 4.0 + pump * 20.0 + inputs.beat_hit * 15.0,
+                sy: 50.0 + pump * 140.0,
+                alpha: tile_post_alpha(0.4 + pump * 0.7, energy, inputs, intensity),
+                hue,
+                lightness: tile_lightness(inputs, pulse),
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let (px, py, pz, rot, mut sx, mut sy, mut alpha, hue) =
+                ghost_base(element_index, seed, inputs);
+            sx *= 0.6 + pump * 1.4;
+            sy *= 0.5 + pump * 2.2;
+            alpha *= 0.4 + pump * 0.9;
+            FieldPose {
+                px,
+                py,
+                pz,
+                rot,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
+// ── spiral (legacy 9) ────────────────────────────────────────────────────────
+
+pub fn pose_spiral(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let a = fraction * TAU * 4.0 + t * 0.45;
+            let r = 40.0 + fraction * 450.0 + inputs.bass * 70.0;
+            let hue = seed * 360.0 + t * 18.0 + 1.0 + fraction * 200.0;
+            FieldPose {
+                px: a.cos() * r,
+                py: a.sin() * r * 0.78,
+                pz: 2.0 + fraction,
+                rot: a + TAU * 0.25,
+                sx: 5.0 + inputs.high * 10.0,
+                sy: 100.0 + fraction * 120.0 + energy * 60.0,
+                alpha: beam_post_alpha(0.8, energy, inputs, intensity),
+                hue,
+                lightness: beam_lightness(inputs, layer),
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.9,
+            1.05,
+            0.55,
+            1.0,
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let n = (inputs.tile_cols.max(1) * inputs.tile_rows.max(1)) as f32;
+            let fraction = element_index as f32 / n.max(1.0);
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let a = fraction * TAU * 3.5 + t * 0.55;
+            let r = 30.0 + fraction * 420.0 + inputs.bass * 60.0;
+            let hue = seed * 360.0 + t * 18.0 + fraction * 200.0 + t * 20.0;
+            FieldPose {
+                px: a.cos() * r,
+                py: a.sin() * r * 0.75,
+                pz: 8.0,
+                rot: a + TAU * 0.25,
+                sx: 5.0 + inputs.high * 8.0,
+                sy: 55.0 + fraction * 80.0 + energy * 40.0,
+                alpha: tile_post_alpha(0.75, energy, inputs, intensity),
+                hue,
+                lightness: tile_lightness(inputs, pulse),
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let n = inputs.ghost_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let (_px, _py, pz, _rot, mut sx, sy, alpha, hue) =
+                ghost_base(element_index, seed, inputs);
+            let spiral_a = fraction * TAU * 3.0 + t * 0.5;
+            sx *= 0.5;
+            FieldPose {
+                px: spiral_a.cos() * (160.0 + fraction * 100.0),
+                py: spiral_a.sin() * (160.0 + fraction * 100.0),
+                pz,
+                rot: spiral_a,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
+// ── ripple (legacy 10) ───────────────────────────────────────────────────────
+
+pub fn pose_ripple(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    let bass = inputs.bass;
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let a = fraction * TAU;
+            let phase = t * (1.6 + bass * 2.0) - fraction * 10.0;
+            let wave_r = ((phase.sin() + 1.0) * 0.5) * 480.0 + 50.0;
+            let hue = seed * 360.0 + t * 18.0 + 40.0 + phase.to_degrees() * 0.2;
+            FieldPose {
+                px: a.cos() * wave_r,
+                py: a.sin() * wave_r * 0.72,
+                pz: 2.0 + fraction,
+                rot: a + TAU * 0.25,
+                sx: 6.0 + phase.sin().abs() * 16.0,
+                sy: 40.0 + phase.sin().abs() * 120.0,
+                alpha: beam_post_alpha(0.35 + phase.sin().abs() * 0.65, energy, inputs, intensity),
+                hue,
+                lightness: beam_lightness(inputs, layer),
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.84 + bass * 0.2,
+            1.05,
+            0.58 + bass * 0.22,
+            1.0,
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let n = (inputs.tile_cols.max(1) * inputs.tile_rows.max(1)) as f32;
+            let fraction = element_index as f32 / n.max(1.0);
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let a = fraction * TAU;
+            let phase = t * (1.5 + bass * 1.8) - fraction * 8.0;
+            let wave_r = ((phase.sin() + 1.0) * 0.5) * 420.0 + 40.0;
+            let hue = seed * 360.0 + t * 18.0 + 40.0 + phase.to_degrees() * 0.2;
+            FieldPose {
+                px: a.cos() * wave_r,
+                py: a.sin() * wave_r * 0.72,
+                pz: 8.0,
+                rot: a + TAU * 0.25,
+                sx: 6.0 + phase.sin().abs() * 14.0,
+                sy: 25.0 + phase.sin().abs() * 70.0,
+                alpha: tile_post_alpha(0.35 + phase.sin().abs() * 0.65, energy, inputs, intensity),
+                hue,
+                lightness: tile_lightness(inputs, pulse),
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let n = inputs.ghost_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let (px, py, pz, rot, mut sx, mut sy, mut alpha, hue) =
+                ghost_base(element_index, seed, inputs);
+            let ripple = (fraction * 10.0 - t * (1.1 + bass * 1.8)).sin();
+            sx *= 1.0 + ripple.abs() * (0.5 + bass);
+            sy *= 0.8 + ripple.abs() * (0.8 + bass * 0.6);
+            alpha *= 0.35 + ripple.abs() * 0.45;
+            FieldPose {
+                px,
+                py,
+                pz,
+                rot,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
+// ── shatter (legacy 11) ──────────────────────────────────────────────────────
+
+pub fn pose_shatter(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    let high = inputs.high;
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let a = seed * TAU + t * (2.2 + high * 3.5);
+            let r = 100.0 + high * 320.0 + (t * 5.0 + seed * 11.0).sin().abs() * 220.0;
+            let hue = seed * 360.0 + t * 18.0 + seed * 200.0 + high * 90.0;
+            FieldPose {
+                px: a.cos() * r + (t * 12.0 + seed).sin() * 60.0,
+                py: a.sin() * r * 0.7 + (t * 10.0 + seed).cos() * 50.0,
+                pz: 2.0 + fraction,
+                rot: a * 2.2 + t * 3.5,
+                sx: 4.0 + high * 22.0,
+                sy: 35.0 + high * 140.0 + inputs.beat_hit * 50.0,
+                alpha: beam_post_alpha(0.3 + high * 0.7 + inputs.beat_hit * 0.3, energy, inputs, intensity),
+                hue,
+                lightness: beam_lightness(inputs, layer),
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.94,
+            0.72,
+            0.48 + high * 0.35,
+            if high > 0.45 { 1.0 } else { 0.35 },
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let a = seed * TAU + t * (2.0 + high * 3.0);
+            let r = 80.0 + high * 280.0 + (t * 4.0 + seed * 9.0).sin().abs() * 200.0;
+            let hue = seed * 360.0 + t * 18.0 + seed * 200.0 + high * 80.0;
+            FieldPose {
+                px: a.cos() * r + (t * 11.0 + seed).sin() * 50.0,
+                py: a.sin() * r * 0.7 + (t * 9.0 + seed).cos() * 40.0,
+                pz: 8.0,
+                rot: a * 2.0 + t * 3.0,
+                sx: 4.0 + high * 20.0,
+                sy: 20.0 + high * 90.0 + inputs.beat_hit * 40.0,
+                alpha: tile_post_alpha(0.3 + high * 0.7 + inputs.beat_hit * 0.3, energy, inputs, intensity),
+                hue,
+                lightness: tile_lightness(inputs, pulse),
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let n = inputs.ghost_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let (mut px, py, pz, rot, mut sx, sy, mut alpha, hue) =
+                ghost_base(element_index, seed, inputs);
+            let shard = (fraction * 19.0 + t * 5.0).sin();
+            px += shard * (80.0 + high * 120.0);
+            sx *= 0.35 + shard.abs();
+            alpha *= 0.3 + high * 0.55;
+            FieldPose {
+                px,
+                py,
+                pz,
+                rot,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
+// ── flux (legacy 12) ─────────────────────────────────────────────────────────
+
+pub fn pose_flux(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    let mid = inputs.mid;
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let flow = wave(t * (1.0 + mid * 1.3) + fraction * 4.0);
+            let hue = seed * 360.0 + t * 18.0 + 50.0 + mid * 80.0 + flow * 40.0;
+            FieldPose {
+                px: (fraction - 0.5) * STAGE_WIDTH * 0.9 + flow * 220.0,
+                py: ((element_index % 12) as f32 / 11.0 - 0.5) * STAGE_HEIGHT * 0.85,
+                pz: 2.0 + fraction,
+                rot: flow * 0.4,
+                sx: 50.0 + mid * 70.0,
+                sy: 16.0 + energy * 28.0,
+                alpha: beam_post_alpha(0.65 + mid * 0.3, energy, inputs, intensity),
+                hue,
+                lightness: beam_lightness(inputs, layer),
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.9,
+            1.0,
+            0.56 + mid * 0.24,
+            1.0,
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let cols = inputs.tile_cols.max(1) as f32;
+            let rows = inputs.tile_rows.max(1) as f32;
+            let u = if cols > 1.0 {
+                col as f32 / (cols - 1.0)
+            } else {
+                0.5
+            };
+            let v = if rows > 1.0 {
+                row as f32 / (rows - 1.0)
+            } else {
+                0.5
+            };
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let flow = wave(t * (0.9 + mid * 1.3) + v * 3.0);
+            let hue = seed * 360.0 + t * 18.0 + 50.0 + mid * 80.0 + flow * 40.0;
+            FieldPose {
+                px: (u - 0.5) * STAGE_WIDTH + flow * 200.0,
+                py: (v - 0.5) * STAGE_HEIGHT * 0.85,
+                pz: 8.0,
+                rot: flow * 0.35,
+                sx: 40.0 + mid * 60.0,
+                sy: 14.0 + energy * 20.0,
+                alpha: tile_post_alpha(0.65 + mid * 0.3, energy, inputs, intensity),
+                hue,
+                lightness: tile_lightness(inputs, pulse),
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let n = inputs.ghost_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let (mut px, mut py, pz, _rot, sx, sy, alpha, hue) =
+                ghost_base(element_index, seed, inputs);
+            let flow = wave(t * 0.7 + fraction * 4.0);
+            px += flow * 90.0;
+            py -= flow * 50.0;
+            FieldPose {
+                px,
+                py,
+                pz,
+                rot: flow * 0.5 + fraction,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
+// ── lattice (legacy 13) ──────────────────────────────────────────────────────
+
+pub fn pose_lattice(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let wobble = wave(t * 2.3 + seed * 9.0);
+            let vertical = element_index.is_multiple_of(2);
+            let cols = 12.0_f32;
+            let rows = 6.0_f32;
+            let c = (element_index % 12) as f32;
+            let r = (element_index / 12) as f32;
+            let (px, py, rot, sx, sy) = if vertical {
+                (
+                    (c / (cols - 1.0) - 0.5) * STAGE_WIDTH * 0.95,
+                    (r / rows.max(1.0) - 0.5) * STAGE_HEIGHT * 0.2,
+                    0.0,
+                    4.0 + inputs.beat_hit * 5.0,
+                    STAGE_HEIGHT * (0.55 + wobble * 0.15),
+                )
+            } else {
+                (
+                    (c / cols - 0.5) * STAGE_WIDTH * 0.2,
+                    (r / rows.max(1.0) - 0.5) * STAGE_HEIGHT * 0.9,
+                    TAU * 0.25,
+                    4.0 + inputs.beat_hit * 5.0,
+                    STAGE_WIDTH * (0.4 + wobble * 0.1),
+                )
+            };
+            let hue = seed * 360.0 + t * 18.0 + 62.0 + (element_index % 4) as f32 * 20.0;
+            FieldPose {
+                px,
+                py,
+                pz: 2.0 + fraction,
+                rot,
+                sx,
+                sy,
+                alpha: beam_post_alpha(0.75, energy, inputs, intensity),
+                hue,
+                lightness: beam_lightness(inputs, layer),
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.88,
+            0.82,
+            0.62,
+            1.0,
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let cols = inputs.tile_cols.max(1) as f32;
+            let rows = inputs.tile_rows.max(1) as f32;
+            let u = if cols > 1.0 {
+                col as f32 / (cols - 1.0)
+            } else {
+                0.5
+            };
+            let v = if rows > 1.0 {
+                row as f32 / (rows - 1.0)
+            } else {
+                0.5
+            };
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let vertical = element_index.is_multiple_of(2);
+            let (px, py, rot, sx, sy) = if vertical {
+                (
+                    (col as f32 - (cols - 1.0) * 0.5) * (STAGE_WIDTH / cols.max(1.0)) * 1.05,
+                    (v - 0.5) * STAGE_HEIGHT * 0.95,
+                    0.0,
+                    3.5 + inputs.beat_hit * 4.0,
+                    STAGE_HEIGHT * (0.55 + pulse * 0.2),
+                )
+            } else {
+                (
+                    (u - 0.5) * STAGE_WIDTH * 0.95,
+                    (row as f32 - (rows - 1.0) * 0.5) * (STAGE_HEIGHT / rows.max(1.0)) * 1.05,
+                    TAU * 0.25,
+                    3.5 + inputs.beat_hit * 4.0,
+                    STAGE_WIDTH * (0.35 + pulse * 0.1),
+                )
+            };
+            let hue = seed * 360.0 + t * 18.0 + 62.0 + (element_index % 4) as f32 * 20.0;
+            FieldPose {
+                px,
+                py,
+                pz: 8.0,
+                rot,
+                sx,
+                sy,
+                alpha: tile_post_alpha(0.7, energy, inputs, intensity),
+                hue,
+                lightness: tile_lightness(inputs, pulse),
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let (mut px, mut py, pz, rot, mut sx, sy, alpha, hue) =
+                ghost_base(element_index, seed, inputs);
+            px = (px / 80.0).round() * 80.0;
+            py = (py / 50.0).round() * 50.0;
+            sx *= 0.7 + (element_index % 4) as f32 * 0.12;
+            FieldPose {
+                px,
+                py,
+                pz,
+                rot,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
+// ── drift (legacy 14) ────────────────────────────────────────────────────────
+
+pub fn pose_drift(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    let trail_gain = inputs.feedback.clamp(0.0, 1.0);
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let a = seed * TAU + t * 0.1;
+            let r = 120.0 + fraction * 300.0;
+            let hue = seed * 360.0 + t * 18.0 + 32.0 + inputs.mid * 40.0;
+            FieldPose {
+                px: a.cos() * r + wave(t * 0.22 + seed) * 90.0,
+                py: a.sin() * r * 0.55 + wave(t * 0.18 + seed * 2.0) * 55.0,
+                pz: 2.0 + fraction,
+                rot: a * 0.35,
+                sx: 40.0 + energy * 50.0,
+                sy: 22.0 + trail_gain * 40.0,
+                alpha: beam_post_alpha(0.4 + trail_gain * 0.35, energy, inputs, intensity),
+                hue,
+                lightness: beam_lightness(inputs, layer),
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.96,
+            1.15,
+            0.38,
+            1.0,
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let n = (inputs.tile_cols.max(1) * inputs.tile_rows.max(1)) as f32;
+            let fraction = element_index as f32 / n.max(1.0);
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let a = seed * TAU + t * 0.08;
+            let r = 100.0 + fraction * 280.0;
+            let hue = seed * 360.0 + t * 18.0 + 32.0 + inputs.mid * 40.0;
+            FieldPose {
+                px: a.cos() * r + wave(t * 0.2 + seed) * 80.0,
+                py: a.sin() * r * 0.55 + wave(t * 0.15 + seed * 2.0) * 50.0,
+                pz: 8.0,
+                rot: a * 0.3,
+                sx: 30.0 + energy * 40.0,
+                sy: 18.0 + trail_gain * 30.0,
+                alpha: tile_post_alpha(0.35 + trail_gain * 0.4, energy, inputs, intensity),
+                hue,
+                lightness: tile_lightness(inputs, pulse),
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let n = inputs.ghost_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let (_px, _py, pz, _rot, sx, sy, mut alpha, hue) =
+                ghost_base(element_index, seed, inputs);
+            let drift_a = t * 0.12 + fraction * TAU;
+            alpha *= 0.55 + trail_gain * 0.25;
+            FieldPose {
+                px: drift_a.cos() * (140.0 + fraction * 40.0),
+                py: drift_a.sin() * (80.0 + fraction * 20.0),
+                pz,
+                rot: drift_a,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
+// ── storm (legacy 15) ────────────────────────────────────────────────────────
+
+pub fn pose_storm(
+    pool: FieldPool,
+    element_index: usize,
+    seed: f32,
+    col: usize,
+    row: usize,
+    field: &CompiledFieldDef,
+    inputs: &FieldFrameInputs,
+) -> FieldPose {
+    let intensity = intensity_param(field);
+    let t = inputs.t;
+    let (_field_live, energy) = field_live_energy(inputs);
+    let bass = inputs.bass;
+    let mid = inputs.mid;
+    let high = inputs.high;
+    let osc_drive = inputs.energy.clamp(0.0, 1.0);
+    let osc_pulse = inputs.pulse.clamp(0.0, 1.0);
+    let wind = 0.55 + bass * 0.55 + mid * 0.25;
+    match pool {
+        FieldPool::Beams => {
+            let n = inputs.beam_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let layer = (element_index % 12) as f32 / 11.0;
+            let fall = (t * (2.4 + inputs.speed * 0.9 + high * 1.4) + seed * 6.0).fract();
+            let lane = (fraction * 14.0 + seed * 3.0) % 1.0;
+            let is_bolt = element_index.is_multiple_of(11);
+            if is_bolt {
+                let bolt_x =
+                    (lane - 0.5) * STAGE_WIDTH * 1.05 + (t * 17.0 + seed * 9.0).sin() * 28.0;
+                let jag = (t * 40.0 + seed * 13.0).sin() * (18.0 + high * 30.0);
+                let hue = seed * 360.0 + t * 18.0 + 195.0 + high * 40.0 + inputs.beat_hit * 50.0;
+                FieldPose {
+                    px: bolt_x + jag * 0.35,
+                    py: (0.5 - fall) * STAGE_HEIGHT * 1.1,
+                    pz: 2.0 + fraction,
+                    rot: (jag * 0.02) + (seed - 0.5) * 0.25,
+                    sx: 3.0 + inputs.beat_hit * 14.0 + osc_pulse * 10.0,
+                    sy: STAGE_HEIGHT
+                        * (0.35 + inputs.beat_hit * 0.55 + inputs.bass_activity * 0.25)
+                        + inputs.cue_hit * 80.0,
+                    alpha: beam_post_alpha(
+                        0.08 + inputs.beat_hit * 0.95 + inputs.cue_hit * 0.7 + osc_pulse * 0.45,
+                        energy,
+                        inputs,
+                        intensity,
+                    ),
+                    hue,
+                    lightness: beam_lightness(inputs, layer),
+                }
+            } else {
+                let hue = seed * 360.0 + t * 18.0 + 200.0 + mid * 25.0 + layer * 20.0;
+                FieldPose {
+                    px: (lane - 0.5) * STAGE_WIDTH * 1.15
+                        + fall * wind * 220.0
+                        + (seed - 0.5) * 40.0,
+                    py: (0.55 - fall) * STAGE_HEIGHT * 1.25,
+                    pz: 2.0 + fraction,
+                    rot: -0.55 - wind * 0.35 + high * 0.1,
+                    sx: 2.2 + high * 3.5 + inputs.beat_hit * 2.0,
+                    sy: 70.0 + energy * 50.0 + bass * 40.0 + (1.0 - fall) * 60.0,
+                    alpha: beam_post_alpha(
+                        0.28 + (1.0 - fall) * 0.45 + high * 0.2 + inputs.beat_hit * 0.15,
+                        energy,
+                        inputs,
+                        intensity,
+                    ),
+                    hue,
+                    lightness: beam_lightness(inputs, layer),
+                }
+            }
+        }
+        FieldPool::Rings => pose_ring_shell(
+            element_index,
+            inputs,
+            0.82 + osc_drive * 0.18,
+            0.95,
+            0.5 + osc_pulse * 0.35,
+            if osc_drive + osc_pulse > 0.55 {
+                1.0
+            } else {
+                0.25
+            },
+            0.0,
+            intensity,
+        ),
+        FieldPool::Tiles => {
+            let n = (inputs.tile_cols.max(1) * inputs.tile_rows.max(1)) as f32;
+            let fraction = element_index as f32 / n.max(1.0);
+            let diagonal = col as f32 * 0.32 + row as f32 * 0.41;
+            let pulse = wave(
+                t * (3.8 + inputs.melodic_activity * 5.5) - diagonal * 1.7
+                    + inputs.beat_hit * 2.0
+                    + inputs.deck_drive,
+            );
+            let fall = (t * (2.4 + inputs.speed * 0.9 + high * 1.4) + seed * 6.0).fract();
+            let lane = (fraction * 14.0 + seed * 3.0) % 1.0;
+            let is_bolt = element_index.is_multiple_of(9);
+            if is_bolt {
+                let bolt_x =
+                    (lane - 0.5) * STAGE_WIDTH * 1.05 + (t * 17.0 + seed * 9.0).sin() * 28.0;
+                let jag = (t * 40.0 + seed * 13.0).sin() * (18.0 + high * 30.0);
+                let hue = seed * 360.0 + t * 18.0 + 195.0 + high * 40.0 + inputs.beat_hit * 50.0;
+                FieldPose {
+                    px: bolt_x + jag * 0.35,
+                    py: (0.5 - fall) * STAGE_HEIGHT * 1.1,
+                    pz: 8.0,
+                    rot: (jag * 0.02) + (seed - 0.5) * 0.25,
+                    sx: 3.0 + inputs.beat_hit * 14.0 + osc_pulse * 10.0,
+                    sy: STAGE_HEIGHT
+                        * (0.35 + inputs.beat_hit * 0.55 + inputs.bass_activity * 0.25)
+                        + inputs.cue_hit * 80.0,
+                    alpha: tile_post_alpha(
+                        0.08 + inputs.beat_hit * 0.95 + inputs.cue_hit * 0.7 + osc_pulse * 0.45,
+                        energy,
+                        inputs,
+                        intensity,
+                    ),
+                    hue,
+                    lightness: tile_lightness(inputs, pulse),
+                }
+            } else {
+                let hue = seed * 360.0 + t * 18.0 + 200.0 + mid * 25.0 + fraction * 30.0;
+                FieldPose {
+                    px: (lane - 0.5) * STAGE_WIDTH * 1.15
+                        + fall * wind * 220.0
+                        + (seed - 0.5) * 40.0,
+                    py: (0.55 - fall) * STAGE_HEIGHT * 1.25,
+                    pz: 8.0,
+                    rot: -0.55 - wind * 0.35 + high * 0.1,
+                    sx: 2.2 + high * 3.5 + inputs.beat_hit * 2.0,
+                    sy: 55.0 + energy * 45.0 + bass * 35.0 + (1.0 - fall) * 50.0,
+                    alpha: tile_post_alpha(
+                        0.28 + (1.0 - fall) * 0.45 + high * 0.2 + inputs.beat_hit * 0.15,
+                        energy,
+                        inputs,
+                        intensity,
+                    ),
+                    hue,
+                    lightness: tile_lightness(inputs, pulse),
+                }
+            }
+        }
+        FieldPool::Ghost => {
+            if ghost_silent(inputs) {
+                return silent_ghost();
+            }
+            let n = inputs.ghost_count.max(1) as f32;
+            let fraction = element_index as f32 / n;
+            let trail_gain = inputs.feedback.clamp(0.0, 1.0);
+            let (mut px, _py, pz, _rot, mut sx, mut sy, mut alpha, mut hue) =
+                ghost_base(element_index, seed, inputs);
+            let fall = (t * 1.8 + fraction * 3.0 + seed).fract();
+            px += (fraction - 0.5) * 40.0 + fall * 30.0;
+            let py = (0.5 - fall) * STAGE_HEIGHT * 0.6;
+            sx *= 0.35 + high * 0.4;
+            sy *= 0.8 + trail_gain * 1.2 + inputs.beat_hit * 0.8;
+            alpha *= 0.2 + trail_gain * 0.45 + inputs.beat_hit * 0.5 + osc_pulse * 0.25;
+            hue += 200.0;
+            FieldPose {
+                px,
+                py,
+                pz,
+                rot: -0.5,
+                sx: sx.max(1.0),
+                sy: sy.max(1.0),
+                alpha: (alpha * intensity).clamp(0.0, 1.2),
+                hue,
+                lightness: 0.62,
+            }
+        }
+    }
+}
+
 // ── Wire parse (minimal CompiledModeWire subset) ─────────────────────────────
 
 /// Parse a CompiledModeWire JSON object. Fail closed on version / shape errors.
@@ -1863,7 +2797,7 @@ mod tests {
     }
 
     #[test]
-    fn family_a_0_7_covers_all_four_pools() {
+    fn family_a_0_15_covers_all_four_pools() {
         let inputs = sample_inputs(1.25);
         let pools = [
             FieldPool::Beams,
@@ -1871,7 +2805,7 @@ mod tests {
             FieldPool::Tiles,
             FieldPool::Ghost,
         ];
-        for legacy in 0..=7 {
+        for legacy in 0..=15 {
             let id = primitive_id_for_legacy_index(legacy).expect("family A id");
             let field = family_field(id);
             for pool in pools {
@@ -1887,7 +2821,7 @@ mod tests {
         let rt = FieldRuntime::default();
         let inputs = sample_inputs(0.5);
         // No compiled wire — VST int path must still pose via fallback.
-        for legacy in 0..=7 {
+        for legacy in 0..=15 {
             let id = primitive_id_for_legacy_index(legacy).unwrap();
             let pose = rt.pose(
                 FieldDeck::A,
@@ -1901,7 +2835,7 @@ mod tests {
             );
             assert!(pose.is_some(), "fallback missing for legacy {legacy}");
         }
-        // Mode 8 (Pulse) has no Family A fallback yet.
+        // Mode 16 (Echo) has no Family A fallback yet.
         assert!(
             rt.pose(
                 FieldDeck::A,
@@ -1911,7 +2845,7 @@ mod tests {
                 0,
                 0,
                 &inputs,
-                primitive_id_for_legacy_index(8),
+                primitive_id_for_legacy_index(16),
             )
             .is_none()
         );
@@ -2073,7 +3007,7 @@ mod tests {
                 );
             }
             eprintln!("// Family A golds (legacy, pool, idx) @ t=1.25 seed=0.37 col=2 row=1:");
-            for legacy in 0..=7 {
+            for legacy in 0..=15 {
                 let id = primitive_id_for_legacy_index(legacy).unwrap();
                 let field = family_field(id);
                 for pool in [
@@ -2120,32 +3054,10 @@ mod tests {
 
     #[test]
     fn family_a_golden_poses_stable() {
-        // One sample per (legacy 0–7 × pool). Values pinned via UPDATE_FIELD_GOLDS=1.
+        // One sample per (legacy 0–15 × pool). Values pinned via UPDATE_FIELD_GOLDS=1.
         // This is a regression harness, not pixel-perfect legacy parity.
-        let cases: &[(i32, FieldPool, FieldPose)] = &[
-            (
-                0,
-                FieldPool::Beams,
-                FieldPose {
-                    px: 0.0,
-                    py: 0.0,
-                    pz: 0.0,
-                    rot: 0.0,
-                    sx: 1.0,
-                    sy: 1.0,
-                    alpha: 0.0,
-                    hue: 0.0,
-                    lightness: 0.0,
-                },
-            ),
-        ];
-
-        // Always compute and check sanity; full numeric table is filled after first
-        // UPDATE_FIELD_GOLDS run in CI-local workflow. Until then, pool×mode matrix
-        // is asserted finite via family_a_0_7_covers_all_four_pools.
-        let _ = cases;
         let inputs = sample_inputs(1.25);
-        for legacy in 0..=7 {
+        for legacy in 0..=15 {
             let id = primitive_id_for_legacy_index(legacy).unwrap();
             let field = family_field(id);
             for pool in [
@@ -2358,8 +3270,12 @@ mod tests {
     fn legacy_index_map_matches_registry() {
         assert_eq!(primitive_id_for_legacy_index(0), Some(PRIMITIVE_BEAMS));
         assert_eq!(primitive_id_for_legacy_index(7), Some(PRIMITIVE_ORBIT));
-        assert_eq!(primitive_id_for_legacy_index(8), None);
+        assert_eq!(primitive_id_for_legacy_index(8), Some(PRIMITIVE_PULSE));
+        assert_eq!(primitive_id_for_legacy_index(15), Some(PRIMITIVE_STORM));
+        assert_eq!(primitive_id_for_legacy_index(16), None);
         assert_eq!(PRIMITIVE_BEAMS, 10);
         assert_eq!(PRIMITIVE_ORBIT, 17);
+        assert_eq!(PRIMITIVE_PULSE, 18);
+        assert_eq!(PRIMITIVE_STORM, 25);
     }
 }
