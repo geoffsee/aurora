@@ -4,18 +4,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
-import {
-  resolveMeshLayerRef,
-  wireIsMeshPrimary,
-} from '../../shared/mesh-layer-resolve.ts';
+import { resolveMeshLayerRef, wireIsMeshPrimary } from '../../shared/mesh-layer-resolve.ts';
+import { compileModePreset, validateModePreset } from '../../shared/mode-preset-schema.ts';
 import { modelById } from '../../shared/model-catalog.ts';
 import {
-  compileModePreset,
-  validateModePreset,
-} from '../../shared/mode-preset-schema.ts';
-import {
-  resolveDeckSelection,
   type CatalogLikeEntry,
+  resolveDeckSelection,
 } from '../../shared/resolve-deck-selection.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
@@ -24,11 +18,12 @@ describe('resolveMeshLayerRef', () => {
   test('resolves catalog id human-female to MODEL_CATALOG index', () => {
     const entry = modelById('human-female');
     expect(entry).toBeDefined();
+    if (!entry) return;
     const r = resolveMeshLayerRef('human-female', '/api/data/e/1/decks/deck-a/figure/');
     expect(r.kind).toBe('catalog');
     if (r.kind !== 'catalog') return;
     expect(r.id).toBe('human-female');
-    expect(r.assetPath).toBe(entry!.assetPath);
+    expect(r.assetPath).toBe(entry.assetPath);
     expect(r.index).toBeGreaterThanOrEqual(0);
   });
 
@@ -91,7 +86,8 @@ describe('figure mesh-primary bundled presets', () => {
 
       const mesh = compiled.value.layers.find((l) => l.kind === 'mesh');
       expect(mesh).toBeDefined();
-      const resolved = resolveMeshLayerRef(mesh!.ref, compiled.value.assetBase);
+      if (!mesh) return;
+      const resolved = resolveMeshLayerRef(mesh.ref, compiled.value.assetBase);
       expect(resolved.kind).toBe('catalog');
     }
   });

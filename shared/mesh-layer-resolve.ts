@@ -11,7 +11,7 @@
  *   paths under `assetBase` (`/api/data/e/<epoch>/decks/<deck>/<slug>/…`).
  */
 
-import { modelById, MODEL_CATALOG } from './model-catalog.ts';
+import { MODEL_CATALOG, modelById } from './model-catalog.ts';
 
 export type ResolvedMeshLayer =
   | {

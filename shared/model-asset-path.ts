@@ -1,8 +1,8 @@
 export const MAX_MODEL_ASSET_PATH_LENGTH = 2048;
 
 function isGltfPathname(pathname: string): boolean {
-	const lower = pathname.toLowerCase();
-	return lower.endsWith(".glb") || lower.endsWith(".gltf");
+  const lower = pathname.toLowerCase();
+  return lower.endsWith('.glb') || lower.endsWith('.gltf');
 }
 
 /**
@@ -16,32 +16,29 @@ function isGltfPathname(pathname: string): boolean {
  * Invalid values fall back to the last known-good value so malformed clients
  * cannot replace a working model path.
  */
-export function normalizeRemoteModelAssetPath(
-	value: unknown,
-	fallback = "",
-): string {
-	if (typeof value !== "string") return fallback;
-	const path = value.trim();
-	if (path === "") return "";
-	if (path.length > MAX_MODEL_ASSET_PATH_LENGTH) return fallback;
+export function normalizeRemoteModelAssetPath(value: unknown, fallback = ''): string {
+  if (typeof value !== 'string') return fallback;
+  const path = value.trim();
+  if (path === '') return '';
+  if (path.length > MAX_MODEL_ASSET_PATH_LENGTH) return fallback;
 
-	// Epoch-scoped pack assets (PR3/PR11): root-relative, no scheme.
-	// Reject `//host` protocol-relative and path escapes.
-	if (path.startsWith("/") && !path.startsWith("//")) {
-		if (path.includes("..") || path.includes("\\")) return fallback;
-		if (!isGltfPathname(path.split("?")[0] ?? path)) return fallback;
-		return path;
-	}
+  // Epoch-scoped pack assets (PR3/PR11): root-relative, no scheme.
+  // Reject `//host` protocol-relative and path escapes.
+  if (path.startsWith('/') && !path.startsWith('//')) {
+    if (path.includes('..') || path.includes('\\')) return fallback;
+    if (!isGltfPathname(path.split('?')[0] ?? path)) return fallback;
+    return path;
+  }
 
-	try {
-		const url = new URL(path);
-		if (url.protocol !== "https:" && url.protocol !== "http:") return fallback;
-		if (url.username || url.password || url.hash) return fallback;
-		if (!isGltfPathname(url.pathname)) {
-			return fallback;
-		}
-		return path;
-	} catch {
-		return fallback;
-	}
+  try {
+    const url = new URL(path);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return fallback;
+    if (url.username || url.password || url.hash) return fallback;
+    if (!isGltfPathname(url.pathname)) {
+      return fallback;
+    }
+    return path;
+  } catch {
+    return fallback;
+  }
 }
