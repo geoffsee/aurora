@@ -1,0 +1,22 @@
+{
+  "wireVersion": 1,
+  "epoch": 7,
+  "deck": "deck-a",
+  "slug": "supernova-stub",
+  "label": "Supernova Stub",
+  "legacyIndex": null,
+  "disposition": "field-primitive",
+  "assetBase": "/data/decks/deck-a/supernova-stub/",
+  "field": {
+    "primitiveId": 1,
+    "primitiveName": "supernova_burst",
+    "params": {
+      "intensity": 0.9,
+      "spin": 0.35,
+      "decay": 0.6
+    }
+  },
+  "layers": [],
+  "suppressLegacyField": true,
+  "engineMinCapabilities": ["field-runtime"]
+}
