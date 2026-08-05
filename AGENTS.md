@@ -19,6 +19,14 @@ bun run clippy       # clippy:wasm + clippy:vst, both with -D warnings (pre-comm
 bun run typecheck    # tsc --noEmit (also runs as the pre-commit hook)
 bun run dry-run      # scripts/dry-run.ts — performer-less end-to-end bridge harness (one-shot)
 DRY_RUN_SUSTAINED=1 bun run dry-run   # standing 60-min gate; passes only with zero GAP lines (#213, docs/dry-run.md)
+bun run studio              # React Preset Studio (WebGPU look authoring) → :3010
+bun run build:studio        # static build → dist/studio
+bun run preset-studio       # alias of studio
+bun run preset-studio:bevy  # experimental Bevy look-dev host; CARGO_TARGET_DIR=target-studio
+bun run check:preset-studio # cargo check -p preset-studio (no window)
+# Look interchange: shared/aurora-look.ts + docs/aurora-look.md
+# Import: POST /api/looks/import (bridge :3000) with AURORA_DATA_DIR set — dual-deck install + catalog rescan
+# Agent skill: .agents/skills/aurora-create-visualization/ (/aurora-create-visualization)
 ```
 
 Tests:
@@ -134,16 +142,18 @@ The bridge is the **single source of truth for `ControlState`**. `coerceControlS
 - `tests/` — vitest suite, mirroring `bridge/`, `shared/`, `shaders/`, `web/`, and `cli/`
 - `plugins/aurora-vst/` — VST3 plugin and `xtask` bundler
 - `scripts/` — setup, dry-run, format, and Rust test helpers
+- `web/studio/` — **Preset Studio** (React): sketch list, WGSL editor, knobs, WebGPU preview, export `.aurora-look`, optional import to bridge. See `docs/preset-studio.md`.
+- `lab/preset-studio/` — experimental Bevy host for pack-bus parity (`bun run preset-studio:bevy`). Sketches in `lab/preset-studio/sketches/`. Not on the wasm path; uses `target-studio`.
 
 ### Cargo workspace and target dirs
 
-The root `Cargo.toml` declares a workspace with three members: the root `aurora` crate (wasm target), `plugins/aurora-vst` (host target, links audio libs), and `plugins/aurora-vst/xtask` (host target, plain Rust).
+The root `Cargo.toml` declares a workspace with: the root `aurora` crate (wasm target), `plugins/aurora-vst` (host target, links audio libs), `plugins/aurora-vst/xtask` (host target, plain Rust), and `lab/preset-studio` (host Bevy look-dev binary).
 
 `bevy` is listed with **`default-features = false`**, which also turns off `bevy_winit`'s normal `winit` feature stack. The dependency therefore includes **`x11`** so bare host **`cargo check`** on Linux still enables **`winit`'s X11 path** (automation that types `cargo check` before push). The runtime build for the browser stays **`wasm32-unknown-unknown`** via `bun run build:web` / `bun run check:wasm`.
 
 **`.cargo/config.toml`** defines **`cargo check-wasm`** / **`cargo build-wasm`** / **`cargo clippy-wasm`** aliases. Don't set **`[build] target = "wasm32-unknown-unknown"`** globally: it tries to compile `xtask` as wasm and `nih_plug_xtask` does not support that triple.
 
-The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for the wasm build, `target-vst/` for VST builds — to keep their incompatible build graphs from invalidating each other's caches. Preserve this split when adding new build commands.
+The scripts deliberately use **separate `CARGO_TARGET_DIR`s** — `target/` for the wasm build, `target-vst/` for VST builds, `target-studio/` for Preset Studio — to keep their incompatible build graphs from invalidating each other's caches. Preserve this split when adding new build commands.
 
 ### Preset bundle schema versioning
 
