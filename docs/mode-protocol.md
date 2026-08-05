@@ -48,9 +48,29 @@ monolithic engine version number.
 **IDs never reuse.** Deprecate entries in place; do not reassign a number to a
 different primitive. Future Rust parity must mirror the same table.
 
+Full name→ID table, per-primitive param specs, and **product ceiling** copy
+(params/shaders/meshes without rebuild; novel field math needs an engine PR):
+[`docs/mode-primitives.md`](./mode-primitives.md).
+
+## Authoring / operator guide
+
+Pack layout, overlay rules (`AURORA_DATA_DIR`), slug rules, atomic `*.tmp` →
+rename, reload-active / last-known-good, VST legacy-only, and static vs bridged:
+[`data/README.md`](../data/README.md).
+
+Offline validate:
+
+```bash
+bun run modes:validate              # ./data
+bun run modes:validate ./my-modes   # overlay root
+```
+
 ## Related modules
 
 - `shared/mode-preset-schema.ts` — validate + compile
 - `shared/compiled-mode-wire.ts` — wire types
 - `shared/field-primitive-ids.ts` — permanent IDs
 - `shared/visual-mode-catalog.ts` — legacy control-bus labels (0–48)
+- `scripts/modes-validate.ts` — offline pack scan CLI (`bun run modes:validate`)
+- `docs/mode-primitives.md` — primitive table + ceiling
+- `data/README.md` — data-dir operator/author guide

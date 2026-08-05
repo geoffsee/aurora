@@ -170,10 +170,15 @@ VST_CONTROL_RECV_PORT=12000 aurora
 
 The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, trails, depth, palette, ring opacity, and max brightness; toggle parameters for rings, strobe, strobe lockout, blackout, freeze, beat sync, bar sync, and demo mode; deck mode parameters for Beams/Tunnel/Burst/Mirror/Wash; and momentary parameters for flash, reset, and the cue presets.
 
-## Deck preset catalog (`data/`)
+## Mode packs (filesystem catalog)
 
-Bundled visualization packs live under `data/decks/deck-a|b/<slug>/`. The bridge
-loads this **read-only** layer on boot and optionally overlays a host directory:
+Visualization packs live under `data/decks/` (bundled) with an optional
+`AURORA_DATA_DIR` overlay. Packs are **params + shaders + meshes** on registered
+field primitives — novel field math needs an engine PR. See:
+
+- [`data/README.md`](data/README.md) — layout, overlay, slug/atomic-replace rules, operator reload/fallback, static vs bridged
+- [`docs/mode-protocol.md`](docs/mode-protocol.md) — authoring vs wire vs engine version axes
+- [`docs/mode-primitives.md`](docs/mode-primitives.md) — permanent primitive IDs, param table, product ceiling
 
 ```bash
 # Native
@@ -183,6 +188,10 @@ aurora --native --data-dir ./my-modes
 # Docker (CLI mounts the path and sets AURORA_DATA_DIR inside the container)
 AURORA_DATA_DIR=./my-modes aurora
 aurora --data-dir ./my-modes
+
+# Offline validate (no bridge / WASM)
+bun run modes:validate              # scan ./data
+bun run modes:validate ./my-modes   # overlay root with decks/deck-a|deck-b
 ```
 
 Override entries **shadow by slug only** (full folder replace, not JSON deep-merge).
@@ -197,6 +206,8 @@ first-run copy of bundled → override. See [`data/README.md`](data/README.md).
 - `data/decks/` – bundled per-deck preset folders (`preset.json` + assets).
 - `web/index.html` / `web/styles.css` – projector output (port `8443` via Caddy).
 - `web/controls/` – controls app (port `8444` via Caddy).
+- `data/` – bundled deck preset catalog + authoring guide (`data/README.md`).
+- `docs/mode-protocol.md` / `docs/mode-primitives.md` – mode pack protocol and primitive ceiling.
 - `deploy/` – `Caddyfile` + `muxox.toml` for the container entrypoint.
 - `Dockerfile` – `ghcr.io/geoffsee/aurora` image (muxox + Caddy + Bun).
 - `plugins/aurora-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.

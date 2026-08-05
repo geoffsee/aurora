@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "not-kebab",
+  "slug": "not-kebab",
+  "label": "Bad folder",
+  "disposition": "field-primitive",
+  "field": {
+    "primitive": "beams",
+    "params": { "intensity": 1 }
+  }
+}
