@@ -8,7 +8,7 @@ members = [".", "plugins/aurora-vst", "plugins/aurora-vst/xtask"]
 resolver = "2"
 
 [dependencies]
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.19", default-features = false, features = [
   "std",
   "async_executor",
   "bevy_asset",
