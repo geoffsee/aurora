@@ -339,8 +339,9 @@ export function isMappableParam(value: string): value is MappableParam {
 }
 
 /**
- * Order of knobs in the main controls strip. Every mappable continuous/integer
- * param is exposed; the strip scrolls horizontally when it overflows.
+ * Order of knobs in the main controls strip (scrolls horizontally on overflow).
+ * Figure model/scale/spin/halo/audio stay on the Figure launchpad / Models panel,
+ * not this global row.
  */
 export const KNOB_STRIP_PARAMS: readonly MappableParam[] = [
   'bpm',
@@ -372,12 +373,16 @@ export const KNOB_STRIP_PARAMS: readonly MappableParam[] = [
   'layerWeight5',
   'layerWeight6',
   'layerWeight7',
+] as const;
+
+/** Figure params live on the figure UI, not the global knob strip. */
+export const FIGURE_KNOB_PARAMS = [
   'figureModel',
   'figureScale',
   'figureSpin',
   'figureHalo',
   'figureAudio',
-] as const;
+] as const satisfies readonly MappableParam[];
 
 /** Build the state patch for setting a mappable param to a value. Palette hue
  * also drives the RGB duotone base so the live color tracks the slider. */
