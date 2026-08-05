@@ -490,7 +490,7 @@ pub fn mode_spec(mode: VisualMode) -> ModeSpec {
         VisualMode::Storm => spec(
             mode,
             ModeCategory::FieldMotion,
-            "Chaotic surge—energy as weather.",
+            "Squall front—rain curtains and lightning on hits.",
             backends(true, false, false, true, false),
             false,
             OverlayPolicy::Blend,

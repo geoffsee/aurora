@@ -139,39 +139,90 @@ function entry(
  */
 export const VISUAL_MODE_CATALOG: readonly VisualModeEntry[] = [
   // --- Family A: field motion ---
-  entry(0, 'Beams', 'field-motion', 'Radial sticks—core pulse and spin field.', ['field', 'accent']),
+  entry(0, 'Beams', 'field-motion', 'Radial sticks—core pulse and spin field.', [
+    'field',
+    'accent',
+  ]),
   entry(1, 'Tunnel', 'field-motion', 'Perspective corridor—depth as the performance axis.', [
     'field',
     'accent',
   ]),
-  entry(2, 'Burst', 'field-motion', 'Explosive radial hits—beat as the author.', ['field', 'accent']),
-  entry(3, 'Mirror', 'field-motion', 'Bilateral symmetry—left/right as a gesture.', ['field', 'accent']),
-  entry(4, 'Wash', 'field-motion', 'Soft full-frame veil—trails and atmosphere.', ['field', 'accent']),
+  entry(2, 'Burst', 'field-motion', 'Explosive radial hits—beat as the author.', [
+    'field',
+    'accent',
+  ]),
+  entry(3, 'Mirror', 'field-motion', 'Bilateral symmetry—left/right as a gesture.', [
+    'field',
+    'accent',
+  ]),
+  entry(4, 'Wash', 'field-motion', 'Soft full-frame veil—trails and atmosphere.', [
+    'field',
+    'accent',
+  ]),
   entry(5, 'Strobe', 'field-motion', 'Gated flashes—transient-led, not sustained wash.', [
     'field',
     'accent',
   ]),
-  entry(6, 'Swarm', 'field-motion', 'Many-body drift—organic scatter on the field.', ['field', 'accent']),
-  entry(7, 'Orbit', 'field-motion', 'Circular paths—gravity well of the deck.', ['field', 'accent']),
-  entry(8, 'Pulse', 'field-motion', 'Breathing scale—kick and intensity as pump.', ['field', 'accent']),
-  entry(9, 'Spiral', 'field-motion', 'Arm winding—fractional twist over time.', ['field', 'accent']),
+  entry(6, 'Swarm', 'field-motion', 'Many-body drift—organic scatter on the field.', [
+    'field',
+    'accent',
+  ]),
+  entry(7, 'Orbit', 'field-motion', 'Circular paths—gravity well of the deck.', [
+    'field',
+    'accent',
+  ]),
+  entry(8, 'Pulse', 'field-motion', 'Breathing scale—kick and intensity as pump.', [
+    'field',
+    'accent',
+  ]),
+  entry(9, 'Spiral', 'field-motion', 'Arm winding—fractional twist over time.', [
+    'field',
+    'accent',
+  ]),
   entry(10, 'Ripple', 'field-motion', 'Concentric waves—bass as radius.', ['field', 'accent']),
   entry(11, 'Shatter', 'field-motion', 'High-band shards—cracks on impact.', ['field', 'accent']),
-  entry(12, 'Flux', 'field-motion', 'Fluid shear—mid-band flow across the frame.', ['field', 'accent']),
-  entry(13, 'Lattice', 'field-motion', 'Snapped grid—order with beat accents.', ['field', 'accent']),
-  entry(14, 'Drift', 'field-motion', 'Slow lateral float—space between drops.', ['field', 'accent']),
-  entry(15, 'Storm', 'field-motion', 'Chaotic surge—energy as weather.', ['field', 'accent']),
+  entry(12, 'Flux', 'field-motion', 'Fluid shear—mid-band flow across the frame.', [
+    'field',
+    'accent',
+  ]),
+  entry(13, 'Lattice', 'field-motion', 'Snapped grid—order with beat accents.', [
+    'field',
+    'accent',
+  ]),
+  entry(14, 'Drift', 'field-motion', 'Slow lateral float—space between drops.', [
+    'field',
+    'accent',
+  ]),
+  entry(15, 'Storm', 'field-motion', 'Squall front—rain curtains and lightning on hits.', [
+    'field',
+    'accent',
+  ]),
   entry(16, 'Echo', 'field-motion', 'Trail-forward afterimages—feedback owns the ghost.', [
     'field',
     'accent',
   ]),
   entry(17, 'Vortex', 'field-motion', 'Inward pull—spin collapses to center.', ['field', 'accent']),
-  entry(18, 'Fracture', 'field-motion', 'Broken planes—angular splits on hits.', ['field', 'accent']),
+  entry(18, 'Fracture', 'field-motion', 'Broken planes—angular splits on hits.', [
+    'field',
+    'accent',
+  ]),
   entry(19, 'Nebula', 'field-motion', 'Soft cloud mass—bloom and drift.', ['field', 'accent']),
-  entry(20, 'Prism', 'field-motion', 'Hue-split facets—spectrum as structure.', ['field', 'accent']),
-  entry(21, 'Scanner', 'field-motion', 'Sweeping bars—scanline time as motion.', ['field', 'accent']),
-  entry(22, 'Comet', 'field-motion', 'Long-tail arcs—speed and trails as length.', ['field', 'accent']),
-  entry(23, 'Bloom', 'field-motion', 'Soft radial glow—mid and feedback as body.', ['field', 'accent']),
+  entry(20, 'Prism', 'field-motion', 'Hue-split facets—spectrum as structure.', [
+    'field',
+    'accent',
+  ]),
+  entry(21, 'Scanner', 'field-motion', 'Sweeping bars—scanline time as motion.', [
+    'field',
+    'accent',
+  ]),
+  entry(22, 'Comet', 'field-motion', 'Long-tail arcs—speed and trails as length.', [
+    'field',
+    'accent',
+  ]),
+  entry(23, 'Bloom', 'field-motion', 'Soft radial glow—mid and feedback as body.', [
+    'field',
+    'accent',
+  ]),
 
   // --- Figure ---
   entry(

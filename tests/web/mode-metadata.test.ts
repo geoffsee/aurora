@@ -7,9 +7,9 @@ import {
   visualModeLabel,
 } from '../../shared/visual-mode-catalog.ts';
 import {
+  VISUAL_MODES as CONTROLS_VISUAL_MODES,
   MAX_GPU_SHADER_INDEX,
   SHADER_OPTIONS,
-  VISUAL_MODES as CONTROLS_VISUAL_MODES,
 } from '../../web/controls/lib/constants.ts';
 import { PARAM_META } from '../../web/controls/lib/param-meta.ts';
 
