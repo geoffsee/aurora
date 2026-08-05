@@ -349,7 +349,7 @@ test('v15 state seeds per-deck axes from globals', () => {
     deckBReloadActiveVersion: 3,
   };
   const migrated = migrateControlState(input) as Record<string, unknown>;
-  expect(migrated.schemaVersion).toBe(16);
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
   expect(migrated.deckAIntensity).toBe(1.1);
   expect(migrated.deckBIntensity).toBe(1.1);
   expect(migrated.deckADepth).toBe(0.4);
@@ -359,6 +359,53 @@ test('v15 state seeds per-deck axes from globals', () => {
   expect(migrated.deckASpeed).toBe(1.8);
   expect(migrated.deckBSpeed).toBe(1.8);
   expect(migrated.deckAReloadActiveVersion).toBe(2);
+});
+
+test('v15 migration preserves already-diverged deck axes when present', () => {
+  const input = {
+    schemaVersion: 15,
+    intensity: 0.82,
+    depth: 0,
+    feedback: 0.22,
+    speed: 1,
+    deckAIntensity: 1.2,
+    deckADepth: 0.7,
+    deckAFeedback: 0.4,
+    deckASpeed: 2,
+    deckBIntensity: 0.5,
+    deckBDepth: 0.1,
+    deckBFeedback: 0.9,
+    deckBSpeed: 0.5,
+  };
+  const migrated = migrateControlState(input) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(migrated.deckAIntensity).toBe(1.2);
+  expect(migrated.deckADepth).toBe(0.7);
+  expect(migrated.deckAFeedback).toBe(0.4);
+  expect(migrated.deckASpeed).toBe(2);
+  expect(migrated.deckBIntensity).toBe(0.5);
+  expect(migrated.deckBDepth).toBe(0.1);
+  expect(migrated.deckBFeedback).toBe(0.9);
+  expect(migrated.deckBSpeed).toBe(0.5);
+});
+
+test('older schema chains through v16 deck axes with defaults from globals', () => {
+  const migrated = migrateControlState({
+    schemaVersion: 13,
+    intensity: 0.9,
+    depth: 0.3,
+    feedback: 0.4,
+    speed: 1.25,
+  }) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(migrated.deckAIntensity).toBe(0.9);
+  expect(migrated.deckBIntensity).toBe(0.9);
+  expect(migrated.deckADepth).toBe(0.3);
+  expect(migrated.deckBDepth).toBe(0.3);
+  expect(migrated.deckAFeedback).toBe(0.4);
+  expect(migrated.deckBFeedback).toBe(0.4);
+  expect(migrated.deckASpeed).toBe(1.25);
+  expect(migrated.deckBSpeed).toBe(1.25);
 });
 
 test('null passes through unchanged', () => {

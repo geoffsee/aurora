@@ -1,5 +1,5 @@
 import { Box, Button, Flex, Grid, Text } from '@chakra-ui/react';
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { type ReactNode, useCallback, useMemo } from 'react';
 import { useControls } from '../context/ControlsContext.tsx';
 import { deckGpuShaderPatch } from '../lib/deck-gpu-shader.ts';
 import { deckGpuShaderModePatch, deckVisibilityPatch } from '../lib/deck-mode.ts';

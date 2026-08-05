@@ -322,8 +322,14 @@ mod tests {
         assert_eq!(dir.deck_b.mode, VisualMode::Figure);
         assert_eq!(dir.deck_a.legacy_field_weight, 1.0);
         assert_eq!(dir.deck_b.legacy_field_weight, 0.0);
+        // Per-deck launchpad axes must stay independent (not shared globals).
         assert_eq!(dir.deck_a.params.intensity, 1.0);
+        assert_eq!(dir.deck_a.params.depth, 0.0);
+        assert_eq!(dir.deck_a.params.feedback, 0.0);
+        assert_eq!(dir.deck_a.params.speed, 1.0);
         assert_eq!(dir.deck_b.params.intensity, 0.5);
+        assert_eq!(dir.deck_b.params.depth, 0.2);
+        assert_eq!(dir.deck_b.params.feedback, 0.3);
         assert_eq!(dir.deck_b.params.speed, 1.5);
     }
 
