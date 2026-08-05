@@ -1238,9 +1238,9 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     if (err) addBanner(err, 'error');
   }, [addBanner]);
 
-  // Initial catalog fetch (WS also pushes on connect / epoch bump).
+  // Initial catalog fetch. Bridged stacks also receive WS pushes on epoch bump.
+  // Static Pages still fetch the shipped catalog.json (no bridge / no WS).
   useEffect(() => {
-    if (staticPreview.current) return;
     let cancelled = false;
     void fetchModesCatalog().then((result) => {
       if (cancelled) return;

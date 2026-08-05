@@ -1,10 +1,18 @@
 /**
  * HTTP client for the bridge mode catalog / compile API (#237 / #241).
  * Browser-safe: no Node imports. Origin is derived from controls→projector mapping.
+ *
+ * Static GitHub Pages ships precompiled catalog files under
+ * `{siteBase}/api/modes/catalog.json` and
+ * `{siteBase}/api/modes/compiled/{deck}/{slug}.json` (see
+ * scripts/stage-static-mode-catalog.ts). Live bridge uses query-string routes.
  */
 
+import { isStaticHosting, staticModesApiBase } from '../../../shared/static-hosting.ts';
 import { type MenuCatalogSnapshot, parsePublicCatalog } from './mode-catalog-menu.ts';
 import { CONTROLS_PORT, PROJECTOR_PORT } from './projector-url.ts';
+
+type ModesLoc = Pick<Location, 'protocol' | 'hostname' | 'port' | 'pathname' | 'search'>;
 
 /** HTTP origin of the projector/bridge that serves `/api/modes/*`. */
 export function bridgeHttpOrigin(
@@ -23,13 +31,29 @@ export function bridgeHttpOrigin(
   return `${protocol}//${host}${port}`;
 }
 
-export function modesCatalogUrl(
+/** Live bridge catalog endpoint (no `.json` suffix). */
+export function modesCatalogLiveUrl(
   loc: Pick<Location, 'protocol' | 'hostname' | 'port'> = location,
 ): string {
   return `${bridgeHttpOrigin(loc)}/api/modes/catalog`;
 }
 
-export function modesCompiledUrl(
+/** Static Pages catalog file (project-base-aware). */
+export function modesCatalogStaticUrl(loc: ModesLoc = location): string {
+  return `${staticModesApiBase(loc)}/api/modes/catalog.json`;
+}
+
+/**
+ * Preferred catalog URL for this environment.
+ * Static hosting → path-based JSON; bridge → live API.
+ */
+export function modesCatalogUrl(loc: ModesLoc = location): string {
+  if (isStaticHosting(loc)) return modesCatalogStaticUrl(loc);
+  return modesCatalogLiveUrl(loc);
+}
+
+/** Live bridge compiled endpoint (query string). */
+export function modesCompiledLiveUrl(
   opts: {
     deck: 'deck-a' | 'deck-b';
     slug: string;
@@ -47,29 +71,75 @@ export function modesCompiledUrl(
   return `${bridgeHttpOrigin(loc)}/api/modes/compiled?${params.toString()}`;
 }
 
+/** Static Pages compiled wire file. */
+export function modesCompiledStaticUrl(
+  opts: { deck: 'deck-a' | 'deck-b'; slug: string },
+  loc: ModesLoc = location,
+): string {
+  const slug = encodeURIComponent(opts.slug.trim());
+  return `${staticModesApiBase(loc)}/api/modes/compiled/${opts.deck}/${slug}.json`;
+}
+
+/**
+ * Preferred compiled URL for this environment.
+ * Static hosting → path-based JSON; bridge → live query API.
+ */
+export function modesCompiledUrl(
+  opts: {
+    deck: 'deck-a' | 'deck-b';
+    slug: string;
+    epoch?: number;
+  },
+  loc: ModesLoc = location,
+): string {
+  if (isStaticHosting(loc)) return modesCompiledStaticUrl(opts, loc);
+  return modesCompiledLiveUrl(opts, loc);
+}
+
 export type FetchCatalogResult =
   | { ok: true; catalog: MenuCatalogSnapshot }
   | { ok: false; error: string; status?: number };
 
+async function parseCatalogResponse(res: Response): Promise<FetchCatalogResult> {
+  if (!res.ok) {
+    return { ok: false, error: `catalog HTTP ${res.status}`, status: res.status };
+  }
+  const raw: unknown = await res.json();
+  const catalog = parsePublicCatalog(raw);
+  if (!catalog) {
+    return { ok: false, error: 'catalog response was not a valid snapshot' };
+  }
+  return { ok: true, catalog };
+}
+
 export async function fetchModesCatalog(
-  loc: Pick<Location, 'protocol' | 'hostname' | 'port'> = location,
+  loc: ModesLoc = location,
   fetchImpl: typeof fetch = fetch,
 ): Promise<FetchCatalogResult> {
+  const primary = modesCatalogUrl(loc);
   try {
-    const res = await fetchImpl(modesCatalogUrl(loc), {
+    const res = await fetchImpl(primary, {
       method: 'GET',
       headers: { accept: 'application/json' },
       cache: 'no-store',
     });
-    if (!res.ok) {
-      return { ok: false, error: `catalog HTTP ${res.status}`, status: res.status };
+    const primaryResult = await parseCatalogResponse(res);
+    if (primaryResult.ok) return primaryResult;
+
+    // Bridge path may miss static files during local hybrid; try the other layout once.
+    if (!isStaticHosting(loc) && res.status === 404) {
+      const staticUrl = modesCatalogStaticUrl(loc);
+      if (staticUrl !== primary) {
+        const fallback = await fetchImpl(staticUrl, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+          cache: 'no-store',
+        });
+        const fallbackResult = await parseCatalogResponse(fallback);
+        if (fallbackResult.ok) return fallbackResult;
+      }
     }
-    const raw: unknown = await res.json();
-    const catalog = parsePublicCatalog(raw);
-    if (!catalog) {
-      return { ok: false, error: 'catalog response was not a valid snapshot' };
-    }
-    return { ok: true, catalog };
+    return primaryResult;
   } catch (err) {
     return {
       ok: false,
@@ -88,7 +158,7 @@ export async function fetchCompiledMode(
     slug: string;
     epoch?: number;
   },
-  loc: Pick<Location, 'protocol' | 'hostname' | 'port'> = location,
+  loc: ModesLoc = location,
   fetchImpl: typeof fetch = fetch,
 ): Promise<FetchCompiledResult> {
   try {
