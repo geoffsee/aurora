@@ -259,6 +259,9 @@ impl Material2d for VjImportedMaterial {
 /// Pack fullscreen slot for Deck A (PR13 / #247). Independent of Deck B so
 /// two packs can run different shaders simultaneously. WGSL only — GLSL is
 /// compiled on the bridge (naga). Placeholder until `ActiveCompiled` carries wgsl.
+///
+/// `pack_drive` (binding 4) is the operator animation bus for packs:
+/// x=intensity (0..1), y=depth/scatter (0..1), z=feedback/trails (0..1), w=speed (0..1).
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
 struct VjPackFullscreenAMaterial {
     #[uniform(0)]
@@ -269,6 +272,8 @@ struct VjPackFullscreenAMaterial {
     audio_uniforms: Vec4,
     #[uniform(3)]
     palette_rgb: Vec4,
+    #[uniform(4)]
+    pack_drive: Vec4,
 }
 
 impl Material2d for VjPackFullscreenAMaterial {
@@ -281,7 +286,7 @@ impl Material2d for VjPackFullscreenAMaterial {
     }
 }
 
-/// Pack fullscreen slot for Deck B (PR13 / #247).
+/// Pack fullscreen slot for Deck B (PR13 / #247). Same layout as deck A.
 #[derive(AsBindGroup, Asset, TypePath, Clone)]
 struct VjPackFullscreenBMaterial {
     #[uniform(0)]
@@ -292,6 +297,8 @@ struct VjPackFullscreenBMaterial {
     audio_uniforms: Vec4,
     #[uniform(3)]
     palette_rgb: Vec4,
+    #[uniform(4)]
+    pack_drive: Vec4,
 }
 
 impl Material2d for VjPackFullscreenBMaterial {
@@ -852,6 +859,8 @@ fn setup(
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 1.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
         palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
+        // intensity, depth, feedback, speed — defaults mid until first frame
+        pack_drive: Vec4::new(0.55, 0.5, 0.22, 0.33),
     });
     commands.insert_resource(VjPackFullscreenAHandle(pack_a_mat.clone()));
     let pack_a_shader: Handle<Shader> = asset_server.load("shaders/pack_fullscreen_a.wgsl");
@@ -871,6 +880,7 @@ fn setup(
         palette_extra: Vec4::new(1.0, 1.0, 0.0, 1.0),
         audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
         palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
+        pack_drive: Vec4::new(0.55, 0.5, 0.22, 0.33),
     });
     commands.insert_resource(VjPackFullscreenBHandle(pack_b_mat.clone()));
     let pack_b_shader: Handle<Shader> = asset_server.load("shaders/pack_fullscreen_b.wgsl");
@@ -1813,6 +1823,14 @@ fn update_palette_material(
             palette_extra_base.z,
             alpha_b,
         );
+        // Operator bus for pack shaders (point-cloud and future packs):
+        // intensity (0..1), depth/scatter, feedback/trails, speed (0..1 from 0.1..3).
+        let pack_drive = Vec4::new(
+            ((state.intensity - 0.05) / 1.45).clamp(0.0, 1.0),
+            state.depth.clamp(0.0, 1.0),
+            state.feedback.clamp(0.0, 1.0),
+            ((state.speed - 0.1) / 2.9).clamp(0.0, 1.0),
+        );
         if let Some(ha) = pack_a_handle.as_ref()
             && let Some(mat) = pack_a_materials.get_mut(&ha.0)
         {
@@ -1820,6 +1838,7 @@ fn update_palette_material(
             mat.palette_extra = extra_a;
             mat.audio_uniforms = audio_uniforms;
             mat.palette_rgb = palette_rgb;
+            mat.pack_drive = pack_drive;
         }
         if let Some(hb) = pack_b_handle.as_ref()
             && let Some(mat) = pack_b_materials.get_mut(&hb.0)
@@ -1828,6 +1847,7 @@ fn update_palette_material(
             mat.palette_extra = extra_b;
             mat.audio_uniforms = audio_uniforms;
             mat.palette_rgb = palette_rgb;
+            mat.pack_drive = pack_drive;
         }
     }
 
