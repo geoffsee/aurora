@@ -236,6 +236,28 @@ HTTP (visual server `:3000`, see `bridge/mode-api.ts`):
 
 On epoch bump the bridge broadcasts `/aurora/modes/catalog` over the WebSocket. The last ~4 epochs of assets/compile cache are retained.
 
+## Control bus: slugs vs legacy ints
+
+`ControlState` carries both:
+
+| Field | Role |
+| --- | --- |
+| `deckAMode` / `deckBMode` | Legacy VisualMode int (`0`–`48`, or `-1` for slug-only packs) |
+| `deckAPresetSlug` / `deckBPresetSlug` | Pack identity from the deck catalog |
+
+Resolution is centralized in `shared/resolve-deck-selection.ts` (`resolveDeckSelection`):
+
+1. **Non-empty slug wins** — mode is set from `legacyIndex`, or `-1` when the pack has none.
+2. **Int-only** (VST / MIDI / launchpad) — maps to a slug only when some catalog entry on that deck has a matching `legacyIndex`. Never invents a non-legacy slug from an int.
+3. **Both present** — slug wins.
+4. Empty slug string is treated as absent.
+
+### VST / MIDI limitation
+
+VST parameters and MIDI CCs only send **legacy integers**. They can only select packs that declare `legacyIndex` in `preset.json`. Packs without `legacyIndex` (non-legacy overlays) are **not** reachable via VST/MIDI — use the controls page slug path (future dynamic launchpad, #241) or an explicit `deckAPresetSlug` / `deckBPresetSlug` write on the control bus.
+
+Concurrent last-writer-wins is unchanged: the bridge still coerces each full state update; mode-only updates from VST do not get masked by a carried-over previous slug.
+
 ---
 
 ## Validate CLI

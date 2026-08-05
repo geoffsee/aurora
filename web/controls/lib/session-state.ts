@@ -1,6 +1,10 @@
 import { migrateControlState } from "../../../shared/control-state-schema.ts";
 import { normalizeRemoteModelAssetPath } from "../../../shared/model-asset-path.ts";
 import { CONTROL_STATE_SCHEMA_VERSION } from "../../../shared/osc-validation.ts";
+import {
+	type DeckCatalogs,
+	migrateDeckSlugsInState,
+} from "../../../shared/resolve-deck-selection.ts";
 import { SESSION_STATE_KEY } from "./constants.ts";
 import { defaultState } from "./default-state.ts";
 import type { ControlState } from "./types.ts";
@@ -80,6 +84,32 @@ export function loadSessionState(): ControlState {
 	} catch {
 		return defaults;
 	}
+}
+
+/**
+ * Resolve deck pack slugs for a control-state snapshot (session or show preset)
+ * against a public mode catalog. Returns the patched fields + warnings for banners.
+ * Int-only legacy snapshots keep their ints when the catalog cannot map them.
+ */
+export function resolveSessionDeckSlugs(
+	state: ControlState,
+	catalogs: DeckCatalogs,
+): { patch: Partial<ControlState>; warnings: string[] } {
+	const resolved = migrateDeckSlugsInState(state, catalogs, {
+		deckAMode: state.deckAMode,
+		deckBMode: state.deckBMode,
+		deckAPresetSlug: state.deckAPresetSlug ?? "",
+		deckBPresetSlug: state.deckBPresetSlug ?? "",
+	});
+	return {
+		patch: {
+			deckAMode: resolved.deckAMode,
+			deckBMode: resolved.deckBMode,
+			deckAPresetSlug: resolved.deckAPresetSlug,
+			deckBPresetSlug: resolved.deckBPresetSlug,
+		},
+		warnings: resolved.warnings,
+	};
 }
 
 export function saveSessionState(state: ControlState): void {

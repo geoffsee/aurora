@@ -39,6 +39,13 @@ import {
   type OutputRoute,
 } from '../shared/output-routing.ts';
 import { DEFAULT_PALETTE_RGB, hueToRgb, resolvePaletteColor } from '../shared/palette-color.ts';
+import {
+  DECK_MODE_MAX,
+  DECK_MODE_MIN,
+  normalizePresetSlug,
+  resolveBothDeckSelections,
+  type DeckSelectionPatch,
+} from '../shared/resolve-deck-selection.ts';
 import { importShadertoyUrl } from '../shared/shadertoy-import.ts';
 import {
   deriveLinkFrame,
@@ -122,6 +129,10 @@ type ControlState = {
   gridShapeMix: number;
   deckAMode: number;
   deckBMode: number;
+  /** Pack slug for deck A (authoritative with deckAMode via resolveDeckSelection). */
+  deckAPresetSlug: string;
+  /** Pack slug for deck B (authoritative with deckBMode via resolveDeckSelection). */
+  deckBPresetSlug: string;
   rings: boolean;
   ringOpacity: number;
   strobe: boolean;
@@ -387,6 +398,10 @@ const defaultControlState = (): ControlState => ({
   gridShapeMix: 0.5,
   deckAMode: 0,
   deckBMode: 1,
+  // Bundled defaults match legacyIndex 0/1 (beams/tunnel); coerce re-resolves
+  // against the live catalog so overrides stay consistent.
+  deckAPresetSlug: 'beams',
+  deckBPresetSlug: 'tunnel',
   rings: false,
   ringOpacity: 0.35,
   strobe: false,
@@ -520,15 +535,31 @@ const cueNames: ReadonlySet<string> = new Set(Object.keys(cuePresets));
     }
   }
 }
+const clampDeckMode = (value: unknown, fallback: number) =>
+  clampInt(value, DECK_MODE_MIN, DECK_MODE_MAX, fallback);
+
 const coerceControlState = (state: unknown): ControlState => {
   const source = state && typeof state === 'object' ? (state as Partial<ControlState>) : {};
   const defaults = defaultControlState();
+  const previous = latestControlState ?? defaults;
   const mapping =
     source.trackMapping && typeof source.trackMapping === 'object' ? source.trackMapping : {};
   const paletteColor = resolvePaletteColor(source, {
     palette: defaults.palette,
     ...DEFAULT_PALETTE_RGB,
   });
+
+  // Resolve deck pack identity against the live catalog. Change-detection in
+  // resolveBothDeckSelections treats a mode-only update (carried slug) as
+  // int-intent so VST/MIDI/launchpad last-writer-wins stays intact.
+  const deckResolved = resolveBothDeckSelections(
+    source as DeckSelectionPatch,
+    {
+      deckA: { mode: previous.deckAMode, slug: previous.deckAPresetSlug },
+      deckB: { mode: previous.deckBMode, slug: previous.deckBPresetSlug },
+    },
+    modeCatalog.decks,
+  );
 
   return {
     schemaVersion: CONTROL_STATE_SCHEMA_VERSION,
@@ -548,8 +579,10 @@ const coerceControlState = (state: unknown): ControlState => {
     gridDiamond: clamp(source.gridDiamond, 0, 1, defaults.gridDiamond),
     gridLineWidth: clamp(source.gridLineWidth, 0, 1, defaults.gridLineWidth),
     gridShapeMix: clamp(source.gridShapeMix, 0, 1, defaults.gridShapeMix),
-    deckAMode: clampInt(source.deckAMode, 0, 48, defaults.deckAMode),
-    deckBMode: clampInt(source.deckBMode, 0, 48, defaults.deckBMode),
+    deckAMode: clampDeckMode(deckResolved.deckAMode, defaults.deckAMode),
+    deckBMode: clampDeckMode(deckResolved.deckBMode, defaults.deckBMode),
+    deckAPresetSlug: normalizePresetSlug(deckResolved.deckAPresetSlug, defaults.deckAPresetSlug),
+    deckBPresetSlug: normalizePresetSlug(deckResolved.deckBPresetSlug, defaults.deckBPresetSlug),
     rings: source.rings !== false,
     ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
     strobe: Boolean(source.strobe),

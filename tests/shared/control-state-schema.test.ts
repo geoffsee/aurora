@@ -294,17 +294,33 @@ test('v11 state is upgraded to v12 with an empty remote asset path', () => {
   expect(result.figureAssetPath).toBe('');
 });
 
-test('v12 state passes through unchanged', () => {
+test('v12 state migrates through to current', () => {
   const input = {
     schemaVersion: 12,
     figureAssetPath: 'https://cdn.example.com/figure.glb',
   };
   const migrated = migrateControlState(input) as Record<string, unknown>;
-  expect(migrated.schemaVersion).toBe(13);
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
   expect(migrated.cpuDeckAEnabled).toBe(false);
   expect(migrated.cpuDeckBEnabled).toBe(false);
   expect(migrated.gpuDeckAEnabled).toBe(false);
   expect(migrated.gpuDeckBEnabled).toBe(false);
+  expect(migrated.deckAPresetSlug).toBe('');
+  expect(migrated.deckBPresetSlug).toBe('');
+});
+
+test('v13 state gains empty deck preset slugs', () => {
+  const input = {
+    schemaVersion: 13,
+    deckAMode: 0,
+    deckBMode: 1,
+  };
+  const migrated = migrateControlState(input) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(14);
+  expect(migrated.deckAPresetSlug).toBe('');
+  expect(migrated.deckBPresetSlug).toBe('');
+  expect(migrated.deckAMode).toBe(0);
+  expect(migrated.deckBMode).toBe(1);
 });
 
 test('null passes through unchanged', () => {

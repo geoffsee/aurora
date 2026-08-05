@@ -5,6 +5,7 @@ import { defaultState } from "../../web/controls/lib/default-state.ts";
 import {
 	clearSessionState,
 	loadSessionState,
+	resolveSessionDeckSlugs,
 	saveSessionState,
 	toPersistedControlState,
 } from "../../web/controls/lib/session-state.ts";
@@ -120,4 +121,47 @@ test("invalid persisted remote model paths fall back to the catalog", () => {
 		}),
 	);
 	expect(loadSessionState().figureAssetPath).toBe("");
+});
+
+test("v13 int-only session migrates to v14 with empty slugs", () => {
+	localStorage.setItem(
+		SESSION_STATE_KEY,
+		JSON.stringify({
+			schemaVersion: 13,
+			crossfade: 0.33,
+			deckAMode: 0,
+			deckBMode: 1,
+		}),
+	);
+	const loaded = loadSessionState();
+	expect(loaded.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+	expect(loaded.crossfade).toBeCloseTo(0.33);
+	expect(loaded.deckAMode).toBe(0);
+	expect(loaded.deckBMode).toBe(1);
+	// Migration leaves empty slugs; runtime catalog resolve fills them.
+	expect(loaded.deckAPresetSlug).toBe("");
+	expect(loaded.deckBPresetSlug).toBe("");
+});
+
+test("resolveSessionDeckSlugs maps int-only state when catalog has legacyIndex", () => {
+	const state = {
+		...defaultState(),
+		deckAMode: 0,
+		deckBMode: 1,
+		deckAPresetSlug: "",
+		deckBPresetSlug: "",
+	};
+	const { patch, warnings } = resolveSessionDeckSlugs(state, {
+		"deck-a": [
+			{ slug: "beams", legacyIndex: 0 },
+			{ slug: "tunnel", legacyIndex: 1 },
+		],
+		"deck-b": [
+			{ slug: "beams", legacyIndex: 0 },
+			{ slug: "tunnel", legacyIndex: 1 },
+		],
+	});
+	expect(patch.deckAPresetSlug).toBe("beams");
+	expect(patch.deckBPresetSlug).toBe("tunnel");
+	expect(warnings).toHaveLength(0);
 });
