@@ -1,5 +1,4 @@
 import {
-	Badge,
 	Box,
 	Button,
 	Flex,
@@ -18,11 +17,7 @@ import { Panel, SectionTitle } from "./ui.tsx";
 
 export function CuesPanel() {
 	const {
-		state,
-		pendingCue,
 		queueCue,
-		updateState,
-		savePreset,
 		transitionDurationMs,
 		setTransitionDurationMs,
 		pendingCurves,
@@ -34,22 +29,9 @@ export function CuesPanel() {
 		renamePreset,
 	} = useControls();
 
-	const quantizeLabel = pendingCue
-		? state.barSync
-			? `Queued ${pendingCue.name} on bar`
-			: `Queued ${pendingCue.name} on beat`
-		: state.beatSync
-			? state.barSync
-				? "Bar sync"
-				: "Beat sync"
-			: "Immediate";
-
 	return (
 		<Panel area="cues">
-			<SectionTitle
-				title="Cues"
-				badge={<Badge colorPalette="yellow">{quantizeLabel}</Badge>}
-			/>
+			<SectionTitle title="Cues" />
 			<Grid templateColumns="repeat(3, 1fr)" gap={2} mb={3}>
 				{CUE_NAMES.map((cue) => (
 					<Button
@@ -64,43 +46,6 @@ export function CuesPanel() {
 					</Button>
 				))}
 			</Grid>
-			<Flex gap={2} wrap="wrap" mb={3}>
-				<Button
-					size="lg"
-					variant={state.beatSync ? "solid" : "surface"}
-					colorPalette="yellow"
-					onClick={() => updateState({ beatSync: !state.beatSync })}
-					aria-pressed={state.beatSync}
-				>
-					Beat Sync
-				</Button>
-				<Button
-					size="lg"
-					variant={state.barSync ? "solid" : "surface"}
-					onClick={() => {
-						const barSync = !state.barSync;
-						updateState({
-							barSync,
-							beatSync: state.beatSync || barSync,
-						});
-					}}
-					aria-pressed={state.barSync}
-				>
-					Bar Sync
-				</Button>
-				<Button
-					size="lg"
-					colorPalette="purple"
-					onClick={() =>
-						updateState({ flashVersion: state.flashVersion + 1 })
-					}
-				>
-					Flash
-				</Button>
-				<Button size="lg" variant="surface" onClick={savePreset}>
-					Save Preset
-				</Button>
-			</Flex>
 			<Flex align="center" gap={2} mb={3}>
 				<Text fontSize="sm" color="whiteAlpha.700">
 					Transition

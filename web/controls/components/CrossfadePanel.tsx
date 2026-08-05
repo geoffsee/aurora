@@ -5,7 +5,7 @@ import { rgbToHex } from '../lib/palette.ts';
 import { Panel } from './ui.tsx';
 
 export function CrossfadePanel() {
-  const { state, updateState, resetState } = useControls();
+  const { state, updateState, resetState, savePreset, pendingCue } = useControls();
 
   const setCrossfade = useCallback(
     (crossfade: number) => updateState({ crossfade }),
@@ -13,6 +13,16 @@ export function CrossfadePanel() {
   );
 
   const paletteHex = rgbToHex(state.paletteR, state.paletteG, state.paletteB);
+
+  const quantizeLabel = pendingCue
+    ? state.barSync
+      ? `Queued ${pendingCue.name} on bar`
+      : `Queued ${pendingCue.name} on beat`
+    : state.beatSync
+      ? state.barSync
+        ? 'Bar sync'
+        : 'Beat sync'
+      : 'Immediate';
 
   return (
     <Panel area="hero" aria-label="Crossfade">
@@ -103,6 +113,50 @@ export function CrossfadePanel() {
             onClick={() => updateState({ crossfade: 1 })}
           >
             B Full
+          </Button>
+        </Flex>
+        <Flex gap={2} wrap="wrap" align="center">
+          <Button
+            flex={1}
+            minW="6.5rem"
+            size="md"
+            variant={state.beatSync ? 'solid' : 'surface'}
+            colorPalette="yellow"
+            onClick={() => updateState({ beatSync: !state.beatSync })}
+            aria-pressed={state.beatSync}
+          >
+            Beat Sync
+          </Button>
+          <Button
+            flex={1}
+            minW="6.5rem"
+            size="md"
+            variant={state.barSync ? 'solid' : 'surface'}
+            onClick={() => {
+              const barSync = !state.barSync;
+              updateState({
+                barSync,
+                beatSync: state.beatSync || barSync,
+              });
+            }}
+            aria-pressed={state.barSync}
+          >
+            Bar Sync
+          </Button>
+          <Badge colorPalette="yellow" px={3} py={2} borderRadius="md" fontSize="sm">
+            {quantizeLabel}
+          </Badge>
+          <Button
+            flex={1}
+            minW="6.5rem"
+            size="md"
+            colorPalette="purple"
+            onClick={() => updateState({ flashVersion: state.flashVersion + 1 })}
+          >
+            Flash
+          </Button>
+          <Button flex={1} minW="6.5rem" size="md" variant="surface" onClick={savePreset}>
+            Save Preset
           </Button>
         </Flex>
         <Flex gap={2} wrap="wrap" align="center">
