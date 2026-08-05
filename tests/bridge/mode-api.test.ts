@@ -110,11 +110,12 @@ function snapshotFromEntries(
 // ── Public catalog ───────────────────────────────────────────────────────────
 
 describe('toPublicCatalog', () => {
-  test('strips absolute host paths; keeps slug/id/label/legacyIndex/source', () => {
+  test('strips absolute host paths; keeps slug/id/label/legacyIndex/uiGroup/source', () => {
     const snap = snapshotFromEntries(3, [
       makeEntry('/secret/host/path/beams', 'beams', {
         label: 'Beams',
         legacyIndex: 0,
+        uiGroup: 'field-motion',
       }),
     ]);
     const pub = toPublicCatalog(snap);
@@ -127,6 +128,7 @@ describe('toPublicCatalog', () => {
       source: 'bundled',
       label: 'Beams',
       legacyIndex: 0,
+      uiGroup: 'field-motion',
     });
     expect(JSON.stringify(pub)).not.toContain('/secret');
     expect(JSON.stringify(pub)).not.toContain('path');

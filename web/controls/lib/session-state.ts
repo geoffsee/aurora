@@ -22,6 +22,9 @@ const EPHEMERAL_CONTROL_FIELDS = {
   cueDeckBMode: 1,
   cueDeckAGpuShader: 1,
   cueDeckBGpuShader: 6,
+  // Reload-active counters are session-ephemeral; projector re-fetches on bump only.
+  deckAReloadActiveVersion: 0,
+  deckBReloadActiveVersion: 0,
 } as const satisfies Partial<ControlState>;
 
 export function toPersistedControlState(
@@ -39,6 +42,8 @@ export function toPersistedControlState(
     cueDeckBMode: _cueDeckBMode,
     cueDeckAGpuShader: _cueDeckAGpuShader,
     cueDeckBGpuShader: _cueDeckBGpuShader,
+    deckAReloadActiveVersion: _deckAReloadActiveVersion,
+    deckBReloadActiveVersion: _deckBReloadActiveVersion,
     ...persisted
   } = state;
   return persisted;

@@ -15,6 +15,15 @@ export function deckPresetSlugPatch(side: DeckSide, slug: string) {
   return side === 'A' ? { deckAPresetSlug: trimmed } : { deckBPresetSlug: trimmed };
 }
 
+/**
+ * Bump the per-deck reload-active counter so the projector re-fetches compiled
+ * for the current slug at the current catalog epoch (#241).
+ */
+export function deckReloadActivePatch(side: DeckSide, previousVersion: number) {
+  const next = Math.max(0, Math.floor(previousVersion)) + 1;
+  return side === 'A' ? { deckAReloadActiveVersion: next } : { deckBReloadActiveVersion: next };
+}
+
 export function deckGpuShaderModePatch(): Record<string, never> {
   return {};
 }

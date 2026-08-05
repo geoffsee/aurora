@@ -135,5 +135,16 @@ export const migrateControlState = (state: unknown): unknown => {
       deckBPresetSlug: typeof s.deckBPresetSlug === 'string' ? s.deckBPresetSlug : '',
     });
   }
+  // v14 → v15: explicit Reload active counters (projector re-fetches compiled).
+  if (s.schemaVersion === 14) {
+    return migrateControlState({
+      ...s,
+      schemaVersion: 15,
+      deckAReloadActiveVersion:
+        typeof s.deckAReloadActiveVersion === 'number' ? s.deckAReloadActiveVersion : 0,
+      deckBReloadActiveVersion:
+        typeof s.deckBReloadActiveVersion === 'number' ? s.deckBReloadActiveVersion : 0,
+    });
+  }
   return state;
 };

@@ -2,14 +2,15 @@ import { Box, Button, Flex, Grid, SimpleGrid, Text } from '@chakra-ui/react';
 import { useCallback, useMemo } from 'react';
 import { useControls } from '../context/ControlsContext.tsx';
 import { deckGpuShaderPatch } from '../lib/deck-gpu-shader.ts';
-import { deckGpuShaderModePatch, deckModePatch, deckVisibilityPatch } from '../lib/deck-mode.ts';
+import { deckGpuShaderModePatch, deckVisibilityPatch } from '../lib/deck-mode.ts';
 import { DeckModeLaunchpad } from './DeckModeLaunchpad.tsx';
 import { ParamKnob } from './ParamKnob.tsx';
 import { ShaderLaunchpad } from './ShaderLaunchpad.tsx';
 import { Panel } from './ui.tsx';
 
 export function SlidersPanel() {
-  const { state, updateState } = useControls();
+  const { state, updateState, modeMenu, selectDeckPreset, reloadActiveDeck, reloadBusy } =
+    useControls();
 
   const fmt1 = useCallback((v: number) => v.toFixed(1), []);
   const fmt2 = useCallback((v: number) => v.toFixed(2), []);
@@ -56,7 +57,15 @@ export function SlidersPanel() {
         />
       </SimpleGrid>
     ),
-    [state.figureScale, state.figureSpin, state.figureHalo, state.figureAudio, updateState, fmt2, fmtPct],
+    [
+      state.figureScale,
+      state.figureSpin,
+      state.figureHalo,
+      state.figureAudio,
+      updateState,
+      fmt2,
+      fmtPct,
+    ],
   );
 
   return (
@@ -207,10 +216,16 @@ export function SlidersPanel() {
             </Button>
           </Flex>
           <DeckModeLaunchpad
-            value={state.deckAMode}
             label="Deck A Mode"
             colorPalette="yellow"
-            onChange={(value) => updateState(deckModePatch('A', value), { bumpCue: true })}
+            entries={modeMenu.deckAEntries}
+            selectedSlug={state.deckAPresetSlug ?? ''}
+            catalogLive={modeMenu.catalogLive}
+            holdingMissing={modeMenu.holdingA}
+            menuEpoch={modeMenu.menuEpoch}
+            onSelectSlug={(slug) => selectDeckPreset('A', slug)}
+            onReloadActive={() => reloadActiveDeck('A')}
+            reloadBusy={reloadBusy.A}
             figureControls={figureKnobs}
           />
         </Panel>
@@ -227,10 +242,16 @@ export function SlidersPanel() {
             </Button>
           </Flex>
           <DeckModeLaunchpad
-            value={state.deckBMode}
             label="Deck B Mode"
             colorPalette="teal"
-            onChange={(value) => updateState(deckModePatch('B', value), { bumpCue: true })}
+            entries={modeMenu.deckBEntries}
+            selectedSlug={state.deckBPresetSlug ?? ''}
+            catalogLive={modeMenu.catalogLive}
+            holdingMissing={modeMenu.holdingB}
+            menuEpoch={modeMenu.menuEpoch}
+            onSelectSlug={(slug) => selectDeckPreset('B', slug)}
+            onReloadActive={() => reloadActiveDeck('B')}
+            reloadBusy={reloadBusy.B}
             figureControls={figureKnobs}
           />
         </Panel>

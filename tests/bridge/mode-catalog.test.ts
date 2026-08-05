@@ -82,6 +82,19 @@ describe('isValidSlug / parsePresetMeta', () => {
     expect(parsePresetMeta({}, 'beams')).toBeNull();
     expect(parsePresetMeta(null, 'beams')).toBeNull();
   });
+
+  test('parses uiGroup when present', () => {
+    expect(
+      parsePresetMeta(
+        { id: 'beams', slug: 'beams', uiGroup: 'field-motion', label: 'Beams' },
+        'beams',
+      ),
+    ).toEqual({
+      id: 'beams',
+      label: 'Beams',
+      uiGroup: 'field-motion',
+    });
+  });
 });
 
 describe('resolveDataDirs', () => {
