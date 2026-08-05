@@ -17,8 +17,14 @@ import { extname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { CompiledModeWire } from '../shared/compiled-mode-wire.ts';
 import {
   type CompileModePresetResult,
+  MAX_PACK_SHADER_SOURCE_BYTES,
   validateAndCompileModePreset,
 } from '../shared/mode-preset-schema.ts';
+import {
+  enrichPackFullscreenLayers,
+  isPackShaderRef,
+  validatePackShaderSource,
+} from '../shared/pack-fullscreen-compile.ts';
 import {
   type CatalogEntry,
   type CatalogSnapshot,
@@ -173,8 +179,44 @@ export type CompileFromEntryResult =
  * Read preset.json for a catalog entry and compile to CompiledModeWire.
  * Uses only the entry's path + the given epoch/deck (no live catalog lookup).
  * Fail-closed: IO / parse / validate / compile errors become `{ ok: false }`.
+ *
+ * Fullscreen pack shaders: pure compile first, then (async) bridge enrichment
+ * attaches WGSL via naga for GLSL refs. Prefer `compileFromEntryAsync` on the
+ * HTTP path; this sync helper still works for field-only packs and pure tests.
  */
 export function compileFromEntry(
+  entry: CatalogEntry,
+  epoch: number,
+  deck: DeckId,
+): CompileFromEntryResult {
+  const pure = compileFromEntryPure(entry, epoch, deck);
+  if (!pure.ok) return pure;
+  // Sync path: reject packs that still need GLSL→WGSL (naga is async).
+  // HTTP uses compileFromEntryAsync which enriches fullscreen layers.
+  const needsNaga = pure.wire.layers.some(
+    (l) => l.kind === 'fullscreen' && isPackShaderRef(l.ref) && !l.wgsl && isGlslLike(l.ref),
+  );
+  if (needsNaga) {
+    return {
+      ok: false,
+      errors: ['pack fullscreen GLSL requires async compile (naga); use GET /api/modes/compiled'],
+    };
+  }
+  // WGSL-only fullscreen layers: sync attach without naga.
+  if (pure.wire.layers.some((l) => l.kind === 'fullscreen' && isPackShaderRef(l.ref) && !l.wgsl)) {
+    // Block on a microtask-free sync read for .wgsl only.
+    return enrichFullscreenSync(entry, pure.wire);
+  }
+  return pure;
+}
+
+function isGlslLike(ref: string): boolean {
+  const ext = extname(ref).toLowerCase();
+  return ext === '.glsl' || ext === '.frag' || ext === '.fs' || ext === '.pixel';
+}
+
+/** Pure preset validate+compile without fullscreen shader enrichment. */
+export function compileFromEntryPure(
   entry: CatalogEntry,
   epoch: number,
   deck: DeckId,
@@ -229,6 +271,127 @@ export function compileFromEntry(
   });
   if (!compiled.ok) return compiled;
   return { ok: true, wire: compiled.value };
+}
+
+function readPackShaderAsset(
+  entry: CatalogEntry,
+  ref: string,
+):
+  | {
+      ok: true;
+      text: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
+  // Layer refs are relative to the preset folder (or assets/ subpath).
+  const real = resolveSandboxedRealPath(entry.path, ref);
+  if (!real) {
+    return {
+      ok: false,
+      error: `fullscreen layer ref ${ref}: asset missing or escapes preset root`,
+    };
+  }
+  let buf: Buffer;
+  try {
+    const st = statSync(real);
+    if (!st.isFile()) {
+      return { ok: false, error: `fullscreen layer ref ${ref}: not a regular file` };
+    }
+    if (st.size > MAX_PACK_SHADER_SOURCE_BYTES) {
+      return {
+        ok: false,
+        error: `fullscreen layer ref ${ref}: source exceeds size cap (${st.size} > ${MAX_PACK_SHADER_SOURCE_BYTES} bytes)`,
+      };
+    }
+    buf = readFileSync(real);
+  } catch (err) {
+    return {
+      ok: false,
+      error: `fullscreen layer ref ${ref}: read failed (${err instanceof Error ? err.message : String(err)})`,
+    };
+  }
+  if (buf.byteLength > MAX_PACK_SHADER_SOURCE_BYTES) {
+    return {
+      ok: false,
+      error: `fullscreen layer ref ${ref}: source exceeds size cap (${buf.byteLength} > ${MAX_PACK_SHADER_SOURCE_BYTES} bytes)`,
+    };
+  }
+  const checked = validatePackShaderSource(
+    new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
+    {
+      label: `fullscreen layer ref ${ref}`,
+    },
+  );
+  if (!checked.ok) return checked;
+  return { ok: true, text: checked.text };
+}
+
+function enrichFullscreenSync(entry: CatalogEntry, wire: CompiledModeWire): CompileFromEntryResult {
+  // Only .wgsl can be attached synchronously (no naga). GLSL is rejected above.
+  const layers = wire.layers.map((layer) => {
+    if (layer.kind !== 'fullscreen' || !isPackShaderRef(layer.ref) || layer.wgsl) {
+      return layer;
+    }
+    const read = readPackShaderAsset(entry, layer.ref);
+    if (!read.ok) {
+      return { ...layer, __error: read.error } as typeof layer & { __error?: string };
+    }
+    if (isGlslLike(layer.ref)) {
+      return {
+        ...layer,
+        __error: `fullscreen layer ref ${layer.ref}: GLSL requires naga async compile`,
+      } as typeof layer & { __error?: string };
+    }
+    // WGSL pass-through (compilePackFullscreenSource sync subset).
+    if (!/\bfn\s+fragment\b/.test(read.text) && !/@fragment\b/.test(read.text)) {
+      return {
+        ...layer,
+        __error: `fullscreen layer ref ${layer.ref}: WGSL must define a @fragment entry (fn fragment)`,
+      } as typeof layer & { __error?: string };
+    }
+    return { ...layer, wgsl: read.text };
+  });
+  const errors = layers
+    .map((l) =>
+      '__error' in l && typeof (l as { __error?: string }).__error === 'string'
+        ? (l as { __error: string }).__error
+        : null,
+    )
+    .filter((e): e is string => e !== null);
+  if (errors.length > 0) return { ok: false, errors };
+  const clean = layers.map((l) => {
+    const { __error: _drop, ...rest } = l as typeof l & { __error?: string };
+    return rest;
+  });
+  return { ok: true, wire: { ...wire, layers: clean } };
+}
+
+/**
+ * Async compile path: pure preset compile + pack fullscreen GLSL→WGSL (naga).
+ * Used by ModeApi.getCompiled so WASM only ever sees WGSL.
+ */
+export async function compileFromEntryAsync(
+  entry: CatalogEntry,
+  epoch: number,
+  deck: DeckId,
+): Promise<CompileFromEntryResult> {
+  const pure = compileFromEntryPure(entry, epoch, deck);
+  if (!pure.ok) return pure;
+
+  const needsEnrich = pure.wire.layers.some(
+    (l) => l.kind === 'fullscreen' && isPackShaderRef(l.ref) && !l.wgsl,
+  );
+  if (!needsEnrich) return pure;
+
+  const enriched = await enrichPackFullscreenLayers(pure.wire, async (ref) => {
+    const read = readPackShaderAsset(entry, ref);
+    if (!read.ok) return read;
+    return { ok: true, text: read.text, bytes: new TextEncoder().encode(read.text).byteLength };
+  });
+  if (!enriched.ok) return enriched;
+  return { ok: true, wire: enriched.wire };
 }
 
 // ── ModeApi store (retention + cache + handlers) ─────────────────────────────
@@ -338,12 +501,13 @@ export class ModeApi {
   /**
    * Compile (or cache-hit) a mode for deck/slug at epoch.
    * Epoch omitted → current. Fail-closed on validate/compile errors (422).
+   * Async: pack fullscreen GLSL is compiled with naga on cache miss.
    */
-  getCompiled(opts: {
+  async getCompiled(opts: {
     deck: string | null;
     slug: string | null;
     epoch: string | number | null | undefined;
-  }): GetCompiledResult {
+  }): Promise<GetCompiledResult> {
     const deck = parseDeckId(opts.deck);
     if (!deck) {
       return { status: 400, error: 'query `deck` must be deck-a or deck-b' };
@@ -384,8 +548,9 @@ export class ModeApi {
       return { status: 422, error: 'compile failed', errors: cached.errors };
     }
 
-    // Compile pure over the retained entry (never mixes another epoch's path).
-    const result = compileFromEntry(entry, epoch, deck);
+    // Compile over the retained entry (never mixes another epoch's path).
+    // Fullscreen pack shaders: GLSL→WGSL via naga; WGSL pass-through; fail-closed.
+    const result = await compileFromEntryAsync(entry, epoch, deck);
     retained.compileCache.set(key, result);
     if (result.ok) return { status: 200, wire: result.wire };
     return { status: 422, error: 'compile failed', errors: result.errors };
@@ -487,8 +652,8 @@ export class ModeApi {
     });
   }
 
-  handleCompiledRequest(url: URL): Response {
-    const result = this.getCompiled({
+  async handleCompiledRequest(url: URL): Promise<Response> {
+    const result = await this.getCompiled({
       deck: url.searchParams.get('deck'),
       slug: url.searchParams.get('slug'),
       epoch: url.searchParams.get('epoch'),

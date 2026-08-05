@@ -32,7 +32,8 @@ export type CompiledModeLayerKind = 'mesh' | 'fullscreen' | 'field' | 'accent';
 
 /**
  * Optional layer descriptor compiled from authoring `layers`.
- * v1 keeps refs as opaque strings (asset-relative or catalog ids) — PR3/PR11 resolve.
+ * Mesh refs stay opaque (catalog ids / asset-relative). Fullscreen layers may
+ * carry bridge-compiled `wgsl` (WASM never receives pack GLSL).
  */
 export type CompiledModeLayer = {
   kind: CompiledModeLayerKind;
@@ -40,6 +41,12 @@ export type CompiledModeLayer = {
   ref: string;
   /** Optional weight in [0, 1]; omitted → runtime default. */
   weight?: number;
+  /**
+   * Compiled WGSL for `kind: "fullscreen"` only (bridge naga path).
+   * Absent on pure `compileModePreset` until `enrichPackFullscreenLayers` runs.
+   * Pages/static never require this — builtins ship without pack GLSL.
+   */
+  wgsl?: string;
 };
 
 export type CompiledFieldParams = Record<string, number>;

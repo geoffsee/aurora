@@ -236,6 +236,9 @@ pub struct ActiveCompiled {
     pub asset_base: String,
     /// Mesh layers from the wire (catalog id or pack-local glTF ref).
     pub mesh_layers: Vec<MeshLayerSpec>,
+    /// Bridge-compiled pack fullscreen WGSL (one per pack / deck slot).
+    /// Absent when the pack has no fullscreen layer or enrichment skipped.
+    pub fullscreen_wgsl: Option<String>,
 }
 
 // ── Runtime ──────────────────────────────────────────────────────────────────
@@ -286,6 +289,13 @@ impl FieldRuntime {
     /// First mesh layer on the active compiled wire, if any.
     pub fn primary_mesh_layer(&self, deck: FieldDeck) -> Option<&MeshLayerSpec> {
         self.active(deck).and_then(|a| a.mesh_layers.first())
+    }
+
+    /// Pack fullscreen WGSL for this deck's material slot, if present.
+    pub fn fullscreen_wgsl(&self, deck: FieldDeck) -> Option<&str> {
+        self.active(deck)
+            .and_then(|a| a.fullscreen_wgsl.as_deref())
+            .filter(|s| !s.is_empty())
     }
 
     /// True when this deck has a compiled field primitive the runtime can pose.
@@ -3474,6 +3484,29 @@ pub fn parse_compiled_wire(json: &str) -> Result<ActiveCompiled, String> {
         .get("suppressLegacyField")
         .and_then(|x| x.as_bool())
         .unwrap_or(false);
+    // N=2 pack slots: take the first fullscreen layer with attached WGSL.
+    // Bridge rejects >1 fullscreen layer per pack at compile; we still only
+    // consume one here so a malformed wire cannot stack shaders on one deck.
+    let fullscreen_wgsl = obj
+        .get("layers")
+        .and_then(|x| x.as_array())
+        .and_then(|layers| {
+            for layer in layers {
+                let Some(lobj) = layer.as_object() else {
+                    continue;
+                };
+                let kind = lobj.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+                if kind != "fullscreen" {
+                    continue;
+                }
+                if let Some(wgsl) = lobj.get("wgsl").and_then(|w| w.as_str()) {
+                    if !wgsl.is_empty() {
+                        return Some(wgsl.to_string());
+                    }
+                }
+            }
+            None
+        });
 
     let disposition = obj
         .get("disposition")
@@ -3564,6 +3597,7 @@ pub fn parse_compiled_wire(json: &str) -> Result<ActiveCompiled, String> {
         disposition,
         asset_base,
         mesh_layers,
+        fullscreen_wgsl,
     })
 }
 
@@ -4189,5 +4223,53 @@ mod tests {
         assert_eq!(PRIMITIVE_STORM, 25);
         assert_eq!(PRIMITIVE_ECHO, 26);
         assert_eq!(PRIMITIVE_BLOOM, 33);
+    }
+
+    #[test]
+    fn dual_deck_fullscreen_wgsl_independent() {
+        let mut rt = FieldRuntime::default();
+        let wire_a = r#"{
+            "wireVersion": 1, "epoch": 1, "slug": "plasma-a",
+            "disposition": "fullscreen-primary",
+            "suppressLegacyField": true,
+            "layers": [
+                { "kind": "fullscreen", "ref": "shader.wgsl", "wgsl": "// deck-a-shader-aaa" }
+            ]
+        }"#;
+        let wire_b = r#"{
+            "wireVersion": 1, "epoch": 1, "slug": "plasma-b",
+            "disposition": "fullscreen-primary",
+            "suppressLegacyField": true,
+            "layers": [
+                { "kind": "fullscreen", "ref": "shader.wgsl", "wgsl": "// deck-b-shader-bbb" }
+            ]
+        }"#;
+        rt.try_set_compiled(FieldDeck::A, wire_a).unwrap();
+        rt.try_set_compiled(FieldDeck::B, wire_b).unwrap();
+        assert_eq!(
+            rt.fullscreen_wgsl(FieldDeck::A),
+            Some("// deck-a-shader-aaa")
+        );
+        assert_eq!(
+            rt.fullscreen_wgsl(FieldDeck::B),
+            Some("// deck-b-shader-bbb")
+        );
+        // Only first fullscreen layer is consumed (N=1 per pack).
+        let multi = r#"{
+            "wireVersion": 1, "epoch": 2, "slug": "stack",
+            "disposition": "fullscreen-primary",
+            "suppressLegacyField": true,
+            "layers": [
+                { "kind": "fullscreen", "ref": "a.wgsl", "wgsl": "// first" },
+                { "kind": "fullscreen", "ref": "b.wgsl", "wgsl": "// second" }
+            ]
+        }"#;
+        rt.try_set_compiled(FieldDeck::A, multi).unwrap();
+        assert_eq!(rt.fullscreen_wgsl(FieldDeck::A), Some("// first"));
+        // Deck B unchanged.
+        assert_eq!(
+            rt.fullscreen_wgsl(FieldDeck::B),
+            Some("// deck-b-shader-bbb")
+        );
     }
 }

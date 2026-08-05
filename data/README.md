@@ -39,6 +39,14 @@ bun run scripts/generate-bundled-mode-presets.ts --check   # CI / drift guard
 
 The engine still matches legacy indices in Rust match arms; these folders are the catalog/metadata source for scan, compile, and later HTTP APIs. Modes 25–48 may be metadata-only (`engine-module` / `mesh-primary` / `fullscreen-primary`) until their backends ship. DSL-backed packs with an implemented FieldRuntime primitive skip those match arms when a compiled wire is active.
 
+### Pack fullscreen (PR13 / #247)
+
+- At most **one** `layers[]` entry with `kind: "fullscreen"` per pack (engine has **two** material slots — one per deck).
+- Pack GLSL is compiled on the **bridge** (naga-cli) into WGSL attached on the wire; WASM never receives pack GLSL.
+- Size cap: 256 KiB source. Fail-closed on missing naga / compile error (same soft UX class as Shadertoy import).
+- GitHub Pages / static: builtins only; no runtime pack GLSL path.
+- `suppressLegacyField: true` → ModeDirector `legacy_field_weight = 0`.
+
 ## Layout
 
 ```text

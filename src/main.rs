@@ -253,7 +253,57 @@ impl Material2d for VjImportedMaterial {
     }
 }
 
-/// Marks the fullscreen GPU-shader quads. `index` 0 = palette material, 1 = grid material, 2 = imported.
+/// Pack fullscreen slot for Deck A (PR13 / #247). Independent of Deck B so
+/// two packs can run different shaders simultaneously. WGSL only — GLSL is
+/// compiled on the bridge (naga). Placeholder until `ActiveCompiled` carries wgsl.
+#[derive(AsBindGroup, Asset, TypePath, Clone)]
+struct VjPackFullscreenAMaterial {
+    #[uniform(0)]
+    params: Vec4,
+    #[uniform(1)]
+    palette_extra: Vec4,
+    #[uniform(2)]
+    audio_uniforms: Vec4,
+    #[uniform(3)]
+    palette_rgb: Vec4,
+}
+
+impl Material2d for VjPackFullscreenAMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/pack_fullscreen_a.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
+    }
+}
+
+/// Pack fullscreen slot for Deck B (PR13 / #247).
+#[derive(AsBindGroup, Asset, TypePath, Clone)]
+struct VjPackFullscreenBMaterial {
+    #[uniform(0)]
+    params: Vec4,
+    #[uniform(1)]
+    palette_extra: Vec4,
+    #[uniform(2)]
+    audio_uniforms: Vec4,
+    #[uniform(3)]
+    palette_rgb: Vec4,
+}
+
+impl Material2d for VjPackFullscreenBMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/pack_fullscreen_b.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Blend
+    }
+}
+
+/// Marks the fullscreen GPU-shader quads.
+/// 0 = palette, 1 = grid, 2 = imported, 10/11 = deck palette overlays,
+/// 20/21 = pack fullscreen slots (deck A / deck B).
 #[derive(Component)]
 struct GpuShaderQuad {
     index: u32,
@@ -278,6 +328,28 @@ struct VjDeckPaletteBHandle(Handle<VjPaletteMaterial>);
 
 #[derive(Resource)]
 struct VjImportedShaderHandle(Handle<Shader>);
+
+#[derive(Resource)]
+struct VjPackFullscreenAHandle(Handle<VjPackFullscreenAMaterial>);
+
+#[derive(Resource)]
+struct VjPackFullscreenBHandle(Handle<VjPackFullscreenBMaterial>);
+
+#[derive(Resource)]
+struct VjPackFullscreenAShaderHandle(Handle<Shader>);
+
+#[derive(Resource)]
+struct VjPackFullscreenBShaderHandle(Handle<Shader>);
+
+/// Last applied pack fullscreen identity so we hot-swap WGSL only on change.
+#[derive(Resource, Default)]
+struct PackFullscreenApplied {
+    deck_a_key: String,
+    deck_b_key: String,
+}
+
+const GPU_QUAD_PACK_A: u32 = 20;
+const GPU_QUAD_PACK_B: u32 = 21;
 
 const STAGE_WIDTH: f32 = 1280.0;
 const STAGE_HEIGHT: f32 = 720.0;
@@ -358,6 +430,9 @@ fn main() {
         .add_plugins(Material2dPlugin::<VjPaletteMaterial>::default())
         .add_plugins(Material2dPlugin::<VjGridMaterial>::default())
         .add_plugins(Material2dPlugin::<VjImportedMaterial>::default())
+        .add_plugins(Material2dPlugin::<VjPackFullscreenAMaterial>::default())
+        .add_plugins(Material2dPlugin::<VjPackFullscreenBMaterial>::default())
+        .insert_resource(PackFullscreenApplied::default())
         .add_systems(Startup, (setup, setup_model_layer))
         .add_systems(
             Update,
@@ -368,6 +443,7 @@ fn main() {
                 // Drain compiled mesh/field wires before ModeDirector + model drive.
                 drain_field_runtime,
                 update_mode_director,
+                apply_pack_fullscreen_shaders,
                 update_visuals,
                 update_tunnel_rings,
                 sync_model_drive,
@@ -553,6 +629,8 @@ fn setup(
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
     mut grid_materials: ResMut<Assets<VjGridMaterial>>,
     mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
+    mut pack_a_materials: ResMut<Assets<VjPackFullscreenAMaterial>>,
+    mut pack_b_materials: ResMut<Assets<VjPackFullscreenBMaterial>>,
 ) {
     commands.spawn(Camera2d);
 
@@ -745,6 +823,46 @@ fn setup(
         Transform::from_xyz(0.0, 0.0, -15.6).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
         Visibility::Hidden,
         GpuShaderQuad { index: 11 },
+    ));
+
+    // Pack fullscreen slots (PR13): one independent material per deck for
+    // bridge-compiled pack WGSL. Indices 20/21; hot-swapped from ActiveCompiled.
+    let pack_a_mat = pack_a_materials.add(VjPackFullscreenAMaterial {
+        params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 1.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
+    });
+    commands.insert_resource(VjPackFullscreenAHandle(pack_a_mat.clone()));
+    let pack_a_shader: Handle<Shader> = asset_server.load("shaders/pack_fullscreen_a.wgsl");
+    commands.insert_resource(VjPackFullscreenAShaderHandle(pack_a_shader));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(pack_a_mat),
+        Transform::from_xyz(0.0, 0.0, -15.7).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Hidden,
+        GpuShaderQuad {
+            index: GPU_QUAD_PACK_A,
+        },
+    ));
+
+    let pack_b_mat = pack_b_materials.add(VjPackFullscreenBMaterial {
+        params: Vec4::ZERO,
+        palette_extra: Vec4::new(1.0, 1.0, 0.0, 1.0),
+        audio_uniforms: Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        palette_rgb: Vec4::new(61.0 / 255.0, 90.0 / 255.0, 128.0 / 255.0, 0.0),
+    });
+    commands.insert_resource(VjPackFullscreenBHandle(pack_b_mat.clone()));
+    let pack_b_shader: Handle<Shader> = asset_server.load("shaders/pack_fullscreen_b.wgsl");
+    commands.insert_resource(VjPackFullscreenBShaderHandle(pack_b_shader));
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::default())),
+        MeshMaterial2d(pack_b_mat),
+        Transform::from_xyz(0.0, 0.0, -15.8).with_scale(Vec3::new(STAGE_WIDTH, STAGE_HEIGHT, 1.0)),
+        Visibility::Hidden,
+        GpuShaderQuad {
+            index: GPU_QUAD_PACK_B,
+        },
     ));
 
     // The control surface now lives on port 3001, so the projector output has no HUD.
@@ -1212,6 +1330,50 @@ fn drain_field_runtime(mut runtime: ResMut<FieldRuntime>) {
     drain_field_pending(&mut runtime);
 }
 
+/// Hot-swap pack fullscreen WGSL into deck A/B material slots when ActiveCompiled changes.
+/// WASM receives WGSL only (bridge naga); fail-closed on empty keeps previous pipeline.
+fn apply_pack_fullscreen_shaders(
+    field_runtime: Res<FieldRuntime>,
+    mut applied: ResMut<PackFullscreenApplied>,
+    shader_a: Option<Res<VjPackFullscreenAShaderHandle>>,
+    shader_b: Option<Res<VjPackFullscreenBShaderHandle>>,
+    mut shaders: ResMut<Assets<Shader>>,
+) {
+    // Deck A
+    let key_a = match field_runtime.active(FieldDeck::A) {
+        Some(a) if a.fullscreen_wgsl.as_ref().is_some_and(|s| !s.is_empty()) => {
+            format!("{}:{}:{}", a.slug, a.epoch, a.fullscreen_wgsl.as_ref().map(|s| s.len()).unwrap_or(0))
+        }
+        _ => String::new(),
+    };
+    if key_a != applied.deck_a_key {
+        applied.deck_a_key = key_a.clone();
+        if let (Some(handle), Some(active)) = (shader_a.as_ref(), field_runtime.active(FieldDeck::A)) {
+            if let Some(wgsl) = active.fullscreen_wgsl.as_ref().filter(|s| !s.is_empty()) {
+                let shader = Shader::from_wgsl(wgsl.clone(), "shaders/pack_fullscreen_a.wgsl".to_string());
+                let _ = shaders.insert(&handle.0, shader);
+            }
+        }
+    }
+
+    // Deck B
+    let key_b = match field_runtime.active(FieldDeck::B) {
+        Some(a) if a.fullscreen_wgsl.as_ref().is_some_and(|s| !s.is_empty()) => {
+            format!("{}:{}:{}", a.slug, a.epoch, a.fullscreen_wgsl.as_ref().map(|s| s.len()).unwrap_or(0))
+        }
+        _ => String::new(),
+    };
+    if key_b != applied.deck_b_key {
+        applied.deck_b_key = key_b;
+        if let (Some(handle), Some(active)) = (shader_b.as_ref(), field_runtime.active(FieldDeck::B)) {
+            if let Some(wgsl) = active.fullscreen_wgsl.as_ref().filter(|s| !s.is_empty()) {
+                let shader = Shader::from_wgsl(wgsl.clone(), "shaders/pack_fullscreen_b.wgsl".to_string());
+                let _ = shaders.insert(&handle.0, shader);
+            }
+        }
+    }
+}
+
 fn field_deck_of(deck: Deck) -> FieldDeck {
     match deck {
         Deck::A => FieldDeck::A,
@@ -1339,7 +1501,8 @@ fn update_visuals(
             ),
             Deck::B => (state.crossfade, state.cpu_deck_b_enabled, &director.deck_b),
         };
-        // ModeDirector zeros legacy_field_weight for Figure / mesh-primary.
+        // ModeDirector zeros legacy_field_weight for Figure/mesh-primary and
+        // fullscreen-primary (pack fullscreen / mesh own the look).
         let deck_alpha = deck_mix
             * instrument.legacy_field_weight
             * if state.blackout || !cpu_enabled {
@@ -2756,19 +2919,27 @@ fn update_tunnel_rings(
 #[allow(clippy::too_many_arguments)]
 fn update_palette_material(
     state: Res<VjState>,
+    field_runtime: Res<FieldRuntime>,
     windows: Query<&Window, With<PrimaryWindow>>,
     palette_handle: Res<VjPaletteHandle>,
     grid_handle: Res<VjGridHandle>,
     imported_handle: Res<VjImportedHandle>,
     deck_a_handle: Option<Res<VjDeckPaletteAHandle>>,
     deck_b_handle: Option<Res<VjDeckPaletteBHandle>>,
+    pack_a_handle: Option<Res<VjPackFullscreenAHandle>>,
+    pack_b_handle: Option<Res<VjPackFullscreenBHandle>>,
     mut palette_materials: ResMut<Assets<VjPaletteMaterial>>,
     mut grid_materials: ResMut<Assets<VjGridMaterial>>,
     mut imported_materials: ResMut<Assets<VjImportedMaterial>>,
+    mut pack_a_materials: ResMut<Assets<VjPackFullscreenAMaterial>>,
+    mut pack_b_materials: ResMut<Assets<VjPackFullscreenBMaterial>>,
     mut gpu_quads: Query<(&GpuShaderQuad, &mut Visibility)>,
 ) {
+    let pack_a_active = field_runtime.fullscreen_wgsl(FieldDeck::A).is_some();
+    let pack_b_active = field_runtime.fullscreen_wgsl(FieldDeck::B).is_some();
     let any_gpu_enabled = state.gpu_deck_a_enabled || state.gpu_deck_b_enabled;
-    let active = state.osc_connected || any_gpu_enabled;
+    let any_pack = pack_a_active || pack_b_active;
+    let active = state.osc_connected || any_gpu_enabled || any_pack;
     let energy = if active {
         state.osc_energy.max(0.0)
     } else {
@@ -2812,14 +2983,60 @@ fn update_palette_material(
         0.0,
     );
 
-    // GPU deck A/B layers: independently drive the enabled fullscreen
-    // palette quads (indices 10/11) and crossfade their alphas via palette_extra.w.
-    // Max brightness scales that crossfade mix only — not palette_brightness.
+    let cross = state.crossfade.clamp(0.0, 1.0);
+    let master = if state.blackout {
+        0.0
+    } else {
+        state.max_brightness.clamp(0.0, 1.0)
+    };
+    let params_base = Vec4::new(display_hue, state.show_time, 0.0, aspect);
+
+    // Pack fullscreen slots (indices 20/21): independent WGSL per deck, crossfaded.
+    if any_pack {
+        let alpha_a = if pack_a_active {
+            ((1.0 - cross) * master).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let alpha_b = if pack_b_active {
+            (cross * master).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let extra_a = Vec4::new(
+            palette_extra_base.x,
+            palette_extra_base.y,
+            palette_extra_base.z,
+            alpha_a,
+        );
+        let extra_b = Vec4::new(
+            palette_extra_base.x,
+            palette_extra_base.y,
+            palette_extra_base.z,
+            alpha_b,
+        );
+        if let Some(ha) = pack_a_handle.as_ref()
+            && let Some(mat) = pack_a_materials.get_mut(&ha.0)
+        {
+            mat.params = params_base;
+            mat.palette_extra = extra_a;
+            mat.audio_uniforms = audio_uniforms;
+            mat.palette_rgb = palette_rgb;
+        }
+        if let Some(hb) = pack_b_handle.as_ref()
+            && let Some(mat) = pack_b_materials.get_mut(&hb.0)
+        {
+            mat.params = params_base;
+            mat.palette_extra = extra_b;
+            mat.audio_uniforms = audio_uniforms;
+            mat.palette_rgb = palette_rgb;
+        }
+    }
+
+    // GPU deck A/B palette overlays (indices 10/11): optional operator GPU pickers.
     if any_gpu_enabled {
         let a_var = palette_variant_from_ui(state.deck_a_gpu_shader);
         let b_var = palette_variant_from_ui(state.deck_b_gpu_shader);
-        let cross = state.crossfade.clamp(0.0, 1.0);
-        let master = state.max_brightness.clamp(0.0, 1.0);
         let alpha_a = if state.gpu_deck_a_enabled {
             ((1.0 - cross) * master).clamp(0.0, 1.0)
         } else {
@@ -2855,12 +3072,16 @@ fn update_palette_material(
             mat.audio_uniforms = audio_uniforms;
             mat.palette_rgb = palette_rgb;
         }
+    }
 
-        // Show only the deck layers; hide classic single-shader quads.
+    // Visibility: pack slots and/or GPU deck overlays; hide classic single-shader quads.
+    if any_gpu_enabled || any_pack {
         for (quad, mut vis) in &mut gpu_quads {
-            *vis = if (quad.index == 10 && state.gpu_deck_a_enabled)
+            let show = (quad.index == 10 && state.gpu_deck_a_enabled)
                 || (quad.index == 11 && state.gpu_deck_b_enabled)
-            {
+                || (quad.index == GPU_QUAD_PACK_A && pack_a_active)
+                || (quad.index == GPU_QUAD_PACK_B && pack_b_active);
+            *vis = if show {
                 Visibility::Inherited
             } else {
                 Visibility::Hidden
@@ -2869,13 +3090,11 @@ fn update_palette_material(
         return;
     }
 
-    // Neither GPU deck is enabled, so hide every GPU layer and leave the frame
-    // to the independently-enabled CPU decks.
+    // Neither GPU deck nor pack fullscreen is active — hide every GPU layer.
+    let _ = (palette_handle, grid_handle, imported_handle, grid_materials, imported_materials);
     for (_, mut vis) in &mut gpu_quads {
         *vis = Visibility::Hidden;
     }
-    return;
-
 }
 
 fn beat_phase(state: &VjState) -> f32 {
