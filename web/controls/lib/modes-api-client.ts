@@ -8,6 +8,10 @@
  * scripts/stage-static-mode-catalog.ts). Live bridge uses query-string routes.
  */
 
+import {
+  compiledWireFromAuthoredPackage,
+  getAuthoredPackage,
+} from '../../../shared/package-channel.ts';
 import { isStaticHosting, staticModesApiBase } from '../../../shared/static-hosting.ts';
 import { type MenuCatalogSnapshot, parsePublicCatalog } from './mode-catalog-menu.ts';
 import { CONTROLS_PORT, PROJECTOR_PORT } from './projector-url.ts';
@@ -161,6 +165,15 @@ export async function fetchCompiledMode(
   loc: ModesLoc = location,
   fetchImpl: typeof fetch = fetch,
 ): Promise<FetchCompiledResult> {
+  // Studio-authored packages (localStorage + BroadcastChannel) win over HTTP —
+  // required on GitHub Pages where there is no import API.
+  const authored = getAuthoredPackage(opts.slug);
+  if (authored) {
+    return {
+      ok: true,
+      wire: compiledWireFromAuthoredPackage(opts.deck, authored, opts.epoch ?? 0),
+    };
+  }
   try {
     const res = await fetchImpl(modesCompiledUrl(opts, loc), {
       method: 'GET',

@@ -3,6 +3,7 @@
  * Grouping is by preset `uiGroup` (not fixed CATEGORY_RANGES int slices).
  */
 
+import type { AuthoredPackage } from '../../../shared/package-channel.ts';
 import { type ModeCategory, VISUAL_MODE_CATALOG } from '../../../shared/visual-mode-catalog.ts';
 
 export type MenuCatalogEntry = {
@@ -13,6 +14,38 @@ export type MenuCatalogEntry = {
   legacyIndex?: number;
   source?: string;
 };
+
+/** Merge Studio-authored packages into both decks of a public catalog snapshot. */
+export function mergeAuthoredPackagesIntoCatalog(
+  catalog: MenuCatalogSnapshot,
+  packages: readonly AuthoredPackage[],
+): MenuCatalogSnapshot {
+  if (packages.length === 0) return catalog;
+  const authored: MenuCatalogEntry[] = packages.map((p) => ({
+    slug: p.slug,
+    id: p.slug,
+    label: p.label,
+    uiGroup: p.uiGroup ?? 'field-motion',
+    source: 'authored',
+  }));
+  const mergeDeck = (entries: MenuCatalogEntry[]): MenuCatalogEntry[] => {
+    const bySlug = new Map(entries.map((e) => [e.slug, e]));
+    for (const a of authored) {
+      bySlug.set(a.slug, a);
+    }
+    return [...bySlug.values()].sort((a, b) =>
+      (a.label ?? a.slug).localeCompare(b.label ?? b.slug),
+    );
+  };
+  return {
+    ...catalog,
+    contentHash: `${catalog.contentHash ?? 'catalog'}+authored:${packages.map((p) => p.slug).join(',')}`,
+    decks: {
+      'deck-a': mergeDeck(catalog.decks['deck-a'] ?? []),
+      'deck-b': mergeDeck(catalog.decks['deck-b'] ?? []),
+    },
+  };
+}
 
 export type MenuCatalogSnapshot = {
   epoch: number;

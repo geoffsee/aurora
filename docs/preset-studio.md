@@ -3,10 +3,16 @@
 Authoring surface for **new fullscreen packages**. Product path:
 
 1. **React Studio** (browser) — sketch list in local state, side-by-side WGSL editor, knobs, live WebGPU preview  
-2. **Export** → [`.aurora-package`](./aurora-package.md) archive  
-3. **Aurora import** → `POST /api/packages/import` (requires `AURORA_DATA_DIR`) → catalog → launchpad  
+2. **Publish to Console** — same-origin `localStorage` + **BroadcastChannel** (works on GitHub Pages without the bridge)  
+3. **Export** → [`.aurora-package`](./aurora-package.md) archive (download)  
+4. **Import to Aurora** → `POST /api/packages/import` (live bridge + `AURORA_DATA_DIR`) → dual-deck overlay  
 
-Format + library: `shared/aurora-package.ts`, [aurora-package.md](./aurora-package.md).
+Format + library: `shared/aurora-package.ts`, [aurora-package.md](./aurora-package.md).  
+Channel: `shared/package-channel.ts` (`aurora-packages-v1` / `aurora-authored-packages-v1`).
+
+### GitHub Pages
+
+Deploy builds Studio into `dist/studio/` (route **`/studio/`**). Console has a **Studio** button; on the geoffsee Pages site the bottom nav also links Studio. Publish from Studio, then pick the slug on the launchpad — projector/controls resolve authored packages before static `api/modes/compiled/…` files.
 
 > **Status:** React Studio (`web/studio/`), archive format, and bridge import are in-repo.  
 > An experimental **Bevy host** still exists at `lab/preset-studio` for pack-bus parity on real `Material2d` (`bun run preset-studio:bevy`). Prefer the React path for day-to-day authoring.

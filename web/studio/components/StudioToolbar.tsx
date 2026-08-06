@@ -9,6 +9,7 @@ export function StudioToolbar({
   message,
   onMeta,
   onBridgeOrigin,
+  onPublish,
   onExport,
   onImportBridge,
 }: {
@@ -18,6 +19,7 @@ export function StudioToolbar({
   message: string | null;
   onMeta: (patch: Partial<Pick<StudioSketch, 'label' | 'slug' | 'character' | 'uiGroup'>>) => void;
   onBridgeOrigin: (origin: string) => void;
+  onPublish: () => void;
   onExport: () => void;
   onImportBridge: () => void;
 }) {
@@ -29,11 +31,20 @@ export function StudioToolbar({
             Preset Studio
           </Text>
           <Text fontSize="xs" color="whiteAlpha.600">
-            Author fullscreen packages · export .aurora-package · import into Aurora
+            Author packages · Publish to Console (BroadcastChannel) · export .aurora-package
           </Text>
         </Box>
         <HStack gap={2}>
-          <Button size="sm" colorPalette="green" onClick={onExport} disabled={busy}>
+          <Button size="sm" colorPalette="green" onClick={onPublish} disabled={busy}>
+            Publish to Console
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onExport}
+            disabled={busy}
+            borderColor="#3a4038"
+          >
             Export .aurora-package
           </Button>
           <Button

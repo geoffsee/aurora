@@ -5,6 +5,11 @@ import {
   createWebSocketTransport,
   type OscFrame,
 } from '../shared/bridge-transport.ts';
+import {
+  compiledWireFromAuthoredPackage,
+  getAuthoredPackage,
+  subscribeAuthoredPackages,
+} from '../shared/package-channel.ts';
 import { webgpuSecureContextError } from '../shared/secure-context.ts';
 import {
   geoffseePagesControlsUrl,
@@ -15,13 +20,30 @@ import {
 } from '../shared/static-hosting.ts';
 
 export {
+  compiledWireFromAuthoredPackage,
+  getAuthoredPackage,
   isControlBridgeConnected,
   isOscBridgeConnected,
   isStaticHosting,
   staticModesApiBase,
   staticSitePathPrefix,
+  subscribeAuthoredPackages,
   webgpuSecureContextError,
 };
+
+/**
+ * Resolve a CompiledModeWire for a slug: Studio-authored packages first
+ * (localStorage / BroadcastChannel), else null so the caller can HTTP-fetch.
+ */
+export function resolveAuthoredCompiledWire(
+  deck: 'deck-a' | 'deck-b',
+  slug: string,
+  epoch = 0,
+): unknown | null {
+  const pkg = getAuthoredPackage(slug);
+  if (!pkg) return null;
+  return compiledWireFromAuthoredPackage(deck, pkg, epoch);
+}
 
 /**
  * URL for a deck's CompiledModeWire.

@@ -8,7 +8,9 @@ import {
   auroraPackageFileName,
   buildAuroraPackageArchive,
   buildManifest,
+  parseAuroraPackageArchive,
 } from '../../../shared/aurora-package.ts';
+import { upsertAuthoredPackage } from '../../../shared/package-channel.ts';
 import { knobsToLookDefaults, type StudioSketch } from './sketch-store.ts';
 
 export type ExportLookResult =
@@ -83,6 +85,39 @@ export function downloadPackageArchive(bytes: Uint8Array, fileName: string): voi
   a.remove();
   // Revoke after a tick so the download can start.
   setTimeout(() => URL.revokeObjectURL(url), 2_000);
+}
+
+export type PublishPackageResult =
+  | { ok: true; slug: string; label: string }
+  | { ok: false; errors: AuroraPackageValidationError[] };
+
+/**
+ * Publish sketch to same-origin authored package store + BroadcastChannel.
+ * Console/projector pick this up without the bridge (GitHub Pages path).
+ */
+export function publishSketchToChannel(sketch: StudioSketch): PublishPackageResult {
+  const built = exportSketchToPackage(sketch);
+  if (!built.ok) return built;
+  try {
+    const parsed = parseAuroraPackageArchive(built.bytes, { remapAuthoring: true });
+    if (!parsed.ok) return { ok: false, errors: parsed.errors };
+    const m = parsed.bundle.manifest;
+    const record = upsertAuthoredPackage({
+      slug: m.slug,
+      label: m.label,
+      character: m.character,
+      uiGroup: m.uiGroup,
+      wgsl: parsed.bundle.wgsl,
+      defaults: parsed.bundle.defaults,
+      updatedAt: new Date().toISOString(),
+    });
+    return { ok: true, slug: record.slug, label: record.label };
+  } catch (e) {
+    return {
+      ok: false,
+      errors: [{ path: 'publish', message: e instanceof Error ? e.message : String(e) }],
+    };
+  }
 }
 
 export type BridgeImportResult =

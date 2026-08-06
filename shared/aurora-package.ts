@@ -207,7 +207,10 @@ export function remapAuthoringWgslToShow(source: string): string {
   return `${s.trim()}\n`;
 }
 
-function validateWgslShape(wgsl: string, form: AuroraPackageWgslForm): AuroraPackageValidationError[] {
+function validateWgslShape(
+  wgsl: string,
+  form: AuroraPackageWgslForm,
+): AuroraPackageValidationError[] {
   const errors: AuroraPackageValidationError[] = [];
   if (!wgsl.trim()) {
     errors.push({ path: 'package.wgsl', message: 'empty WGSL' });
@@ -266,7 +269,10 @@ export function validateManifest(raw: unknown): AuroraPackageValidationResult {
     errors.push({ path: 'manifest.target', message: 'v1 only supports pack-fullscreen' });
   }
   if (raw.uniformBus !== AURORA_PACKAGE_UNIFORM_BUS) {
-    errors.push({ path: 'manifest.uniformBus', message: `expected "${AURORA_PACKAGE_UNIFORM_BUS}"` });
+    errors.push({
+      path: 'manifest.uniformBus',
+      message: `expected "${AURORA_PACKAGE_UNIFORM_BUS}"`,
+    });
   }
   if (raw.disposition !== 'fullscreen-primary') {
     errors.push({ path: 'manifest.disposition', message: 'expected fullscreen-primary' });
@@ -303,7 +309,9 @@ export function validateManifest(raw: unknown): AuroraPackageValidationResult {
   return { ok: true, bundle: { manifest, wgsl: '' } };
 }
 
-export function validateDefaults(raw: unknown): AuroraPackageDefaults | AuroraPackageValidationError[] {
+export function validateDefaults(
+  raw: unknown,
+): AuroraPackageDefaults | AuroraPackageValidationError[] {
   if (raw === undefined || raw === null) return {};
   if (!isRecord(raw)) return [{ path: 'defaults.json', message: 'must be an object' }];
   const out: AuroraPackageDefaults = {};

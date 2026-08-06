@@ -1,8 +1,10 @@
 name: Deploy
 
-# Publishes the projector page and controls UI to GitHub Pages.
+# Publishes projector, controls, and Preset Studio to GitHub Pages.
 # Note: GH Pages can only host the static front-end. The OSC/WebSocket
 # bridge in bridge/index.ts requires a local Bun server and is not deployed.
+# Studio "Publish to Console" uses BroadcastChannel + localStorage on the
+# same origin so authored packages reach Console/projector without the bridge.
 
 on:
   push:
@@ -53,6 +55,9 @@ jobs:
       - name: Build controls app
         run: bun run build:controls
 
+      - name: Build Preset Studio
+        run: bun run build:studio
+
       - name: Stage static site
         run: |
           set -euo pipefail
@@ -74,6 +79,8 @@ jobs:
           sed -i 's|./dist/projector-bridge.js|./projector-bridge.js|g' dist/index.html
           # `build:controls` writes the React controls bundle to dist/controls/.
           test -f dist/controls/index.html
+          # Preset Studio static app (package authoring + BroadcastChannel publish).
+          test -f dist/studio/index.html
           touch dist/.nojekyll
 
       - uses: actions/configure-pages@v6

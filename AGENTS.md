@@ -142,7 +142,7 @@ The bridge is the **single source of truth for `ControlState`**. `coerceControlS
 - `tests/` — vitest suite, mirroring `bridge/`, `shared/`, `shaders/`, `web/`, and `cli/`
 - `plugins/aurora-vst/` — VST3 plugin and `xtask` bundler
 - `scripts/` — setup, dry-run, format, and Rust test helpers
-- `web/studio/` — **Preset Studio** (React): sketch list, WGSL editor, knobs, WebGPU preview, export `.aurora-package`, optional import to bridge. See `docs/preset-studio.md`.
+- `web/studio/` — **Preset Studio** (React): sketch list, WGSL editor, knobs, WebGPU preview, **Publish to Console** (BroadcastChannel), export `.aurora-package`, optional bridge import. Deployed at `/studio/` on Pages. See `docs/preset-studio.md`.
 - `lab/preset-studio/` — experimental Bevy host for pack-bus parity (`bun run preset-studio:bevy`). Sketches in `lab/preset-studio/sketches/`. Not on the wasm path; uses `target-studio`.
 
 ### Cargo workspace and target dirs
@@ -166,4 +166,4 @@ When bumping to v2 or beyond, update both files and `migratePresetBundle`. The p
 
 ### Deploy
 
-`.github/workflows/deploy.yml` publishes only the **static front-end** (HTML/CSS + the wasm bundle) to GitHub Pages. The OSC/WebSocket bridge in `bridge/index.ts` cannot run there — Pages is just for the visual page, no Ableton, no controls round-trip. The deploy step copies `web/` into `dist/` and rewrites `./dist/pkg/` to `./pkg/` in `dist/index.html` to match the flattened Pages layout.
+`.github/workflows/deploy.yml` publishes the **static front-end** (projector, controls, Preset Studio under `/studio/`, mode catalog JSON) to GitHub Pages. The OSC/WebSocket bridge in `bridge/index.ts` cannot run there — no Ableton/VST. Studio **Publish to Console** uses same-origin `localStorage` + BroadcastChannel so authored packages reach Console/projector without the bridge. The deploy step stages `dist/` and rewrites `./dist/pkg/` → `./pkg/` in `dist/index.html` for the flattened Pages layout.
