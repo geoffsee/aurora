@@ -94,7 +94,7 @@ describe('MAX_FULLSCREEN_LAYERS_PER_PACK', () => {
         suppressLegacyField: true,
         layers: [
           { kind: 'mesh', ref: 'human-female' },
-          { kind: 'fullscreen', ref: 'look.wgsl' },
+          { kind: 'fullscreen', ref: 'package.wgsl' },
         ],
       },
       CTX,
@@ -166,7 +166,7 @@ describe('compilePackFullscreenSource', () => {
 describe('enrichPackFullscreenLayers + dual-deck independence', () => {
   test('attaches wgsl from readAsset for deck-a and deck-b independently', async () => {
     const base = compileModePreset(
-      fullscreenPreset([{ kind: 'fullscreen', ref: 'look.wgsl' }]),
+      fullscreenPreset([{ kind: 'fullscreen', ref: 'package.wgsl' }]),
       CTX,
     );
     expect(base.ok).toBe(true);

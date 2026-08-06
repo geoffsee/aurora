@@ -72,10 +72,10 @@ import {
 } from './automation-bridge.ts';
 import { selectTempoSource } from './clock-arbiter.ts';
 import {
-  installAuroraLookArchive,
-  readLookArchiveFromRequest,
-  resolveLookImportDataDir,
-} from './look-import.ts';
+  installAuroraPackageArchive,
+  readPackageArchiveFromRequest,
+  resolvePackageImportDataDir,
+} from './package-import.ts';
 import {
   deriveBpmFromTimestamps,
   MIDI_CLOCK_TICK,
@@ -1629,9 +1629,9 @@ const visualServer = Bun.serve({
       return Response.json({ error: 'invalid mode asset path' }, { status: 400 });
     }
 
-    // Import `.aurora-look` archive → dual-deck packs under AURORA_DATA_DIR.
-    if (request.method === 'POST' && pathname === '/api/looks/import') {
-      const dataDir = resolveLookImportDataDir();
+    // Import `.aurora-package` archive → dual-deck packs under AURORA_DATA_DIR.
+    if (request.method === 'POST' && pathname === '/api/packages/import') {
+      const dataDir = resolvePackageImportDataDir();
       if (!dataDir) {
         return Response.json(
           {
@@ -1640,7 +1640,7 @@ const visualServer = Bun.serve({
               {
                 path: 'AURORA_DATA_DIR',
                 message:
-                  'not set; look import writes only to the override data dir (never bundled data/)',
+                  'not set; package import writes only to the override data dir (never bundled data/)',
               },
             ],
           },
@@ -1648,12 +1648,12 @@ const visualServer = Bun.serve({
         );
       }
 
-      const body = await readLookArchiveFromRequest(request, url);
+      const body = await readPackageArchiveFromRequest(request, url);
       if (!body.ok) {
         return Response.json({ ok: false, errors: body.errors }, { status: body.status });
       }
 
-      const result = installAuroraLookArchive(body.bytes, {
+      const result = installAuroraPackageArchive(body.bytes, {
         dataDir,
         remapAuthoring: body.remapAuthoring,
       });
@@ -1663,7 +1663,7 @@ const visualServer = Bun.serve({
 
       const catalog = rescanModeCatalog();
       console.log(
-        `[looks] imported slug=${result.slug} overwritten=${result.overwritten} dataDir=${dataDir}`,
+        `[packages] imported slug=${result.slug} overwritten=${result.overwritten} dataDir=${dataDir}`,
       );
       return Response.json({
         ok: true,

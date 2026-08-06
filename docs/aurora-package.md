@@ -1,18 +1,18 @@
-# `.aurora-look` archive format
+# `.aurora-package` archive format
 
 Interchange format between **Preset Studio** (export) and **Aurora** (import).  
-A look is a fullscreen pack that uses the **pack-v1** uniform bus (same as show `VjPackFullscreen*` materials).
+A package is a fullscreen pack that uses the **pack-v1** uniform bus (same as show `VjPackFullscreen*` materials).
 
 Related: [preset-studio.md](./preset-studio.md) · [mode-protocol.md](./mode-protocol.md)
 
 ## File
 
-- **Name:** `<slug>.aurora-look`
-- **Container:** ZIP, **store only** (no deflate) in v1 — built by `shared/zip-store.ts` / `buildAuroraLookArchive`
+- **Name:** `<slug>.aurora-package`
+- **Container:** ZIP, **store only** (no deflate) in v1 — built by `shared/zip-store.ts` / `buildAuroraPackageArchive`
 
 ```text
 manifest.json     # required
-look.wgsl         # required
+package.wgsl       # required
 defaults.json     # optional knob defaults
 preview.png       # optional (reserved; ignored by v1 importer if present as non-text)
 ```
@@ -22,7 +22,7 @@ preview.png       # optional (reserved; ignored by v1 importer if present as non
 | Field | Type | Notes |
 | --- | --- | --- |
 | `schemaVersion` | `1` | |
-| `kind` | `"aurora-look"` | |
+| `kind` | `"aurora-package"` | |
 | `slug` | kebab-case | must match `MODE_PRESET_SLUG_RE` |
 | `label` | string | operator-facing name |
 | `character` | string? | short brief |
@@ -68,7 +68,7 @@ $AURORA_DATA_DIR/decks/<deck>/<slug>/preset.json
 $AURORA_DATA_DIR/decks/<deck>/<slug>/<slug_with_underscores>.wgsl
 ```
 
-`preset.json` is produced by `auroraLookToModePreset` (fullscreen layer ref + `dual-fullscreen` capability).
+`preset.json` is produced by `auroraPackageToModePreset` (fullscreen layer ref + `dual-fullscreen` capability).
 
 Re-import of the same slug **overwrites**. Never writes into bundled `data/` — only the override root (`AURORA_DATA_DIR`).
 
@@ -77,12 +77,12 @@ Re-import of the same slug **overwrites**. Never writes into bundled `data/` —
 Requires the bridge process with **`AURORA_DATA_DIR` set** (writable overlay). Without it, import returns **503**.
 
 ```http
-POST http://127.0.0.1:3000/api/looks/import
+POST http://127.0.0.1:3000/api/packages/import
 ```
 
 | Body | Content-Type | Notes |
 | --- | --- | --- |
-| raw `.aurora-look` bytes | `application/zip`, `application/octet-stream`, or `application/x-aurora-look` | preferred for Studio / `curl --data-binary` |
+| raw `.aurora-package` bytes | `application/zip`, `application/octet-stream`, or `application/x-aurora-package` | preferred for Studio / `curl --data-binary` |
 | `{ "archiveBase64": "…" }` | `application/json` | agent-friendly; alias field `archive` |
 
 Query / JSON field `remapAuthoring` (default **true**): set `false` / `0` to skip authoring→show remap.
@@ -110,13 +110,13 @@ After a successful install the bridge **rescans** the mode catalog and WS-broadc
 
 ```bash
 # Raw zip
-curl -sS -X POST "http://127.0.0.1:3000/api/looks/import" \
+curl -sS -X POST "http://127.0.0.1:3000/api/packages/import" \
   -H "Content-Type: application/zip" \
-  --data-binary @glass-drift.aurora-look
+  --data-binary @glass-drift.aurora-package
 
 # Base64 JSON (agents)
-B64=$(base64 < glass-drift.aurora-look | tr -d '\n')
-curl -sS -X POST "http://127.0.0.1:3000/api/looks/import" \
+B64=$(base64 < glass-drift.aurora-package | tr -d '\n')
+curl -sS -X POST "http://127.0.0.1:3000/api/packages/import" \
   -H "Content-Type: application/json" \
   -d "{\"archiveBase64\":\"$B64\"}"
 ```
@@ -124,9 +124,9 @@ curl -sS -X POST "http://127.0.0.1:3000/api/looks/import" \
 ### TypeScript install helper (no HTTP)
 
 ```ts
-import { installAuroraLookArchive } from '../bridge/look-import.ts';
+import { installAuroraPackageArchive } from '../bridge/package-import.ts';
 
-const result = installAuroraLookArchive(bytes, { dataDir: process.env.AURORA_DATA_DIR! });
+const result = installAuroraPackageArchive(bytes, { dataDir: process.env.AURORA_DATA_DIR! });
 // then rescanModeCatalog() in the bridge process
 ```
 
@@ -135,27 +135,27 @@ const result = installAuroraLookArchive(bytes, { dataDir: process.env.AURORA_DAT
 ```ts
 import {
   buildManifest,
-  buildAuroraLookArchive,
-  parseAuroraLookArchive,
+  buildAuroraPackageArchive,
+  parseAuroraPackageArchive,
   remapAuthoringWgslToShow,
-  auroraLookToModePreset,
+  auroraPackageToModePreset,
   PACK_V1_AUTHORING_TEMPLATE,
   PACK_V1_SHOW_TEMPLATE,
-} from '../shared/aurora-look.ts';
+} from '../shared/aurora-package.ts';
 ```
 
 ## Agent / human workflow
 
 1. Author in **Preset Studio** (`bun run studio` → http://127.0.0.1:3010) or craft an archive with this format.  
-2. **Export** `.aurora-look` (toolbar download) or call `exportSketchToLook` / `buildAuroraLookArchive` / the skill script.  
-3. **Import:** Studio “Import to Aurora”, or `POST /api/looks/import` with `AURORA_DATA_DIR` set → catalog rescan → select on launchpad.  
+2. **Export** `.aurora-package` (toolbar download) or call `exportSketchToPackage` / `buildAuroraPackageArchive` / the skill script.  
+3. **Import:** Studio “Import to Aurora”, or `POST /api/packages/import` with `AURORA_DATA_DIR` set → catalog rescan → select on launchpad.  
 
 **Agent skill:** `.agents/skills/aurora-create-visualization/` (`/aurora-create-visualization`).
 
 ```bash
-bun run .agents/skills/aurora-create-visualization/scripts/build-look.ts \
-  --slug glass-drift --label "Glass Drift" --wgsl ./look.wgsl \
-  --out /tmp/glass-drift.aurora-look --import-http http://127.0.0.1:3000
+bun run .agents/skills/aurora-create-visualization/scripts/build-package.ts \
+  --slug glass-drift --label "Glass Drift" --wgsl ./package.wgsl \
+  --out /tmp/glass-drift.aurora-package --import-http http://127.0.0.1:3000
 ```
 
 Do **not** hand-edit dual-deck folders for the happy path; prefer archive + import.

@@ -1,27 +1,27 @@
 ---
 name: aurora-create-visualization
 description: >
-  Create Aurora fullscreen pack looks (new deck visualizations) via pack-v1 WGSL,
-  `.aurora-look` archives, Preset Studio, and bridge import — never by hand-editing
-  dual-deck folders. Use when the user asks to add/create a visualization, look,
+  Create Aurora fullscreen packages (new deck visualizations) via pack-v1 WGSL,
+  `.aurora-package` archives, Preset Studio, and bridge import — never by hand-editing
+  dual-deck folders. Use when the user asks to add/create a visualization, package,
   pack, mode, deck shader, VJ visual, water/starfield/plasma-style fullscreen effect,
-  export/import an `.aurora-look`, or runs /aurora-create-visualization.
+  export/import an `.aurora-package`, or runs /aurora-create-visualization.
 ---
 
-# Create an Aurora visualization (look)
+# Create an Aurora visualization (package)
 
-A **look** is a fullscreen GPU pack that rides the **pack-v1** uniform bus (same bus as show `VjPackFullscreen*` materials). The happy path is:
+A **package** is a fullscreen GPU pack that rides the **pack-v1** uniform bus (same bus as show `VjPackFullscreen*` materials). The happy path is:
 
-**author WGSL → build `.aurora-look` → import → catalog → launchpad**
+**author WGSL → build `.aurora-package` → import → catalog → launchpad**
 
-Do **not** manually create both `data/decks/deck-a/<slug>/` and `data/decks/deck-b/<slug>/` for new looks. Prefer archive + import.
+Do **not** manually create both `data/decks/deck-a/<slug>/` and `data/decks/deck-b/<slug>/` for new packages. Prefer archive + import.
 
 Canonical docs (read when details are missing):
 
-- `docs/aurora-look.md` — archive format + import API  
+- `docs/aurora-package.md` — archive format + import API  
 - `docs/preset-studio.md` — React Studio + Bevy parity host  
-- `shared/aurora-look.ts` — build/parse/validate/remap  
-- `bridge/look-import.ts` — dual-deck install  
+- `shared/aurora-package.ts` — build/parse/validate/remap  
+- `bridge/package-import.ts` — dual-deck install  
 
 Pack-v1 bus + WGSL templates: `references/pack-v1-wgsl.md` (this skill).
 
@@ -31,8 +31,8 @@ Pack-v1 bus + WGSL templates: `references/pack-v1-wgsl.md` (this skill).
 
 | Goal | Path |
 | --- | --- |
-| **New selectable deck pack** (default) | Author look → import under `AURORA_DATA_DIR` → select on launchpad |
-| **Ship with the repo (bundled)** | Same archive, then install into **both** `data/decks/deck-a/<slug>/` and `data/decks/deck-b/<slug>/` via import to a data dir, **or** write the same files with `installAuroraLookArchive` / script, then commit. Never only one deck. |
+| **New selectable deck pack** (default) | Author package → import under `AURORA_DATA_DIR` → select on launchpad |
+| **Ship with the repo (bundled)** | Same archive, then install into **both** `data/decks/deck-a/<slug>/` and `data/decks/deck-b/<slug>/` via import to a data dir, **or** write the same files with `installAuroraPackageArchive` / script, then commit. Never only one deck. |
 | **Interactive tweak only** | `bun run studio` (WebGPU preview); export when ready |
 | **Pixel-parity with Bevy** | `bun run preset-studio:bevy` (optional; not required for archive/import) |
 
@@ -46,8 +46,8 @@ Out of scope for this skill: TypeGPU palette variants under `shaders/variants/`,
 2. For **import into a running show**:
    - Bridge up (`aurora` / `bun run aurora` / whatever the user uses).  
    - **`AURORA_DATA_DIR`** set to a writable overlay (never write into bundled `data/` via the import API).  
-   - Import URL: `http://127.0.0.1:3000/api/looks/import` (projector/visual server).  
-3. For **agent-only** (no UI): Bun + `shared/aurora-look.ts` is enough to build an archive file.
+   - Import URL: `http://127.0.0.1:3000/api/packages/import` (projector/visual server).  
+3. For **agent-only** (no UI): Bun + `shared/aurora-package.ts` is enough to build an archive file.
 
 ---
 
@@ -62,7 +62,7 @@ Out of scope for this skill: TypeGPU palette variants under `shaders/variants/`,
 
 ### 2. Write authoring WGSL
 
-Start from `PACK_V1_AUTHORING_TEMPLATE` in `shared/aurora-look.ts` (or `references/pack-v1-wgsl.md`).
+Start from `PACK_V1_AUTHORING_TEMPLATE` in `shared/aurora-package.ts` (or `references/pack-v1-wgsl.md`).
 
 **Must:**
 
@@ -85,26 +85,26 @@ Start from `PACK_V1_AUTHORING_TEMPLATE` in `shared/aurora-look.ts` (or `referenc
 Prefer the helper script:
 
 ```bash
-bun run .agents/skills/aurora-create-visualization/scripts/build-look.ts \
+bun run .agents/skills/aurora-create-visualization/scripts/build-package.ts \
   --slug glass-drift \
   --label "Glass Drift" \
   --character "soft refractive glass" \
-  --wgsl path/to/look.wgsl \
-  --out /tmp/glass-drift.aurora-look
+  --wgsl path/to/package.wgsl \
+  --out /tmp/glass-drift.aurora-package
 ```
 
 Or inline with Bun:
 
 ```ts
 import {
-  buildAuroraLookArchive,
+  buildAuroraPackageArchive,
   buildManifest,
   PACK_V1_AUTHORING_TEMPLATE,
-} from './shared/aurora-look.ts';
+} from './shared/aurora-package.ts';
 import { writeFileSync } from 'node:fs';
 
 const slug = 'glass-drift';
-const archive = buildAuroraLookArchive({
+const archive = buildAuroraPackageArchive({
   manifest: buildManifest({
     slug,
     label: 'Glass Drift',
@@ -114,14 +114,14 @@ const archive = buildAuroraLookArchive({
   wgsl: /* your WGSL or */ PACK_V1_AUTHORING_TEMPLATE,
   defaults: { intensity: 0.7, depth: 0.4, feedback: 0.35, speed: 0.5 },
 });
-writeFileSync(`${slug}.aurora-look`, archive);
+writeFileSync(`${slug}.aurora-package`, archive);
 ```
 
 Validate by parsing:
 
 ```ts
-import { parseAuroraLookArchive } from './shared/aurora-look.ts';
-const r = parseAuroraLookArchive(archive); // r.ok must be true; form becomes "show" after remap
+import { parseAuroraPackageArchive } from './shared/aurora-package.ts';
+const r = parseAuroraPackageArchive(archive); // r.ok must be true; form becomes "show" after remap
 ```
 
 ### 4. Import into Aurora
@@ -129,16 +129,16 @@ const r = parseAuroraLookArchive(archive); // r.ok must be true; form becomes "s
 **HTTP (running bridge + `AURORA_DATA_DIR`):**
 
 ```bash
-curl -sS -X POST "http://127.0.0.1:3000/api/looks/import" \
+curl -sS -X POST "http://127.0.0.1:3000/api/packages/import" \
   -H "Content-Type: application/zip" \
-  --data-binary @glass-drift.aurora-look
+  --data-binary @glass-drift.aurora-package
 ```
 
 Or JSON base64:
 
 ```bash
-B64=$(base64 < glass-drift.aurora-look | tr -d '\n')
-curl -sS -X POST "http://127.0.0.1:3000/api/looks/import" \
+B64=$(base64 < glass-drift.aurora-package | tr -d '\n')
+curl -sS -X POST "http://127.0.0.1:3000/api/packages/import" \
   -H "Content-Type: application/json" \
   -d "{\"archiveBase64\":\"$B64\"}"
 ```
@@ -147,17 +147,17 @@ curl -sS -X POST "http://127.0.0.1:3000/api/looks/import" \
 
 ```bash
 # requires AURORA_DATA_DIR for --import-dir / bridge for --import-http
-bun run .agents/skills/aurora-create-visualization/scripts/build-look.ts \
-  --slug glass-drift --label "Glass Drift" --wgsl ./look.wgsl \
-  --out /tmp/glass-drift.aurora-look \
+bun run .agents/skills/aurora-create-visualization/scripts/build-package.ts \
+  --slug glass-drift --label "Glass Drift" --wgsl ./package.wgsl \
+  --out /tmp/glass-drift.aurora-package \
   --import-http http://127.0.0.1:3000
 ```
 
 **Direct install (no HTTP)** — writes dual-deck packs under a data dir:
 
 ```ts
-import { installAuroraLookArchive } from './bridge/look-import.ts';
-installAuroraLookArchive(bytes, { dataDir: process.env.AURORA_DATA_DIR! });
+import { installAuroraPackageArchive } from './bridge/package-import.ts';
+installAuroraPackageArchive(bytes, { dataDir: process.env.AURORA_DATA_DIR! });
 // Bridge process must rescan; HTTP import already rescans.
 ```
 
@@ -168,7 +168,7 @@ Success JSON includes `ok: true`, `slug`, `overwritten`, `catalog.epoch`.
 Then:
 
 - Controls launchpad should list the slug (after catalog WS update).  
-- Select on deck A/B; confirm pack_drive knobs move the look.  
+- Select on deck A/B; confirm pack_drive knobs move the package.  
 - If import returns **503**: `AURORA_DATA_DIR` is not set on the bridge.  
 - If **400**: fix validation errors in `errors[]` (slug, missing uniform names, bad WGSL shape).
 
@@ -183,7 +183,7 @@ bun run studio          # http://127.0.0.1:3010
 ```
 
 1. New sketch → edit WGSL + knobs.  
-2. **Export .aurora-look** (download).  
+2. **Export .aurora-package** (download).  
 3. **Import to Aurora** (bridge origin default `http://127.0.0.1:3000`) **or** curl the file as in Workflow A.
 
 Sketches live in browser `localStorage` only — they are **not** the show catalog until imported.
@@ -192,7 +192,7 @@ Sketches live in browser `localStorage` only — they are **not** the show catal
 
 ## WGSL design checklist (quality)
 
-Before calling a look “done”:
+Before calling a package “done”:
 
 - [ ] **Idle path:** `energy_raw = audio_uniforms.x`; when `< 0`, look still readable (not black).  
 - [ ] **Live path:** bass/mid/high or pulse change motion/brightness when energy ≥ 0.  
@@ -239,7 +239,7 @@ $AURORA_DATA_DIR/decks/deck-b/<slug>/<slug_underscored>.wgsl
 When finished, state:
 
 1. **slug** + **label**  
-2. Path to `.aurora-look` (if written)  
+2. Path to `.aurora-package` (if written)  
 3. Import result (`overwritten`, catalog epoch) or that only the archive was produced  
 4. How to select it (launchpad / deck mode)  
 5. Any open follow-ups (bundled commit, Bevy parity check)
@@ -252,5 +252,5 @@ When finished, state:
 bun run studio                 # React Preset Studio :3010
 bun run build:studio           # dist/studio
 bun run preset-studio:bevy     # optional Bevy host
-bunx vitest run tests/shared/aurora-look.test.ts tests/bridge/look-import.test.ts
+bunx vitest run tests/shared/aurora-package.test.ts tests/bridge/package-import.test.ts
 ```

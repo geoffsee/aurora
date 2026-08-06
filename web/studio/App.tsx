@@ -5,7 +5,7 @@ import { PreviewPanel } from './components/PreviewPanel.tsx';
 import { SketchSidebar } from './components/SketchSidebar.tsx';
 import { StudioToolbar } from './components/StudioToolbar.tsx';
 import { WgslEditor } from './components/WgslEditor.tsx';
-import { downloadLookArchive, exportSketchToLook, importLookToBridge } from './lib/export-look.ts';
+import { downloadPackageArchive, exportSketchToPackage, importPackageToBridge } from './lib/export-package.ts';
 import {
   addSketch,
   createSketch,
@@ -64,12 +64,12 @@ export function App() {
     setBusy(true);
     setMessage(null);
     try {
-      const result = exportSketchToLook(active);
+      const result = exportSketchToPackage(active);
       if (!result.ok) {
         setMessage(`Export failed: ${result.errors.map((e) => e.message).join('; ')}`);
         return;
       }
-      downloadLookArchive(result.bytes, result.fileName);
+      downloadPackageArchive(result.bytes, result.fileName);
       setMessage(`Downloaded ${result.fileName} (${result.bytes.byteLength} bytes)`);
     } finally {
       setBusy(false);
@@ -81,12 +81,12 @@ export function App() {
     setBusy(true);
     setMessage(null);
     try {
-      const built = exportSketchToLook(active);
+      const built = exportSketchToPackage(active);
       if (!built.ok) {
         setMessage(`Export failed: ${built.errors.map((e) => e.message).join('; ')}`);
         return;
       }
-      const result = await importLookToBridge(built.bytes, { bridgeOrigin });
+      const result = await importPackageToBridge(built.bytes, { bridgeOrigin });
       if (!result.ok) {
         setMessage(
           `Import failed (${result.status}): ${result.errors.map((e) => `${e.path}: ${e.message}`).join('; ')}`,
@@ -162,7 +162,7 @@ export function App() {
                   addSketch(
                     d,
                     createSketch(
-                      { label: 'Untitled Look' },
+                      { label: 'Untitled Package' },
                       d.sketches.map((s) => s.slug),
                     ),
                   ),

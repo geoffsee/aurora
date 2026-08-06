@@ -2,9 +2,9 @@ import { describe, expect, test } from 'vitest';
 import {
   PACK_V1_AUTHORING_TEMPLATE,
   PACK_V1_SHOW_TEMPLATE,
-  parseAuroraLookArchive,
-} from '../../shared/aurora-look.ts';
-import { detectWgslForm, exportSketchToLook } from '../../web/studio/lib/export-look.ts';
+  parseAuroraPackageArchive,
+} from '../../shared/aurora-package.ts';
+import { detectWgslForm, exportSketchToPackage } from '../../web/studio/lib/export-package.ts';
 import { preparePreviewWgsl } from '../../web/studio/lib/prepare-preview-wgsl.ts';
 import {
   createSketch,
@@ -19,7 +19,7 @@ describe('detectWgslForm', () => {
   });
 });
 
-describe('exportSketchToLook', () => {
+describe('exportSketchToPackage', () => {
   test('builds a valid archive from a sketch', () => {
     const sketch = createSketch({
       label: 'Glass Drift',
@@ -30,14 +30,14 @@ describe('exportSketchToLook', () => {
     // Force slug for stable name.
     sketch.slug = 'glass-drift';
 
-    const result = exportSketchToLook(sketch);
+    const result = exportSketchToPackage(sketch);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.fileName).toBe('glass-drift.aurora-look');
+    expect(result.fileName).toBe('glass-drift.aurora-package');
     expect(result.bytes.byteLength).toBeGreaterThan(100);
 
-    const parsed = parseAuroraLookArchive(result.bytes);
+    const parsed = parseAuroraPackageArchive(result.bytes);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.bundle.manifest.slug).toBe('glass-drift');
@@ -52,11 +52,11 @@ describe('exportSketchToLook', () => {
       wgsl: PACK_V1_SHOW_TEMPLATE,
     });
     sketch.slug = 'show-pack';
-    const result = exportSketchToLook(sketch);
+    const result = exportSketchToPackage(sketch);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.bundle.manifest.wgslForm).toBe('show');
-    const parsed = parseAuroraLookArchive(result.bytes);
+    const parsed = parseAuroraPackageArchive(result.bytes);
     expect(parsed.ok).toBe(true);
   });
 });

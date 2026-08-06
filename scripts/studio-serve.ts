@@ -1,11 +1,11 @@
 /**
- * Serve Aurora Preset Studio (React + WebGPU look authoring).
+ * Serve Aurora Preset Studio (React + WebGPU package authoring).
  *
  * Dev:  bun run studio          → http://127.0.0.1:3010 with HMR when supported
  * Build: bun run build:studio   → dist/studio
  *
- * Export writes .aurora-look locally. "Import to Aurora" POSTs to the bridge
- * (default http://127.0.0.1:3000/api/looks/import) — requires AURORA_DATA_DIR.
+ * Export downloads `.aurora-package`. "Import to Aurora" POSTs to the bridge
+ * (default http://127.0.0.1:3000/api/packages/import) — requires AURORA_DATA_DIR.
  */
 
 import homepage from '../web/studio/index.html';
@@ -29,4 +29,4 @@ const server = Bun.serve({
 });
 
 console.log(`Aurora Preset Studio → ${server.url}`);
-console.log('Export .aurora-look from the toolbar; Import needs bridge + AURORA_DATA_DIR.');
+console.log('Export .aurora-package from the toolbar; Import needs bridge + AURORA_DATA_DIR.');
