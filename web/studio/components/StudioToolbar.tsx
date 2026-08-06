@@ -29,12 +29,12 @@ export function StudioToolbar({
             Preset Studio
           </Text>
           <Text fontSize="xs" color="whiteAlpha.600">
-            Author fullscreen pack looks · export .aurora-look · import into Aurora
+            Author fullscreen packages · export .aurora-package · import into Aurora
           </Text>
         </Box>
         <HStack gap={2}>
           <Button size="sm" colorPalette="green" onClick={onExport} disabled={busy}>
-            Export .aurora-look
+            Export .aurora-package
           </Button>
           <Button
             size="sm"

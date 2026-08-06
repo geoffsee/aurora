@@ -4,10 +4,10 @@
  */
 
 import {
-  type AuroraLookDefaults,
+  type AuroraPackageDefaults,
   PACK_V1_AUTHORING_TEMPLATE,
-  slugifyLookLabel,
-} from '../../../shared/aurora-look.ts';
+  slugifyPackageLabel,
+} from '../../../shared/aurora-package.ts';
 
 export const STUDIO_STORAGE_KEY = 'aurora-studio-sketches-v1';
 export const STUDIO_VERSION = 1 as const;
@@ -69,7 +69,7 @@ export function defaultKnobs(): StudioKnobs {
   };
 }
 
-export function knobsToLookDefaults(knobs: StudioKnobs): AuroraLookDefaults {
+export function knobsToLookDefaults(knobs: StudioKnobs): AuroraPackageDefaults {
   return {
     intensity: knobs.intensity,
     depth: knobs.depth,
@@ -95,7 +95,7 @@ function newId(): string {
 /** Ensure slug is unique among sketches (append -2, -3, …). */
 export function uniqueSlug(base: string, existing: Iterable<string>): string {
   const taken = new Set(existing);
-  const slug = slugifyLookLabel(base);
+  const slug = slugifyPackageLabel(base);
   if (!taken.has(slug)) return slug;
   let n = 2;
   while (taken.has(`${slug}-${n}`)) n += 1;
@@ -106,7 +106,7 @@ export function createSketch(
   partial?: Partial<Pick<StudioSketch, 'label' | 'character' | 'uiGroup' | 'wgsl' | 'knobs'>>,
   existingSlugs: string[] = [],
 ): StudioSketch {
-  const label = partial?.label?.trim() || 'Untitled Look';
+  const label = partial?.label?.trim() || 'Untitled Package';
   const slug = uniqueSlug(label, existingSlugs);
   return {
     id: newId(),
@@ -168,8 +168,8 @@ function parseSketch(raw: unknown): StudioSketch | null {
   if (!id || !label || wgsl === null) return null;
   const slug =
     typeof raw.slug === 'string' && raw.slug.trim()
-      ? slugifyLookLabel(raw.slug)
-      : slugifyLookLabel(label);
+      ? slugifyPackageLabel(raw.slug)
+      : slugifyPackageLabel(label);
   return {
     id,
     slug,

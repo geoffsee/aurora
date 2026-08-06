@@ -1,5 +1,5 @@
 /**
- * Minimal store-only ZIP (no compression) for .aurora-look archives.
+ * Minimal store-only ZIP (no compression) for .aurora-package archives.
  * Enough for small text/binary payloads; not a general-purpose zip library.
  */
 

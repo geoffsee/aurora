@@ -1,12 +1,12 @@
 # Preset Studio
 
-Authoring surface for **new fullscreen pack looks**. Product path:
+Authoring surface for **new fullscreen packages**. Product path:
 
 1. **React Studio** (browser) — sketch list in local state, side-by-side WGSL editor, knobs, live WebGPU preview  
-2. **Export** → [`.aurora-look`](./aurora-look.md) archive  
-3. **Aurora import** → `POST /api/looks/import` (requires `AURORA_DATA_DIR`) → catalog → launchpad  
+2. **Export** → [`.aurora-package`](./aurora-package.md) archive  
+3. **Aurora import** → `POST /api/packages/import` (requires `AURORA_DATA_DIR`) → catalog → launchpad  
 
-Format + library: `shared/aurora-look.ts`, [aurora-look.md](./aurora-look.md).
+Format + library: `shared/aurora-package.ts`, [aurora-package.md](./aurora-package.md).
 
 > **Status:** React Studio (`web/studio/`), archive format, and bridge import are in-repo.  
 > An experimental **Bevy host** still exists at `lab/preset-studio` for pack-bus parity on real `Material2d` (`bun run preset-studio:bevy`). Prefer the React path for day-to-day authoring.
@@ -24,7 +24,7 @@ bun run preset-studio:bevy   # experimental Bevy host
 
 1. Open Studio; edit WGSL (authoring `@group(0)` template by default).  
 2. Tweak **Intensity / Depth / Feedback / Speed** + palette / demo audio.  
-3. **Export .aurora-look** — downloads a zip archive.  
+3. **Export .aurora-package** — downloads a zip archive.  
 4. **Import to Aurora** — POSTs the archive to the bridge (default `http://127.0.0.1:3000`). Bridge must be running with `AURORA_DATA_DIR` set.  
 5. Select the new slug on the controls launchpad.
 
@@ -59,7 +59,7 @@ web/studio/
     sketch-store.ts       # local sketches + knobs
     prepare-preview-wgsl.ts
     pack-preview.ts       # WebGPU
-    export-look.ts        # archive + bridge POST
+    export-package.ts        # archive + bridge POST
   components/
 ```
 
@@ -76,11 +76,11 @@ Uses `CARGO_TARGET_DIR=target-studio`. Sketches under `lab/preset-studio/sketche
 
 Project skill: **`.agents/skills/aurora-create-visualization/`** (`/aurora-create-visualization`).
 
-Agents create looks via pack-v1 WGSL → `.aurora-look` → import — not hand dual-deck rituals. Helper:
+Agents create packages via pack-v1 WGSL → `.aurora-package` → import — not hand dual-deck rituals. Helper:
 
 ```bash
-bun run .agents/skills/aurora-create-visualization/scripts/build-look.ts \
-  --slug my-look --label "My Look" --wgsl ./look.wgsl --out /tmp/my-look.aurora-look
+bun run .agents/skills/aurora-create-visualization/scripts/build-package.ts \
+  --slug my-look --label "My Look" --wgsl ./package.wgsl --out /tmp/my-look.aurora-package
 ```
 
-See [aurora-look.md](./aurora-look.md) and the skill `SKILL.md` / `references/pack-v1-wgsl.md`.
+See [aurora-package.md](./aurora-package.md) and the skill `SKILL.md` / `references/pack-v1-wgsl.md`.

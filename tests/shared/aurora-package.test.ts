@@ -1,24 +1,24 @@
 import { describe, expect, test } from 'vitest';
 import {
-  AURORA_LOOK_SCHEMA_VERSION,
-  auroraLookFileName,
-  auroraLookToModePreset,
-  auroraLookWgslFileName,
-  buildAuroraLookArchive,
+  AURORA_PACKAGE_SCHEMA_VERSION,
+  auroraPackageFileName,
+  auroraPackageToModePreset,
+  auroraPackageWgslFileName,
+  buildAuroraPackageArchive,
   buildManifest,
   PACK_V1_AUTHORING_TEMPLATE,
   PACK_V1_SHOW_TEMPLATE,
-  parseAuroraLookArchive,
+  parseAuroraPackageArchive,
   remapAuthoringWgslToShow,
-  slugifyLookLabel,
+  slugifyPackageLabel,
   validateBundle,
-} from '../../shared/aurora-look.ts';
+} from '../../shared/aurora-package.ts';
 import { unzipTextEntries } from '../../shared/zip-store.ts';
 
-describe('slugifyLookLabel', () => {
+describe('slugifyPackageLabel', () => {
   test('kebab-cases labels', () => {
-    expect(slugifyLookLabel('Glass Drift')).toBe('glass-drift');
-    expect(slugifyLookLabel('  Foo_Bar  ')).toBe('foo-bar');
+    expect(slugifyPackageLabel('Glass Drift')).toBe('glass-drift');
+    expect(slugifyPackageLabel('  Foo_Bar  ')).toBe('foo-bar');
   });
 });
 
@@ -35,29 +35,29 @@ describe('remapAuthoringWgslToShow', () => {
 });
 
 describe('build + parse archive', () => {
-  test('round-trips show-form look', () => {
+  test('round-trips show-form package', () => {
     const manifest = buildManifest({
       slug: 'glass-drift',
       label: 'Glass Drift',
       character: 'test',
       wgslForm: 'show',
     });
-    expect(manifest.schemaVersion).toBe(AURORA_LOOK_SCHEMA_VERSION);
+    expect(manifest.schemaVersion).toBe(AURORA_PACKAGE_SCHEMA_VERSION);
 
-    const archive = buildAuroraLookArchive({
+    const archive = buildAuroraPackageArchive({
       manifest,
       wgsl: PACK_V1_SHOW_TEMPLATE,
       defaults: { intensity: 0.7, depth: 0.4 },
     });
     expect(archive.byteLength).toBeGreaterThan(100);
-    expect(auroraLookFileName(manifest.slug)).toBe('glass-drift.aurora-look');
+    expect(auroraPackageFileName(manifest.slug)).toBe('glass-drift.aurora-package');
 
     const files = unzipTextEntries(archive);
     expect(files['manifest.json']).toBeDefined();
-    expect(files['look.wgsl']).toBeDefined();
+    expect(files['package.wgsl']).toBeDefined();
     expect(files['defaults.json']).toBeDefined();
 
-    const parsed = parseAuroraLookArchive(archive);
+    const parsed = parseAuroraPackageArchive(archive);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.bundle.manifest.slug).toBe('glass-drift');
@@ -72,11 +72,11 @@ describe('build + parse archive', () => {
       label: 'Soft Blob',
       wgslForm: 'authoring',
     });
-    const archive = buildAuroraLookArchive({
+    const archive = buildAuroraPackageArchive({
       manifest,
       wgsl: PACK_V1_AUTHORING_TEMPLATE,
     });
-    const parsed = parseAuroraLookArchive(archive);
+    const parsed = parseAuroraPackageArchive(archive);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.bundle.manifest.wgslForm).toBe('show');
@@ -105,10 +105,10 @@ describe('build + parse archive', () => {
   });
 });
 
-describe('auroraLookToModePreset', () => {
+describe('auroraPackageToModePreset', () => {
   test('builds fullscreen-primary preset with dual-fullscreen capability', () => {
     const manifest = buildManifest({ slug: 'glass-drift', label: 'Glass Drift', wgslForm: 'show' });
-    const preset = auroraLookToModePreset({
+    const preset = auroraPackageToModePreset({
       manifest,
       wgsl: PACK_V1_SHOW_TEMPLATE,
     });
@@ -117,6 +117,6 @@ describe('auroraLookToModePreset', () => {
     expect(preset.suppressLegacyField).toBe(true);
     expect(preset.layers[0]).toEqual({ kind: 'fullscreen', ref: 'glass_drift.wgsl' });
     expect(preset.engineMinCapabilities).toContain('dual-fullscreen');
-    expect(auroraLookWgslFileName('glass-drift')).toBe('glass_drift.wgsl');
+    expect(auroraPackageWgslFileName('glass-drift')).toBe('glass_drift.wgsl');
   });
 });

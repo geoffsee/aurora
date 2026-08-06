@@ -1,19 +1,19 @@
 /**
- * Build / download `.aurora-look` from a studio sketch.
+ * Build / download `.aurora-package` from a studio sketch.
  */
 
 import {
-  type AuroraLookBundle,
-  type AuroraLookValidationError,
-  auroraLookFileName,
-  buildAuroraLookArchive,
+  type AuroraPackageBundle,
+  type AuroraPackageValidationError,
+  auroraPackageFileName,
+  buildAuroraPackageArchive,
   buildManifest,
-} from '../../../shared/aurora-look.ts';
+} from '../../../shared/aurora-package.ts';
 import { knobsToLookDefaults, type StudioSketch } from './sketch-store.ts';
 
 export type ExportLookResult =
-  | { ok: true; bytes: Uint8Array; fileName: string; bundle: AuroraLookBundle }
-  | { ok: false; errors: AuroraLookValidationError[] };
+  | { ok: true; bytes: Uint8Array; fileName: string; bundle: AuroraPackageBundle }
+  | { ok: false; errors: AuroraPackageValidationError[] };
 
 /**
  * Detect whether sketch WGSL looks like show-form (Bevy) vs authoring.
@@ -35,10 +35,10 @@ export function detectWgslForm(wgsl: string): 'show' | 'authoring' {
 }
 
 /** Build a validated archive for a sketch (does not touch the DOM). */
-export function exportSketchToLook(sketch: StudioSketch): ExportLookResult {
+export function exportSketchToPackage(sketch: StudioSketch): ExportLookResult {
   const form = detectWgslForm(sketch.wgsl);
   try {
-    const bundle: AuroraLookBundle = {
+    const bundle: AuroraPackageBundle = {
       manifest: buildManifest({
         slug: sketch.slug,
         label: sketch.label,
@@ -50,16 +50,16 @@ export function exportSketchToLook(sketch: StudioSketch): ExportLookResult {
       wgsl: sketch.wgsl,
       defaults: knobsToLookDefaults(sketch.knobs),
     };
-    const bytes = buildAuroraLookArchive(bundle);
+    const bytes = buildAuroraPackageArchive(bundle);
     return {
       ok: true,
       bytes,
-      fileName: auroraLookFileName(sketch.slug),
+      fileName: auroraPackageFileName(sketch.slug),
       bundle,
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    // buildAuroraLookArchive throws with joined validation errors.
+    // buildAuroraPackageArchive throws with joined validation errors.
     return {
       ok: false,
       errors: [{ path: 'export', message }],
@@ -68,7 +68,7 @@ export function exportSketchToLook(sketch: StudioSketch): ExportLookResult {
 }
 
 /** Trigger a browser download of the archive bytes. */
-export function downloadLookArchive(bytes: Uint8Array, fileName: string): void {
+export function downloadPackageArchive(bytes: Uint8Array, fileName: string): void {
   // Copy into a fresh ArrayBuffer-backed view for Blob typing across DOM libs.
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -96,15 +96,15 @@ export type BridgeImportResult =
   | { ok: false; errors: { path: string; message: string }[]; status: number };
 
 /**
- * POST archive bytes to the Aurora bridge look-import endpoint.
+ * POST archive bytes to the Aurora bridge package-import endpoint.
  * Requires bridge running with AURORA_DATA_DIR set.
  */
-export async function importLookToBridge(
+export async function importPackageToBridge(
   bytes: Uint8Array,
   opts?: { bridgeOrigin?: string; signal?: AbortSignal },
 ): Promise<BridgeImportResult> {
   const origin = (opts?.bridgeOrigin ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
-  const url = `${origin}/api/looks/import`;
+  const url = `${origin}/api/packages/import`;
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   const requestBody = new Blob([copy], { type: 'application/zip' });

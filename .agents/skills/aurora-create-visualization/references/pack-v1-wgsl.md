@@ -1,4 +1,4 @@
-# pack-v1 WGSL reference (Aurora looks)
+# pack-v1 WGSL reference (Aurora packages)
 
 ## Uniform bus
 
@@ -58,7 +58,7 @@ fn fragment(@builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>) -> @l
 }
 ```
 
-Canonical source of the minimal template: `PACK_V1_AUTHORING_TEMPLATE` in `shared/aurora-look.ts`.
+Canonical source of the minimal template: `PACK_V1_AUTHORING_TEMPLATE` in `shared/aurora-package.ts`.
 
 ## Show form (after import remap)
 
@@ -73,7 +73,7 @@ You may also author show form directly and set `wgslForm: "show"` in the manifes
 ## Validation rules (importer)
 
 - kebab-case `slug`  
-- `kind: "aurora-look"`, `schemaVersion: 1`, `target: "pack-fullscreen"`, `uniformBus: "pack-v1"`  
+- `kind: "aurora-package"`, `schemaVersion: 1`, `target: "pack-fullscreen"`, `uniformBus: "pack-v1"`  
 - `disposition: "fullscreen-primary"`, `suppressLegacyField: true`  
 - WGSL contains `@fragment` / `fn fragment` and the five uniform **names**  
 - Size caps: WGSL ≤ 256 KiB, archive ≤ 1 MiB  
@@ -83,4 +83,4 @@ You may also author show form directly and set `wgslForm: "show"` in the manifes
 - Hand-edit only one deck under `data/decks/`  
 - Add texture bindings (not on pack-v1 bus)  
 - Rely on Studio WebGPU preview alone for Bevy-only features (`#import`, VertexOutput) without export/import  
-- Confuse Shadertoy import (`/api/shadertoy/import`) with `.aurora-look` import  
+- Confuse Shadertoy import (`/api/shadertoy/import`) with `.aurora-package` import  

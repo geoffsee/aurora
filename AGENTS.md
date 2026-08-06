@@ -19,13 +19,13 @@ bun run clippy       # clippy:wasm + clippy:vst, both with -D warnings (pre-comm
 bun run typecheck    # tsc --noEmit (also runs as the pre-commit hook)
 bun run dry-run      # scripts/dry-run.ts — performer-less end-to-end bridge harness (one-shot)
 DRY_RUN_SUSTAINED=1 bun run dry-run   # standing 60-min gate; passes only with zero GAP lines (#213, docs/dry-run.md)
-bun run studio              # React Preset Studio (WebGPU look authoring) → :3010
+bun run studio              # React Preset Studio (WebGPU package authoring) → :3010
 bun run build:studio        # static build → dist/studio
 bun run preset-studio       # alias of studio
 bun run preset-studio:bevy  # experimental Bevy look-dev host; CARGO_TARGET_DIR=target-studio
 bun run check:preset-studio # cargo check -p preset-studio (no window)
-# Look interchange: shared/aurora-look.ts + docs/aurora-look.md
-# Import: POST /api/looks/import (bridge :3000) with AURORA_DATA_DIR set — dual-deck install + catalog rescan
+# Package interchange: shared/aurora-package.ts + docs/aurora-package.md
+# Import: POST /api/packages/import (bridge :3000) with AURORA_DATA_DIR set — dual-deck install + catalog rescan
 # Agent skill: .agents/skills/aurora-create-visualization/ (/aurora-create-visualization)
 ```
 
@@ -142,7 +142,7 @@ The bridge is the **single source of truth for `ControlState`**. `coerceControlS
 - `tests/` — vitest suite, mirroring `bridge/`, `shared/`, `shaders/`, `web/`, and `cli/`
 - `plugins/aurora-vst/` — VST3 plugin and `xtask` bundler
 - `scripts/` — setup, dry-run, format, and Rust test helpers
-- `web/studio/` — **Preset Studio** (React): sketch list, WGSL editor, knobs, WebGPU preview, export `.aurora-look`, optional import to bridge. See `docs/preset-studio.md`.
+- `web/studio/` — **Preset Studio** (React): sketch list, WGSL editor, knobs, WebGPU preview, export `.aurora-package`, optional import to bridge. See `docs/preset-studio.md`.
 - `lab/preset-studio/` — experimental Bevy host for pack-bus parity (`bun run preset-studio:bevy`). Sketches in `lab/preset-studio/sketches/`. Not on the wasm path; uses `target-studio`.
 
 ### Cargo workspace and target dirs

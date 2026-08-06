@@ -7,24 +7,24 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
-  installAuroraLookArchive,
-  readLookArchiveFromRequest,
-  resolveLookImportDataDir,
-} from '../../bridge/look-import.ts';
+  installAuroraPackageArchive,
+  readPackageArchiveFromRequest,
+  resolvePackageImportDataDir,
+} from '../../bridge/package-import.ts';
 import { loadModeCatalog, scanDeckCatalog } from '../../bridge/mode-catalog.ts';
 import {
-  buildAuroraLookArchive,
+  buildAuroraPackageArchive,
   buildManifest,
   PACK_V1_AUTHORING_TEMPLATE,
   PACK_V1_SHOW_TEMPLATE,
-} from '../../shared/aurora-look.ts';
+} from '../../shared/aurora-package.ts';
 import { validateModePreset } from '../../shared/mode-preset-schema.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 
 const tempRoots: string[] = [];
 
-function tempDir(prefix = 'aurora-look-import-'): string {
+function tempDir(prefix = 'aurora-package-import-'): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempRoots.push(dir);
   return dir;
@@ -47,7 +47,7 @@ function makeShowArchive(
   label = 'Glass Drift',
   extras?: { character?: string; defaults?: Record<string, number> },
 ): Uint8Array {
-  return buildAuroraLookArchive({
+  return buildAuroraPackageArchive({
     manifest: buildManifest({
       slug,
       label,
@@ -60,24 +60,24 @@ function makeShowArchive(
 }
 
 function makeAuthoringArchive(slug = 'soft-blob', label = 'Soft Blob'): Uint8Array {
-  return buildAuroraLookArchive({
+  return buildAuroraPackageArchive({
     manifest: buildManifest({ slug, label, wgslForm: 'authoring' }),
     wgsl: PACK_V1_AUTHORING_TEMPLATE,
   });
 }
 
-describe('resolveLookImportDataDir', () => {
+describe('resolvePackageImportDataDir', () => {
   test('returns null when unset or blank', () => {
-    expect(resolveLookImportDataDir({ env: {} })).toBeNull();
-    expect(resolveLookImportDataDir({ env: { AURORA_DATA_DIR: '  ' } })).toBeNull();
-    expect(resolveLookImportDataDir({ overrideRoot: null })).toBeNull();
+    expect(resolvePackageImportDataDir({ env: {} })).toBeNull();
+    expect(resolvePackageImportDataDir({ env: { AURORA_DATA_DIR: '  ' } })).toBeNull();
+    expect(resolvePackageImportDataDir({ overrideRoot: null })).toBeNull();
   });
 
   test('resolves absolute and relative paths', () => {
     const abs = resolve('/tmp/aurora-data-test');
-    expect(resolveLookImportDataDir({ overrideRoot: abs })).toBe(abs);
+    expect(resolvePackageImportDataDir({ overrideRoot: abs })).toBe(abs);
     const cwd = tempDir();
-    const rel = resolveLookImportDataDir({
+    const rel = resolvePackageImportDataDir({
       overrideRoot: './modes',
       cwd,
     });
@@ -85,7 +85,7 @@ describe('resolveLookImportDataDir', () => {
   });
 });
 
-describe('installAuroraLookArchive', () => {
+describe('installAuroraPackageArchive', () => {
   test('writes dual-deck preset.json + wgsl under data dir', () => {
     const dataDir = tempDir();
     const archive = makeShowArchive('glass-drift', 'Glass Drift', {
@@ -93,7 +93,7 @@ describe('installAuroraLookArchive', () => {
       defaults: { intensity: 0.6 },
     });
 
-    const result = installAuroraLookArchive(archive, { dataDir });
+    const result = installAuroraPackageArchive(archive, { dataDir });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -131,7 +131,7 @@ describe('installAuroraLookArchive', () => {
 
   test('remaps authoring WGSL to show form by default', () => {
     const dataDir = tempDir();
-    const result = installAuroraLookArchive(makeAuthoringArchive(), { dataDir });
+    const result = installAuroraPackageArchive(makeAuthoringArchive(), { dataDir });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.wgslForm).toBe('show');
@@ -143,7 +143,7 @@ describe('installAuroraLookArchive', () => {
 
   test('re-import overwrites same slug', () => {
     const dataDir = tempDir();
-    const first = installAuroraLookArchive(
+    const first = installAuroraPackageArchive(
       makeShowArchive('wave-rim', 'Wave Rim', { character: 'v1' }),
       { dataDir },
     );
@@ -153,7 +153,7 @@ describe('installAuroraLookArchive', () => {
     // Corrupt the installed WGSL so overwrite is visible.
     writeFileSync(join(first.paths['deck-a'], 'wave_rim.wgsl'), '// stale\n');
 
-    const second = installAuroraLookArchive(
+    const second = installAuroraPackageArchive(
       makeShowArchive('wave-rim', 'Wave Rim', { character: 'v2' }),
       { dataDir },
     );
@@ -172,7 +172,7 @@ describe('installAuroraLookArchive', () => {
 
   test('rejects invalid archive without writing packs', () => {
     const dataDir = tempDir();
-    const result = installAuroraLookArchive(new Uint8Array([1, 2, 3, 4]), { dataDir });
+    const result = installAuroraPackageArchive(new Uint8Array([1, 2, 3, 4]), { dataDir });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.length).toBeGreaterThan(0);
@@ -181,13 +181,13 @@ describe('installAuroraLookArchive', () => {
 
   test('rejects empty body', () => {
     const dataDir = tempDir();
-    const result = installAuroraLookArchive(new Uint8Array(), { dataDir });
+    const result = installAuroraPackageArchive(new Uint8Array(), { dataDir });
     expect(result.ok).toBe(false);
   });
 
   test('catalog overlay picks up installed look', () => {
     const dataDir = tempDir();
-    const installed = installAuroraLookArchive(makeShowArchive('catalog-probe'), { dataDir });
+    const installed = installAuroraPackageArchive(makeShowArchive('catalog-probe'), { dataDir });
     expect(installed.ok).toBe(true);
 
     const deckA = scanDeckCatalog(join(dataDir, 'decks', 'deck-a'), 'override');
@@ -207,15 +207,15 @@ describe('installAuroraLookArchive', () => {
   });
 });
 
-describe('readLookArchiveFromRequest', () => {
+describe('readPackageArchiveFromRequest', () => {
   test('accepts raw zip bytes', async () => {
     const archive = makeShowArchive();
-    const request = new Request('http://127.0.0.1:3000/api/looks/import', {
+    const request = new Request('http://127.0.0.1:3000/api/packages/import', {
       method: 'POST',
       headers: { 'content-type': 'application/zip' },
       body: Buffer.from(archive),
     });
-    const body = await readLookArchiveFromRequest(request);
+    const body = await readPackageArchiveFromRequest(request);
     expect(body.ok).toBe(true);
     if (!body.ok) return;
     expect(body.bytes.byteLength).toBe(archive.byteLength);
@@ -225,12 +225,12 @@ describe('readLookArchiveFromRequest', () => {
   test('accepts JSON archiveBase64 and remapAuthoring=false', async () => {
     const archive = makeShowArchive();
     const b64 = Buffer.from(archive).toString('base64');
-    const request = new Request('http://127.0.0.1:3000/api/looks/import?remapAuthoring=false', {
+    const request = new Request('http://127.0.0.1:3000/api/packages/import?remapAuthoring=false', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ archiveBase64: b64, remapAuthoring: false }),
     });
-    const body = await readLookArchiveFromRequest(request);
+    const body = await readPackageArchiveFromRequest(request);
     expect(body.ok).toBe(true);
     if (!body.ok) return;
     expect(body.remapAuthoring).toBe(false);
@@ -238,24 +238,24 @@ describe('readLookArchiveFromRequest', () => {
   });
 
   test('rejects empty raw body', async () => {
-    const request = new Request('http://127.0.0.1:3000/api/looks/import', {
+    const request = new Request('http://127.0.0.1:3000/api/packages/import', {
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
       body: Buffer.alloc(0),
     });
-    const body = await readLookArchiveFromRequest(request);
+    const body = await readPackageArchiveFromRequest(request);
     expect(body.ok).toBe(false);
     if (body.ok) return;
     expect(body.status).toBe(400);
   });
 
   test('rejects missing base64 field', async () => {
-    const request = new Request('http://127.0.0.1:3000/api/looks/import', {
+    const request = new Request('http://127.0.0.1:3000/api/packages/import', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
     });
-    const body = await readLookArchiveFromRequest(request);
+    const body = await readPackageArchiveFromRequest(request);
     expect(body.ok).toBe(false);
     if (body.ok) return;
     expect(body.status).toBe(400);

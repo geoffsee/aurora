@@ -230,10 +230,10 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
       {
         disposition: 'fullscreen-primary',
         field: undefined,
-        layers: [{ kind: 'fullscreen', ref: 'look.wgsl' }],
+        layers: [{ kind: 'fullscreen', ref: 'package.wgsl' }],
         suppressLegacyField: true,
       },
-      { 'look.wgsl': wgsl },
+      { 'package.wgsl': wgsl },
     );
     // writeValidPreset puts assets under assets/; ref should match.
     // Re-write with ref under assets/ so sandbox resolve works.
@@ -247,13 +247,13 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
           label: 'Plasma',
           disposition: 'fullscreen-primary',
           suppressLegacyField: true,
-          layers: [{ kind: 'fullscreen', ref: 'assets/look.wgsl' }],
+          layers: [{ kind: 'fullscreen', ref: 'assets/package.wgsl' }],
         },
         null,
         2,
       ),
     );
-    writeFileSync(join(folder, 'assets', 'look.wgsl'), wgsl);
+    writeFileSync(join(folder, 'assets', 'package.wgsl'), wgsl);
 
     const entry = makeEntry(folder, 'plasma');
     const result = await compileFromEntryAsync(entry, 4, 'deck-a');

@@ -1,27 +1,27 @@
 /**
- * `.aurora-look` archive format — Preset Studio export / Aurora import contract.
+ * `.aurora-package` archive format — Preset Studio export / Aurora import contract.
  *
- * See docs/aurora-look.md.
+ * See docs/aurora-package.md.
  */
 
 import { MODE_PRESET_SLUG_RE } from './mode-preset-schema.ts';
 import { unzipTextEntries, zipStore, zipTextEntries } from './zip-store.ts';
 
-export const AURORA_LOOK_KIND = 'aurora-look' as const;
-export const AURORA_LOOK_SCHEMA_VERSION = 1 as const;
-export const AURORA_LOOK_UNIFORM_BUS = 'pack-v1' as const;
+export const AURORA_PACKAGE_KIND = 'aurora-package' as const;
+export const AURORA_PACKAGE_SCHEMA_VERSION = 1 as const;
+export const AURORA_PACKAGE_UNIFORM_BUS = 'pack-v1' as const;
 
 /** Max sizes for import safety. */
-export const AURORA_LOOK_MAX_WGSL_BYTES = 256 * 1024;
-export const AURORA_LOOK_MAX_ARCHIVE_BYTES = 1024 * 1024;
+export const AURORA_PACKAGE_MAX_WGSL_BYTES = 256 * 1024;
+export const AURORA_PACKAGE_MAX_ARCHIVE_BYTES = 1024 * 1024;
 
-export const AURORA_LOOK_TARGETS = ['pack-fullscreen'] as const;
-export type AuroraLookTarget = (typeof AURORA_LOOK_TARGETS)[number];
+export const AURORA_PACKAGE_TARGETS = ['pack-fullscreen'] as const;
+export type AuroraPackageTarget = (typeof AURORA_PACKAGE_TARGETS)[number];
 
-export const AURORA_LOOK_WGSL_FORMS = ['show', 'authoring'] as const;
-export type AuroraLookWgslForm = (typeof AURORA_LOOK_WGSL_FORMS)[number];
+export const AURORA_PACKAGE_WGSL_FORMS = ['show', 'authoring'] as const;
+export type AuroraPackageWgslForm = (typeof AURORA_PACKAGE_WGSL_FORMS)[number];
 
-export type AuroraLookDefaults = {
+export type AuroraPackageDefaults = {
   intensity?: number;
   depth?: number;
   feedback?: number;
@@ -31,35 +31,35 @@ export type AuroraLookDefaults = {
   bright?: number;
 };
 
-export type AuroraLookManifest = {
-  schemaVersion: typeof AURORA_LOOK_SCHEMA_VERSION;
-  kind: typeof AURORA_LOOK_KIND;
+export type AuroraPackageManifest = {
+  schemaVersion: typeof AURORA_PACKAGE_SCHEMA_VERSION;
+  kind: typeof AURORA_PACKAGE_KIND;
   slug: string;
   label: string;
   character?: string;
-  target: AuroraLookTarget;
-  uniformBus: typeof AURORA_LOOK_UNIFORM_BUS;
+  target: AuroraPackageTarget;
+  uniformBus: typeof AURORA_PACKAGE_UNIFORM_BUS;
   disposition: 'fullscreen-primary';
   suppressLegacyField: boolean;
   uiGroup?: string;
   /** show = Bevy @group(2) + import; authoring = Studio @group(0) (remap on import). */
-  wgslForm: AuroraLookWgslForm;
+  wgslForm: AuroraPackageWgslForm;
   createdAt?: string;
   studioVersion?: number;
 };
 
-export type AuroraLookBundle = {
-  manifest: AuroraLookManifest;
+export type AuroraPackageBundle = {
+  manifest: AuroraPackageManifest;
   /** WGSL source as stored in the archive (may be authoring or show form). */
   wgsl: string;
-  defaults?: AuroraLookDefaults;
+  defaults?: AuroraPackageDefaults;
 };
 
-export type AuroraLookValidationError = { path: string; message: string };
+export type AuroraPackageValidationError = { path: string; message: string };
 
-export type AuroraLookValidationResult =
-  | { ok: true; bundle: AuroraLookBundle }
-  | { ok: false; errors: AuroraLookValidationError[] };
+export type AuroraPackageValidationResult =
+  | { ok: true; bundle: AuroraPackageBundle }
+  | { ok: false; errors: AuroraPackageValidationError[] };
 
 const BEVY_IMPORT = '#import bevy_sprite::mesh2d_vertex_output::VertexOutput';
 
@@ -132,14 +132,14 @@ function clamp01(n: number): number {
 }
 
 /** kebab-case slug from a display label. */
-export function slugifyLookLabel(label: string): string {
+export function slugifyPackageLabel(label: string): string {
   const s = label
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .replace(/-+/g, '-');
-  return s || 'untitled-look';
+  return s || 'untitled-package';
 }
 
 export function buildManifest(input: {
@@ -147,18 +147,18 @@ export function buildManifest(input: {
   label: string;
   character?: string;
   uiGroup?: string;
-  wgslForm?: AuroraLookWgslForm;
+  wgslForm?: AuroraPackageWgslForm;
   createdAt?: string;
   studioVersion?: number;
-}): AuroraLookManifest {
+}): AuroraPackageManifest {
   return {
-    schemaVersion: AURORA_LOOK_SCHEMA_VERSION,
-    kind: AURORA_LOOK_KIND,
+    schemaVersion: AURORA_PACKAGE_SCHEMA_VERSION,
+    kind: AURORA_PACKAGE_KIND,
     slug: input.slug,
     label: input.label,
     character: input.character,
     target: 'pack-fullscreen',
-    uniformBus: AURORA_LOOK_UNIFORM_BUS,
+    uniformBus: AURORA_PACKAGE_UNIFORM_BUS,
     disposition: 'fullscreen-primary',
     suppressLegacyField: true,
     uiGroup: input.uiGroup ?? 'field-motion',
@@ -207,34 +207,34 @@ export function remapAuthoringWgslToShow(source: string): string {
   return `${s.trim()}\n`;
 }
 
-function validateWgslShape(wgsl: string, form: AuroraLookWgslForm): AuroraLookValidationError[] {
-  const errors: AuroraLookValidationError[] = [];
+function validateWgslShape(wgsl: string, form: AuroraPackageWgslForm): AuroraPackageValidationError[] {
+  const errors: AuroraPackageValidationError[] = [];
   if (!wgsl.trim()) {
-    errors.push({ path: 'look.wgsl', message: 'empty WGSL' });
+    errors.push({ path: 'package.wgsl', message: 'empty WGSL' });
     return errors;
   }
-  if (new TextEncoder().encode(wgsl).length > AURORA_LOOK_MAX_WGSL_BYTES) {
+  if (new TextEncoder().encode(wgsl).length > AURORA_PACKAGE_MAX_WGSL_BYTES) {
     errors.push({
-      path: 'look.wgsl',
-      message: `WGSL exceeds ${AURORA_LOOK_MAX_WGSL_BYTES} bytes`,
+      path: 'package.wgsl',
+      message: `WGSL exceeds ${AURORA_PACKAGE_MAX_WGSL_BYTES} bytes`,
     });
   }
   if (!/@fragment/.test(wgsl) || !/\bfn\s+fragment\b/.test(wgsl)) {
-    errors.push({ path: 'look.wgsl', message: 'must define @fragment fn fragment' });
+    errors.push({ path: 'package.wgsl', message: 'must define @fragment fn fragment' });
   }
   // Pack bus names must appear so bindings are intentional.
   for (const name of ['params', 'palette_extra', 'audio_uniforms', 'palette_rgb', 'pack_drive']) {
     if (!wgsl.includes(name)) {
-      errors.push({ path: 'look.wgsl', message: `missing pack-v1 uniform name "${name}"` });
+      errors.push({ path: 'package.wgsl', message: `missing pack-v1 uniform name "${name}"` });
     }
   }
   if (form === 'show') {
     if (!wgsl.includes('@group(2)')) {
-      errors.push({ path: 'look.wgsl', message: 'show form requires @group(2) bindings' });
+      errors.push({ path: 'package.wgsl', message: 'show form requires @group(2) bindings' });
     }
     if (!wgsl.includes('VertexOutput')) {
       errors.push({
-        path: 'look.wgsl',
+        path: 'package.wgsl',
         message: 'show form requires bevy VertexOutput fragment input',
       });
     }
@@ -242,19 +242,19 @@ function validateWgslShape(wgsl: string, form: AuroraLookWgslForm): AuroraLookVa
   return errors;
 }
 
-export function validateManifest(raw: unknown): AuroraLookValidationResult {
-  const errors: AuroraLookValidationError[] = [];
+export function validateManifest(raw: unknown): AuroraPackageValidationResult {
+  const errors: AuroraPackageValidationError[] = [];
   if (!isRecord(raw)) {
     return { ok: false, errors: [{ path: 'manifest.json', message: 'must be an object' }] };
   }
-  if (raw.schemaVersion !== AURORA_LOOK_SCHEMA_VERSION) {
+  if (raw.schemaVersion !== AURORA_PACKAGE_SCHEMA_VERSION) {
     errors.push({
       path: 'manifest.schemaVersion',
-      message: `expected ${AURORA_LOOK_SCHEMA_VERSION}`,
+      message: `expected ${AURORA_PACKAGE_SCHEMA_VERSION}`,
     });
   }
-  if (raw.kind !== AURORA_LOOK_KIND) {
-    errors.push({ path: 'manifest.kind', message: `expected "${AURORA_LOOK_KIND}"` });
+  if (raw.kind !== AURORA_PACKAGE_KIND) {
+    errors.push({ path: 'manifest.kind', message: `expected "${AURORA_PACKAGE_KIND}"` });
   }
   if (typeof raw.slug !== 'string' || !MODE_PRESET_SLUG_RE.test(raw.slug)) {
     errors.push({ path: 'manifest.slug', message: 'must be kebab-case slug' });
@@ -265,8 +265,8 @@ export function validateManifest(raw: unknown): AuroraLookValidationResult {
   if (raw.target !== 'pack-fullscreen') {
     errors.push({ path: 'manifest.target', message: 'v1 only supports pack-fullscreen' });
   }
-  if (raw.uniformBus !== AURORA_LOOK_UNIFORM_BUS) {
-    errors.push({ path: 'manifest.uniformBus', message: `expected "${AURORA_LOOK_UNIFORM_BUS}"` });
+  if (raw.uniformBus !== AURORA_PACKAGE_UNIFORM_BUS) {
+    errors.push({ path: 'manifest.uniformBus', message: `expected "${AURORA_PACKAGE_UNIFORM_BUS}"` });
   }
   if (raw.disposition !== 'fullscreen-primary') {
     errors.push({ path: 'manifest.disposition', message: 'expected fullscreen-primary' });
@@ -283,18 +283,18 @@ export function validateManifest(raw: unknown): AuroraLookValidationResult {
 
   if (errors.length) return { ok: false, errors };
 
-  const manifest: AuroraLookManifest = {
-    schemaVersion: AURORA_LOOK_SCHEMA_VERSION,
-    kind: AURORA_LOOK_KIND,
+  const manifest: AuroraPackageManifest = {
+    schemaVersion: AURORA_PACKAGE_SCHEMA_VERSION,
+    kind: AURORA_PACKAGE_KIND,
     slug: raw.slug as string,
     label: (raw.label as string).trim(),
     character: typeof raw.character === 'string' ? raw.character : undefined,
     target: 'pack-fullscreen',
-    uniformBus: AURORA_LOOK_UNIFORM_BUS,
+    uniformBus: AURORA_PACKAGE_UNIFORM_BUS,
     disposition: 'fullscreen-primary',
     suppressLegacyField: true,
     uiGroup: typeof raw.uiGroup === 'string' ? raw.uiGroup : 'field-motion',
-    wgslForm: raw.wgslForm as AuroraLookWgslForm,
+    wgslForm: raw.wgslForm as AuroraPackageWgslForm,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : undefined,
     studioVersion: typeof raw.studioVersion === 'number' ? raw.studioVersion : undefined,
   };
@@ -303,10 +303,10 @@ export function validateManifest(raw: unknown): AuroraLookValidationResult {
   return { ok: true, bundle: { manifest, wgsl: '' } };
 }
 
-export function validateDefaults(raw: unknown): AuroraLookDefaults | AuroraLookValidationError[] {
+export function validateDefaults(raw: unknown): AuroraPackageDefaults | AuroraPackageValidationError[] {
   if (raw === undefined || raw === null) return {};
   if (!isRecord(raw)) return [{ path: 'defaults.json', message: 'must be an object' }];
-  const out: AuroraLookDefaults = {};
+  const out: AuroraPackageDefaults = {};
   for (const key of ['intensity', 'depth', 'feedback', 'speed', 'hue', 'sat', 'bright'] as const) {
     if (raw[key] === undefined) continue;
     if (typeof raw[key] !== 'number' || !Number.isFinite(raw[key])) {
@@ -317,7 +317,7 @@ export function validateDefaults(raw: unknown): AuroraLookDefaults | AuroraLookV
   return out;
 }
 
-export function validateBundle(bundle: AuroraLookBundle): AuroraLookValidationResult {
+export function validateBundle(bundle: AuroraPackageBundle): AuroraPackageValidationResult {
   const man = validateManifest(bundle.manifest);
   if (!man.ok) return man;
   const errors = validateWgslShape(bundle.wgsl, bundle.manifest.wgslForm);
@@ -337,16 +337,16 @@ export function validateBundle(bundle: AuroraLookBundle): AuroraLookValidationRe
 }
 
 /** Build zip bytes for a validated (or pre-validation) bundle. */
-export function buildAuroraLookArchive(bundle: AuroraLookBundle): Uint8Array {
+export function buildAuroraPackageArchive(bundle: AuroraPackageBundle): Uint8Array {
   const checked = validateBundle(bundle);
   if (!checked.ok) {
     throw new Error(
-      `aurora-look build failed: ${checked.errors.map((e) => `${e.path}: ${e.message}`).join('; ')}`,
+      `aurora-package build failed: ${checked.errors.map((e) => `${e.path}: ${e.message}`).join('; ')}`,
     );
   }
   const files: Record<string, string> = {
     'manifest.json': `${JSON.stringify(checked.bundle.manifest, null, 2)}\n`,
-    'look.wgsl': checked.bundle.wgsl.endsWith('\n')
+    'package.wgsl': checked.bundle.wgsl.endsWith('\n')
       ? checked.bundle.wgsl
       : `${checked.bundle.wgsl}\n`,
   };
@@ -354,24 +354,24 @@ export function buildAuroraLookArchive(bundle: AuroraLookBundle): Uint8Array {
     files['defaults.json'] = `${JSON.stringify(checked.bundle.defaults, null, 2)}\n`;
   }
   const archive = zipTextEntries(files);
-  if (archive.byteLength > AURORA_LOOK_MAX_ARCHIVE_BYTES) {
-    throw new Error(`aurora-look archive exceeds ${AURORA_LOOK_MAX_ARCHIVE_BYTES} bytes`);
+  if (archive.byteLength > AURORA_PACKAGE_MAX_ARCHIVE_BYTES) {
+    throw new Error(`aurora-package archive exceeds ${AURORA_PACKAGE_MAX_ARCHIVE_BYTES} bytes`);
   }
   return archive;
 }
 
 /** Parse + validate an archive. Optionally remaps authoring WGSL to show form. */
-export function parseAuroraLookArchive(
+export function parseAuroraPackageArchive(
   bytes: Uint8Array,
   opts?: { remapAuthoring?: boolean },
-): AuroraLookValidationResult {
-  if (bytes.byteLength > AURORA_LOOK_MAX_ARCHIVE_BYTES) {
+): AuroraPackageValidationResult {
+  if (bytes.byteLength > AURORA_PACKAGE_MAX_ARCHIVE_BYTES) {
     return {
       ok: false,
       errors: [
         {
           path: 'archive',
-          message: `exceeds ${AURORA_LOOK_MAX_ARCHIVE_BYTES} bytes`,
+          message: `exceeds ${AURORA_PACKAGE_MAX_ARCHIVE_BYTES} bytes`,
         },
       ],
     };
@@ -390,8 +390,8 @@ export function parseAuroraLookArchive(
   if (!files['manifest.json']) {
     return { ok: false, errors: [{ path: 'manifest.json', message: 'missing from archive' }] };
   }
-  if (!files['look.wgsl']) {
-    return { ok: false, errors: [{ path: 'look.wgsl', message: 'missing from archive' }] };
+  if (!files['package.wgsl']) {
+    return { ok: false, errors: [{ path: 'package.wgsl', message: 'missing from archive' }] };
   }
 
   let manifestRaw: unknown;
@@ -404,7 +404,7 @@ export function parseAuroraLookArchive(
   const man = validateManifest(manifestRaw);
   if (!man.ok) return man;
 
-  let defaults: AuroraLookDefaults | undefined;
+  let defaults: AuroraPackageDefaults | undefined;
   if (files['defaults.json']) {
     try {
       const d = validateDefaults(JSON.parse(files['defaults.json']));
@@ -415,14 +415,14 @@ export function parseAuroraLookArchive(
     }
   }
 
-  let wgsl = files['look.wgsl'];
+  let wgsl = files['package.wgsl'];
   let form = man.bundle.manifest.wgslForm;
   if (opts?.remapAuthoring !== false && form === 'authoring') {
     wgsl = remapAuthoringWgslToShow(wgsl);
     form = 'show';
   }
 
-  const bundle: AuroraLookBundle = {
+  const bundle: AuroraPackageBundle = {
     manifest: { ...man.bundle.manifest, wgslForm: form },
     wgsl,
     defaults,
@@ -434,7 +434,7 @@ export function parseAuroraLookArchive(
  * ModePreset-shaped object for installing under data/decks/.../preset.json.
  * Pure data — does not write disk.
  */
-export function auroraLookToModePreset(bundle: AuroraLookBundle): {
+export function auroraPackageToModePreset(bundle: AuroraPackageBundle): {
   schemaVersion: 1;
   id: string;
   slug: string;
@@ -463,13 +463,13 @@ export function auroraLookToModePreset(bundle: AuroraLookBundle): {
 }
 
 /** Filename for the WGSL asset next to preset.json. */
-export function auroraLookWgslFileName(slug: string): string {
+export function auroraPackageWgslFileName(slug: string): string {
   return `${slug.replace(/-/g, '_')}.wgsl`;
 }
 
 /** Download-friendly archive name. */
-export function auroraLookFileName(slug: string): string {
-  return `${slug}.aurora-look`;
+export function auroraPackageFileName(slug: string): string {
+  return `${slug}.aurora-package`;
 }
 
 // Re-export zip helpers for Studio/bridge without reaching into zip-store.
