@@ -48,14 +48,17 @@
       "Polished UX beyond what the solo operator needs under stage pressure."
     ],
     "acceptance_criteria": [
-      {"id": "AC1", "metric": "Stable 60+ FPS on projector during 45–60 min set, zero crashes."},
-      {"id": "AC2", "metric": "End-to-end cue response (controls or MIDI → projector) <200ms."},
-      {"id": "AC3", "metric": "OSC live indicator stays connected for full set; no silent reactivity loss."},
-      {"id": "AC4", "metric": "All safety toggles reachable in <2s from controls page."},
-      {"id": "AC5", "metric": "Six preset slots persist across browser reload."},
-      {"id": "AC6", "metric": "Setup/teardown <15 min using show-day checklist."},
-      {"id": "AC7", "metric": "Zero strobe/brightness misfires in rehearsal + show."},
-      {"id": "AC8", "metric": "Geoff reports high post-rehearsal confidence (qualitative)."}
+      { "id": "AC1", "metric": "Stable 60+ FPS on projector during 45–60 min set, zero crashes." },
+      { "id": "AC2", "metric": "End-to-end cue response (controls or MIDI → projector) <200ms." },
+      {
+        "id": "AC3",
+        "metric": "OSC live indicator stays connected for full set; no silent reactivity loss."
+      },
+      { "id": "AC4", "metric": "All safety toggles reachable in <2s from controls page." },
+      { "id": "AC5", "metric": "Six preset slots persist across browser reload." },
+      { "id": "AC6", "metric": "Setup/teardown <15 min using show-day checklist." },
+      { "id": "AC7", "metric": "Zero strobe/brightness misfires in rehearsal + show." },
+      { "id": "AC8", "metric": "Geoff reports high post-rehearsal confidence (qualitative)." }
     ]
   },
 
@@ -93,10 +96,22 @@
       "Two-page UI cognitive load — mitigated by rehearsal + clear diagnostics, not by redesign."
     ],
     "alternatives_rejected": [
-      {"option": "Generic browser VJ engine", "why_rejected": "Higher engineering cost and more failure modes; cannot ship a confident first show within scope."},
-      {"option": "GPU palette pass in v0.1.0", "why_rejected": "Increases visual risk surface (shader bugs, GPU stalls) for marginal first-show value."},
-      {"option": "Direct Web MIDI in browser", "why_rejected": "Less deterministic than Ableton-mapped MIDI through VST3+OSC; harder to debug live."},
-      {"option": "Single-page combined UI", "why_rejected": "Risks HUD bleed onto projector and conflates operator/audience views."}
+      {
+        "option": "Generic browser VJ engine",
+        "why_rejected": "Higher engineering cost and more failure modes; cannot ship a confident first show within scope."
+      },
+      {
+        "option": "GPU palette pass in v0.1.0",
+        "why_rejected": "Increases visual risk surface (shader bugs, GPU stalls) for marginal first-show value."
+      },
+      {
+        "option": "Direct Web MIDI in browser",
+        "why_rejected": "Less deterministic than Ableton-mapped MIDI through VST3+OSC; harder to debug live."
+      },
+      {
+        "option": "Single-page combined UI",
+        "why_rejected": "Risks HUD bleed onto projector and conflates operator/audience views."
+      }
     ]
   },
 
@@ -160,22 +175,95 @@
   ],
 
   "risks_carried_forward": [
-    {"id": "R1", "trigger": "WebGPU disabled or throttled on show machine", "likelihood": "medium", "impact": "high", "mitigation": "Pre-flight check in show-day checklist; consider WebGL2 fallback post-show only."},
-    {"id": "R2", "trigger": "wasm-bindgen CLI version drift", "likelihood": "medium", "impact": "high", "mitigation": "Pin in README; add check:wasm to pre-show routine."},
-    {"id": "R3", "trigger": "AbletonOSC port not bound or conflicting", "likelihood": "medium", "impact": "high", "mitigation": "Controls diagnostics surface OSC state; env-var port overrides documented."},
-    {"id": "R4", "trigger": "Strobe / max-brightness misfire", "likelihood": "low", "impact": "high", "mitigation": "Strobe lockout, max brightness cap, Panic Dim, blackout, freeze, reset — tested every rehearsal."},
-    {"id": "R5", "trigger": "Operator cognitive load under stage fatigue", "likelihood": "medium", "impact": "medium", "mitigation": "Rehearsal with record/replay; one-touch safety; show-day checklist."},
-    {"id": "R6", "trigger": "VST OSC port 12000 conflicts with another local service", "likelihood": "low", "impact": "medium", "mitigation": "VST_CONTROL_RECV_PORT override documented."}
+    {
+      "id": "R1",
+      "trigger": "WebGPU disabled or throttled on show machine",
+      "likelihood": "medium",
+      "impact": "high",
+      "mitigation": "Pre-flight check in show-day checklist; consider WebGL2 fallback post-show only."
+    },
+    {
+      "id": "R2",
+      "trigger": "wasm-bindgen CLI version drift",
+      "likelihood": "medium",
+      "impact": "high",
+      "mitigation": "Pin in README; add check:wasm to pre-show routine."
+    },
+    {
+      "id": "R3",
+      "trigger": "AbletonOSC port not bound or conflicting",
+      "likelihood": "medium",
+      "impact": "high",
+      "mitigation": "Controls diagnostics surface OSC state; env-var port overrides documented."
+    },
+    {
+      "id": "R4",
+      "trigger": "Strobe / max-brightness misfire",
+      "likelihood": "low",
+      "impact": "high",
+      "mitigation": "Strobe lockout, max brightness cap, Panic Dim, blackout, freeze, reset — tested every rehearsal."
+    },
+    {
+      "id": "R5",
+      "trigger": "Operator cognitive load under stage fatigue",
+      "likelihood": "medium",
+      "impact": "medium",
+      "mitigation": "Rehearsal with record/replay; one-touch safety; show-day checklist."
+    },
+    {
+      "id": "R6",
+      "trigger": "VST OSC port 12000 conflicts with another local service",
+      "likelihood": "low",
+      "impact": "medium",
+      "mitigation": "VST_CONTROL_RECV_PORT override documented."
+    }
   ],
 
   "action_list": [
-    {"id": "T1", "action": "Lock v0.1.0 MVP scope in repo (no new features until post-show review).", "owner": "Geoff Seemueller", "blocking": false},
-    {"id": "T2", "action": "Write show-day checklist covering: wasm-bindgen version, port checks, build:web, serve, AbletonOSC, VST load, safety toggle test.", "owner": "Geoff Seemueller", "blocking": true},
-    {"id": "T3", "action": "Run full-length rehearsal (45–60 min) end-to-end; record AC1–AC8 outcomes.", "owner": "Geoff Seemueller", "blocking": true},
-    {"id": "T4", "action": "Drill safety toggles (strobe lockout, max brightness, Panic Dim, blackout, freeze, reset) at least once per rehearsal.", "owner": "Geoff Seemueller", "blocking": true},
-    {"id": "T5", "action": "Verify six preset slots persist across browser reload on show machine.", "owner": "Geoff Seemueller", "blocking": false},
-    {"id": "T6", "action": "Run show.", "owner": "Geoff Seemueller", "blocking": true, "depends_on": ["T2", "T3", "T4"]},
-    {"id": "T7", "action": "Post-show retro: capture AC results, operator debrief, audience-safety review; decide on scope expansion.", "owner": "Geoff Seemueller", "blocking": false, "depends_on": ["T6"]}
+    {
+      "id": "T1",
+      "action": "Lock v0.1.0 MVP scope in repo (no new features until post-show review).",
+      "owner": "Geoff Seemueller",
+      "blocking": false
+    },
+    {
+      "id": "T2",
+      "action": "Write show-day checklist covering: wasm-bindgen version, port checks, build:web, serve, AbletonOSC, VST load, safety toggle test.",
+      "owner": "Geoff Seemueller",
+      "blocking": true
+    },
+    {
+      "id": "T3",
+      "action": "Run full-length rehearsal (45–60 min) end-to-end; record AC1–AC8 outcomes.",
+      "owner": "Geoff Seemueller",
+      "blocking": true
+    },
+    {
+      "id": "T4",
+      "action": "Drill safety toggles (strobe lockout, max brightness, Panic Dim, blackout, freeze, reset) at least once per rehearsal.",
+      "owner": "Geoff Seemueller",
+      "blocking": true
+    },
+    {
+      "id": "T5",
+      "action": "Verify six preset slots persist across browser reload on show machine.",
+      "owner": "Geoff Seemueller",
+      "blocking": false
+    },
+    {
+      "id": "T6",
+      "action": "Run show.",
+      "owner": "Geoff Seemueller",
+      "blocking": true,
+      "depends_on": ["T2", "T3", "T4"]
+    },
+    {
+      "id": "T7",
+      "action": "Post-show retro: capture AC results, operator debrief, audience-safety review; decide on scope expansion.",
+      "owner": "Geoff Seemueller",
+      "blocking": false,
+      "depends_on": ["T6"]
+    }
   ],
 
   "handoff_pointers": {

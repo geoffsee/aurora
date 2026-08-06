@@ -10,7 +10,7 @@
 // the preset morph interpolates (MORPH_KEYS): discrete modes (deckAMode, etc.)
 // are not blended, so layering never disturbs the live deck modes.
 
-import { MORPH_KEYS, type MorphKey } from "./preset-morph.ts";
+import { MORPH_KEYS, type MorphKey } from './preset-morph.ts';
 
 export type LayerKey = MorphKey;
 export const LAYER_KEYS = MORPH_KEYS;
@@ -18,11 +18,11 @@ export const LAYER_KEYS = MORPH_KEYS;
 export type LayerState = Partial<Record<LayerKey, number>>;
 
 export type PresetLayer = {
-	// Source preset/cue name, kept for identification in the control surface.
-	name: string;
-	state: LayerState;
-	// Per-layer contribution in the unit interval (0 = invisible, 1 = full over).
-	weight: number;
+  // Source preset/cue name, kept for identification in the control surface.
+  name: string;
+  state: LayerState;
+  // Per-layer contribution in the unit interval (0 = invisible, 1 = full over).
+  weight: number;
 };
 
 // Bound the stack so a misbehaving controller can't grow it without limit and
@@ -36,20 +36,20 @@ export const PRESET_LAYER_MAX = 8;
 // MIDI control edit lands on one of these names, and the change is forwarded
 // back into the stack via applyLayerWeightControl.
 export const LAYER_WEIGHT_KEYS: readonly string[] = Array.from(
-	{ length: PRESET_LAYER_MAX },
-	(_, i) => `layerWeight${i}`,
+  { length: PRESET_LAYER_MAX },
+  (_, i) => `layerWeight${i}`,
 );
 
 // Clamp a layer weight into the unit interval; non-finite input collapses to 0
 // so a malformed message renders the layer invisible rather than throwing.
 export const clampLayerWeight = (value: unknown): number => {
-	const n = Number(value);
-	if (!Number.isFinite(n)) return 0;
-	return n <= 0 ? 0 : n >= 1 ? 1 : n;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return n <= 0 ? 0 : n >= 1 ? 1 : n;
 };
 
 const pickFinite = (v: unknown): number | undefined =>
-	Number.isFinite(v) ? (v as number) : undefined;
+  Number.isFinite(v) ? (v as number) : undefined;
 
 // Composite the stack over the base state. Pure: neither `base` nor any layer
 // (or its `state`) is mutated. For each key, start from the base value (if it
@@ -59,97 +59,88 @@ const pickFinite = (v: unknown): number | undefined =>
 // Keys neither base nor any layer defines collapse to 0 (matching the morph
 // blend's neutral fallback), so the result always carries every LAYER_KEY.
 export const composeLayers = (
-	base: LayerState,
-	layers: readonly PresetLayer[],
+  base: LayerState,
+  layers: readonly PresetLayer[],
 ): Record<LayerKey, number> => {
-	const out = {} as Record<LayerKey, number>;
-	for (const key of LAYER_KEYS) {
-		let cur = pickFinite(base[key]);
-		for (const layer of layers) {
-			const lv = pickFinite(layer.state[key]);
-			if (lv === undefined) continue;
-			const w = clampLayerWeight(layer.weight);
-			cur = cur === undefined ? lv : cur + (lv - cur) * w;
-		}
-		out[key] = cur === undefined ? 0 : cur;
-	}
-	return out;
+  const out = {} as Record<LayerKey, number>;
+  for (const key of LAYER_KEYS) {
+    let cur = pickFinite(base[key]);
+    for (const layer of layers) {
+      const lv = pickFinite(layer.state[key]);
+      if (lv === undefined) continue;
+      const w = clampLayerWeight(layer.weight);
+      cur = cur === undefined ? lv : cur + (lv - cur) * w;
+    }
+    out[key] = cur === undefined ? 0 : cur;
+  }
+  return out;
 };
 
 // The stack operations below all return a new array and never mutate the input,
 // keeping layering non-destructive: the caller re-composites from the fixed
 // base against the returned stack.
 
-export const addLayer = (
-	layers: readonly PresetLayer[],
-	layer: PresetLayer,
-): PresetLayer[] => [...layers, { ...layer, weight: clampLayerWeight(layer.weight) }];
+export const addLayer = (layers: readonly PresetLayer[], layer: PresetLayer): PresetLayer[] => [
+  ...layers,
+  { ...layer, weight: clampLayerWeight(layer.weight) },
+];
 
-export const removeLayerAt = (
-	layers: readonly PresetLayer[],
-	index: number,
-): PresetLayer[] =>
-	index >= 0 && index < layers.length
-		? layers.filter((_, i) => i !== index)
-		: [...layers];
+export const removeLayerAt = (layers: readonly PresetLayer[], index: number): PresetLayer[] =>
+  index >= 0 && index < layers.length ? layers.filter((_, i) => i !== index) : [...layers];
 
 export const setLayerWeightAt = (
-	layers: readonly PresetLayer[],
-	index: number,
-	weight: unknown,
+  layers: readonly PresetLayer[],
+  index: number,
+  weight: unknown,
 ): PresetLayer[] =>
-	layers.map((layer, i) =>
-		i === index ? { ...layer, weight: clampLayerWeight(weight) } : layer,
-	);
+  layers.map((layer, i) => (i === index ? { ...layer, weight: clampLayerWeight(weight) } : layer));
 
 // Move the layer at `from` to position `to`, shifting the rest. Out-of-range
 // indices leave the order unchanged.
 export const moveLayer = (
-	layers: readonly PresetLayer[],
-	from: number,
-	to: number,
+  layers: readonly PresetLayer[],
+  from: number,
+  to: number,
 ): PresetLayer[] => {
-	if (
-		!Number.isFinite(from) ||
-		!Number.isFinite(to) ||
-		from < 0 ||
-		from >= layers.length ||
-		to < 0 ||
-		to >= layers.length ||
-		from === to
-	) {
-		return [...layers];
-	}
-	const next = [...layers];
-	const moved = next[from] as PresetLayer;
-	next.splice(from, 1);
-	next.splice(to, 0, moved);
-	return next;
+  if (
+    !Number.isFinite(from) ||
+    !Number.isFinite(to) ||
+    from < 0 ||
+    from >= layers.length ||
+    to < 0 ||
+    to >= layers.length ||
+    from === to
+  ) {
+    return [...layers];
+  }
+  const next = [...layers];
+  const moved = next[from] as PresetLayer;
+  next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
 };
 
 // Restrict an arbitrary state object to the composable layer keys, dropping
 // non-finite values. Used to capture a base snapshot and to seed a layer from a
 // cue preset without dragging along discrete-mode fields.
-export const pickLayerState = (
-	state: Record<string, unknown> | null | undefined,
-): LayerState => {
-	const out: LayerState = {};
-	if (!state) return out;
-	for (const key of LAYER_KEYS) {
-		const v = pickFinite(state[key]);
-		if (v !== undefined) out[key] = v;
-	}
-	return out;
+export const pickLayerState = (state: Record<string, unknown> | null | undefined): LayerState => {
+  const out: LayerState = {};
+  if (!state) return out;
+  for (const key of LAYER_KEYS) {
+    const v = pickFinite(state[key]);
+    if (v !== undefined) out[key] = v;
+  }
+  return out;
 };
 
 export type LayerControllerDeps = {
-	// Snapshot the live underlying state to freeze as the composition floor,
-	// captured the moment the stack becomes non-empty.
-	captureFloor: () => LayerState;
-	// Merge a composited (or restored) state back into the live control state.
-	merge: (state: LayerState) => void;
-	// Notified when an add is dropped because the stack is already at max.
-	onFull: () => void;
+  // Snapshot the live underlying state to freeze as the composition floor,
+  // captured the moment the stack becomes non-empty.
+  captureFloor: () => LayerState;
+  // Merge a composited (or restored) state back into the live control state.
+  merge: (state: LayerState) => void;
+  // Notified when an add is dropped because the stack is already at max.
+  onFull: () => void;
 };
 
 // The stateful half of the feature: owns the frozen base and the layer stack,
@@ -157,80 +148,79 @@ export type LayerControllerDeps = {
 // non-destructive round-trip (add → recompose → clear restores the floor) is
 // unit-testable against a fake merge/capture without booting the server.
 export const createLayerController = (deps: LayerControllerDeps) => {
-	let layerBase: LayerState | null = null;
-	let layerStack: PresetLayer[] = [];
+  let layerBase: LayerState | null = null;
+  let layerStack: PresetLayer[] = [];
 
-	const apply = () => {
-		if (layerStack.length === 0) {
-			if (layerBase) deps.merge({ ...layerBase });
-			layerBase = null;
-			return;
-		}
-		if (!layerBase) layerBase = deps.captureFloor();
-		deps.merge(composeLayers(layerBase, layerStack));
-	};
+  const apply = () => {
+    if (layerStack.length === 0) {
+      if (layerBase) deps.merge({ ...layerBase });
+      layerBase = null;
+      return;
+    }
+    if (!layerBase) layerBase = deps.captureFloor();
+    deps.merge(composeLayers(layerBase, layerStack));
+  };
 
-	return {
-		add(layer: PresetLayer): void {
-			if (layerStack.length >= PRESET_LAYER_MAX) {
-				deps.onFull();
-				return;
-			}
-			layerStack = addLayer(layerStack, layer);
-			apply();
-		},
-		setWeight(index: number, weight: unknown): void {
-			layerStack = setLayerWeightAt(layerStack, index, weight);
-			apply();
-		},
-		remove(index: number): void {
-			layerStack = removeLayerAt(layerStack, index);
-			apply();
-		},
-		move(from: number, to: number): void {
-			layerStack = moveLayer(layerStack, from, to);
-			apply();
-		},
-		clear(): void {
-			layerStack = [];
-			apply();
-		},
-		get stack(): readonly PresetLayer[] {
-			return layerStack;
-		},
-	};
+  return {
+    add(layer: PresetLayer): void {
+      if (layerStack.length >= PRESET_LAYER_MAX) {
+        deps.onFull();
+        return;
+      }
+      layerStack = addLayer(layerStack, layer);
+      apply();
+    },
+    setWeight(index: number, weight: unknown): void {
+      layerStack = setLayerWeightAt(layerStack, index, weight);
+      apply();
+    },
+    remove(index: number): void {
+      layerStack = removeLayerAt(layerStack, index);
+      apply();
+    },
+    move(from: number, to: number): void {
+      layerStack = moveLayer(layerStack, from, to);
+      apply();
+    },
+    clear(): void {
+      layerStack = [];
+      apply();
+    },
+    get stack(): readonly PresetLayer[] {
+      return layerStack;
+    },
+  };
 };
 
 export type LayerWeightController = Pick<
-	ReturnType<typeof createLayerController>,
-	"setWeight" | "stack"
+  ReturnType<typeof createLayerController>,
+  'setWeight' | 'stack'
 >;
 
 // Project the stack's weights onto the fixed slot fields. Slots past the current
 // stack depth (or with a non-finite weight) read 0, so a removed or absent layer
 // reports no contribution and the mirror always carries every slot.
-export const layerWeightFields = (
-	layers: readonly PresetLayer[],
-): Record<string, number> => {
-	const out: Record<string, number> = {};
-	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
-		out[LAYER_WEIGHT_KEYS[i]!] = clampLayerWeight(layers[i]?.weight);
-	}
-	return out;
+export const layerWeightFields = (layers: readonly PresetLayer[]): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+    const key = LAYER_WEIGHT_KEYS[i];
+    if (key) out[key] = clampLayerWeight(layers[i]?.weight);
+  }
+  return out;
 };
 
 // Slots whose weight field differs between two states. Used to spot an external
 // weight edit (automation replay, OSC/MIDI control) that landed in ControlState.
 export const changedLayerWeightIndices = (
-	prev: Record<string, unknown>,
-	next: Record<string, unknown>,
+  prev: Record<string, unknown>,
+  next: Record<string, unknown>,
 ): number[] => {
-	const out: number[] = [];
-	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
-		const key = LAYER_WEIGHT_KEYS[i]!;
-		if (prev[key] !== next[key]) out.push(i);
-	}
-	return out;
+  const out: number[] = [];
+  for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+    const key = LAYER_WEIGHT_KEYS[i];
+    if (key && prev[key] !== next[key]) out.push(i);
+  }
+  return out;
 };
 
 // Forward externally-set weight-slot fields into the controller so the stack
@@ -242,26 +232,26 @@ export const changedLayerWeightIndices = (
 // zero it in place here. `next` is the caller's live control-state record, so
 // the zero lands on the field it will emit.
 export const applyLayerWeightControl = (
-	controller: LayerWeightController,
-	prev: Record<string, unknown>,
-	next: Record<string, unknown>,
+  controller: LayerWeightController,
+  prev: Record<string, unknown>,
+  next: Record<string, unknown>,
 ): boolean => {
-	// Iterate the slots directly rather than through changedLayerWeightIndices so
-	// the common no-change broadcast doesn't allocate an indices array.
-	let recomposited = false;
-	for (let i = 0; i < PRESET_LAYER_MAX; i++) {
-		const key = LAYER_WEIGHT_KEYS[i]!;
-		if (prev[key] === next[key]) continue;
-		if (controller.stack[i]) {
-			// A live layer backs this slot: forwarding recomposites the stack, and
-			// the controller's merge reprojects every slot back onto the state.
-			controller.setWeight(i, next[key]);
-			recomposited = true;
-		} else {
-			// No layer behind this slot, so setWeight wouldn't reproject. Snap the
-			// phantom weight back to 0 so it isn't broadcast or recorded.
-			next[key] = 0;
-		}
-	}
-	return recomposited;
+  // Iterate the slots directly rather than through changedLayerWeightIndices so
+  // the common no-change broadcast doesn't allocate an indices array.
+  let recomposited = false;
+  for (let i = 0; i < PRESET_LAYER_MAX; i++) {
+    const key = LAYER_WEIGHT_KEYS[i];
+    if (!key || prev[key] === next[key]) continue;
+    if (controller.stack[i]) {
+      // A live layer backs this slot: forwarding recomposites the stack, and
+      // the controller's merge reprojects every slot back onto the state.
+      controller.setWeight(i, next[key]);
+      recomposited = true;
+    } else {
+      // No layer behind this slot, so setWeight wouldn't reproject. Snap the
+      // phantom weight back to 0 so it isn't broadcast or recorded.
+      next[key] = 0;
+    }
+  }
+  return recomposited;
 };

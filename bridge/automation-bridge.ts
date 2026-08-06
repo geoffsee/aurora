@@ -1,59 +1,58 @@
-import { makeAutomationPlayer, buildRecording } from "./automation-player.ts";
+import { CONTROL_STATE_SCHEMA_VERSION } from '../shared/osc-validation.ts';
+import type { AudioFeatures } from './audio-ema.ts';
 import {
-	matchMidiNote,
-	matchMidiCc,
-	matchOscAddress,
-	resolveAction,
-	type AutomationTriggerBinding,
-	type TriggerAction,
-} from "./automation-trigger.ts";
-import type { StateLogEntry } from "./state-log.ts";
-import { CONTROL_STATE_SCHEMA_VERSION } from "../shared/osc-validation.ts";
-import type { AudioFeatures } from "./audio-ema.ts";
+  type AudioTransientConfig,
+  makeAudioTransientDetector,
+} from './audio-transient-trigger.ts';
+import { buildRecording, makeAutomationPlayer } from './automation-player.ts';
 import {
-	makeAudioTransientDetector,
-	type AudioTransientConfig,
-} from "./audio-transient-trigger.ts";
+  type AutomationTriggerBinding,
+  matchMidiCc,
+  matchMidiNote,
+  matchOscAddress,
+  resolveAction,
+  type TriggerAction,
+} from './automation-trigger.ts';
+import type { StateLogEntry } from './state-log.ts';
 
-export type { AutomationTriggerBinding };
-export type { AudioTransientConfig };
+export type { AudioTransientConfig, AutomationTriggerBinding };
 
 // Default OSC addresses wired unconditionally. Hardware/software controllers
 // can send to these without any per-deployment configuration.
 export const DEFAULT_OSC_BINDINGS: readonly AutomationTriggerBinding[] = [
-	{ type: "osc", address: "/aurora/automation/play", action: "play" },
-	{ type: "osc", address: "/aurora/automation/play-loop", action: "play-loop" },
-	{ type: "osc", address: "/aurora/automation/stop", action: "stop" },
-	{ type: "osc", address: "/aurora/automation/toggle", action: "toggle" },
-	{ type: "osc", address: "/aurora/automation/toggle-loop", action: "toggle-loop" },
+  { type: 'osc', address: '/aurora/automation/play', action: 'play' },
+  { type: 'osc', address: '/aurora/automation/play-loop', action: 'play-loop' },
+  { type: 'osc', address: '/aurora/automation/stop', action: 'stop' },
+  { type: 'osc', address: '/aurora/automation/toggle', action: 'toggle' },
+  { type: 'osc', address: '/aurora/automation/toggle-loop', action: 'toggle-loop' },
 ];
 
 const VALID_ACTIONS: ReadonlySet<string> = new Set([
-	"play",
-	"play-loop",
-	"stop",
-	"toggle",
-	"toggle-loop",
+  'play',
+  'play-loop',
+  'stop',
+  'toggle',
+  'toggle-loop',
 ]);
 
 function isValidBinding(b: unknown): b is AutomationTriggerBinding {
-	if (!b || typeof b !== "object") return false;
-	const obj = b as Record<string, unknown>;
-	if (!VALID_ACTIONS.has(String(obj["action"]))) return false;
-	if (obj["type"] === "midi-note") {
-		return typeof obj["note"] === "number" && typeof obj["channel"] === "number";
-	}
-	if (obj["type"] === "midi-cc") {
-		return (
-			typeof obj["cc"] === "number" &&
-			typeof obj["channel"] === "number" &&
-			typeof obj["threshold"] === "number"
-		);
-	}
-	if (obj["type"] === "osc") {
-		return typeof obj["address"] === "string";
-	}
-	return false;
+  if (!b || typeof b !== 'object') return false;
+  const obj = b as Record<string, unknown>;
+  if (!VALID_ACTIONS.has(String(obj.action))) return false;
+  if (obj.type === 'midi-note') {
+    return typeof obj.note === 'number' && typeof obj.channel === 'number';
+  }
+  if (obj.type === 'midi-cc') {
+    return (
+      typeof obj.cc === 'number' &&
+      typeof obj.channel === 'number' &&
+      typeof obj.threshold === 'number'
+    );
+  }
+  if (obj.type === 'osc') {
+    return typeof obj.address === 'string';
+  }
+  return false;
 }
 
 /**
@@ -61,14 +60,14 @@ function isValidBinding(b: unknown): b is AutomationTriggerBinding {
  * parse or validation error so the bridge degrades gracefully on bad config.
  */
 export function parseTriggerBindings(json: string): AutomationTriggerBinding[] {
-	try {
-		const parsed: unknown = JSON.parse(json);
-		if (!Array.isArray(parsed)) return [];
-		return parsed.filter(isValidBinding);
-	} catch {
-		console.warn("[automation] failed to parse AUTOMATION_TRIGGER_BINDINGS");
-		return [];
-	}
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidBinding);
+  } catch {
+    console.warn('[automation] failed to parse AUTOMATION_TRIGGER_BINDINGS');
+    return [];
+  }
 }
 
 /**
@@ -85,71 +84,68 @@ export function parseTriggerBindings(json: string): AutomationTriggerBinding[] {
  * Call `updateTransientConfig(patch)` to reconfigure the detector at runtime.
  */
 export function makeAutomationBridge(
-	mergeControlState: (diff: Record<string, unknown>) => void,
-	extraBindings: readonly AutomationTriggerBinding[],
-	getEntries: () => StateLogEntry[],
-	transientConfig?: Partial<AudioTransientConfig>,
+  mergeControlState: (diff: Record<string, unknown>) => void,
+  extraBindings: readonly AutomationTriggerBinding[],
+  getEntries: () => StateLogEntry[],
+  transientConfig?: Partial<AudioTransientConfig>,
 ): {
-	player: ReturnType<typeof makeAutomationPlayer>;
-	onMidiNote(note: number, channel: number): boolean;
-	onMidiCc(cc: number, channel: number, value: number): boolean;
-	onOscAddress(address: string): boolean;
-	onAudioFeatures(features: Readonly<AudioFeatures>, nowMs: number): boolean;
-	updateTransientConfig(patch: Partial<AudioTransientConfig>): void;
-	resetTransientDetector(features?: Readonly<AudioFeatures>): void;
-	getTransientConfig(): Readonly<AudioTransientConfig>;
+  player: ReturnType<typeof makeAutomationPlayer>;
+  onMidiNote(note: number, channel: number): boolean;
+  onMidiCc(cc: number, channel: number, value: number): boolean;
+  onOscAddress(address: string): boolean;
+  onAudioFeatures(features: Readonly<AudioFeatures>, nowMs: number): boolean;
+  updateTransientConfig(patch: Partial<AudioTransientConfig>): void;
+  resetTransientDetector(features?: Readonly<AudioFeatures>): void;
+  getTransientConfig(): Readonly<AudioTransientConfig>;
 } {
-	const player = makeAutomationPlayer(mergeControlState);
-	const bindings: readonly AutomationTriggerBinding[] = [
-		...DEFAULT_OSC_BINDINGS,
-		...extraBindings,
-	];
-	const detector = makeAudioTransientDetector(transientConfig ?? {});
+  const player = makeAutomationPlayer(mergeControlState);
+  const bindings: readonly AutomationTriggerBinding[] = [...DEFAULT_OSC_BINDINGS, ...extraBindings];
+  const detector = makeAudioTransientDetector(transientConfig ?? {});
 
-	function dispatch(action: TriggerAction): void {
-		const resolved = resolveAction(action, player.isActive());
-		if (resolved === "stop") {
-			player.stop();
-			return;
-		}
-		const recording = buildRecording(getEntries(), CONTROL_STATE_SCHEMA_VERSION);
-		player.load(recording);
-		player.play({ loop: resolved === "play-loop" });
-	}
+  function dispatch(action: TriggerAction): void {
+    const resolved = resolveAction(action, player.isActive());
+    if (resolved === 'stop') {
+      player.stop();
+      return;
+    }
+    const recording = buildRecording(getEntries(), CONTROL_STATE_SCHEMA_VERSION);
+    player.load(recording);
+    player.play({ loop: resolved === 'play-loop' });
+  }
 
-	return {
-		player,
-		onMidiNote(note, channel) {
-			const action = matchMidiNote(note, channel, bindings);
-			if (action === null) return false;
-			dispatch(action);
-			return true;
-		},
-		onMidiCc(cc, channel, value) {
-			const action = matchMidiCc(cc, channel, value, bindings);
-			if (action === null) return false;
-			dispatch(action);
-			return true;
-		},
-		onOscAddress(address) {
-			const action = matchOscAddress(address, bindings);
-			if (action === null) return false;
-			dispatch(action);
-			return true;
-		},
-		onAudioFeatures(features, nowMs) {
-			if (!detector.step(features, nowMs)) return false;
-			dispatch(detector.getConfig().action);
-			return true;
-		},
-		updateTransientConfig(patch) {
-			detector.updateConfig(patch);
-		},
-		resetTransientDetector(features) {
-			detector.reset(features);
-		},
-		getTransientConfig() {
-			return detector.getConfig();
-		},
-	};
+  return {
+    player,
+    onMidiNote(note, channel) {
+      const action = matchMidiNote(note, channel, bindings);
+      if (action === null) return false;
+      dispatch(action);
+      return true;
+    },
+    onMidiCc(cc, channel, value) {
+      const action = matchMidiCc(cc, channel, value, bindings);
+      if (action === null) return false;
+      dispatch(action);
+      return true;
+    },
+    onOscAddress(address) {
+      const action = matchOscAddress(address, bindings);
+      if (action === null) return false;
+      dispatch(action);
+      return true;
+    },
+    onAudioFeatures(features, nowMs) {
+      if (!detector.step(features, nowMs)) return false;
+      dispatch(detector.getConfig().action);
+      return true;
+    },
+    updateTransientConfig(patch) {
+      detector.updateConfig(patch);
+    },
+    resetTransientDetector(features) {
+      detector.reset(features);
+    },
+    getTransientConfig() {
+      return detector.getConfig();
+    },
+  };
 }

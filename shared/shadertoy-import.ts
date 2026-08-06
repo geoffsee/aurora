@@ -1,27 +1,27 @@
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { writeFile, readFile, unlink } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { randomBytes } from 'node:crypto';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { ShadertoyMeta } from './shadertoy-api.ts';
 import {
-	extractShadertoyId,
-	fetchShadertoyShader,
-	parseShadertoyImagePass,
-} from "./shadertoy-api.ts";
-import type { ShadertoyMeta } from "./shadertoy-api.ts";
+  extractShadertoyId,
+  fetchShadertoyShader,
+  parseShadertoyImagePass,
+} from './shadertoy-api.ts';
 
+export { extractShadertoyId } from './shadertoy-api.ts';
 export type { ShadertoyMeta };
-export { extractShadertoyId } from "./shadertoy-api.ts";
 
 export type ImportSuccess = {
-	ok: true;
-	wgsl: string;
-	meta: ShadertoyMeta;
-	usedIChannel: boolean;
+  ok: true;
+  wgsl: string;
+  meta: ShadertoyMeta;
+  usedIChannel: boolean;
 };
 
 export type ImportFailure = {
-	ok: false;
-	error: string;
+  ok: false;
+  error: string;
 };
 
 export type ImportResult = ImportSuccess | ImportFailure;
@@ -90,12 +90,12 @@ void main() {
 `;
 
 export const wrapGlsl = (userGlsl: string): string =>
-	`${WRAPPER_PREAMBLE}// === SHADERTOY USER CODE ===\n${userGlsl}\n// === END USER CODE ===\n${WRAPPER_EPILOGUE}`;
+  `${WRAPPER_PREAMBLE}// === SHADERTOY USER CODE ===\n${userGlsl}\n// === END USER CODE ===\n${WRAPPER_EPILOGUE}`;
 
 type NagaRun = {
-	code: number | null;
-	stderr: string;
-	stdout: string;
+  code: number | null;
+  stderr: string;
+  stdout: string;
 };
 
 // Returns the installed naga-cli semver (e.g. "26.0.0"), or null when the CLI is
@@ -103,40 +103,39 @@ type NagaRun = {
 // so the import-regression harness uses this to pin the WGSL snapshot to one
 // release rather than failing across versions.
 export const nagaVersion = async (): Promise<string | null> => {
-	const { code, stdout } = await runNaga(["--version"]);
-	if (code !== 0) return null;
-	const match = stdout.match(/\d+\.\d+\.\d+/);
-	return match ? match[0] : null;
+  const { code, stdout } = await runNaga(['--version']);
+  if (code !== 0) return null;
+  const match = stdout.match(/\d+\.\d+\.\d+/);
+  return match ? match[0] : null;
 };
 
 const runNaga = async (args: string[]): Promise<NagaRun> => {
-	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
-	try {
-		proc = Bun.spawn(["naga", ...args], {
-			stdin: "ignore",
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-	} catch {
-		// Bun.spawn throws "No such file or directory (os error 2)" when the binary
-		// is missing. Surface a clear, actionable message instead of the raw error.
-		return {
-			code: null,
-			stdout: "",
-			stderr:
-				"`naga` CLI not found on PATH. Install it with `cargo install naga-cli` to enable Shadertoy import.",
-		};
-	}
-	const [stdout, stderr, code] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
-	return { code, stdout, stderr };
+  let proc: Bun.Subprocess<'ignore', 'pipe', 'pipe'>;
+  try {
+    proc = Bun.spawn(['naga', ...args], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+  } catch {
+    // Bun.spawn throws "No such file or directory (os error 2)" when the binary
+    // is missing. Surface a clear, actionable message instead of the raw error.
+    return {
+      code: null,
+      stdout: '',
+      stderr:
+        '`naga` CLI not found on PATH. Install it with `cargo install naga-cli` to enable Shadertoy import.',
+    };
+  }
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { code, stdout, stderr };
 };
 
-const BEVY_VERTEX_OUTPUT_IMPORT =
-	"#import bevy_sprite::mesh2d_vertex_output::VertexOutput";
+const BEVY_VERTEX_OUTPUT_IMPORT = '#import bevy_sprite::mesh2d_vertex_output::VertexOutput';
 
 // Bevy resolves the `#import` above at material-load time; bare naga can't. For
 // the standalone validation pass we swap it for a concrete VertexOutput matching
@@ -159,40 +158,41 @@ const VALIDATION_VERTEX_OUTPUT_STUB = `struct VertexOutput {
  * than emit a broken file.
  */
 export const adaptNagaWgslForBevy = (raw: string): string | null => {
-	const importLine = BEVY_VERTEX_OUTPUT_IMPORT;
-	if (raw.includes(importLine)) return raw;
+  const importLine = BEVY_VERTEX_OUTPUT_IMPORT;
+  if (raw.includes(importLine)) return raw;
 
-	// naga's return type varies by version: older builds inline `@location(0)
-	// vec4<f32>`, newer ones return a generated output struct (e.g.
-	// `FragmentOutput`). Capture whichever it is and keep it verbatim so the
-	// rewritten body (which may `return FragmentOutput(...)`) stays type-correct.
-	const fragmentSig =
-		/@fragment\s*\nfn\s+main\s*\(\s*@builtin\(position\)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*vec4<f32>\s*\)\s*->\s*(@location\(0\)\s*vec4<f32>|[A-Za-z_][A-Za-z0-9_]*)\s*\{/;
-	const match = raw.match(fragmentSig);
-	if (!match) return null;
-	const posName = match[1];
-	const returnType = match[2];
-	const replaced = raw.replace(
-		fragmentSig,
-		`@fragment\nfn fragment(_aurora_in: VertexOutput) -> ${returnType} {\n    let ${posName}: vec4<f32> = _aurora_in.position;`,
-	);
-	return `${importLine}\n\n${replaced}`;
+  // naga's return type varies by version: older builds inline `@location(0)
+  // vec4<f32>`, newer ones return a generated output struct (e.g.
+  // `FragmentOutput`). Capture whichever it is and keep it verbatim so the
+  // rewritten body (which may `return FragmentOutput(...)`) stays type-correct.
+  const fragmentSig =
+    /@fragment\s*\nfn\s+main\s*\(\s*@builtin\(position\)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*vec4<f32>\s*\)\s*->\s*(@location\(0\)\s*vec4<f32>|[A-Za-z_][A-Za-z0-9_]*)\s*\{/;
+  const match = raw.match(fragmentSig);
+  if (!match) return null;
+  const posName = match[1];
+  const returnType = match[2];
+  const replaced = raw.replace(
+    fragmentSig,
+    `@fragment\nfn fragment(_aurora_in: VertexOutput) -> ${returnType} {\n    let ${posName}: vec4<f32> = _aurora_in.position;`,
+  );
+  return `${importLine}\n\n${replaced}`;
 };
 
-const ICHANNEL_USAGE_RE = /\b(iChannel[0-3]|texture\s*\(|texelFetch\s*\(|textureLod\s*\(|texture2D\s*\(|textureGrad\s*\()/;
+const ICHANNEL_USAGE_RE =
+  /\b(iChannel[0-3]|texture\s*\(|texelFetch\s*\(|textureLod\s*\(|texture2D\s*\(|textureGrad\s*\()/;
 
 // Remove // line comments and /* */ block comments so a mention like
 // `// blurs the texture (slow)` doesn't trip the usage check below.
 const stripGlslComments = (src: string): string =>
-	src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
 export const checkIChannelUsage = (userGlsl: string): boolean =>
-	ICHANNEL_USAGE_RE.test(stripGlslComments(userGlsl));
+  ICHANNEL_USAGE_RE.test(stripGlslComments(userGlsl));
 
 export type TransformSuccess = {
-	ok: true;
-	wgsl: string;
-	usedIChannel: boolean;
+  ok: true;
+  wgsl: string;
+  usedIChannel: boolean;
 };
 
 export type TransformResult = TransformSuccess | ImportFailure;
@@ -205,103 +205,98 @@ export type TransformResult = TransformSuccess | ImportFailure;
  * drives it directly against a committed fixture so the real transform path is
  * snapshotted rather than a CPU stand-in. Requires the `naga` CLI on PATH.
  */
-export const transformShadertoyGlsl = async (
-	userGlsl: string,
-): Promise<TransformResult> => {
-	const usedIChannel = checkIChannelUsage(userGlsl);
-	const wrapped = wrapGlsl(userGlsl);
+export const transformShadertoyGlsl = async (userGlsl: string): Promise<TransformResult> => {
+  const usedIChannel = checkIChannelUsage(userGlsl);
+  const wrapped = wrapGlsl(userGlsl);
 
-	const stem = randomBytes(8).toString("hex");
-	const glslPath = join(tmpdir(), `shadertoy-${stem}.frag`);
-	const wgslPath = join(tmpdir(), `shadertoy-${stem}.wgsl`);
+  const stem = randomBytes(8).toString('hex');
+  const glslPath = join(tmpdir(), `shadertoy-${stem}.frag`);
+  const wgslPath = join(tmpdir(), `shadertoy-${stem}.wgsl`);
 
-	try {
-		await writeFile(glslPath, wrapped, "utf8");
-		// naga can't infer GLSL input from the `.frag` stem alone (it reads the
-		// stage but not the language), so name both explicitly.
-		const conv = await runNaga([
-			"--input-kind",
-			"glsl",
-			"--shader-stage",
-			"frag",
-			glslPath,
-			wgslPath,
-		]);
-		if (conv.code !== 0) {
-			return {
-				ok: false,
-				error: `naga GLSL→WGSL failed:\n${conv.stderr || conv.stdout}`,
-			};
-		}
-		const rawWgsl = await readFile(wgslPath, "utf8");
-		const adapted = adaptNagaWgslForBevy(rawWgsl);
-		if (!adapted) {
-			return {
-				ok: false,
-				error:
-					"Could not adapt naga output to Bevy Material2d shape (unexpected entry-point signature)",
-			};
-		}
+  try {
+    await writeFile(glslPath, wrapped, 'utf8');
+    // naga can't infer GLSL input from the `.frag` stem alone (it reads the
+    // stage but not the language), so name both explicitly.
+    const conv = await runNaga([
+      '--input-kind',
+      'glsl',
+      '--shader-stage',
+      'frag',
+      glslPath,
+      wgslPath,
+    ]);
+    if (conv.code !== 0) {
+      return {
+        ok: false,
+        error: `naga GLSL→WGSL failed:\n${conv.stderr || conv.stdout}`,
+      };
+    }
+    const rawWgsl = await readFile(wgslPath, 'utf8');
+    const adapted = adaptNagaWgslForBevy(rawWgsl);
+    if (!adapted) {
+      return {
+        ok: false,
+        error:
+          'Could not adapt naga output to Bevy Material2d shape (unexpected entry-point signature)',
+      };
+    }
 
-		// Round-trip validation: ensure the adapted WGSL parses cleanly. naga can't
-		// resolve Bevy's `#import`, so validate against a concrete VertexOutput stub
-		// — the returned `adapted` keeps the real import untouched.
-		const validationSrc = adapted.replace(
-			BEVY_VERTEX_OUTPUT_IMPORT,
-			VALIDATION_VERTEX_OUTPUT_STUB,
-		);
-		const validatePath = join(tmpdir(), `shadertoy-${stem}-validate.wgsl`);
-		await writeFile(validatePath, validationSrc, "utf8");
-		const verify = await runNaga([validatePath]);
-		await unlink(validatePath).catch(() => {});
-		if (verify.code !== 0) {
-			return {
-				ok: false,
-				error: `Adapted WGSL failed validation:\n${verify.stderr || verify.stdout}`,
-			};
-		}
+    // Round-trip validation: ensure the adapted WGSL parses cleanly. naga can't
+    // resolve Bevy's `#import`, so validate against a concrete VertexOutput stub
+    // — the returned `adapted` keeps the real import untouched.
+    const validationSrc = adapted.replace(BEVY_VERTEX_OUTPUT_IMPORT, VALIDATION_VERTEX_OUTPUT_STUB);
+    const validatePath = join(tmpdir(), `shadertoy-${stem}-validate.wgsl`);
+    await writeFile(validatePath, validationSrc, 'utf8');
+    const verify = await runNaga([validatePath]);
+    await unlink(validatePath).catch(() => {});
+    if (verify.code !== 0) {
+      return {
+        ok: false,
+        error: `Adapted WGSL failed validation:\n${verify.stderr || verify.stdout}`,
+      };
+    }
 
-		return { ok: true, wgsl: adapted, usedIChannel };
-	} finally {
-		await unlink(glslPath).catch(() => {});
-		await unlink(wgslPath).catch(() => {});
-	}
+    return { ok: true, wgsl: adapted, usedIChannel };
+  } finally {
+    await unlink(glslPath).catch(() => {});
+    await unlink(wgslPath).catch(() => {});
+  }
 };
 
 export const importShadertoyUrl = async (
-	urlOrId: string,
-	apiKey: string,
+  urlOrId: string,
+  apiKey: string,
 ): Promise<ImportResult> => {
-	const id = extractShadertoyId(urlOrId);
-	if (!id) {
-		return { ok: false, error: "Invalid Shadertoy URL or ID" };
-	}
+  const id = extractShadertoyId(urlOrId);
+  if (!id) {
+    return { ok: false, error: 'Invalid Shadertoy URL or ID' };
+  }
 
-	let shader: Record<string, unknown>;
-	try {
-		shader = await fetchShadertoyShader(id, apiKey);
-	} catch (err) {
-		return {
-			ok: false,
-			error: err instanceof Error ? err.message : String(err),
-		};
-	}
+  let shader: Record<string, unknown>;
+  try {
+    shader = await fetchShadertoyShader(id, apiKey);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 
-	const parsed = parseShadertoyImagePass(shader, id);
-	if ("ok" in parsed) {
-		return parsed;
-	}
+  const parsed = parseShadertoyImagePass(shader, id);
+  if ('ok' in parsed) {
+    return parsed;
+  }
 
-	const { userGlsl, meta } = parsed;
-	const transformed = await transformShadertoyGlsl(userGlsl);
-	if (!transformed.ok) {
-		return transformed;
-	}
+  const { userGlsl, meta } = parsed;
+  const transformed = await transformShadertoyGlsl(userGlsl);
+  if (!transformed.ok) {
+    return transformed;
+  }
 
-	return {
-		ok: true,
-		wgsl: transformed.wgsl,
-		meta,
-		usedIChannel: transformed.usedIChannel,
-	};
+  return {
+    ok: true,
+    wgsl: transformed.wgsl,
+    meta,
+    usedIChannel: transformed.usedIChannel,
+  };
 };

@@ -7,20 +7,20 @@
 // ──────────────────────────────────────────────────────────────────────────
 
 export type Check = {
-	name: string;
-	ok: boolean;
-	required: boolean;
-	detail: string;
+  name: string;
+  ok: boolean;
+  required: boolean;
+  detail: string;
 };
 
 // Gate the accumulated checks into a pass/fail verdict. Under `sustained` the
 // standing gate demands ZERO GAP lines, so every failing check — required or
 // soft — is a failure; in one-shot mode only the required checks fail the run.
 export function evaluateRun(
-	checks: Check[],
-	sustained: boolean,
+  checks: Check[],
+  sustained: boolean,
 ): { failures: Check[]; gaps: Check[]; pass: boolean } {
-	const failures = checks.filter((c) => !c.ok && (c.required || sustained));
-	const gaps = checks.filter((c) => !c.ok);
-	return { failures, gaps, pass: failures.length === 0 };
+  const failures = checks.filter((c) => !c.ok && (c.required || sustained));
+  const gaps = checks.filter((c) => !c.ok);
+  return { failures, gaps, pass: failures.length === 0 };
 }

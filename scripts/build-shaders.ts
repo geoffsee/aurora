@@ -1,7 +1,7 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { build } from 'bun';
 import typegpuPlugin from 'unplugin-typegpu/esbuild';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 
 const BEVY_IMPORT = '#import bevy_sprite::mesh2d_vertex_output::VertexOutput\n\n';
 
@@ -53,9 +53,9 @@ async function main() {
   const paletteModule = await import(path.resolve(tempDir, 'vj_palette.js'));
 
   console.log('Resolving vj_grid WGSL...');
-  let finalGridWgsl = BEVY_IMPORT + remapBevyBindGroup(
-    tgpu.resolve([gridModule.vjGridLayout, gridModule.mainShader]),
-  );
+  let finalGridWgsl =
+    BEVY_IMPORT +
+    remapBevyBindGroup(tgpu.resolve([gridModule.vjGridLayout, gridModule.mainShader]));
   finalGridWgsl += bevyFragmentWrapper('mainShader');
 
   const gridOutPath = path.resolve(rootDir, 'assets/shaders/vj_grid.wgsl');
@@ -63,9 +63,8 @@ async function main() {
   console.log(`Saved compiled grid shader to ${gridOutPath}`);
 
   console.log('Resolving vj_palette WGSL...');
-  let finalPaletteWgsl = BEVY_IMPORT + remapBevyBindGroup(
-    tgpu.resolve(paletteModule.paletteResolveAll),
-  );
+  let finalPaletteWgsl =
+    BEVY_IMPORT + remapBevyBindGroup(tgpu.resolve(paletteModule.paletteResolveAll));
   finalPaletteWgsl += bevyFragmentWrapper('paletteFragment');
 
   const paletteOutPath = path.resolve(rootDir, 'assets/shaders/vj_palette.wgsl');

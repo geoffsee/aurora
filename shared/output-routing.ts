@@ -32,82 +32,80 @@ export const MAX_SHADER_INDEX = 36;
 export type OutputOverride = number | null;
 
 export type OutputRoute = {
-	id: string;
-	label: string;
-	enabled: boolean;
-	// null = inherit the shared control-state value for this field.
-	crossfade: OutputOverride;
-	palette: OutputOverride;
-	activeShader: OutputOverride;
+  id: string;
+  label: string;
+  enabled: boolean;
+  // null = inherit the shared control-state value for this field.
+  crossfade: OutputOverride;
+  palette: OutputOverride;
+  activeShader: OutputOverride;
 };
 
 export type OutputBaseView = {
-	crossfade: number;
-	palette: number;
-	activeShader: number;
-	blackout: boolean;
+  crossfade: number;
+  palette: number;
+  activeShader: number;
+  blackout: boolean;
 };
 
 const clampUnit = (value: unknown): number => {
-	const n = Number(value);
-	if (!Number.isFinite(n)) return 0;
-	return Math.max(0, Math.min(1, n));
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
 };
 
 const clampShader = (value: unknown): number => {
-	const n = Number(value);
-	if (!Number.isFinite(n)) return 0;
-	return Math.max(0, Math.min(MAX_SHADER_INDEX, Math.floor(n)));
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(MAX_SHADER_INDEX, Math.floor(n)));
 };
 
 // A unit override is inherited (null) when absent/non-finite, otherwise clamped.
 const normalizeUnitOverride = (value: unknown): OutputOverride =>
-	value === null || value === undefined || !Number.isFinite(Number(value))
-		? null
-		: clampUnit(value);
+  value === null || value === undefined || !Number.isFinite(Number(value))
+    ? null
+    : clampUnit(value);
 
 const normalizeShaderOverride = (value: unknown): OutputOverride =>
-	value === null || value === undefined || !Number.isFinite(Number(value))
-		? null
-		: clampShader(value);
+  value === null || value === undefined || !Number.isFinite(Number(value))
+    ? null
+    : clampShader(value);
 
 export const isValidOutputId = (raw: unknown): raw is string =>
-	typeof raw === "string" && OUTPUT_ID_RE.test(raw);
+  typeof raw === 'string' && OUTPUT_ID_RE.test(raw);
 
 // Normalize one untrusted route entry. Returns null when the id is unusable so
 // the caller can drop it — every output must have a valid, addressable id.
 export const normalizeOutputRoute = (raw: unknown): OutputRoute | null => {
-	if (!raw || typeof raw !== "object") return null;
-	const r = raw as Record<string, unknown>;
-	if (!isValidOutputId(r.id)) return null;
-	const label =
-		typeof r.label === "string" && r.label.trim().length > 0
-			? r.label.trim().slice(0, 48)
-			: r.id;
-	return {
-		id: r.id,
-		label,
-		enabled: r.enabled !== false,
-		crossfade: normalizeUnitOverride(r.crossfade),
-		palette: normalizeUnitOverride(r.palette),
-		activeShader: normalizeShaderOverride(r.activeShader),
-	};
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (!isValidOutputId(r.id)) return null;
+  const label =
+    typeof r.label === 'string' && r.label.trim().length > 0 ? r.label.trim().slice(0, 48) : r.id;
+  return {
+    id: r.id,
+    label,
+    enabled: r.enabled !== false,
+    crossfade: normalizeUnitOverride(r.crossfade),
+    palette: normalizeUnitOverride(r.palette),
+    activeShader: normalizeShaderOverride(r.activeShader),
+  };
 };
 
 // Normalize an untrusted outputs list: drop invalid entries, de-duplicate by id
 // (first wins), and cap the length at MAX_OUTPUTS.
 export const normalizeOutputRoutes = (raw: unknown): OutputRoute[] => {
-	if (!Array.isArray(raw)) return [];
-	const seen = new Set<string>();
-	const out: OutputRoute[] = [];
-	for (const entry of raw) {
-		const route = normalizeOutputRoute(entry);
-		if (!route || seen.has(route.id)) continue;
-		seen.add(route.id);
-		out.push(route);
-		if (out.length >= MAX_OUTPUTS) break;
-	}
-	return out;
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: OutputRoute[] = [];
+  for (const entry of raw) {
+    const route = normalizeOutputRoute(entry);
+    if (!route || seen.has(route.id)) continue;
+    seen.add(route.id);
+    out.push(route);
+    if (out.length >= MAX_OUTPUTS) break;
+  }
+  return out;
 };
 
 // Resolve the effective view for one output. With no route (the implicit "main"
@@ -115,16 +113,13 @@ export const normalizeOutputRoutes = (raw: unknown): OutputRoute[] => {
 // A disabled output is blacked out; otherwise each non-null override replaces its
 // base field. The projector (web/index.html applyOutputRoute) mirrors this inline;
 // tests/shared/output-routing.test.ts pins the mirror against this function.
-export const resolveOutputView = (
-	base: OutputBaseView,
-	route?: OutputRoute,
-): OutputBaseView => {
-	if (!route) return { ...base };
-	if (!route.enabled) return { ...base, blackout: true };
-	return {
-		crossfade: route.crossfade ?? base.crossfade,
-		palette: route.palette ?? base.palette,
-		activeShader: route.activeShader ?? base.activeShader,
-		blackout: base.blackout,
-	};
+export const resolveOutputView = (base: OutputBaseView, route?: OutputRoute): OutputBaseView => {
+  if (!route) return { ...base };
+  if (!route.enabled) return { ...base, blackout: true };
+  return {
+    crossfade: route.crossfade ?? base.crossfade,
+    palette: route.palette ?? base.palette,
+    activeShader: route.activeShader ?? base.activeShader,
+    blackout: base.blackout,
+  };
 };

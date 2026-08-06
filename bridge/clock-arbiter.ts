@@ -15,18 +15,18 @@
 // (graceful fallback): "internal" is always selectable, so selectTempoSource
 // never returns null.
 
-export type ClockSource = "link" | "midi" | "internal";
+export type ClockSource = 'link' | 'midi' | 'internal';
 
-export const CLOCK_PRIORITY = ["link", "midi", "internal"] as const;
+export const CLOCK_PRIORITY = ['link', 'midi', 'internal'] as const;
 
 export type ClockActivity = {
-	linkActive: boolean;
-	midiActive: boolean;
+  linkActive: boolean;
+  midiActive: boolean;
 };
 
 // Pick the authoritative tempo source from the set of currently active sources.
 export function selectTempoSource(activity: ClockActivity): ClockSource {
-	if (activity.linkActive) return "link";
-	if (activity.midiActive) return "midi";
-	return "internal";
+  if (activity.linkActive) return 'link';
+  if (activity.midiActive) return 'midi';
+  return 'internal';
 }

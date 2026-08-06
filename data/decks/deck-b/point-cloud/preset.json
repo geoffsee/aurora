@@ -3,7 +3,7 @@
   "id": "point-cloud",
   "slug": "point-cloud",
   "label": "Point Cloud",
-  "character": "GPU star-field point cloud. Animate with: Speed=spin, Intensity=density, Trails=twinkle sustain, 3D Lines=scatter/depth, Color/GPU sat-bright=palette, Max Bright=gain.",
+  "character": "GPU star-field point cloud. Stars stay put and twinkle. Animate with: Speed=twinkle rate, Intensity=density, Trails=twinkle sustain/glow, 3D Lines=scatter/depth, Color/GPU sat-bright=palette, Max Bright=gain.",
   "uiGroup": "field-motion",
   "disposition": "fullscreen-primary",
   "layers": [
@@ -13,7 +13,5 @@
     }
   ],
   "suppressLegacyField": true,
-  "engineMinCapabilities": [
-    "dual-fullscreen"
-  ]
+  "engineMinCapabilities": ["dual-fullscreen"]
 }

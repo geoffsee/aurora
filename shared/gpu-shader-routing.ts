@@ -27,31 +27,31 @@ export const GPU_SHADER_AURORA_CROWN_UI_INDEX = 36;
 
 /** Map control-state picker index → palette shader `params.z` variant id. */
 export function paletteVariantFromUiIndex(ui: number): number {
-	const idx = Math.floor(ui);
-	if (idx === GPU_SHADER_IMPORTED_UI_INDEX) {
-		return 0;
-	}
-	if (idx >= 10) {
-		return idx;
-	}
-	return idx - 1;
+  const idx = Math.floor(ui);
+  if (idx === GPU_SHADER_IMPORTED_UI_INDEX) {
+    return 0;
+  }
+  if (idx >= 10) {
+    return idx;
+  }
+  return idx - 1;
 }
 
-export type GpuShaderQuad = "palette" | "grid" | "imported";
+export type GpuShaderQuad = 'palette' | 'grid' | 'imported';
 
 export function resolveGpuShaderRoute(ui: number): {
-	quad: GpuShaderQuad;
-	paletteVariant: number;
+  quad: GpuShaderQuad;
+  paletteVariant: number;
 } {
-	const idx = Math.floor(ui);
-	if (idx === GPU_SHADER_IMPORTED_UI_INDEX) {
-		return { quad: "imported", paletteVariant: 0 };
-	}
-	if (idx === GPU_SHADER_GRID_UI_INDEX) {
-		return { quad: "grid", paletteVariant: 0 };
-	}
-	return {
-		quad: "palette",
-		paletteVariant: paletteVariantFromUiIndex(idx),
-	};
+  const idx = Math.floor(ui);
+  if (idx === GPU_SHADER_IMPORTED_UI_INDEX) {
+    return { quad: 'imported', paletteVariant: 0 };
+  }
+  if (idx === GPU_SHADER_GRID_UI_INDEX) {
+    return { quad: 'grid', paletteVariant: 0 };
+  }
+  return {
+    quad: 'palette',
+    paletteVariant: paletteVariantFromUiIndex(idx),
+  };
 }

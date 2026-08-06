@@ -1,4 +1,5 @@
 // GPU point cloud — dense star-field discs in fragment space.
+// Stars sit on fixed cell anchors and twinkle in brightness (no orbital jump).
 //
 // Uniforms (pack fullscreen slot):
 //   params:        x=displayHue, y=time (already speed-scaled), z=unused, w=aspect
@@ -7,8 +8,8 @@
 //   palette_rgb:   xyz=duotone base
 //   pack_drive:    x=intensity 0..1 (density/gain)
 //                  y=depth 0..1     (scatter / shell thickness)  ← "3D Lines" knob
-//                  z=feedback 0..1  (twinkle sustain / trails) ← "Trails" knob
-//                  w=speed 0..1     (spin rate scale)          ← "Speed" knob
+//                  z=feedback 0..1  (twinkle sustain / glow)   ← "Trails" knob
+//                  w=speed 0..1     (twinkle rate scale)        ← "Speed" knob
 //
 // Also reacts to Color / GPU Sat / GPU Bright / Max Bright via the other buses.
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
@@ -42,12 +43,6 @@ fn hash33(p: vec3<f32>) -> vec3<f32> {
   return fract(sin(n) * 43758.5453);
 }
 
-fn rotate2(p: vec2<f32>, a: f32) -> vec2<f32> {
-  let c = cos(a);
-  let s = sin(a);
-  return vec2<f32>(c * p.x - s * p.y, s * p.x + c * p.y);
-}
-
 fn duotone(base: vec3<f32>, phase: f32, sat: f32, value: f32) -> vec3<f32> {
   let accent = clamp(base * 1.35 + vec3<f32>(0.12, 0.08, 0.18), vec3<f32>(0.0), vec3<f32>(1.0));
   let t = abs(fract(phase) - 0.5) * 2.0;
@@ -67,12 +62,11 @@ fn shell_layer(
   uv: vec2<f32>,
   layer: f32,
   time: f32,
-  swirl: f32,
   density: f32,
   spark: f32,
-  breath: f32,
   scatter: f32,
   trail: f32,
+  twinkle_rate: f32,
 ) -> vec3<f32> {
   // Density knob + operator intensity → cell count
   let cells = mix(14.0, 48.0, density);
@@ -91,26 +85,36 @@ fn shell_layer(
         if (hk.x > emit_gate) {
           continue;
         }
+        // Fixed cell anchor — stars do not orbit / jump.
         let p0 = hash22(id + vec2<f32>(layer, f32(k) * 9.1));
-        let ang = time * (0.06 + swirl * 0.7) * (0.55 + hk.y) + layer * 0.7;
-        // Scatter widens orbital radius range
-        let orbit_amp = (0.45 + scatter * 0.55) * (0.85 + breath * 0.2);
-        let orbit = rotate2(p0 - 0.5, ang) * orbit_amp;
-        let center = 0.5 + orbit * (0.5 + density * 0.4);
+        // Scatter + density only affect static placement radius inside the cell.
+        let place_amp = (0.28 + scatter * 0.42) * (0.75 + density * 0.35);
+        let center = 0.5 + (p0 - 0.5) * place_amp;
         let local = gv - id;
-        let parallax = rotate2(local - center, ang * 0.12 * layer * (0.5 + scatter)) + center;
-        // Soft trails: slightly larger discs when feedback is high
-        let size = (0.016 + 0.038 * hk.z)
-          * (1.0 + spark * 0.85)
-          * (1.0 + trail * 0.55)
+
+        // Per-star phase so the field doesn't blink in lockstep.
+        let phase = hk.z * TAU + layer * 1.7 + f32(k) * 2.3;
+        // Trails raise the floor and slow the beat (sustain); Speed scales rate.
+        let base_hz = mix(1.6, 5.5, twinkle_rate) * (0.55 + hk.y * 1.8);
+        let slow_hz = base_hz * mix(1.0, 0.35, trail);
+        let fast_hz = base_hz * mix(2.4, 1.1, trail);
+        let twinkle =
+          mix(0.22, 0.58, trail)
+          + (0.48 - trail * 0.18) * sin(time * slow_hz + phase)
+          + (0.28 - trail * 0.12) * sin(time * fast_hz + phase * 1.7 + hk.y * TAU);
+        let tw = clamp(twinkle, 0.05, 1.35);
+
+        // Soft glow when trails are high; size breathes with twinkle, not position.
+        let size = (0.014 + 0.034 * hk.z)
+          * (0.72 + tw * 0.55)
+          * (1.0 + spark * 0.55)
+          * (1.0 + trail * 0.4)
           / (0.65 + layer * 0.12);
-        let a = disc(parallax, center, size);
+        let a = disc(local, center, size);
         let depth_fade = exp(-layer * mix(0.32, 0.18, scatter));
-        // Trails hold twinkle longer (lower frequency, higher floor)
-        let twinkle_hz = mix(4.5, 1.2, trail) * (1.0 + hk.y * 3.0);
-        let twinkle = mix(0.35, 0.75, trail)
-          + (0.65 - trail * 0.25) * sin(time * twinkle_hz + hk.z * TAU);
-        let w = a * depth_fade * mix(1.0, clamp(twinkle, 0.0, 1.2), spark);
+        // Always modulate by twinkle; spark deepens the contrast.
+        let amp = mix(tw, pow(tw, mix(0.85, 0.45, spark)), spark);
+        let w = a * depth_fade * amp;
         acc = acc + w;
         hue_w = hue_w + w * (hk.y + layer * 0.07);
       }
@@ -133,7 +137,7 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let drive_intensity = clamp(pack_drive.x, 0.0, 1.0);
   let drive_depth = clamp(pack_drive.y, 0.0, 1.0);     // scatter / shell thickness
   let drive_feedback = clamp(pack_drive.z, 0.0, 1.0); // trails / twinkle sustain
-  let drive_speed = clamp(pack_drive.w, 0.0, 1.0);     // spin scale (time already speed-scaled)
+  let drive_speed = clamp(pack_drive.w, 0.0, 1.0);     // twinkle rate scale
 
   let energy_raw = audio_uniforms.x;
   let live = select(0.0, 1.0, energy_raw >= 0.0);
@@ -146,15 +150,8 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
 
-  var uv = (frag.uv - vec2<f32>(0.5)) * vec2<f32>(aspect, 1.0) * 2.0;
-
-  // Swirl: base from mids + operator speed knob (spin authority)
-  let swirl = (0.2 + mid * 0.2 + drive_speed * 0.75) * (0.55 + drive_intensity * 0.55);
-  // Breath: bass + intensity gain
-  let breath = 1.0 + bass * 0.22 + pulse * 0.12 + drive_intensity * 0.08;
-  let spin = time * (0.04 + swirl * 0.1) * (0.65 + energy * 0.35);
-  uv = rotate2(uv, spin);
-  uv = uv / breath;
+  // Stable UV — no global spin or breath zoom (those made stars jump).
+  let uv = (frag.uv - vec2<f32>(0.5)) * vec2<f32>(aspect, 1.0) * 2.0;
 
   // Density: operator intensity + audio energy
   let density = clamp(
@@ -166,6 +163,8 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
   let spark = clamp(high * 0.75 + pulse * 0.2 + drive_feedback * 0.35, 0.0, 1.0);
   let scatter = drive_depth;
   let trail = drive_feedback;
+  // Speed drives twinkle rate; highs add a little extra shimmer
+  let twinkle_rate = clamp(0.2 + drive_speed * 0.7 + high * 0.25, 0.0, 1.0);
 
   var points = 0.0;
   var hue_acc = 0.0;
@@ -179,13 +178,14 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
     // Depth knob spreads parallax range (tight shell → deep cloud)
     let scale = mix(mix(0.7, 0.45, scatter), mix(1.35, 2.15, scatter), lf / max(f32(layer_count - 1), 1.0));
     let shell_uv = uv * scale + vec2<f32>(lf * 0.17, -lf * 0.11);
-    let s = shell_layer(shell_uv, lf + 1.0, time, swirl, density, spark, breath, scatter, trail);
+    let s = shell_layer(shell_uv, lf + 1.0, time, density, spark, scatter, trail, twinkle_rate);
     let fade = exp(-lf * mix(0.28, 0.16, scatter));
     points = points + s.x * fade;
     hue_acc = hue_acc + s.y * fade;
   }
 
   let r = length(uv);
+  // Soft core glow reacts to bass without moving star anchors
   let core = exp(-r * r * mix(2.4, 1.0, density))
     * (0.06 + bass * 0.12 + energy * 0.05 + drive_intensity * 0.05);
   points = points + core;
