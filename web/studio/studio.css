@@ -71,3 +71,13 @@ body {
   color: #d4b56a;
   font-size: 12px;
 }
+
+/* Bottom knob strip: one horizontal row, never wrap */
+.studio-knob-row {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.studio-knob-row > * {
+  flex-shrink: 0;
+}
