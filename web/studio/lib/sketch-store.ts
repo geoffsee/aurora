@@ -127,7 +127,7 @@ export function createSketch(
 }
 
 export function emptyDocument(): StudioDocument {
-  const first = createSketch({ label: 'Soft Blob' });
+  const first = createSketch({ label: 'Dot Terrain' });
   return {
     version: STUDIO_VERSION,
     activeId: first.id,

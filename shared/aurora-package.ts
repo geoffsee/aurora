@@ -72,8 +72,9 @@ const SHOW_UNIFORMS = `// pack-v1 bus (show form) — bindings match VjPackFulls
 `;
 
 /** Minimal authoring template (WebGPU-friendly @group(0)). */
-export const PACK_V1_AUTHORING_TEMPLATE = `// Preset Studio authoring template — pack-v1 bus (@group(0) for WebGPU preview).
-// Export remaps to Bevy @group(2) + VertexOutput import for the show.
+export const PACK_V1_AUTHORING_TEMPLATE = `// Dot Terrain — monochrome particle heightfield horizon (authoring pack-v1).
+// Reference: sparse-to-dense white dots forming rolling hills over pure black.
+// Studio UV: y=0 top, y=1 bottom.
 
 @group(0) @binding(0) var<uniform> params: vec4<f32>;
 @group(0) @binding(1) var<uniform> palette_extra: vec4<f32>;
@@ -81,22 +82,159 @@ export const PACK_V1_AUTHORING_TEMPLATE = `// Preset Studio authoring template �
 @group(0) @binding(3) var<uniform> palette_rgb: vec4<f32>;
 @group(0) @binding(4) var<uniform> pack_drive: vec4<f32>;
 
+const TAU: f32 = 6.283185307179586;
+
+fn hash21(p: vec2<f32>) -> f32 {
+  return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453123);
+}
+
+fn noise2(p: vec2<f32>) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  let a = hash21(i);
+  let b = hash21(i + vec2<f32>(1.0, 0.0));
+  let c = hash21(i + vec2<f32>(0.0, 1.0));
+  let d = hash21(i + vec2<f32>(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+fn fbm(p: vec2<f32>) -> f32 {
+  var v = 0.0;
+  var a = 0.5;
+  var q = p;
+  for (var n = 0; n < 5; n = n + 1) {
+    v = v + a * noise2(q);
+    q = q * 2.03 + vec2<f32>(13.0, -8.0);
+    a = a * 0.5;
+  }
+  return v;
+}
+
+fn terrain_height(xz: vec2<f32>, t: f32, wave: f32, bass: f32, mid: f32) -> f32 {
+  let p = xz * 0.28 + vec2<f32>(t * 0.14, t * 0.05);
+  var h = fbm(p) * 1.05;
+  h = h + 0.38 * fbm(p * 2.0 + vec2<f32>(2.7, -1.4));
+  h = h + wave * 0.62 * sin(xz.y * 0.55 - t * 0.75 + xz.x * 0.1);
+  h = h + wave * 0.32 * sin(xz.x * 0.48 + t * 0.5 + xz.y * 0.18);
+  h = h + wave * 0.2 * sin(xz.y * 1.15 + xz.x * 0.75 - t * 1.05);
+  h = h + bass * 0.22 * sin(xz.y * 1.1 - t * 1.55);
+  h = h + mid * 0.1 * sin(xz.x * 1.6 + t * 1.2);
+  return h * 0.9;
+}
+
 @fragment
 fn fragment(@builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-  let t = params.y;
+  let t0 = params.y;
   let aspect = max(params.w, 0.01);
   let intensity = clamp(pack_drive.x, 0.0, 1.0);
+  let depth_k = clamp(pack_drive.y, 0.0, 1.0);
+  let feedback = clamp(pack_drive.z, 0.0, 1.0);
+  let speed = clamp(pack_drive.w, 0.0, 1.0);
+
   let energy_raw = audio_uniforms.x;
   let live = select(0.0, 1.0, energy_raw >= 0.0);
-  let p = (uv - vec2(0.5)) * vec2(aspect, 1.0);
-  let r = length(p);
+  let energy = select(0.2, clamp(energy_raw, 0.0, 1.0), energy_raw >= 0.0);
+  let bass = select(0.12, clamp(audio_uniforms.y, 0.0, 1.0), energy_raw >= 0.0);
+  let mid = select(0.1, clamp(audio_uniforms.z, 0.0, 1.0), energy_raw >= 0.0);
+  let high = select(0.08, clamp(audio_uniforms.w, 0.0, 1.0), energy_raw >= 0.0);
+
+  let sat = clamp(palette_extra.x, 0.0, 1.0);
+  let bri = clamp(palette_extra.y, 0.0, 1.5);
   let pulse = clamp(palette_extra.z, 0.0, 1.0);
-  let body = exp(-r * r * (2.0 + intensity * 4.0)) * (0.4 + intensity * 0.6 + pulse * 0.2);
-  let base = max(palette_rgb.xyz, vec3(0.05));
-  let a = body * clamp(palette_extra.w, 0.0, 1.0) * mix(0.85, 1.0, 0.5 + 0.5 * live);
-  // Touch all uniforms so bindings stay live.
-  let keep = params.x + audio_uniforms.y + pack_drive.y + pack_drive.z + pack_drive.w + t * 0.0;
-  return vec4(base * body + keep * 0.0, a);
+  let alpha = clamp(palette_extra.w, 0.0, 1.0);
+
+  if (alpha < 0.001) {
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+  }
+
+  let t = t0 * (0.5 + speed * 0.95);
+  let wave = 0.55 + intensity * 0.4 + energy * 0.22 + pulse * 0.12;
+
+  let horizon = mix(0.28, 0.34, depth_k);
+  if (uv.y < horizon) {
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+  }
+
+  // Higher camera → more sky / less solid near-field wall.
+  let cam_h = mix(1.7, 2.3, depth_k) + bass * 0.1;
+  let fov = mix(1.15, 1.55, depth_k);
+
+  // World lattice density. Higher intensity = more dots.
+  let dens = mix(4.0, 11.0, clamp(0.2 + intensity * 0.75 + energy * 0.1, 0.0, 1.0));
+  let dens_z = dens * mix(1.35, 1.85, depth_k);
+
+  let far_z = mix(20.0, 34.0, depth_k);
+  let near_z = 1.2;
+  let layers = i32(mix(80.0, 130.0, 0.35 + depth_k * 0.45 + intensity * 0.2));
+
+  // Max-blend so dots stay discrete (no white sheet).
+  var acc = 0.0;
+
+  for (var i = 0; i < 140; i = i + 1) {
+    if (i >= layers) {
+      break;
+    }
+    let fi = f32(i) / max(f32(layers - 1), 1.0);
+    let zz = mix(near_z, far_z, pow(fi, mix(0.88, 0.7, depth_k)));
+    let xx = (uv.x - 0.5) * aspect * zz * fov;
+
+    let base_cell = vec2<f32>(floor(xx * dens + 0.5), floor(zz * dens_z + 0.5));
+
+    for (var ox = -1; ox <= 1; ox = ox + 1) {
+      let cell = base_cell + vec2<f32>(f32(ox), 0.0);
+      let rnd = hash21(cell);
+      // Keep most cells lit at high intensity; thin when low.
+      let emit = mix(0.55, 0.92, intensity) + high * 0.03;
+      if (rnd > emit) {
+        continue;
+      }
+
+      let jx = hash21(cell + vec2<f32>(3.3, 5.7)) - 0.5;
+      let jz = hash21(cell + vec2<f32>(8.2, 1.1)) - 0.5;
+      let xz = vec2<f32>(
+        (cell.x + jx * 0.4) / dens,
+        max((cell.y + jz * 0.4) / dens_z, 1.0),
+      );
+
+      let h = terrain_height(xz, t, wave, bass, mid);
+      let py = horizon + (cam_h - h) / xz.y * 0.7;
+      let px = 0.5 + xz.x / (xz.y * fov * aspect);
+
+      if (py < horizon || py > 1.02) {
+        continue;
+      }
+
+      let d = distance(uv, vec2<f32>(px, py));
+      // Small, crisp dots — scale with perspective but stay sparse.
+      let persp = clamp(1.6 / xz.y, 0.35, 2.2);
+      let radius = (0.0022 + 0.0028 * intensity) * persp * (1.0 + feedback * 0.45 + pulse * 0.08);
+      let core = 1.0 - smoothstep(radius * 0.25, radius, d);
+      let halo = (1.0 - smoothstep(radius, radius * 1.9, d)) * 0.25;
+      let point = max(core, halo);
+
+      // Distance fade (far rows dimmer, still visible).
+      let fade = exp(-xz.y * mix(0.04, 0.022, depth_k));
+      // Slight crest emphasis without filling valleys solid.
+      let crest = 0.75 + 0.25 * smoothstep(0.2, 0.9, h);
+      let twinkle = 0.92 + 0.08 * sin(t * mix(1.6, 0.6, feedback) + rnd * TAU + high * 2.5);
+      acc = max(acc, point * fade * crest * twinkle);
+    }
+  }
+
+  // Keep black between dots.
+  var body = smoothstep(0.05, 0.9, acc);
+  body = body * (0.55 + intensity * 0.55);
+
+  let base = max(palette_rgb.xyz, vec3<f32>(0.94, 0.96, 0.98));
+  let gray = vec3<f32>(dot(base, vec3<f32>(0.299, 0.587, 0.114)));
+  var col = mix(vec3<f32>(1.0), mix(gray, base, sat), clamp(sat * 1.05, 0.0, 1.0));
+  col = col * bri * body * (1.05 + energy * 0.1);
+  col = clamp(col, vec3<f32>(0.0), vec3<f32>(1.0));
+
+  let a = body * alpha * mix(0.92, 1.0, 0.5 + 0.5 * live);
+  // Premultiply for studio canvas alphaMode.
+  return vec4<f32>(col * a, a);
 }
 `;
 
