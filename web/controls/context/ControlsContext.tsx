@@ -25,6 +25,10 @@ import {
 /** Mirror of bridge/mode-api MODES_CATALOG_WS_ADDRESS (avoid importing bridge Node code). */
 const MODES_CATALOG_WS_ADDRESS = '/aurora/modes/catalog';
 
+import {
+  loadAuthoredPackages,
+  subscribeAuthoredPackages,
+} from '../../../shared/package-channel.ts';
 import { webgpuSecureContextError } from '../../../shared/secure-context.ts';
 import { isStaticHosting } from '../../../shared/static-hosting.ts';
 import {
@@ -67,6 +71,7 @@ import {
   legacyFallbackMenuEntries,
   type MenuCatalogEntry,
   type MenuCatalogSnapshot,
+  mergeAuthoredPackagesIntoCatalog,
   parsePublicCatalog,
 } from '../lib/mode-catalog-menu.ts';
 import { fetchCompiledMode, fetchModesCatalog } from '../lib/modes-api-client.ts';
@@ -289,36 +294,45 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const baseCatalogRef = useRef<MenuCatalogSnapshot | null>(null);
+
   const applyMenuSnapshot = useCallback(
-    (snapshot: MenuCatalogSnapshot, opts?: { fromWs?: boolean }) => {
+    (snapshot: MenuCatalogSnapshot, opts?: { fromWs?: boolean; skipAuthoredMerge?: boolean }) => {
+      // Keep last HTTP/WS catalog so Studio package publishes can re-merge without refetch.
+      if (!opts?.skipAuthoredMerge) {
+        baseCatalogRef.current = snapshot;
+      }
+      const withAuthored = opts?.skipAuthoredMerge
+        ? snapshot
+        : mergeAuthoredPackagesIntoCatalog(snapshot, loadAuthoredPackages());
       // Menu-only update: never auto-swap the held compiled payload (#241 hot-reload rule).
       const prevA = activeCompiledRef.current['deck-a'];
       const prevB = activeCompiledRef.current['deck-b'];
       const updateA = applyMenuCatalogUpdate(
         { menuEpoch: menuEpochRef.current, activeCompiled: prevA },
-        snapshot,
+        withAuthored,
       );
       const updateB = applyMenuCatalogUpdate(
         { menuEpoch: menuEpochRef.current, activeCompiled: prevB },
-        snapshot,
+        withAuthored,
       );
-      menuEpochRef.current = snapshot.epoch;
+      menuEpochRef.current = withAuthored.epoch;
       activeCompiledRef.current['deck-a'] = updateA.activeCompiled;
       activeCompiledRef.current['deck-b'] = updateB.activeCompiled;
 
       const catalogs: DeckCatalogs = {
-        'deck-a': snapshot.decks['deck-a'],
-        'deck-b': snapshot.decks['deck-b'],
+        'deck-a': withAuthored.decks['deck-a'],
+        'deck-b': withAuthored.decks['deck-b'],
       };
       modeCatalogsRef.current = catalogs;
-      setMenuCatalog(snapshot);
+      setMenuCatalog(withAuthored);
       setCatalogLive(true);
 
       // Holding banners: active slug removed → hold last compiled, do not clear selection.
       const slugA = stateRef.current.deckAPresetSlug ?? '';
       const slugB = stateRef.current.deckBPresetSlug ?? '';
-      const missingA = activeSlugStatus(slugA, snapshot.decks['deck-a']) === 'missing';
-      const missingB = activeSlugStatus(slugB, snapshot.decks['deck-b']) === 'missing';
+      const missingA = activeSlugStatus(slugA, withAuthored.decks['deck-a']) === 'missing';
+      const missingB = activeSlugStatus(slugB, withAuthored.decks['deck-b']) === 'missing';
       setHoldingA(missingA);
       setHoldingB(missingB);
       if (missingA && slugA) {
@@ -1258,6 +1272,15 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
         applyMenuSnapshot(result.catalog);
       } else {
         // Graceful degradation: launchpad falls back to VISUAL_MODES.
+        // Still merge Studio-authored packages so Publish works offline.
+        const fallback: MenuCatalogSnapshot = {
+          epoch: 1,
+          decks: {
+            'deck-a': legacyFallbackMenuEntries(),
+            'deck-b': legacyFallbackMenuEntries(),
+          },
+        };
+        applyMenuSnapshot(fallback);
         addBanner(`Mode catalog unavailable: ${result.error}`, 'warn');
         setCatalogLive(false);
       }
@@ -1266,6 +1289,24 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [addBanner, applyMenuSnapshot]);
+
+  // Studio Publish → BroadcastChannel / localStorage: re-merge authored packages into menu.
+  useEffect(() => {
+    return subscribeAuthoredPackages(() => {
+      const base = baseCatalogRef.current;
+      if (!base) {
+        // No base catalog yet — apply authored alone so launchpad still updates.
+        const packages = loadAuthoredPackages();
+        if (packages.length === 0) return;
+        applyMenuSnapshot({
+          epoch: Math.max(1, menuEpochRef.current || 1),
+          decks: { 'deck-a': [], 'deck-b': [] },
+        });
+        return;
+      }
+      applyMenuSnapshot(base);
+    });
+  }, [applyMenuSnapshot]);
 
   useEffect(() => {
     const timer = setTimeout(() => saveSessionState(state), 300);

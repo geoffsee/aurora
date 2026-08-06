@@ -21,6 +21,8 @@
         isOscBridgeConnected,
         mountGeoffseePagesNav,
         projectorCompiledModeUrl,
+        resolveAuthoredCompiledWire,
+        subscribeAuthoredPackages,
         webgpuSecureContextError,
       } from "./dist/projector-bridge.js";
 
@@ -404,14 +406,18 @@
         const gen = ++compiledFetchGen[key];
         compiledSlugApplied[key] = clean;
         try {
-          const url = projectorCompiledModeUrl(key, clean);
-          const res = await fetch(url, { cache: "no-store" });
-          if (gen !== compiledFetchGen[key]) return; // superseded
-          if (!res.ok) {
-            console.warn(`[field-runtime] compile fetch ${res.status} for ${key}/${clean}`);
-            return;
+          // Studio Publish stores packages in localStorage + BroadcastChannel.
+          let wire = resolveAuthoredCompiledWire(key, clean, 0);
+          if (!wire) {
+            const url = projectorCompiledModeUrl(key, clean);
+            const res = await fetch(url, { cache: "no-store" });
+            if (gen !== compiledFetchGen[key]) return; // superseded
+            if (!res.ok) {
+              console.warn(`[field-runtime] compile fetch ${res.status} for ${key}/${clean}`);
+              return;
+            }
+            wire = await res.json();
           }
-          const wire = await res.json();
           if (gen !== compiledFetchGen[key]) return;
           const json = JSON.stringify(wire);
           const ok = auroraSetCompiledMode(deck, json);
@@ -441,6 +447,11 @@
         compiledSlugApplied["deck-b"] = "";
         syncCompiledModesFromControlState(true);
       };
+
+      // When Studio publishes a package, re-bind if the active slug matches.
+      subscribeAuthoredPackages(() => {
+        window.__auroraReloadActiveCompiledModes();
+      });
 
       function applyControlState(next) {
         if (!next || typeof next !== "object") return;

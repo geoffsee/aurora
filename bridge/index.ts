@@ -72,11 +72,6 @@ import {
 } from './automation-bridge.ts';
 import { selectTempoSource } from './clock-arbiter.ts';
 import {
-  installAuroraPackageArchive,
-  readPackageArchiveFromRequest,
-  resolvePackageImportDataDir,
-} from './package-import.ts';
-import {
   deriveBpmFromTimestamps,
   MIDI_CLOCK_TICK,
   MIDI_CLOCK_TIMEOUT_MS,
@@ -84,6 +79,11 @@ import {
 } from './midi-clock.ts';
 import { ModeApi, modesCatalogWsMessage } from './mode-api.ts';
 import { type CatalogSnapshot, formatCatalogSummary, loadModeCatalog } from './mode-catalog.ts';
+import {
+  installAuroraPackageArchive,
+  readPackageArchiveFromRequest,
+  resolvePackageImportDataDir,
+} from './package-import.ts';
 import {
   applyLayerWeightControl,
   createLayerController,

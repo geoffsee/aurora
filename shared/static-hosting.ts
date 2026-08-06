@@ -21,6 +21,39 @@ export function geoffseePagesProjectorUrl(loc: Pick<Location, 'href'> = location
   return new URL('../', loc.href).href;
 }
 
+/** Static Pages (and same-origin dist) Preset Studio URL. */
+export function geoffseePagesStudioUrl(loc: Pick<Location, 'href'> = location): string {
+  return new URL('../studio/', loc.href).href;
+}
+
+/** Controls port used by docker Caddy / projector-url; avoid circular import. */
+const CONTROLS_PORT_FALLBACK = 8444;
+
+/**
+ * URL to open Preset Studio.
+ * - Static / GitHub Pages → `{siteBase}/studio/`
+ * - Bridged local stack (controls :3001 / :8444) → Studio on :3010
+ * - Same origin otherwise → `./studio/`
+ */
+export function studioAppUrl(
+  loc: Pick<Location, 'protocol' | 'hostname' | 'port' | 'href' | 'pathname' | 'search'> = location,
+): string {
+  if (isStaticHosting(loc) || isGeoffseeGithubPages(loc)) {
+    const base = staticModesApiBase(loc);
+    return `${base}/studio/`;
+  }
+  const host = loc.hostname || '127.0.0.1';
+  const port = loc.port;
+  // Controls ports (native 3001, docker/caddy 8444) → dedicated studio port.
+  if (port === '3001' || port === '8444' || port === String(CONTROLS_PORT_FALLBACK)) {
+    return `${loc.protocol}//${host}:3010/`;
+  }
+  if (port === '3010') {
+    return `${loc.protocol}//${host}:3010/`;
+  }
+  return new URL('studio/', loc.href).href;
+}
+
 /**
  * Path prefix for the static site root (no trailing slash).
  * Examples: "" at http://localhost:3000/, "/aurora" on project Pages.
@@ -31,9 +64,13 @@ export function staticSitePathPrefix(loc: Pick<Location, 'pathname'> = location)
   if (path.endsWith('/index.html')) {
     path = path.slice(0, -'/index.html'.length);
   }
-  const controlsIdx = path.indexOf('/controls');
-  if (controlsIdx >= 0) {
-    path = path.slice(0, controlsIdx);
+  // Strip app sub-routes so projector / controls / studio share one site root.
+  for (const segment of ['/controls', '/studio'] as const) {
+    const idx = path.indexOf(segment);
+    if (idx >= 0) {
+      path = path.slice(0, idx);
+      break;
+    }
   }
   if (path.endsWith('/')) {
     path = path.slice(0, -1);

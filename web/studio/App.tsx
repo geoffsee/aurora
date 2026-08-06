@@ -5,7 +5,12 @@ import { PreviewPanel } from './components/PreviewPanel.tsx';
 import { SketchSidebar } from './components/SketchSidebar.tsx';
 import { StudioToolbar } from './components/StudioToolbar.tsx';
 import { WgslEditor } from './components/WgslEditor.tsx';
-import { downloadPackageArchive, exportSketchToPackage, importPackageToBridge } from './lib/export-package.ts';
+import {
+  downloadPackageArchive,
+  exportSketchToPackage,
+  importPackageToBridge,
+  publishSketchToChannel,
+} from './lib/export-package.ts';
 import {
   addSketch,
   createSketch,
@@ -58,6 +63,24 @@ export function App() {
     },
     [active],
   );
+
+  const onPublish = useCallback(() => {
+    if (!active) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = publishSketchToChannel(active);
+      if (!result.ok) {
+        setMessage(`Publish failed: ${result.errors.map((e) => e.message).join('; ')}`);
+        return;
+      }
+      setMessage(
+        `Published “${result.label}” (${result.slug}) · open Console and select it on the launchpad`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [active]);
 
   const onExport = useCallback(() => {
     if (!active) return;
@@ -139,6 +162,7 @@ export function App() {
             message={message}
             onMeta={(patch) => patchActive(patch)}
             onBridgeOrigin={setBridgeOrigin}
+            onPublish={onPublish}
             onExport={onExport}
             onImportBridge={() => void onImportBridge()}
           />

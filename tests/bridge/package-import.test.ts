@@ -6,12 +6,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
+import { loadModeCatalog, scanDeckCatalog } from '../../bridge/mode-catalog.ts';
 import {
   installAuroraPackageArchive,
   readPackageArchiveFromRequest,
   resolvePackageImportDataDir,
 } from '../../bridge/package-import.ts';
-import { loadModeCatalog, scanDeckCatalog } from '../../bridge/mode-catalog.ts';
 import {
   buildAuroraPackageArchive,
   buildManifest,
