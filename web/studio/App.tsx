@@ -137,114 +137,121 @@ export function App() {
 
   return (
     <Box
-      minH="100vh"
-      h="100%"
+      h="100vh"
+      maxH="100vh"
+      overflow="hidden"
+      display="flex"
+      flexDirection="column"
       bgGradient="to-b"
       gradientFrom="#090804"
       gradientTo="#0e0b0b"
       color="gray.50"
-      px={{ base: 2, md: 3 }}
-      py={3}
     >
-      <Grid
-        templateColumns={{ base: '1fr', lg: '200px 1fr 1fr' }}
-        templateRows={{ base: 'auto auto auto auto', lg: 'auto 1fr auto' }}
-        gap={3}
-        h={{ base: 'auto', lg: 'calc(100vh - 24px)' }}
-        maxW="1600px"
-        mx="auto"
-      >
-        <GridItem colSpan={{ base: 1, lg: 3 }}>
-          <StudioToolbar
-            sketch={active}
-            bridgeOrigin={bridgeOrigin}
-            busy={busy}
-            message={message}
-            onMeta={(patch) => patchActive(patch)}
-            onBridgeOrigin={setBridgeOrigin}
-            onPublish={onPublish}
-            onExport={onExport}
-            onImportBridge={() => void onImportBridge()}
-          />
-        </GridItem>
+      <Box flex="1 1 auto" minH={0} overflow="hidden" px={{ base: 2, md: 3 }} pt={3} pb={2}>
+        <Grid
+          templateColumns={{ base: '1fr', lg: '200px 1fr 1fr' }}
+          templateRows={{ base: 'auto auto auto auto', lg: 'auto 1fr' }}
+          gap={3}
+          h="100%"
+          maxW="1600px"
+          mx="auto"
+        >
+          <GridItem colSpan={{ base: 1, lg: 3 }} flexShrink={0}>
+            <StudioToolbar
+              sketch={active}
+              bridgeOrigin={bridgeOrigin}
+              busy={busy}
+              message={message}
+              onMeta={(patch) => patchActive(patch)}
+              onBridgeOrigin={setBridgeOrigin}
+              onPublish={onPublish}
+              onExport={onExport}
+              onImportBridge={() => void onImportBridge()}
+            />
+          </GridItem>
 
-        <GridItem minH={{ base: '160px', lg: 0 }} overflow="hidden">
-          <Box
-            h="100%"
-            p={3}
-            borderRadius="lg"
-            border="1px solid"
-            borderColor="#252a31"
-            bg="rgba(0,0,0,0.25)"
-          >
-            <SketchSidebar
-              sketches={doc.sketches}
-              activeId={doc.activeId}
-              onSelect={(id) => setDoc((d) => ({ ...d, activeId: id }))}
-              onAdd={() =>
-                setDoc((d) =>
-                  addSketch(
-                    d,
-                    createSketch(
-                      { label: 'Untitled Package' },
-                      d.sketches.map((s) => s.slug),
+          <GridItem minH={{ base: '120px', lg: 0 }} overflow="hidden">
+            <Box
+              h="100%"
+              p={3}
+              borderRadius="lg"
+              border="1px solid"
+              borderColor="#252a31"
+              bg="rgba(0,0,0,0.25)"
+            >
+              <SketchSidebar
+                sketches={doc.sketches}
+                activeId={doc.activeId}
+                onSelect={(id) => setDoc((d) => ({ ...d, activeId: id }))}
+                onAdd={() =>
+                  setDoc((d) =>
+                    addSketch(
+                      d,
+                      createSketch(
+                        { label: 'Untitled Package' },
+                        d.sketches.map((s) => s.slug),
+                      ),
                     ),
-                  ),
-                )
-              }
-              onDuplicate={(id) => setDoc((d) => duplicateSketch(d, id))}
-              onRemove={(id) => {
-                if (doc.sketches.length <= 1) {
-                  setMessage('Keep at least one sketch.');
-                  return;
+                  )
                 }
-                setDoc((d) => removeSketch(d, id));
-              }}
-            />
-          </Box>
-        </GridItem>
+                onDuplicate={(id) => setDoc((d) => duplicateSketch(d, id))}
+                onRemove={(id) => {
+                  if (doc.sketches.length <= 1) {
+                    setMessage('Keep at least one sketch.');
+                    return;
+                  }
+                  setDoc((d) => removeSketch(d, id));
+                }}
+              />
+            </Box>
+          </GridItem>
 
-        <GridItem minH={{ base: '300px', lg: 0 }} overflow="hidden">
-          <Box
-            h="100%"
-            p={3}
-            borderRadius="lg"
-            border="1px solid"
-            borderColor="#252a31"
-            bg="rgba(0,0,0,0.25)"
-          >
-            <WgslEditor value={active.wgsl} onChange={(wgsl) => patchActive({ wgsl })} />
-          </Box>
-        </GridItem>
+          <GridItem minH={{ base: '200px', lg: 0 }} overflow="hidden">
+            <Box
+              h="100%"
+              p={3}
+              borderRadius="lg"
+              border="1px solid"
+              borderColor="#252a31"
+              bg="rgba(0,0,0,0.25)"
+            >
+              <WgslEditor value={active.wgsl} onChange={(wgsl) => patchActive({ wgsl })} />
+            </Box>
+          </GridItem>
 
-        <GridItem minH={{ base: '300px', lg: 0 }} overflow="hidden">
-          <Box
-            h="100%"
-            p={3}
-            borderRadius="lg"
-            border="1px solid"
-            borderColor="#252a31"
-            bg="rgba(0,0,0,0.25)"
-          >
-            <PreviewPanel wgsl={active.wgsl} knobs={active.knobs} />
-          </Box>
-        </GridItem>
+          <GridItem minH={{ base: '200px', lg: 0 }} overflow="hidden">
+            <Box
+              h="100%"
+              p={3}
+              borderRadius="lg"
+              border="1px solid"
+              borderColor="#252a31"
+              bg="rgba(0,0,0,0.25)"
+            >
+              <PreviewPanel wgsl={active.wgsl} knobs={active.knobs} />
+            </Box>
+          </GridItem>
+        </Grid>
+      </Box>
 
-        <GridItem colSpan={{ base: 1, lg: 3 }}>
-          <Box
-            p={3}
-            borderRadius="lg"
-            border="1px solid"
-            borderColor="#252a31"
-            bg="rgba(0,0,0,0.25)"
-          >
-            <KnobPanel
-              knobs={active.knobs}
-              onChange={(patch) => patchActive({ knobs: { ...active.knobs, ...patch } })}
-            />
-          </Box>
-        </GridItem>
-      </Grid>
+      {/* Fixed bottom knob strip — single non-wrapping row */}
+      <Box
+        flex="0 0 auto"
+        borderTop="1px solid"
+        borderColor="#252a31"
+        bg="rgba(8, 8, 6, 0.96)"
+        backdropFilter="blur(8px)"
+        px={{ base: 2, md: 3 }}
+        py={2}
+        zIndex={20}
+      >
+        <Box maxW="1600px" mx="auto">
+          <KnobPanel
+            knobs={active.knobs}
+            onChange={(patch) => patchActive({ knobs: { ...active.knobs, ...patch } })}
+          />
+        </Box>
+      </Box>
     </Box>
   );
 }
