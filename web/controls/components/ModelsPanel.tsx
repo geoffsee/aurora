@@ -34,7 +34,7 @@ export function ModelsPanel() {
   const figureOnA = state.deckAMode === FIGURE_VISUAL_MODE;
   const figureOnB = state.deckBMode === FIGURE_VISUAL_MODE;
   const selected = MODEL_CATALOG[state.figureModel] ?? MODEL_CATALOG[0];
-  const useRemoteAsset = () => {
+  const applyRemoteAsset = () => {
     const normalized = normalizeRemoteModelAssetPath(assetPath, state.figureAssetPath);
     setAssetPath(normalized);
     updateState({ figureAssetPath: normalized });
@@ -106,11 +106,11 @@ export function ModelsPanel() {
               value={assetPath}
               onChange={(e) => setAssetPath(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') useRemoteAsset();
+                if (e.key === 'Enter') applyRemoteAsset();
               }}
             />
             <Box display="flex" gap={2} mt={2}>
-              <Button size="sm" onClick={useRemoteAsset}>
+              <Button size="sm" onClick={applyRemoteAsset}>
                 Load remote
               </Button>
               <Button size="sm" variant="surface" onClick={clearRemoteAsset}>

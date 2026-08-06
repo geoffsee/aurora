@@ -1,45 +1,48 @@
 import tgpu, { std } from 'typegpu';
+import { geometryField } from './geometry_field.ts';
 import { BevyVertexOutput } from './shared/bevy_vertex.ts';
-import { vjPaletteLayout } from './shared/layout.ts';
 import { vec2f, vec4f } from './shared/constants.ts';
 import { audioCurve } from './shared/duotone.ts';
-import { geometryField } from './geometry_field.ts';
+import { vjPaletteLayout } from './shared/layout.ts';
 import {
-  rehoboamVariant,
-  tunnelVariant,
-  glitchVariant,
-  fluidVariant,
-  truchetVariant,
-  bass_reactorVariant,
-  high_sparkVariant,
-  kick_ringsVariant,
-  laser_latticeVariant,
-  strobe_shardsVariant,
-  vortex_bloomVariant,
-  crystal_coreVariant,
-  bass_portalVariant,
-  mercury_lakeVariant,
-  iridescent_veilVariant,
-  starwebVariant,
-  recursive_mawVariant,
-  inkbloomVariant,
-  scanlab_holoVariant,
-  lumen_coralVariant,
-  polaris_petalsVariant,
+  aurora_crownVariant,
   aurora_curtainsVariant,
   bass_monolithVariant,
-  prism_tunnelVariant,
+  bass_portalVariant,
+  bass_reactorVariant,
+  crystal_coreVariant,
   data_rainVariant,
-  solar_flareVariant,
-  topo_linesVariant,
-  glass_ribbonsVariant,
-  gummy_wire_bearVariant,
   fierce_walking_wolfVariant,
+  fluidVariant,
+  glass_ribbonsVariant,
+  glitchVariant,
+  gummy_wire_bearVariant,
+  high_sparkVariant,
+  inkbloomVariant,
+  iridescent_veilVariant,
+  kick_ringsVariant,
+  laser_latticeVariant,
+  lumen_coralVariant,
+  mercury_lakeVariant,
+  polaris_petalsVariant,
+  prism_tunnelVariant,
+  recursive_mawVariant,
+  rehoboamVariant,
+  scanlab_holoVariant,
+  solar_flareVariant,
   spectral_ghostVariant,
-  aurora_crownVariant,
+  starwebVariant,
+  strobe_shardsVariant,
+  topo_linesVariant,
+  truchetVariant,
+  tunnelVariant,
+  vortex_bloomVariant,
 } from './variants/index.ts';
 
-export const paletteFragment = tgpu.fn([BevyVertexOutput], vec4f)((frag) => {
+export const paletteFragment = tgpu.fn(
+  [BevyVertexOutput],
+  vec4f,
+)((frag) => {
   'use gpu';
   const params = vjPaletteLayout.$.params;
   const palette_extra = vjPaletteLayout.$.palette_extra;

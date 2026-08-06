@@ -9,7 +9,10 @@ export function ErrorBanners() {
     const timers = banners.map((banner) =>
       window.setTimeout(() => dismissErrorBanner(banner.id), 8000),
     );
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
+    return () =>
+      timers.forEach((timer) => {
+        window.clearTimeout(timer);
+      });
   }, [banners, dismissErrorBanner]);
 
   if (!banners.length) return null;

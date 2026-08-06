@@ -131,8 +131,8 @@ describe('automation target', () => {
       1,
     );
     expect(rec.frames).toHaveLength(2);
-    expect(rec.frames[0]!.diff).toEqual({ layerWeight0: 0.3 });
-    expect(rec.frames[1]!.diff).toEqual({ layerWeight0: 0.8 });
+    expect(rec.frames[0]?.diff).toEqual({ layerWeight0: 0.3 });
+    expect(rec.frames[1]?.diff).toEqual({ layerWeight0: 0.8 });
   });
 });
 

@@ -1,17 +1,20 @@
 import tgpu, { std } from 'typegpu';
 import * as d from 'typegpu/data';
+import { BevyVertexOutput } from './shared/bevy_vertex.ts';
 import { vjDuotone } from './shared/duotone.ts';
 import { vjGridLayout } from './shared/layout.ts';
-import { BevyVertexOutput } from './shared/bevy_vertex.ts';
 
 const vec4f = d.vec4f;
 const vec3f = d.vec3f;
 const vec2f = d.vec2f;
-const f32 = d.f32;
+const _f32 = d.f32;
 
-export { vjGridLayout, BevyVertexOutput };
+export { BevyVertexOutput, vjGridLayout };
 
-export const mainShader = tgpu.fn([BevyVertexOutput], vec4f)((frag) => {
+export const mainShader = tgpu.fn(
+  [BevyVertexOutput],
+  vec4f,
+)((frag) => {
   'use gpu';
 
   const params = vjGridLayout.$.params;
@@ -32,8 +35,8 @@ export const mainShader = tgpu.fn([BevyVertexOutput], vec4f)((frag) => {
   const enabled = std.select(1.0, 0.0, energy < 0.0);
 
   const density = grid_extra.x;
-  const cols = (4.0 + std.floor(density * 16.0)) + std.floor(bass * 8.0);
-  const rows = (3.0 + std.floor(density * 12.0)) + std.floor(mid * 6.0);
+  const cols = 4.0 + std.floor(density * 16.0) + std.floor(bass * 8.0);
+  const rows = 3.0 + std.floor(density * 12.0) + std.floor(mid * 6.0);
 
   const cell = vec2f(uv.x * cols * 0.5 + cols * 0.5, uv.y * rows * 0.5 + rows * 0.5);
   const cell_id = std.floor(cell);
@@ -43,8 +46,10 @@ export const mainShader = tgpu.fn([BevyVertexOutput], vec4f)((frag) => {
   const tile_phase = std.sin(tile_seed + time * 1.1 + pulse * 4.0);
   const tile_beat = std.sin(tile_seed * 0.5 + time * 2.6 + bass * 5.0);
 
-  const diamond_r = std.mix(0.10, 0.46, grid_extra.y) + high * 0.14 + pulse * 0.08;
-  const diamond = 1.0 - std.smoothstep(diamond_r - 0.03, diamond_r + 0.03, std.abs(cell_uv.x) + std.abs(cell_uv.y));
+  const diamond_r = std.mix(0.1, 0.46, grid_extra.y) + high * 0.14 + pulse * 0.08;
+  const diamond =
+    1.0 -
+    std.smoothstep(diamond_r - 0.03, diamond_r + 0.03, std.abs(cell_uv.x) + std.abs(cell_uv.y));
 
   const line_w = std.mix(0.005, 0.12, grid_extra.z) + mid * 0.04;
   const cross_h = 1.0 - std.smoothstep(line_w, line_w + 0.03, std.abs(cell_uv.y));
@@ -58,12 +63,11 @@ export const mainShader = tgpu.fn([BevyVertexOutput], vec4f)((frag) => {
   const shape = std.mix(
     std.mix(diamond_only, balanced, std.clamp(mix_t * 2.0, 0.0, 1.0)),
     cross_only,
-    std.clamp(mix_t * 2.0 - 1.0, 0.0, 1.0)
+    std.clamp(mix_t * 2.0 - 1.0, 0.0, 1.0),
   );
 
-  const hue_phase = (cell_id.x + cell_id.y) / (cols + rows) * 0.5
-                + time * 0.04
-                + tile_phase * 0.1;
+  const hue_phase =
+    ((cell_id.x + cell_id.y) / (cols + rows)) * 0.5 + time * 0.04 + tile_phase * 0.1;
   const sat = std.clamp(palette_extra.x, 0.0, 1.0);
   const bri = std.clamp(palette_extra.y, 0.0, 1.0);
   const color = vjDuotone(base, hue_phase, sat * 0.72, bri);

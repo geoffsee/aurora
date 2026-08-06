@@ -90,11 +90,11 @@ test('visual mode catalog has stable ids and character briefs', () => {
     expect(entry.routing.intensity).toBeTruthy();
   }
   expect(visualModeLabel(39)).toBe('MandelbrotSet');
-  expect(VISUAL_MODE_CATALOG[24]!.suppressLegacyField).toBe(true);
-  expect(VISUAL_MODE_CATALOG[24]!.backends).toContain('figure');
+  expect(VISUAL_MODE_CATALOG[24]?.suppressLegacyField).toBe(true);
+  expect(VISUAL_MODE_CATALOG[24]?.backends).toContain('figure');
   // Intent for deep instruments — ModeDirector still keeps field weight 1 until backends ship.
-  expect(VISUAL_MODE_CATALOG[25]!.suppressLegacyField).toBe(true);
-  expect(VISUAL_MODE_CATALOG[39]!.suppressLegacyField).toBe(true);
+  expect(VISUAL_MODE_CATALOG[25]?.suppressLegacyField).toBe(true);
+  expect(VISUAL_MODE_CATALOG[39]?.suppressLegacyField).toBe(true);
 });
 
 test('GPU shader metadata exposes the full shader range', () => {

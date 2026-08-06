@@ -9,7 +9,7 @@ import {
   Portal,
   Text,
 } from '@chakra-ui/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { GPU_SHADER_IMPORTED_UI_INDEX } from '../../../shared/gpu-shader-routing.ts';
 import { normalizeRemoteModelAssetPath } from '../../../shared/model-asset-path.ts';
 import {
@@ -19,7 +19,6 @@ import {
 } from '../../../shared/model-catalog.ts';
 import { useControls } from '../context/ControlsContext.tsx';
 import { VISUAL_MODES } from '../lib/constants.ts';
-import { deckGpuShaderPatch } from '../lib/deck-gpu-shader.ts';
 import { deckGpuShaderModePatch } from '../lib/deck-mode.ts';
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -145,7 +144,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
       ? `Live on ${[figureOnA ? 'Deck A' : null, figureOnB ? 'Deck B' : null].filter(Boolean).join(' + ')}`
       : 'Not on a deck — assign below or pick Figure in Deck Mode';
 
-  const useRemoteAsset = () => {
+  const applyRemoteAsset = () => {
     const normalized = normalizeRemoteModelAssetPath(assetPath, state.figureAssetPath);
     setAssetPath(normalized);
     updateState({ figureAssetPath: normalized });
@@ -310,11 +309,11 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
                       value={assetPath}
                       onChange={(e) => setAssetPath(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') useRemoteAsset();
+                        if (e.key === 'Enter') applyRemoteAsset();
                       }}
                     />
                     <Box display="flex" gap={2} mt={2}>
-                      <Button size="sm" onClick={useRemoteAsset}>
+                      <Button size="sm" onClick={applyRemoteAsset}>
                         Load remote
                       </Button>
                       <Button size="sm" variant="surface" onClick={clearRemoteAsset}>

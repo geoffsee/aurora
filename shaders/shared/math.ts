@@ -7,12 +7,18 @@ const f32 = d.f32;
 // Prevent tree-shaking of type constructors
 export const keepAlive = [vec2f, f32];
 
-export const hash21 = tgpu.fn([vec2f], f32)((st) => {
+export const hash21 = tgpu.fn(
+  [vec2f],
+  f32,
+)((st) => {
   'use gpu';
   return std.fract(std.sin(std.dot(st, vec2f(127.1, 311.7))) * 43758.5453123);
 });
 
-export const noise = tgpu.fn([vec2f], f32)((st) => {
+export const noise = tgpu.fn(
+  [vec2f],
+  f32,
+)((st) => {
   'use gpu';
   const i = std.floor(st);
   const f = std.fract(st);
@@ -24,7 +30,10 @@ export const noise = tgpu.fn([vec2f], f32)((st) => {
   return std.mix(std.mix(a, b, u.x), std.mix(c, dVal, u.x), u.y);
 });
 
-export const fbm = tgpu.fn([vec2f], f32)((st) => {
+export const fbm = tgpu.fn(
+  [vec2f],
+  f32,
+)((st) => {
   'use gpu';
   let value = f32(0.0);
   let amp = 0.5;
@@ -39,16 +48,22 @@ export const fbm = tgpu.fn([vec2f], f32)((st) => {
   return value;
 });
 
-export const kaleidoscope = tgpu.fn([vec2f, f32, f32], vec2f)((p, slices, rotation) => {
+export const kaleidoscope = tgpu.fn(
+  [vec2f, f32, f32],
+  vec2f,
+)((p, slices, rotation) => {
   'use gpu';
   const a0 = std.atan2(p.y, p.x) + rotation;
   const seg = 6.283185307179586 / slices;
-  const folded = std.abs(((a0 % seg) + seg) % seg - seg * 0.5);
+  const folded = std.abs((((a0 % seg) + seg) % seg) - seg * 0.5);
   const r = std.length(p);
   return vec2f(std.cos(folded), std.sin(folded)).mul(r);
 });
 
-export const crispRing = tgpu.fn([f32, f32, f32, f32], f32)((r, radius, halfWidth, softness) => {
+export const crispRing = tgpu.fn(
+  [f32, f32, f32, f32],
+  f32,
+)((r, radius, halfWidth, softness) => {
   'use gpu';
   return 1.0 - std.smoothstep(halfWidth, halfWidth + softness, std.abs(r - radius));
 });

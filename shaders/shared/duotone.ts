@@ -7,12 +7,18 @@ const f32 = d.f32;
 // Prevent tree-shaking of type constructors in bundled environment
 export const keepAlive = [vec3f, f32];
 
-export const duotoneAccent = tgpu.fn([vec3f], vec3f)((base) => {
+export const duotoneAccent = tgpu.fn(
+  [vec3f],
+  vec3f,
+)((base) => {
   'use gpu';
   return std.clamp(base.mul(1.35).add(vec3f(0.18)), vec3f(0.0), vec3f(1.0));
 });
 
-export const vjDuotone = tgpu.fn([vec3f, f32, f32, f32], vec3f)((base, phase, saturation, value) => {
+export const vjDuotone = tgpu.fn(
+  [vec3f, f32, f32, f32],
+  vec3f,
+)((base, phase, saturation, value) => {
   'use gpu';
   const accent = duotoneAccent(base);
   const local = std.fract(phase) - 0.5;
@@ -22,7 +28,10 @@ export const vjDuotone = tgpu.fn([vec3f, f32, f32, f32], vec3f)((base, phase, sa
   return std.mix(grayscale, rgb, saturation).mul(value);
 });
 
-export const audioCurve = tgpu.fn([f32], f32)((x) => {
+export const audioCurve = tgpu.fn(
+  [f32],
+  f32,
+)((x) => {
   'use gpu';
   return 1.0 - std.exp(-3.0 * x);
 });

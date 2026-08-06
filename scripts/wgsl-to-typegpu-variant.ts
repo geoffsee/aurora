@@ -2,8 +2,8 @@
  * Converts a palette variant WGSL body into a TypeGPU `defineVariant` module.
  * Reads shaders/variants/*.wgsl and writes shaders/variants/*.ts (real tgpu.fn code).
  */
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 
 const BUILTIN_TO_STD = [
   'smoothstep',
@@ -49,7 +49,7 @@ function extractVariantBody(source: string): { name: string; body: string } {
   if (!fnMatch) {
     throw new Error('Could not parse variant function');
   }
-  return { name: fnMatch[1]!, body: fnMatch[2]!.trim() };
+  return { name: fnMatch[1]!, body: fnMatch[2]?.trim() ?? '' };
 }
 
 function convertBody(body: string): string {
@@ -78,15 +78,15 @@ function convertBody(body: string): string {
   }
 
   // restore helper calls that got std.-prefixed
-  s = s.replace(/std\.(hash21|noise|fbm|kaleidoscope|crispRing|vjDuotone|duotoneAccent|audioCurve)\(/g, '$1(');
+  s = s.replace(
+    /std\.(hash21|noise|fbm|kaleidoscope|crispRing|vjDuotone|duotoneAccent|audioCurve)\(/g,
+    '$1(',
+  );
   s = s.replace(/std\.(bear_\w+|wolf_\w+)\(/g, '$1(');
 
   // vec * scalar and vec4f(color * scalar, ...) patterns
   s = s.replace(/return vec4f\((\w+) \* (\w+), (\w+)\)/g, 'return vec4f($1.mul($2), $3)');
-  s = s.replace(
-    /(std\.mix\([^)]+\)) \* (std\.clamp\([^)]+\))/g,
-    '$1.mul($2)',
-  );
+  s = s.replace(/(std\.mix\([^)]+\)) \* (std\.clamp\([^)]+\))/g, '$1.mul($2)');
 
   // vec3 ray march / boolean patterns
   s = s.replace(/let t = 0\.0;/g, 'let t = f32(0.0);');
@@ -156,12 +156,7 @@ async function convertVariantFile(wgslPath: string, outPath: string) {
     );
   }
   if (converted.includes('wolf_')) {
-    extraImports.push(
-      'wolf_ellipse_2d',
-      'wolf_capsule_2d',
-      'wolf_triangle_2d',
-      'wolf_leg_2d_sdf',
-    );
+    extraImports.push('wolf_ellipse_2d', 'wolf_capsule_2d', 'wolf_triangle_2d', 'wolf_leg_2d_sdf');
   }
 
   const importLines = [
@@ -174,9 +169,7 @@ async function convertVariantFile(wgslPath: string, outPath: string) {
     const fromMath = extraImports.filter((n) =>
       ['hash21', 'noise', 'fbm', 'kaleidoscope', 'crispRing'].includes(n),
     );
-    const fromDuotone = extraImports.filter((n) =>
-      ['vjDuotone', 'duotoneAccent'].includes(n),
-    );
+    const fromDuotone = extraImports.filter((n) => ['vjDuotone', 'duotoneAccent'].includes(n));
     const fromBear = extraImports.filter((n) => n.startsWith('bear'));
     const fromWolf = extraImports.filter((n) => n.startsWith('wolf'));
     if (fromMath.length) {

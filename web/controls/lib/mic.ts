@@ -4,6 +4,6 @@ export const MIC_MAX_DB = -30;
 export const MIC_SEND_INTERVAL_MS = 50;
 
 export {
-	extractMicFeatures,
-	micSecureContextError,
-} from "../../../bridge/mic-features.ts";
+  extractMicFeatures,
+  micSecureContextError,
+} from '../../../bridge/mic-features.ts';

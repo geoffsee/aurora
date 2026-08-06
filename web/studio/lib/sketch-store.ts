@@ -102,8 +102,14 @@ export function uniqueSlug(base: string, existing: Iterable<string>): string {
   return `${slug}-${n}`;
 }
 
+export type StudioSketchPatch = Partial<Omit<StudioSketch, 'id' | 'knobs'>> & {
+  knobs?: Partial<StudioKnobs>;
+};
+
 export function createSketch(
-  partial?: Partial<Pick<StudioSketch, 'label' | 'character' | 'uiGroup' | 'wgsl' | 'knobs'>>,
+  partial?: Partial<Pick<StudioSketch, 'label' | 'character' | 'uiGroup' | 'wgsl'>> & {
+    knobs?: Partial<StudioKnobs>;
+  },
   existingSlugs: string[] = [],
 ): StudioSketch {
   const label = partial?.label?.trim() || 'Untitled Package';
@@ -241,7 +247,7 @@ export function getActiveSketch(doc: StudioDocument): StudioSketch | null {
 export function updateSketch(
   doc: StudioDocument,
   id: string,
-  patch: Partial<Omit<StudioSketch, 'id'>>,
+  patch: StudioSketchPatch,
 ): StudioDocument {
   const sketches = doc.sketches.map((s) => {
     if (s.id !== id) return s;

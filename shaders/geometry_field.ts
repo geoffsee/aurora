@@ -1,13 +1,13 @@
 import tgpu, { std } from 'typegpu';
-import { vjPaletteLayout } from './shared/layout.ts';
-import { TAU, vec2f, vec3f, vec4f, f32 } from './shared/constants.ts';
-import { noise, fbm, kaleidoscope } from './shared/math.ts';
+import { f32, TAU, vec2f, vec3f, vec4f } from './shared/constants.ts';
 import { vjDuotone } from './shared/duotone.ts';
+import { vjPaletteLayout } from './shared/layout.ts';
+import { fbm, kaleidoscope, noise } from './shared/math.ts';
 
 export const geometryField = tgpu.fn(
   [vec2f, f32, f32, f32, f32, f32, f32, f32, f32],
   vec4f,
-)((uv, time, hue_shift, variant, pulse, energy, bass, mid, high) => {
+)((uv, time, _hue_shift, variant, pulse, energy, bass, mid, high) => {
   'use gpu';
   const palette_extra = vjPaletteLayout.$.palette_extra;
   const palette_rgb = vjPaletteLayout.$.palette_rgb;
@@ -32,11 +32,13 @@ export const geometryField = tgpu.fn(
 
   const spoke_count = std.select(18.0, 9.0, vRound === 1.0) + std.floor(drift * 8.0);
   const spoke_angle = std.select(angle, kal_angle, vRound === 0.0);
-  const spoke = 1.0 - std.smoothstep(
-    0.0,
-    0.055 + 0.015 * mid,
-    std.abs(std.fract(spoke_angle / TAU * spoke_count + time * 0.08 + grain * 0.4) - 0.5) * 2.0,
-  );
+  const spoke =
+    1.0 -
+    std.smoothstep(
+      0.0,
+      0.055 + 0.015 * mid,
+      std.abs(std.fract((spoke_angle / TAU) * spoke_count + time * 0.08 + grain * 0.4) - 0.5) * 2.0,
+    );
 
   const ring_density = std.select(16.0, 8.0, vRound === 2.0);
   const ring_radius = std.select(radius, kal_radius, vRound === 0.0);
@@ -47,11 +49,8 @@ export const geometryField = tgpu.fn(
 
   const lattice_uv = kal_uv.mul(8.0 + mid * 6.0 + bass * 2.0);
   const lattice_grid = std.abs(std.fract(lattice_uv).sub(vec2f(0.5)));
-  const lattice = 1.0 - std.smoothstep(
-    0.0,
-    0.06 + 0.02 * (1.0 - mid),
-    std.min(lattice_grid.x, lattice_grid.y),
-  );
+  const lattice =
+    1.0 - std.smoothstep(0.0, 0.06 + 0.02 * (1.0 - mid), std.min(lattice_grid.x, lattice_grid.y));
 
   const core = std.exp(-std.pow(radius * 2.2, 2.0)) * (0.9 + 0.1 * bass);
   const pulse_wave = 0.72 + 0.28 * pulse;
@@ -93,12 +92,13 @@ export const geometryField = tgpu.fn(
   const sat = std.clamp(palette_extra.x, 0.0, 1.0);
   const bri = std.clamp(palette_extra.y, 0.0, 1.0);
   const hue_bias = std.select(0.0, dw_q.x * 0.45, vRound === 3.0);
-  const hue_phase = angle / TAU * 0.42 + radius * 0.52 + time * 0.03 + 0.21 * drift + hue_bias;
+  const hue_phase = (angle / TAU) * 0.42 + radius * 0.52 + time * 0.03 + 0.21 * drift + hue_bias;
   const baseRgb = vec3f(palette_rgb.x, palette_rgb.y, palette_rgb.z);
   const base = vjDuotone(baseRgb, hue_phase, 0.62 * sat, 0.82 * bri);
   const accent = vjDuotone(baseRgb, hue_phase + 0.33 + 0.45 * grain, 0.74 * sat, bri);
   const fill = std.mix(base, accent, 0.38 + 0.35 * energy);
-  const color = fill.mul(std.clamp(0.32 + layer, 0.0, 1.0))
+  const color = fill
+    .mul(std.clamp(0.32 + layer, 0.0, 1.0))
     .add(vec3f(line_glow).mul(accent))
     .add(vec3f(core * 0.45));
   const alpha = std.clamp(

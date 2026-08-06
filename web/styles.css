@@ -22,8 +22,7 @@ body,
 body {
   background:
     radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.22), transparent 28rem),
-    radial-gradient(circle at 70% 80%, rgba(236, 72, 153, 0.16), transparent 32rem),
-    #02030a;
+    radial-gradient(circle at 70% 80%, rgba(236, 72, 153, 0.16), transparent 32rem), #02030a;
 }
 
 #stage {
@@ -104,4 +103,3 @@ code {
   border-color: rgba(125, 211, 252, 0.55);
   pointer-events: none;
 }
-

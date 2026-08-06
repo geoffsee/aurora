@@ -5,12 +5,12 @@ export const MIDI_CLOCK_TIMEOUT_MS = 2000;
 
 // returns null when < 3 timestamps or derived BPM is outside [40, 240]
 export function deriveBpmFromTimestamps(timestamps: readonly number[]): number | null {
-	if (timestamps.length < 3) return null;
-	const oldest = timestamps[0] as number;
-	const newest = timestamps[timestamps.length - 1] as number;
-	const spanMs = newest - oldest;
-	const clocks = timestamps.length - 1;
-	const bpm = 60000 / ((spanMs / clocks) * MIDI_CLOCKS_PER_BEAT);
-	if (!Number.isFinite(bpm) || bpm < 40 || bpm > 240) return null;
-	return bpm;
+  if (timestamps.length < 3) return null;
+  const oldest = timestamps[0] as number;
+  const newest = timestamps[timestamps.length - 1] as number;
+  const spanMs = newest - oldest;
+  const clocks = timestamps.length - 1;
+  const bpm = 60000 / ((spanMs / clocks) * MIDI_CLOCKS_PER_BEAT);
+  if (!Number.isFinite(bpm) || bpm < 40 || bpm > 240) return null;
+  return bpm;
 }
