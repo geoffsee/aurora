@@ -1613,6 +1613,46 @@ const visualServer = Bun.serve({
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
 
+    if (request.method === 'GET' && pathname === '/studio') {
+      return Response.redirect(new URL('/studio/', url), 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/studio/')) {
+      const relativePath = pathname.slice('/studio/'.length) || 'index.html';
+      if (relativePath.includes('..')) {
+        return new Response('Not found', { status: 404 });
+      }
+      const file = resolveStudioFile(relativePath);
+      if (!(await file.exists())) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response(file, {
+        headers: {
+          'content-type': contentType(relativePath),
+          'cache-control': 'no-store',
+        },
+      });
+    }
+
+    if (request.method === 'GET' && pathname === '/controls') {
+      return Response.redirect(new URL('/controls/', url), 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/controls/')) {
+      const relativePath = pathname.slice('/controls/'.length) || 'index.html';
+      if (relativePath.includes('..')) {
+        return new Response('Not found', { status: 404 });
+      }
+      const file = resolveControlsFile(relativePath);
+      if (!(await file.exists())) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response(file, {
+        headers: {
+          'content-type': contentType(relativePath),
+          'cache-control': 'no-store',
+        },
+      });
+    }
+
     if (pathname === '/debug/state-log') {
       return new Response(JSON.stringify(controlStateLog.toArray()), {
         headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -1838,26 +1878,15 @@ const controlsServer = Bun.serve({
   hostname: host,
   async fetch(request) {
     const url = new URL(request.url);
+    url.port = port.toString();
+    
     const pathname = decodeURIComponent(url.pathname);
 
     if (request.method === 'GET' && pathname === '/studio') {
       return Response.redirect(new URL('/studio/', url), 308);
     }
     if (request.method === 'GET' && pathname.startsWith('/studio/')) {
-      const relativePath = pathname.slice('/studio/'.length) || 'index.html';
-      if (relativePath.includes('..')) {
-        return new Response('Not found', { status: 404 });
-      }
-      const file = resolveStudioFile(relativePath);
-      if (!(await file.exists())) {
-        return new Response('Not found', { status: 404 });
-      }
-      return new Response(file, {
-        headers: {
-          'content-type': contentType(relativePath),
-          'cache-control': 'no-store',
-        },
-      });
+      return Response.redirect(url, 308);
     }
 
     if (pathname === '/api/shadertoy/key') {
