@@ -247,6 +247,7 @@ const studioDistRoot = `${root}/dist/studio`;
 const liveHost = Bun.env.LIVE_HOST ?? '127.0.0.1';
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
+const vstControlRecvHost = Bun.env.VST_CONTROL_RECV_HOST ?? '127.0.0.1';
 const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
 const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? '';
 const abletonLinkEnabled = Bun.env.ABLETON_LINK_ENABLED === '1';
@@ -356,7 +357,7 @@ const udp = new osc.UDPPort({
 });
 
 const vstControlUdp = new osc.UDPPort({
-  localAddress: '127.0.0.1',
+  localAddress: vstControlRecvHost,
   localPort: vstControlRecvPort,
   metadata: true,
 });
@@ -2020,7 +2021,7 @@ udp.on('error', (error: Error & { code?: string }) => {
 udp.open();
 
 vstControlUdp.on('ready', () => {
-  console.log(`VST control OSC ready: listening :${vstControlRecvPort}`);
+  console.log(`VST control OSC ready: listening ${vstControlRecvHost}:${vstControlRecvPort}`);
 });
 vstControlUdp.on('message', (msg: OscMsg) => {
   if (msg.address === PRESET_MORPH_ADDRESS) {

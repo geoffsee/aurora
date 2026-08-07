@@ -95,7 +95,8 @@ RUN chmod +x /app/deploy/entrypoint.sh
 ENV HOST=127.0.0.1 \
 	PORT=13000 \
 	CONTROLS_PORT=13001 \
-	LIVE_HOST=host.docker.internal
+	LIVE_HOST=host.docker.internal \
+	VST_CONTROL_RECV_HOST=0.0.0.0
 
 EXPOSE 8443 8444 8450 11001/udp 12000/udp
 

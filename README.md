@@ -56,7 +56,7 @@ Accept the Caddy `tls internal` certificate warning once.
 
 Use the same HTTPS ports on this machine’s LAN IP (`https://<ip>:8443` / `:8444`). WebGPU requires a secure context — plain `http://192.168.x.x` will black-screen the projector. The Docker image terminates TLS via Caddy so LAN clients get a secure context after trusting the warning.
 
-AbletonOSC / VST UDP (`11001`, `12000`) is published from the container; the bridge reaches Ableton on the host via `host.docker.internal`.
+AbletonOSC / VST UDP (`11001`, `12000`) is published from the container; the bridge reaches Ableton on the host via `host.docker.internal`. VST control is local OSC/UDP, not HTTP or TLS; the CLI publishes port `12000` on host loopback only.
 
 ### Image
 
@@ -166,8 +166,10 @@ aurora
 If you need a different plugin control port, start with:
 
 ```bash
-VST_CONTROL_RECV_PORT=12000 aurora
+AURORA_VST_TARGET=127.0.0.1:12001 VST_CONTROL_RECV_PORT=12001 aurora
 ```
+
+Set `AURORA_VST_TARGET` in the environment that launches Ableton so the plugin and bridge use the same non-default port.
 
 The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, trails, depth, palette, ring opacity, and max brightness; toggle parameters for rings, strobe, strobe lockout, blackout, freeze, beat sync, bar sync, and demo mode; deck mode parameters for Beams/Tunnel/Burst/Mirror/Wash; and momentary parameters for flash, reset, and the cue presets.
 

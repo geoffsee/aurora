@@ -4,9 +4,9 @@ import {
   geoffseePagesProjectorUrl,
   isGeoffseeGithubPages,
   isStaticHosting,
-  studioAppUrl,
   staticModesApiBase,
   staticSitePathPrefix,
+  studioAppUrl,
 } from '../../shared/static-hosting.ts';
 
 describe('isStaticHosting', () => {

@@ -127,11 +127,14 @@ function startContainer(dataDir?: string): number {
   stopContainer();
   console.log(`[aurora] starting ${CONTAINER}…`);
   const tlsHosts = ['localhost', '127.0.0.1', ...hostLanIps()].join(',');
+  const vstControlRecvPort = process.env.VST_CONTROL_RECV_PORT ?? '12000';
   const envArgs: string[] = [
     '-e',
     `LIVE_HOST=${process.env.LIVE_HOST ?? 'host.docker.internal'}`,
     '-e',
     `AURORA_TLS_HOSTS=${process.env.AURORA_TLS_HOSTS ?? tlsHosts}`,
+    '-e',
+    'VST_CONTROL_RECV_HOST=0.0.0.0',
   ];
   for (const key of [
     'LIVE_SEND_PORT',
@@ -181,7 +184,7 @@ function startContainer(dataDir?: string): number {
     '-p',
     '11001:11001/udp',
     '-p',
-    '12000:12000/udp',
+    `127.0.0.1:${vstControlRecvPort}:${vstControlRecvPort}/udp`,
     IMAGE,
   ]);
 }
