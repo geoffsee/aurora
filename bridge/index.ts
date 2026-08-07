@@ -349,7 +349,7 @@ const resolveControlsFile = (relativePath: string) =>
 const resolveStudioFile = (relativePath: string) => Bun.file(`${studioDistRoot}/${relativePath}`);
 
 const udp = new osc.UDPPort({
-  localAddress: '127.0.0.1',
+  localAddress: Bun.env.LIVE_RECV_HOST ?? '0.0.0.0',
   localPort: liveRecvPort,
   remoteAddress: liveHost,
   remotePort: liveSendPort,
