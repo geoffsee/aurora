@@ -32,7 +32,8 @@ const CONTROLS_PORT_FALLBACK = 8444;
 /**
  * URL to open Preset Studio.
  * - Static / GitHub Pages → `{siteBase}/studio/`
- * - Bridged local stack (controls :3001 / :8444) → Studio on :3010
+ * - Docker controls (:8444) → bundled Studio at same-origin `/studio/`
+ * - Native controls (:3001) → Studio dev server on :3010
  * - Same origin otherwise → `./studio/`
  */
 export function studioAppUrl(
@@ -44,8 +45,10 @@ export function studioAppUrl(
   }
   const host = loc.hostname || '127.0.0.1';
   const port = loc.port;
-  // Controls ports (native 3001, docker/caddy 8444) → dedicated studio port.
-  if (port === '3001' || port === '8444' || port === String(CONTROLS_PORT_FALLBACK)) {
+  if (port === '8444' || port === String(CONTROLS_PORT_FALLBACK)) {
+    return new URL('/studio/', loc.href).href;
+  }
+  if (port === '3001') {
     return `${loc.protocol}//${host}:3010/`;
   }
   if (port === '3010') {

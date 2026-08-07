@@ -47,6 +47,7 @@ Then open:
 
 - Projector: [https://localhost:8443](https://localhost:8443)
 - Controls: [https://localhost:8444](https://localhost:8444)
+- Preset Studio: [https://localhost:8444/studio/](https://localhost:8444/studio/)
 - Muxox service logs UI: [http://localhost:8450](http://localhost:8450)
 
 Accept the Caddy `tls internal` certificate warning once.

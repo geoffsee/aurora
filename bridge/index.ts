@@ -243,6 +243,7 @@ const host = Bun.env.HOST ?? '0.0.0.0';
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const webRoot = `${root}/web`;
 const controlsDistRoot = `${root}/dist/controls`;
+const studioDistRoot = `${root}/dist/studio`;
 const liveHost = Bun.env.LIVE_HOST ?? '127.0.0.1';
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
@@ -344,6 +345,7 @@ const resolveStaticFile = (relativePath: string) => {
 
 const resolveControlsFile = (relativePath: string) =>
   Bun.file(`${controlsDistRoot}/${relativePath}`);
+const resolveStudioFile = (relativePath: string) => Bun.file(`${studioDistRoot}/${relativePath}`);
 
 const udp = new osc.UDPPort({
   localAddress: '127.0.0.1',
@@ -1836,6 +1838,26 @@ const controlsServer = Bun.serve({
   async fetch(request) {
     const url = new URL(request.url);
     const pathname = decodeURIComponent(url.pathname);
+
+    if (request.method === 'GET' && pathname === '/studio') {
+      return Response.redirect(new URL('/studio/', url), 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/studio/')) {
+      const relativePath = pathname.slice('/studio/'.length) || 'index.html';
+      if (relativePath.includes('..')) {
+        return new Response('Not found', { status: 404 });
+      }
+      const file = resolveStudioFile(relativePath);
+      if (!(await file.exists())) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response(file, {
+        headers: {
+          'content-type': contentType(relativePath),
+          'cache-control': 'no-store',
+        },
+      });
+    }
 
     if (pathname === '/api/shadertoy/key') {
       if (request.method === 'GET') {

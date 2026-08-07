@@ -12,5 +12,10 @@ https://localhost:8443, https://127.0.0.1:8443 {
 
 https://localhost:8444, https://127.0.0.1:8444 {
 	tls internal
-	reverse_proxy 127.0.0.1:13001
+	handle /api/packages/import {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:13001
+	}
 }

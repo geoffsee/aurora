@@ -4,6 +4,7 @@ import {
   geoffseePagesProjectorUrl,
   isGeoffseeGithubPages,
   isStaticHosting,
+  studioAppUrl,
   staticModesApiBase,
   staticSitePathPrefix,
 } from '../../shared/static-hosting.ts';
@@ -37,6 +38,34 @@ describe('isStaticHosting', () => {
         search: '',
       }),
     ).toBe(false);
+  });
+});
+
+describe('studioAppUrl', () => {
+  test('uses the bundled same-origin Studio in Docker', () => {
+    expect(
+      studioAppUrl({
+        protocol: 'https:',
+        hostname: 'localhost',
+        port: '8444',
+        href: 'https://localhost:8444/',
+        pathname: '/',
+        search: '',
+      }),
+    ).toBe('https://localhost:8444/studio/');
+  });
+
+  test('keeps the separate dev server for the native controls stack', () => {
+    expect(
+      studioAppUrl({
+        protocol: 'http:',
+        hostname: '127.0.0.1',
+        port: '3001',
+        href: 'http://127.0.0.1:3001/',
+        pathname: '/',
+        search: '',
+      }),
+    ).toBe('http://127.0.0.1:3010/');
   });
 });
 

@@ -26,11 +26,26 @@ import {
 
 const BRIDGE_KEY = 'aurora-studio-bridge-origin';
 
+function defaultBridgeOrigin(): string {
+  if (location.port === '3010') {
+    return `${location.protocol}//${location.hostname || '127.0.0.1'}:3000`;
+  }
+  return location.origin;
+}
+
 function loadBridgeOrigin(): string {
   try {
-    return localStorage.getItem(BRIDGE_KEY) ?? 'http://127.0.0.1:3000';
+    const saved = localStorage.getItem(BRIDGE_KEY);
+    // Migrate the old native default when Studio moves into the HTTPS Docker origin.
+    if (
+      location.port === '8444' &&
+      (saved === 'http://127.0.0.1:3000' || saved === 'http://localhost:3000')
+    ) {
+      return defaultBridgeOrigin();
+    }
+    return saved ?? defaultBridgeOrigin();
   } catch {
-    return 'http://127.0.0.1:3000';
+    return defaultBridgeOrigin();
   }
 }
 
