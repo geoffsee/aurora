@@ -72,7 +72,7 @@ const SHOW_UNIFORMS = `// pack-v1 bus (show form) — bindings match VjPackFulls
 `;
 
 /** Minimal authoring template (WebGPU-friendly @group(0)). */
-export const PACK_V1_AUTHORING_TEMPLATE = `// Dot Terrain — monochrome particle heightfield horizon (authoring pack-v1).
+export const PACK_V1_AUTHORING_TEMPLATE = `// Point Cloud Waves — monochrome particle heightfield horizon (authoring pack-v1).
 // Reference: sparse-to-dense white dots forming rolling hills over pure black.
 // Studio UV: y=0 top, y=1 bottom.
 
@@ -226,9 +226,9 @@ fn fragment(@builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>) -> @l
   var body = smoothstep(0.05, 0.9, acc);
   body = body * (0.55 + intensity * 0.55);
 
-  let base = max(palette_rgb.xyz, vec3<f32>(0.94, 0.96, 0.98));
+  let base = max(palette_rgb.xyz, vec3<f32>(0.05));
   let gray = vec3<f32>(dot(base, vec3<f32>(0.299, 0.587, 0.114)));
-  var col = mix(vec3<f32>(1.0), mix(gray, base, sat), clamp(sat * 1.05, 0.0, 1.0));
+  var col = mix(vec3<f32>(1.0), mix(gray, base, sat), clamp(sat * 1.2, 0.0, 1.0));
   col = col * bri * body * (1.05 + energy * 0.1);
   col = clamp(col, vec3<f32>(0.0), vec3<f32>(1.0));
 

@@ -468,15 +468,15 @@ export const FIGURE_KNOB_PARAMS = [
 export const DECK_A_KNOB_PARAMS = [
   'deckAIntensity',
   'deckADepth',
-  'deckAFeedback',
   'deckASpeed',
+  'palette',
 ] as const satisfies readonly MappableParam[];
 
 export const DECK_B_KNOB_PARAMS = [
   'deckBIntensity',
   'deckBDepth',
-  'deckBFeedback',
   'deckBSpeed',
+  'palette',
 ] as const satisfies readonly MappableParam[];
 
 /** Build the state patch for setting a mappable param to a value. Palette hue

@@ -154,7 +154,7 @@ export function DeckModeLaunchpad({
         })}
       </Flex>
 
-      <Grid templateColumns="repeat(auto-fill, minmax(7.5rem, 1fr))" gap={2} flex="1" minH="12rem">
+      <Grid templateColumns="repeat(auto-fill, minmax(7.5rem, 1fr))" gap={2} flex="1" minH="0">
         {activeModes.map((entry) => {
           const isSelected = entry.slug === selectedSlug;
           const name = entry.label ?? entry.slug;
@@ -194,7 +194,7 @@ export function DeckModeLaunchpad({
       </Grid>
       {deckControls && (
         <Box
-          mt={2}
+          mt={3}
           pt={3}
           borderTop="1px solid"
           borderColor="whiteAlpha.200"

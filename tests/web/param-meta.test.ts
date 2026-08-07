@@ -61,19 +61,9 @@ describe('buildParamPatch palette', () => {
 });
 
 describe('deck launchpad knobs', () => {
-  test('each deck has intensity, depth, trails, and speed', () => {
-    expect(DECK_A_KNOB_PARAMS).toEqual([
-      'deckAIntensity',
-      'deckADepth',
-      'deckAFeedback',
-      'deckASpeed',
-    ]);
-    expect(DECK_B_KNOB_PARAMS).toEqual([
-      'deckBIntensity',
-      'deckBDepth',
-      'deckBFeedback',
-      'deckBSpeed',
-    ]);
+  test('each deck has intensity, depth, speed, and color (palette)', () => {
+    expect(DECK_A_KNOB_PARAMS).toEqual(['deckAIntensity', 'deckADepth', 'deckASpeed', 'palette']);
+    expect(DECK_B_KNOB_PARAMS).toEqual(['deckBIntensity', 'deckBDepth', 'deckBSpeed', 'palette']);
   });
 
   test('deck param ranges match the corresponding global masters', () => {
@@ -105,20 +95,22 @@ describe('knob strip coverage', () => {
       expect(MAPPABLE_PARAMS).toContain(key);
     }
     for (const key of DECK_A_KNOB_PARAMS) {
-      expect(KNOB_STRIP_PARAMS).not.toContain(key);
+      if (key !== 'palette') expect(KNOB_STRIP_PARAMS).not.toContain(key);
       expect(MAPPABLE_PARAMS).toContain(key);
     }
     for (const key of DECK_B_KNOB_PARAMS) {
-      expect(KNOB_STRIP_PARAMS).not.toContain(key);
+      if (key !== 'palette') expect(KNOB_STRIP_PARAMS).not.toContain(key);
       expect(MAPPABLE_PARAMS).toContain(key);
     }
-    // Everything mappable is strip, figure-only, or deck-launchpad.
+    // Everything mappable is strip, figure-only, deck-launchpad, or per-deck feedback.
     for (const key of MAPPABLE_PARAMS) {
       const onStrip = (KNOB_STRIP_PARAMS as readonly string[]).includes(key);
       const figureOnly = (FIGURE_KNOB_PARAMS as readonly string[]).includes(key);
       const deckOnly =
         (DECK_A_KNOB_PARAMS as readonly string[]).includes(key) ||
-        (DECK_B_KNOB_PARAMS as readonly string[]).includes(key);
+        (DECK_B_KNOB_PARAMS as readonly string[]).includes(key) ||
+        key === 'deckAFeedback' ||
+        key === 'deckBFeedback';
       expect(onStrip || figureOnly || deckOnly).toBe(true);
     }
   });

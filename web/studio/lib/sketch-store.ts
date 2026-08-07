@@ -127,7 +127,7 @@ export function createSketch(
 }
 
 export function emptyDocument(): StudioDocument {
-  const first = createSketch({ label: 'Dot Terrain' });
+  const first = createSketch({ label: 'Point Cloud Waves' });
   return {
     version: STUDIO_VERSION,
     activeId: first.id,
@@ -176,13 +176,17 @@ function parseSketch(raw: unknown): StudioSketch | null {
     typeof raw.slug === 'string' && raw.slug.trim()
       ? slugifyPackageLabel(raw.slug)
       : slugifyPackageLabel(label);
+  const cleanWgsl = wgsl.replace(
+    /max\(\s*palette_rgb\.xyz\s*,\s*vec3<\s*f32\s*>\(\s*0\.94\s*,\s*0\.96\s*,\s*0\.98\s*\)\s*\)/g,
+    'max(palette_rgb.xyz, vec3<f32>(0.05))',
+  );
   return {
     id,
     slug,
     label,
     character: typeof raw.character === 'string' ? raw.character : '',
     uiGroup: typeof raw.uiGroup === 'string' && raw.uiGroup.trim() ? raw.uiGroup : 'field-motion',
-    wgsl,
+    wgsl: cleanWgsl,
     knobs: parseKnobs(raw.knobs),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : nowIso(),
   };

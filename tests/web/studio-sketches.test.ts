@@ -88,7 +88,7 @@ describe('sketch document ops', () => {
     const doc = emptyDocument();
     expect(doc.sketches.length).toBe(1);
     expect(getActiveSketch(doc)?.id).toBe(doc.activeId);
-    expect(getActiveSketch(doc)?.label).toBe('Soft Blob');
+    expect(getActiveSketch(doc)?.label).toBe('Point Cloud Waves');
   });
 
   test('updateSketch patches label and refreshes slug', () => {
@@ -172,7 +172,7 @@ describe('sketch document ops', () => {
     doc = removeSketch(doc, onlyId);
     expect(doc.sketches.length).toBe(1);
     expect(doc.activeId).not.toBe(onlyId);
-    expect(getActiveSketch(doc)?.label).toBe('Soft Blob');
+    expect(getActiveSketch(doc)?.label).toBe('Point Cloud Waves');
   });
 
   test('removeSketch of non-active keeps activeId', () => {
@@ -304,7 +304,7 @@ describe('loadStudioDocument / saveStudioDocument', () => {
   test('load returns empty document when storage is empty', () => {
     const doc = loadStudioDocument(storage);
     expect(doc.sketches.length).toBe(1);
-    expect(getActiveSketch(doc)?.label).toBe('Soft Blob');
+    expect(getActiveSketch(doc)?.label).toBe('Point Cloud Waves');
   });
 
   test('save + load round-trips sketches', () => {

@@ -33,6 +33,65 @@ function GroupDivider() {
   );
 }
 
+function hueToHex(h: number, s = 0.8, l = 0.5): string {
+  const hue = ((h % 1) + 1) % 1;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((hue * 6) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0,
+    g = 0,
+    b = 0;
+  const sector = Math.floor(hue * 6);
+  if (sector === 0) {
+    r = c;
+    g = x;
+    b = 0;
+  } else if (sector === 1) {
+    r = x;
+    g = c;
+    b = 0;
+  } else if (sector === 2) {
+    r = 0;
+    g = c;
+    b = x;
+  } else if (sector === 3) {
+    r = 0;
+    g = x;
+    b = c;
+  } else if (sector === 4) {
+    r = x;
+    g = 0;
+    b = c;
+  } else {
+    r = c;
+    g = 0;
+    b = x;
+  }
+  const toHex = (v: number) =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function hexToHue(hex: string): number {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return 0;
+  const r = parseInt(clean.slice(0, 2), 16) / 255;
+  const g = parseInt(clean.slice(2, 4), 16) / 255;
+  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta === 0) return 0;
+  let h = 0;
+  if (max === r) h = ((g - b) / delta) % 6;
+  else if (max === g) h = (b - r) / delta + 2;
+  else h = (r - g) / delta + 4;
+  h = h / 6;
+  return ((h % 1) + 1) % 1;
+}
+
 export function KnobPanel({
   knobs,
   onChange,
@@ -101,14 +160,40 @@ export function KnobPanel({
       <GroupDivider />
       <GroupLabel>PALETTE</GroupLabel>
       <ParamKnob
-        label="Hue"
+        label="Color"
         value={knobs.hue}
         min={0}
         max={1}
         step={0.01}
         format={fmt01}
+        accent={hueToHex(knobs.hue, knobs.sat, 0.55)}
         onChange={(hue) => onChange({ hue })}
       />
+      <Box
+        flex="0 0 auto"
+        position="relative"
+        display="inline-flex"
+        alignItems="center"
+        justifyContent="center"
+        alignSelf="center"
+        title="Pick color"
+        mx={1}
+      >
+        <input
+          type="color"
+          value={hueToHex(knobs.hue, knobs.sat, 0.5)}
+          onChange={(e) => onChange({ hue: hexToHue(e.target.value) })}
+          style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '50%',
+            border: '2px solid #3a4048',
+            cursor: 'pointer',
+            padding: 0,
+            background: 'none',
+          }}
+        />
+      </Box>
       <ParamKnob
         label="Sat"
         value={knobs.sat}

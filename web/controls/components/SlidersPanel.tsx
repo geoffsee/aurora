@@ -66,26 +66,40 @@ export function SlidersPanel() {
   );
 
   const deckKnobRow = useCallback(
-    (keys: readonly MappableParam[], ariaLabel: string) =>
-      knobScrollStrip(
-        keys.map((key) => {
-          const meta = PARAM_META[key];
-          return (
-            <ParamKnob
-              key={key}
-              label={meta.knobLabel ?? meta.label}
-              value={numericStateValue(state as unknown as Record<string, unknown>, key)}
-              min={meta.min}
-              max={meta.max}
-              step={meta.step}
-              format={meta.format}
-              onChange={(v) => onKnobChange(key, v)}
-            />
-          );
-        }),
-        ariaLabel,
-      ),
-    [state, onKnobChange, knobScrollStrip],
+    (keys: readonly MappableParam[], ariaLabel: string) => (
+      <Box
+        overflowX="auto"
+        overflowY="hidden"
+        maxW="100%"
+        pb={1}
+        css={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(153,136,98,0.55) transparent',
+          WebkitOverflowScrolling: 'touch',
+        }}
+        aria-label={ariaLabel}
+      >
+        <Flex gap={6} minW="min-content" align="flex-start" pr={1} flexWrap="nowrap">
+          {keys.map((key) => {
+            const meta = PARAM_META[key];
+            return (
+              <ParamKnob
+                key={key}
+                label={meta.knobLabel ?? meta.label}
+                value={numericStateValue(state as unknown as Record<string, unknown>, key)}
+                min={meta.min}
+                max={meta.max}
+                step={meta.step}
+                format={meta.format}
+                accent={key === 'palette' ? paletteHex : undefined}
+                onChange={(v) => onKnobChange(key, v)}
+              />
+            );
+          })}
+        </Flex>
+      </Box>
+    ),
+    [state, paletteHex, onKnobChange],
   );
 
   const deckAKnobs = useMemo(

@@ -73,22 +73,15 @@ describe('studio authoring pipeline', () => {
   test('document → preview → export → publish → console wire', () => {
     // 1. Author a sketch in the studio document
     let doc = emptyDocument();
-    doc = addSketch(
-      doc,
-      createSketch(
-        {
-          label: 'Dot Terrain',
-          character: 'dotted wave field',
-          wgsl: PACK_V1_AUTHORING_TEMPLATE,
-          knobs: { intensity: 0.7, hue: 0.42, demoAudio: true },
-        },
-        doc.sketches.map((s) => s.slug),
-      ),
-    );
+    doc = updateSketch(doc, doc.activeId as string, {
+      character: 'dotted wave field',
+      wgsl: PACK_V1_AUTHORING_TEMPLATE,
+      knobs: { intensity: 0.7, hue: 0.42, demoAudio: true },
+    });
     const sketch = getActiveSketch(doc);
     expect(sketch).toBeTruthy();
     if (!sketch) return;
-    expect(sketch.slug).toBe('dot-terrain');
+    expect(sketch.slug).toBe('point-cloud-waves');
 
     // 2. Preview adapts authoring WGSL for WebGPU
     const preview = preparePreviewWgsl(sketch.wgsl);
@@ -101,7 +94,7 @@ describe('studio authoring pipeline', () => {
     const exported = exportSketchToPackage(sketch);
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
-    expect(exported.fileName).toBe('dot-terrain.aurora-package');
+    expect(exported.fileName).toBe('point-cloud-waves.aurora-package');
     const parsed = parseAuroraPackageArchive(exported.bytes, { remapAuthoring: true });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
@@ -112,15 +105,15 @@ describe('studio authoring pipeline', () => {
     const published = publishSketchToChannel(sketch);
     expect(published.ok).toBe(true);
     if (!published.ok) return;
-    const authored = getAuthoredPackage('dot-terrain');
+    const authored = getAuthoredPackage('point-cloud-waves');
     expect(authored).toBeTruthy();
     if (!authored) return;
-    expect(authored.label).toBe('Dot Terrain');
+    expect(authored.label).toBe('Point Cloud Waves');
     expect(authored.character).toBe('dotted wave field');
 
     // 5. Console can build a compiled wire from the authored package
     const wire = compiledWireFromAuthoredPackage('deck-a', authored, 1);
-    expect(wire.slug).toBe('dot-terrain');
+    expect(wire.slug).toBe('point-cloud-waves');
     expect(wire.layers[0]?.kind).toBe('fullscreen');
     expect(wire.layers[0]?.wgsl).toContain('@fragment');
   });
