@@ -1879,7 +1879,7 @@ const controlsServer = Bun.serve({
   async fetch(request) {
     const url = new URL(request.url);
     url.port = port.toString();
-    
+
     const pathname = decodeURIComponent(url.pathname);
 
     if (request.method === 'GET' && pathname === '/studio') {

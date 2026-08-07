@@ -11,6 +11,7 @@ import {
   importPackageToBridge,
   publishSketchToChannel,
 } from './lib/export-package.ts';
+import type { WgslDiagnostic } from './lib/wgsl-diagnostics.ts';
 import {
   addSketch,
   createSketch,
@@ -54,8 +55,13 @@ export function App() {
   const [bridgeOrigin, setBridgeOrigin] = useState(loadBridgeOrigin);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<readonly WgslDiagnostic[]>([]);
 
   const active = useMemo(() => getActiveSketch(doc), [doc]);
+
+  useEffect(() => {
+    setDiagnostics([]);
+  }, [active?.id]);
 
   // Persist sketches.
   useEffect(() => {
@@ -230,7 +236,11 @@ export function App() {
               borderColor="#252a31"
               bg="rgba(0,0,0,0.25)"
             >
-              <WgslEditor value={active.wgsl} onChange={(wgsl) => patchActive({ wgsl })} />
+              <WgslEditor
+                value={active.wgsl}
+                onChange={(wgsl) => patchActive({ wgsl })}
+                diagnostics={diagnostics}
+              />
             </Box>
           </GridItem>
 
@@ -243,7 +253,11 @@ export function App() {
               borderColor="#252a31"
               bg="rgba(0,0,0,0.25)"
             >
-              <PreviewPanel wgsl={active.wgsl} knobs={active.knobs} />
+              <PreviewPanel
+                wgsl={active.wgsl}
+                knobs={active.knobs}
+                onDiagnostics={(next) => setDiagnostics(next)}
+              />
             </Box>
           </GridItem>
         </Grid>

@@ -59,7 +59,9 @@
   "dependencies": {
     "@chakra-ui/react": "^3.36.1",
     "@emotion/react": "^11.14.0",
+    "@monaco-editor/react": "^4.6.0",
     "@webgpu/types": "^0.1.71",
+    "monaco-editor": "^0.52.2",
     "osc": "^2.4.5",
     "picomatch": "^4.0.5",
     "react": "^19.2.8",

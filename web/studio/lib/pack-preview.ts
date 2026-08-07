@@ -6,18 +6,75 @@
 import { hueToRgb } from '../../../shared/palette-color.ts';
 import { preparePreviewWgsl } from './prepare-preview-wgsl.ts';
 import type { StudioKnobs } from './sketch-store.ts';
+import type { WgslDiagnostic } from './wgsl-diagnostics.ts';
 
 export type PackPreviewStatus =
   | { state: 'idle' }
   | { state: 'no-webgpu'; message: string }
   | { state: 'compiling' }
-  | { state: 'error'; message: string }
+  | { state: 'error'; message: string; diagnostics: readonly WgslDiagnostic[] }
   | { state: 'ready' };
 
 export type PackPreviewListener = (status: PackPreviewStatus) => void;
 
+export type PackPreviewMetrics = {
+  status: PackPreviewStatus['state'];
+  fps: number;
+  frameMs: number;
+  avgFrameMs: number;
+  minFrameMs: number;
+  maxFrameMs: number;
+  totalFrames: number;
+  jankFrameCount: number;
+  lastCompileMs: number | null;
+  lastPrepareMs: number | null;
+  lastPipelineMs: number | null;
+  compileCount: number;
+  lastCompileErrorCount: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  memoryUsedMb: number | null;
+  memoryLimitMb: number | null;
+};
+
+export type PackPreviewMetricsListener = (metrics: PackPreviewMetrics) => void;
+
 const UNIFORM_SIZE = 16; // one vec4
 const BINDING_COUNT = 5;
+const FRAME_WINDOW_SIZE = 60;
+const JANK_FRAME_MS = 33.333; // > 33ms means <30fps
+
+function readMemoryMetrics(): { usedMb: number | null; limitMb: number | null } {
+  const memory = (performance as Performance & { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } })
+    .memory;
+  if (!memory) return { usedMb: null, limitMb: null };
+  return {
+    usedMb: Math.round(memory.usedJSHeapSize / 1024 / 1024),
+    limitMb: Math.round(memory.jsHeapSizeLimit / 1024 / 1024),
+  };
+}
+
+function initialMetrics(): PackPreviewMetrics {
+  return {
+    status: 'idle',
+    fps: 0,
+    frameMs: 0,
+    avgFrameMs: 0,
+    minFrameMs: 0,
+    maxFrameMs: 0,
+    totalFrames: 0,
+    jankFrameCount: 0,
+    lastCompileMs: null,
+    lastPrepareMs: null,
+    lastPipelineMs: null,
+    compileCount: 0,
+    lastCompileErrorCount: 0,
+    canvasWidth: 0,
+    canvasHeight: 0,
+    memoryUsedMb: null,
+    memoryLimitMb: null,
+  };
+}
 
 export class PackPreview {
   private canvas: HTMLCanvasElement;
@@ -33,8 +90,21 @@ export class PackPreview {
   private startMs = performance.now();
   private knobs: StudioKnobs | null = null;
   private listener: PackPreviewListener | null = null;
+  private metricsListener: PackPreviewMetricsListener | null = null;
   private destroyed = false;
   private lastSource = '';
+  private frameSamples: number[] = [];
+  private frameSamplesSumMs = 0;
+  private totalFrames = 0;
+  private jankFrameCount = 0;
+  private compileCount = 0;
+  private lastCompileMs: number | null = null;
+  private lastPrepareMs: number | null = null;
+  private lastPipelineMs: number | null = null;
+  private lastCompileErrorCount = 0;
+  private lastFrameAtMs: number | null = null;
+  private metrics: PackPreviewMetrics = initialMetrics();
+  private renderState: PackPreviewStatus['state'] = 'idle';
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -44,8 +114,130 @@ export class PackPreview {
     this.listener = listener;
   }
 
+  onMetrics(listener: PackPreviewMetricsListener): void {
+    this.metricsListener = listener;
+    listener(this.metrics);
+  }
+
   private emit(status: PackPreviewStatus): void {
+    this.renderState = status.state;
     this.listener?.(status);
+    this.emitMetrics({ status: status.state });
+  }
+
+  private emitError(
+    message: string,
+    rawMessages: readonly GPUCompilationMessage[],
+    compileMs: number | null = null,
+    prepareMs: number | null = null,
+    pipelineMs: number | null = null,
+  ): void {
+    const diagnostics: WgslDiagnostic[] = rawMessages.map((error) => ({
+      lineNumber: Math.max(1, error.lineNum || 1),
+      startColumn: Math.max(1, error.linePos || 1),
+      endLineNumber: Math.max(1, error.lineNum || 1),
+      endColumn: error.linePos ? error.linePos + 1 : 2,
+      message: error.message,
+      severity: error.type === 'warning' ? 'warning' : error.type === 'error' ? 'error' : 'info',
+    }));
+
+    this.lastCompileMs = compileMs;
+    this.lastPrepareMs = prepareMs;
+    this.lastPipelineMs = pipelineMs;
+    this.lastCompileErrorCount = rawMessages.length;
+    this.emit({
+      state: 'error',
+      message,
+      diagnostics,
+    });
+    this.emitMetrics({
+      status: 'error',
+      lastCompileMs: compileMs,
+      lastPrepareMs: prepareMs,
+      lastPipelineMs: pipelineMs,
+      lastCompileErrorCount: this.lastCompileErrorCount,
+    });
+  }
+
+  private emitReady(): void {
+    this.emit({ state: 'ready' });
+  }
+
+  private emitMetrics(partial: Partial<PackPreviewMetrics>): void {
+    this.metrics = {
+      ...this.metrics,
+      ...partial,
+      status: partial.status ?? this.renderState,
+      canvasWidth: this.canvas.width,
+      canvasHeight: this.canvas.height,
+    };
+    const memory = readMemoryMetrics();
+    if (memory.usedMb !== null) {
+      this.metrics.memoryUsedMb = memory.usedMb;
+    }
+    if (memory.limitMb !== null) {
+      this.metrics.memoryLimitMb = memory.limitMb;
+    }
+    this.metricsListener?.(this.metrics);
+  }
+
+  private recordFrame(deltaMs: number): void {
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0) return;
+
+    this.totalFrames += 1;
+    this.frameSamples.push(deltaMs);
+    this.frameSamplesSumMs += deltaMs;
+    if (this.frameSamples.length > FRAME_WINDOW_SIZE) {
+      const dropped = this.frameSamples.shift();
+      if (dropped !== undefined) {
+        this.frameSamplesSumMs -= dropped;
+      }
+    }
+
+    if (deltaMs > JANK_FRAME_MS) this.jankFrameCount += 1;
+
+    let minFrameMs = Number.POSITIVE_INFINITY;
+    let maxFrameMs = 0;
+    for (const sample of this.frameSamples) {
+      if (sample < minFrameMs) minFrameMs = sample;
+      if (sample > maxFrameMs) maxFrameMs = sample;
+    }
+
+    const avgFrameMs =
+      this.frameSamples.length > 0 ? this.frameSamplesSumMs / this.frameSamples.length : deltaMs;
+    const fps = avgFrameMs > 0 ? 1000 / avgFrameMs : 0;
+
+    this.emitMetrics({
+      fps,
+      frameMs: deltaMs,
+      avgFrameMs,
+      minFrameMs: minFrameMs === Number.POSITIVE_INFINITY ? 0 : minFrameMs,
+      maxFrameMs,
+      totalFrames: this.totalFrames,
+      jankFrameCount: this.jankFrameCount,
+      lastCompileMs: this.lastCompileMs,
+      lastPrepareMs: this.lastPrepareMs,
+      lastPipelineMs: this.lastPipelineMs,
+      compileCount: this.compileCount,
+      lastCompileErrorCount: this.lastCompileErrorCount,
+    });
+  }
+
+  private resetFrameMetrics(): void {
+    this.frameSamples = [];
+    this.frameSamplesSumMs = 0;
+    this.totalFrames = 0;
+    this.jankFrameCount = 0;
+    this.lastFrameAtMs = null;
+    this.emitMetrics({
+      frameMs: 0,
+      avgFrameMs: 0,
+      minFrameMs: 0,
+      maxFrameMs: 0,
+      totalFrames: 0,
+      jankFrameCount: 0,
+      fps: 0,
+    });
   }
 
   async init(): Promise<boolean> {
@@ -65,7 +257,7 @@ export class PackPreview {
     this.device = await adapter.requestDevice();
     this.device.lost.then((info) => {
       if (!this.destroyed) {
-        this.emit({ state: 'error', message: `GPU device lost: ${info.message}` });
+        this.emitError(`GPU device lost: ${info.message}`, []);
       }
     });
 
@@ -119,11 +311,21 @@ export class PackPreview {
     if (wgsl === this.lastSource && this.pipeline) return;
     this.lastSource = wgsl;
     this.emit({ state: 'compiling' });
+    this.compileCount += 1;
+    this.lastCompileErrorCount = 0;
 
+    const compileStart = performance.now();
+    const prepareStart = performance.now();
     const prepared = preparePreviewWgsl(wgsl);
+    const prepareMs = performance.now() - prepareStart;
+    this.lastPrepareMs = prepareMs;
+
     if (!prepared.ok) {
       this.pipeline = null;
-      this.emit({ state: 'error', message: prepared.error });
+      const compileMs = performance.now() - compileStart;
+      this.lastCompileMs = compileMs;
+      this.emitError(prepared.error, [], compileMs, prepareMs, null);
+      this.resetFrameMetrics();
       return;
     }
 
@@ -132,16 +334,20 @@ export class PackPreview {
     const errors = info.messages.filter((m) => m.type === 'error');
     if (errors.length > 0) {
       this.pipeline = null;
+      const compileMs = performance.now() - compileStart;
+      this.lastCompileMs = compileMs;
       const msg = errors
         .map((e) => {
           const loc = e.lineNum > 0 ? `L${e.lineNum}:${e.linePos} ` : '';
           return `${loc}${e.message}`;
         })
         .join('\n');
-      this.emit({ state: 'error', message: msg || 'WGSL compile error' });
+      this.emitError(msg || 'WGSL compile error', errors, compileMs, prepareMs, null);
+      this.resetFrameMetrics();
       return;
     }
 
+    const pipelineStart = performance.now();
     try {
       this.pipeline = this.device.createRenderPipeline({
         layout: this.pipelineLayout,
@@ -153,13 +359,27 @@ export class PackPreview {
         },
         primitive: { topology: 'triangle-list' },
       });
-      this.emit({ state: 'ready' });
+      const pipelineMs = performance.now() - pipelineStart;
+      const compileMs = performance.now() - compileStart;
+      this.lastCompileMs = compileMs;
+      this.lastPipelineMs = pipelineMs;
+      this.emitMetrics({
+        lastCompileMs: compileMs,
+        lastPrepareMs: prepareMs,
+        lastPipelineMs: pipelineMs,
+        compileCount: this.compileCount,
+        lastCompileErrorCount: this.lastCompileErrorCount,
+      });
+      this.emitReady();
     } catch (e) {
       this.pipeline = null;
-      this.emit({
-        state: 'error',
-        message: e instanceof Error ? e.message : String(e),
-      });
+      const message = e instanceof Error ? e.message : String(e);
+      const compileMs = performance.now() - compileStart;
+      const pipelineMs = performance.now() - pipelineStart;
+      this.lastCompileMs = compileMs;
+      this.lastPipelineMs = pipelineMs;
+      this.emitError(message, [], compileMs, prepareMs, pipelineMs);
+      this.resetFrameMetrics();
     }
   }
 
@@ -217,9 +437,23 @@ export class PackPreview {
 
   private frame = (): void => {
     this.raf = requestAnimationFrame(this.frame);
-    if (!this.device || !this.context || !this.pipeline || !this.bindGroup) return;
+    if (!this.device || !this.context || !this.pipeline || !this.bindGroup) {
+      this.lastFrameAtMs = null;
+      this.emitMetrics({
+        canvasWidth: this.canvas.width,
+        canvasHeight: this.canvas.height,
+      });
+      return;
+    }
+    const nowMs = performance.now();
+    if (this.lastFrameAtMs !== null) {
+      this.recordFrame(nowMs - this.lastFrameAtMs);
+    } else {
+      this.emitMetrics({ status: 'ready' });
+    }
+    this.lastFrameAtMs = nowMs;
     this.resize();
-    const timeSec = (performance.now() - this.startMs) / 1000;
+    const timeSec = (nowMs - this.startMs) / 1000;
     this.writeUniforms(timeSec);
 
     const encoder = this.device.createCommandEncoder();
@@ -261,5 +495,6 @@ export class PackPreview {
     this.bindGroup = null;
     this.device = null;
     this.context = null;
+    this.emitMetrics({ status: 'idle' });
   }
 }
