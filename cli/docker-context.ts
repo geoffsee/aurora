@@ -32,6 +32,7 @@ export const DOCKERFILE_REQUIRED = [
   'rust-toolchain.toml',
   'src',
   'plugins',
+  'lab/preset-studio',
   'assets/shaders',
   'shaders',
   'models',

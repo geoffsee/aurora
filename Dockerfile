@@ -29,6 +29,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY src ./src
 COPY plugins ./plugins
+COPY lab/preset-studio ./lab/preset-studio
 COPY assets/shaders ./assets/shaders
 COPY shaders ./shaders
 COPY models ./models

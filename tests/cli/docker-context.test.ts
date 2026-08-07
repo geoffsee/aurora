@@ -101,6 +101,7 @@ cli
         'Cargo.lock',
         'rust-toolchain.toml',
         'plugins',
+        'lab/preset-studio',
         'assets/shaders',
         'shaders',
         'models',
