@@ -1,7 +1,10 @@
 # `.aurora-package` archive format
 
 Interchange format between **Preset Studio** (export) and **Aurora** (import).  
-A package is a fullscreen pack that uses the **pack-v1** uniform bus (same as show `VjPackFullscreen*` materials).
+A package is either a WGSL fullscreen pack (schema v1) or a trusted Three.js module (schema v2).
+
+> [!WARNING]
+> Three.js packages execute same-origin JavaScript. Treat them like plugins and import only code you trust.
 
 Related: [preset-studio.md](./preset-studio.md) · [mode-protocol.md](./mode-protocol.md)
 
@@ -14,8 +17,9 @@ Related: [preset-studio.md](./preset-studio.md) · [mode-protocol.md](./mode-pro
 manifest.json     # required
 package.wgsl       # required
 defaults.json     # optional knob defaults
-preview.png       # optional (reserved; ignored by v1 importer if present as non-text)
 ```
+
+Schema v2 uses `visualization.ts` as canonical source, `visualization.js` plus an optional source map as the executable, and optional declared binary files under `assets/`.
 
 ## `manifest.json` (schemaVersion 1)
 
@@ -54,10 +58,24 @@ preview.png       # optional (reserved; ignored by v1 importer if present as non
 
 Import with default options **remaps** `authoring` → `show` via `remapAuthoringWgslToShow`.
 
+## `manifest.json` (schemaVersion 2, Three.js)
+
+The v2 target is `threejs`, runtime `three-v1`, input bus `aurora-frame-v1`, and renderer `webgl2` or `webgpu`. `requiresNativeWebGPU` rejects Three's WebGL2 fallback when true. `entry` and `source` are fixed to `visualization.js` and `visualization.ts`. Every asset is declared with a safe `assets/…` path, media type, and exact byte count.
+
+Only pinned `three`, `three/webgpu`, `three/tsl`, and the curated addon registry accepted by `validateThreeImports` may be imported. URL, relative, arbitrary npm, and dynamic imports are rejected. Aurora stages revision 0.180.0 locally; packages never depend on a CDN.
+
+The default export is an async factory. Aurora supplies the renderer, canvas, abort signal, asset resolver/loading manager, resource tracker, and viewport. The result provides either `scene` and `camera`, or `render(frame)`, and may provide synchronous `update`, `resize`, and `dispose` hooks. Packages must not create an animation loop or resize the renderer.
+
+WebGPU packages should use TSL/node materials. WebGL `ShaderMaterial` and `EffectComposer` semantics do not carry over to WebGPU.
+
 ## Limits
 
-- WGSL ≤ 256 KiB  
-- Archive ≤ 1 MiB  
+- WGSL ≤ 256 KiB
+- TypeScript and JavaScript ≤ 512 KiB each
+- Asset ≤ 32 MiB; at most 64 assets
+- Archive ≤ 64 MiB
+
+Archives are store-only ZIPs. Import rejects duplicate entries, unsafe/traversal paths, unsupported compression, invalid CRCs, size mismatches, and undeclared files.
 
 ## Install shape (importer)
 
@@ -67,6 +85,8 @@ For each deck `deck-a` / `deck-b`:
 $AURORA_DATA_DIR/decks/<deck>/<slug>/preset.json
 $AURORA_DATA_DIR/decks/<deck>/<slug>/<slug_with_underscores>.wgsl
 ```
+
+Three installs use the same transactional dual-deck layout with `visualization.ts`, `visualization.js`, its source map, and `assets/`; the preset requests `threejs-runtime-v1`.
 
 `preset.json` is produced by `auroraPackageToModePreset` (fullscreen layer ref + `dual-fullscreen` capability).
 

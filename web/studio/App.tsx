@@ -4,12 +4,13 @@ import { KnobPanel } from './components/KnobPanel.tsx';
 import { PreviewPanel } from './components/PreviewPanel.tsx';
 import { SketchSidebar } from './components/SketchSidebar.tsx';
 import { StudioToolbar } from './components/StudioToolbar.tsx';
+import { ThreePreview } from './components/ThreePreview.tsx';
 import { WgslEditor } from './components/WgslEditor.tsx';
 import {
   downloadPackageArchive,
   exportSketchToPackage,
   importPackageToBridge,
-  publishSketchToChannel,
+  publishSketchToChannelAsync,
 } from './lib/export-package.ts';
 import {
   addSketch,
@@ -91,12 +92,12 @@ export function App() {
     [active],
   );
 
-  const onPublish = useCallback(() => {
+  const onPublish = useCallback(async () => {
     if (!active) return;
     setBusy(true);
     setMessage(null);
     try {
-      const result = publishSketchToChannel(active);
+      const result = await publishSketchToChannelAsync(active);
       if (!result.ok) {
         setMessage(`Publish failed: ${result.errors.map((e) => e.message).join('; ')}`);
         return;
@@ -190,7 +191,7 @@ export function App() {
               message={message}
               onMeta={(patch) => patchActive(patch)}
               onBridgeOrigin={setBridgeOrigin}
-              onPublish={onPublish}
+              onPublish={() => void onPublish()}
               onExport={onExport}
               onImportBridge={() => void onImportBridge()}
             />
@@ -209,12 +210,19 @@ export function App() {
                 sketches={doc.sketches}
                 activeId={doc.activeId}
                 onSelect={(id) => setDoc((d) => ({ ...d, activeId: id }))}
-                onAdd={() =>
+                onAdd={(backend, renderer) =>
                   setDoc((d) =>
                     addSketch(
                       d,
                       createSketch(
-                        { label: 'Untitled Package' },
+                        {
+                          label:
+                            backend === 'threejs'
+                              ? `Untitled Three ${renderer === 'webgpu' ? 'WebGPU' : 'WebGL2'}`
+                              : 'Untitled Package',
+                          backend,
+                          renderer,
+                        },
                         d.sketches.map((s) => s.slug),
                       ),
                     ),
@@ -242,9 +250,12 @@ export function App() {
               bg="rgba(0,0,0,0.25)"
             >
               <WgslEditor
-                value={active.wgsl}
-                onChange={(wgsl) => patchActive({ wgsl })}
+                value={active.backend === 'threejs' ? (active.source ?? '') : active.wgsl}
+                onChange={(source) =>
+                  patchActive(active.backend === 'threejs' ? { source } : { wgsl: source })
+                }
                 diagnostics={diagnostics}
+                backend={active.backend}
               />
             </Box>
           </GridItem>
@@ -258,7 +269,20 @@ export function App() {
               borderColor="#252a31"
               bg="rgba(0,0,0,0.25)"
             >
-              <PreviewPanel wgsl={active.wgsl} knobs={active.knobs} onDiagnostics={onDiagnostics} />
+              {active.backend === 'threejs' ? (
+                <ThreePreview
+                  source={active.source ?? ''}
+                  renderer={active.renderer ?? 'webgl2'}
+                  requiresNativeWebGPU={active.requiresNativeWebGPU ?? false}
+                  knobs={active.knobs}
+                />
+              ) : (
+                <PreviewPanel
+                  wgsl={active.wgsl}
+                  knobs={active.knobs}
+                  onDiagnostics={onDiagnostics}
+                />
+              )}
             </Box>
           </GridItem>
         </Grid>

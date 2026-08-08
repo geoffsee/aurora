@@ -1716,8 +1716,15 @@ const visualServer = Bun.serve({
         decks: result.decks,
         paths: result.paths,
         overwritten: result.overwritten,
+        target: result.target,
+        entryFile: result.entryFile,
+        renderer: result.renderer,
         wgslFile: result.wgslFile,
         wgslForm: result.wgslForm,
+        trustedCode: result.trustedCode,
+        warning: result.trustedCode
+          ? 'This package executes trusted same-origin JavaScript. Treat it like a plugin.'
+          : undefined,
         catalog: {
           epoch: catalog.epoch,
           contentHash: catalog.contentHash,

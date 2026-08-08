@@ -28,7 +28,11 @@ export type AuthoredPackage = {
   character?: string;
   uiGroup?: string;
   /** Show-form pack-v1 WGSL (@group(2) + VertexOutput when remapped). */
-  wgsl: string;
+  target?: 'wgsl' | 'threejs';
+  wgsl?: string;
+  renderer?: 'webgl2' | 'webgpu';
+  requiresNativeWebGPU?: boolean;
+  assets?: { path: string; mediaType: string; bytes: number }[];
   defaults?: AuroraPackageDefaults;
   updatedAt: string;
 };
@@ -46,14 +50,19 @@ function parsePackage(raw: unknown): AuthoredPackage | null {
   if (!isRecord(raw)) return null;
   const slug = typeof raw.slug === 'string' ? raw.slug.trim() : '';
   const label = typeof raw.label === 'string' ? raw.label.trim() : '';
-  const wgsl = typeof raw.wgsl === 'string' ? raw.wgsl : '';
-  if (!slug || !label || !wgsl.includes('@fragment')) return null;
+  const target = raw.target === 'threejs' ? 'threejs' : 'wgsl';
+  const wgsl = typeof raw.wgsl === 'string' ? raw.wgsl : undefined;
+  if (!slug || !label || (target === 'wgsl' && !wgsl?.includes('@fragment'))) return null;
   return {
     slug,
     label,
     character: typeof raw.character === 'string' ? raw.character : undefined,
     uiGroup: typeof raw.uiGroup === 'string' ? raw.uiGroup : 'field-motion',
     wgsl,
+    target,
+    renderer: raw.renderer === 'webgpu' ? 'webgpu' : target === 'threejs' ? 'webgl2' : undefined,
+    requiresNativeWebGPU: target === 'threejs' ? Boolean(raw.requiresNativeWebGPU) : undefined,
+    assets: Array.isArray(raw.assets) ? (raw.assets as AuthoredPackage['assets']) : undefined,
     defaults: isRecord(raw.defaults) ? (raw.defaults as AuroraPackageDefaults) : undefined,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
   };
@@ -144,6 +153,30 @@ export function compiledWireFromAuthoredPackage(
   pkg: AuthoredPackage,
   epoch = 0,
 ): CompiledModeWire {
+  if (pkg.target === 'threejs') {
+    return {
+      wireVersion: COMPILED_MODE_WIRE_VERSION,
+      epoch,
+      deck,
+      slug: pkg.slug,
+      label: pkg.label,
+      legacyIndex: null,
+      disposition: 'fullscreen-primary',
+      assetBase: '',
+      suppressLegacyField: true,
+      engineMinCapabilities: ['threejs-runtime-v1'],
+      layers: [
+        {
+          kind: 'threejs',
+          ref: 'visualization.js',
+          sourceRef: 'visualization.ts',
+          renderer: pkg.renderer ?? 'webgl2',
+          requiresNativeWebGPU: pkg.requiresNativeWebGPU ?? false,
+          assets: pkg.assets ?? [],
+        },
+      ],
+    };
+  }
   return {
     wireVersion: COMPILED_MODE_WIRE_VERSION,
     epoch,
@@ -159,7 +192,7 @@ export function compiledWireFromAuthoredPackage(
       {
         kind: 'fullscreen',
         ref: 'package.wgsl',
-        wgsl: pkg.wgsl,
+        wgsl: pkg.wgsl as string,
       },
     ],
   };

@@ -6,7 +6,7 @@
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function crc32(buf: Uint8Array): number {
+export function crc32(buf: Uint8Array): number {
   let c = 0xffff_ffff;
   for (let i = 0; i < buf.length; i++) {
     c ^= buf[i] as number;
@@ -53,7 +53,10 @@ export function zipStore(entries: ZipEntry[]): Uint8Array {
   const centrals: Uint8Array[] = [];
   let offset = 0;
 
+  const names = new Set<string>();
   for (const ent of entries) {
+    if (names.has(ent.name)) throw new Error(`zip: duplicate entry ${ent.name}`);
+    names.add(ent.name);
     const nameBytes = encoder.encode(ent.name);
     const data = ent.data;
     const crc = crc32(data);
@@ -142,32 +145,70 @@ export function unzipStore(buf: Uint8Array): ZipEntry[] {
   if (eocd < 0) throw new Error('zip: EOCD not found');
 
   const count = readU16(buf, eocd + 10);
+  const disk = readU16(buf, eocd + 4);
+  const centralDisk = readU16(buf, eocd + 6);
+  const diskCount = readU16(buf, eocd + 8);
+  if (disk !== 0 || centralDisk !== 0 || diskCount !== count) {
+    throw new Error('zip: multi-disk archives not supported');
+  }
   let centralOffset = readU32(buf, eocd + 16);
   const out: ZipEntry[] = [];
+  const names = new Set<string>();
 
   for (let n = 0; n < count; n++) {
     if (readU32(buf, centralOffset) !== 0x02014b50) {
       throw new Error('zip: bad central directory signature');
     }
     const method = readU16(buf, centralOffset + 10);
+    const flags = readU16(buf, centralOffset + 8);
+    const expectedCrc = readU32(buf, centralOffset + 16);
     const compSize = readU32(buf, centralOffset + 20);
+    const plainSize = readU32(buf, centralOffset + 24);
     const nameLen = readU16(buf, centralOffset + 28);
     const extraLen = readU16(buf, centralOffset + 30);
     const commentLen = readU16(buf, centralOffset + 32);
     const localHeaderOffset = readU32(buf, centralOffset + 42);
     const name = decoder.decode(buf.subarray(centralOffset + 46, centralOffset + 46 + nameLen));
 
+    if (names.has(name)) throw new Error(`zip: duplicate entry ${name}`);
+    names.add(name);
+    if (!name || name.startsWith('/') || name.startsWith('\\') || name.includes('\\')) {
+      throw new Error(`zip: unsafe entry path ${name || '<empty>'}`);
+    }
+    const parts = name.split('/');
+    if (parts.some((part) => part === '' || part === '.' || part === '..')) {
+      throw new Error(`zip: unsafe entry path ${name}`);
+    }
+    if ((flags & 0x0001) !== 0 || (flags & 0x0008) !== 0) {
+      throw new Error(`zip: encrypted/data-descriptor entries not supported (${name})`);
+    }
     if (method !== 0) {
       throw new Error(`zip: compressed entries not supported (method ${method} for ${name})`);
     }
+    if (compSize !== plainSize) throw new Error(`zip: invalid stored size for ${name}`);
 
     if (readU32(buf, localHeaderOffset) !== 0x04034b50) {
       throw new Error(`zip: bad local header for ${name}`);
     }
+    if (
+      readU16(buf, localHeaderOffset + 6) !== flags ||
+      readU16(buf, localHeaderOffset + 8) !== method ||
+      readU32(buf, localHeaderOffset + 14) !== expectedCrc ||
+      readU32(buf, localHeaderOffset + 18) !== compSize ||
+      readU32(buf, localHeaderOffset + 22) !== plainSize
+    ) {
+      throw new Error(`zip: local/central metadata mismatch for ${name}`);
+    }
     const localNameLen = readU16(buf, localHeaderOffset + 26);
     const localExtraLen = readU16(buf, localHeaderOffset + 28);
+    const localName = decoder.decode(
+      buf.subarray(localHeaderOffset + 30, localHeaderOffset + 30 + localNameLen),
+    );
+    if (localName !== name) throw new Error(`zip: local/central name mismatch for ${name}`);
     const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
+    if (dataStart + compSize > buf.byteLength) throw new Error(`zip: truncated entry ${name}`);
     const data = buf.subarray(dataStart, dataStart + compSize);
+    if (crc32(data) !== expectedCrc) throw new Error(`zip: CRC mismatch for ${name}`);
 
     out.push({ name, data: new Uint8Array(data) });
     centralOffset += 46 + nameLen + extraLen + commentLen;

@@ -6,14 +6,16 @@ import {
   auroraPackageWgslFileName,
   buildAuroraPackageArchive,
   buildManifest,
+  buildThreeManifest,
   PACK_V1_AUTHORING_TEMPLATE,
   PACK_V1_SHOW_TEMPLATE,
   parseAuroraPackageArchive,
   remapAuthoringWgslToShow,
   slugifyPackageLabel,
   validateBundle,
+  validateThreeImports,
 } from '../../shared/aurora-package.ts';
-import { unzipTextEntries } from '../../shared/zip-store.ts';
+import { unzipTextEntries, zipStore } from '../../shared/zip-store.ts';
 
 describe('slugifyPackageLabel', () => {
   test('kebab-cases labels', () => {
@@ -102,6 +104,81 @@ describe('build + parse archive', () => {
       wgsl: PACK_V1_SHOW_TEMPLATE,
     });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('Three.js schema v2', () => {
+  test('round-trips executable source and binary assets', () => {
+    const asset = new Uint8Array([0, 1, 2, 255]);
+    const manifest = buildThreeManifest({
+      slug: 'three-orbit',
+      label: 'Three Orbit',
+      renderer: 'webgl2',
+      assets: [
+        {
+          path: 'assets/pixel.bin',
+          mediaType: 'application/octet-stream',
+          bytes: asset.byteLength,
+        },
+      ],
+    });
+    const archive = buildAuroraPackageArchive({
+      manifest,
+      source: 'export default async function create(ctx) { return { render() {} }; }',
+      javascript: 'export default async function create(ctx) { return { render() {} }; }',
+      sourceMap: '{}',
+      assets: { 'assets/pixel.bin': asset },
+      defaults: { intensity: 0.8 },
+    });
+    const parsed = parseAuroraPackageArchive(archive);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.bundle.manifest.target !== 'threejs') return;
+    expect(parsed.bundle.manifest.runtime).toBe('three-v1');
+    expect(parsed.bundle.assets?.['assets/pixel.bin']).toEqual(asset);
+    const preset = auroraPackageToModePreset(parsed.bundle);
+    expect(preset.layers[0]?.kind).toBe('threejs');
+    expect(preset.engineMinCapabilities).toContain('threejs-runtime-v1');
+  });
+
+  test('rejects arbitrary, relative, URL, and dynamic imports', () => {
+    for (const source of [
+      `import x from 'lodash'; export default x`,
+      `import x from './local.js'; export default x`,
+      `import x from 'https://example.com/x.js'; export default x`,
+      `export default () => import('three')`,
+    ])
+      expect(validateThreeImports(source).length).toBeGreaterThan(0);
+    expect(
+      validateThreeImports(`import * as THREE from 'three'; export default () => ({})`),
+    ).toEqual([]);
+  });
+
+  test('rejects unsafe paths, duplicate entries, and bad CRCs', () => {
+    expect(() =>
+      zipStore([
+        { name: 'same', data: new Uint8Array([1]) },
+        { name: 'same', data: new Uint8Array([2]) },
+      ]),
+    ).toThrow(/duplicate/);
+    const unsafe = zipStore([{ name: '../manifest.json', data: new Uint8Array([1]) }]);
+    expect(parseAuroraPackageArchive(unsafe).ok).toBe(false);
+    const valid = buildAuroraPackageArchive({
+      manifest: buildManifest({ slug: 'crc-test', label: 'CRC Test', wgslForm: 'show' }),
+      wgsl: PACK_V1_SHOW_TEMPLATE,
+    });
+    const marker = new TextEncoder().encode('#import');
+    let sourceOffset = -1;
+    for (let index = 0; index <= valid.length - marker.length; index += 1) {
+      if (marker.every((byte, offset) => valid[index + offset] === byte)) {
+        sourceOffset = index;
+        break;
+      }
+    }
+    expect(sourceOffset).toBeGreaterThan(0);
+    valid[sourceOffset] = 0x24;
+    const bad = parseAuroraPackageArchive(valid);
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.errors[0]?.message).toMatch(/CRC/);
   });
 });
 

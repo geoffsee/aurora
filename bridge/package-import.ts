@@ -18,6 +18,8 @@ import {
   type AuroraPackageValidationError,
   auroraPackageToModePreset,
   auroraPackageWgslFileName,
+  isThreePackageBundle,
+  isWgslPackageBundle,
   parseAuroraPackageArchive,
 } from '../shared/aurora-package.ts';
 import { validateModePreset } from '../shared/mode-preset-schema.ts';
@@ -42,8 +44,12 @@ export type PackageImportSuccess = {
   paths: Record<DeckId, string>;
   /** True when at least one deck folder already existed before install. */
   overwritten: boolean;
-  wgslFile: string;
-  wgslForm: 'show' | 'authoring';
+  target: 'pack-fullscreen' | 'threejs';
+  entryFile: string;
+  renderer?: 'webgl2' | 'webgpu';
+  wgslFile?: string;
+  wgslForm?: 'show' | 'authoring';
+  trustedCode: boolean;
 };
 
 export type PackageImportFailure = {
@@ -154,9 +160,10 @@ export function installAuroraPackageArchive(
   }
 
   const dataRoot = resolve(opts.cwd ?? process.cwd(), opts.dataDir);
-  const wgslFile = auroraPackageWgslFileName(slug);
+  const entryFile = isThreePackageBundle(bundle)
+    ? bundle.manifest.entry
+    : auroraPackageWgslFileName(slug);
   const presetJson = `${JSON.stringify(validated.value, null, 2)}\n`;
-  const wgslText = bundle.wgsl.endsWith('\n') ? bundle.wgsl : `${bundle.wgsl}\n`;
 
   const paths = {} as Record<DeckId, string>;
   let overwritten = false;
@@ -178,7 +185,22 @@ export function installAuroraPackageArchive(
 
     try {
       writeTextAtomic(join(stagingDir, 'preset.json'), presetJson);
-      writeTextAtomic(join(stagingDir, wgslFile), wgslText);
+      if (isWgslPackageBundle(bundle)) {
+        const wgslText = bundle.wgsl.endsWith('\n') ? bundle.wgsl : `${bundle.wgsl}\n`;
+        writeTextAtomic(join(stagingDir, entryFile), wgslText);
+      } else {
+        writeTextAtomic(join(stagingDir, bundle.manifest.source), bundle.source);
+        writeTextAtomic(join(stagingDir, bundle.manifest.entry), bundle.javascript);
+        if (bundle.sourceMap)
+          writeTextAtomic(join(stagingDir, 'visualization.js.map'), bundle.sourceMap);
+        for (const asset of bundle.manifest.assets) {
+          const destination = join(stagingDir, ...asset.path.split('/'));
+          mkdirSync(dirname(destination), { recursive: true });
+          const data = bundle.assets[asset.path];
+          if (!data) throw new Error(`validated asset missing: ${asset.path}`);
+          writeFileSync(destination, data);
+        }
+      }
       swapStagingIntoPlace(stagingDir, finalDir);
     } catch (err) {
       // Leave no half-written staging if rename failed mid-flight.
@@ -206,8 +228,12 @@ export function installAuroraPackageArchive(
     decks: DECK_IDS,
     paths,
     overwritten,
-    wgslFile,
-    wgslForm: bundle.manifest.wgslForm,
+    target: bundle.manifest.target,
+    entryFile,
+    renderer: isThreePackageBundle(bundle) ? bundle.manifest.renderer : undefined,
+    wgslFile: isWgslPackageBundle(bundle) ? entryFile : undefined,
+    wgslForm: isWgslPackageBundle(bundle) ? bundle.manifest.wgslForm : undefined,
+    trustedCode: isThreePackageBundle(bundle),
   };
 }
 

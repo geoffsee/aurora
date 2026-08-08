@@ -8,9 +8,13 @@ import {
   auroraPackageFileName,
   buildAuroraPackageArchive,
   buildManifest,
+  buildThreeManifest,
+  isThreePackageBundle,
   parseAuroraPackageArchive,
 } from '../../../shared/aurora-package.ts';
 import { upsertAuthoredPackage } from '../../../shared/package-channel.ts';
+import { putThreePackageBundle } from '../../../shared/three-package-store.ts';
+import { compileThreeSource } from './compile-three.ts';
 import { knobsToLookDefaults, type StudioSketch } from './sketch-store.ts';
 
 export type ExportLookResult =
@@ -38,6 +42,39 @@ export function detectWgslForm(wgsl: string): 'show' | 'authoring' {
 
 /** Build a validated archive for a sketch (does not touch the DOM). */
 export function exportSketchToPackage(sketch: StudioSketch): ExportLookResult {
+  if (sketch.backend === 'threejs') {
+    const source = sketch.source ?? '';
+    const compiled = compileThreeSource(source);
+    if (!compiled.ok) return { ok: false, errors: compiled.errors };
+    try {
+      const bundle: AuroraPackageBundle = {
+        manifest: buildThreeManifest({
+          slug: sketch.slug,
+          label: sketch.label,
+          character: sketch.character || undefined,
+          uiGroup: sketch.uiGroup,
+          renderer: sketch.renderer ?? 'webgl2',
+          requiresNativeWebGPU: sketch.requiresNativeWebGPU,
+          assets: [],
+          studioVersion: 2,
+        }),
+        source,
+        javascript: compiled.javascript,
+        sourceMap: compiled.sourceMap,
+        assets: {},
+        defaults: knobsToLookDefaults(sketch.knobs),
+      };
+      const bytes = buildAuroraPackageArchive(bundle);
+      return { ok: true, bytes, fileName: auroraPackageFileName(sketch.slug), bundle };
+    } catch (error) {
+      return {
+        ok: false,
+        errors: [
+          { path: 'export', message: error instanceof Error ? error.message : String(error) },
+        ],
+      };
+    }
+  }
   const form = detectWgslForm(sketch.wgsl);
   try {
     const bundle: AuroraPackageBundle = {
@@ -96,11 +133,26 @@ export type PublishPackageResult =
  * Console/projector pick this up without the bridge (GitHub Pages path).
  */
 export function publishSketchToChannel(sketch: StudioSketch): PublishPackageResult {
+  if (sketch.backend === 'threejs') {
+    return {
+      ok: false,
+      errors: [
+        {
+          path: 'publish',
+          message:
+            'Three.js Publish to Console requires IndexedDB support; export or bridge import is available.',
+        },
+      ],
+    };
+  }
   const built = exportSketchToPackage(sketch);
   if (!built.ok) return built;
   try {
     const parsed = parseAuroraPackageArchive(built.bytes, { remapAuthoring: true });
     if (!parsed.ok) return { ok: false, errors: parsed.errors };
+    if (parsed.bundle.manifest.target !== 'pack-fullscreen' || !parsed.bundle.wgsl) {
+      return { ok: false, errors: [{ path: 'publish', message: 'expected a WGSL package' }] };
+    }
     const m = parsed.bundle.manifest;
     const record = upsertAuthoredPackage({
       slug: m.slug,
@@ -116,6 +168,43 @@ export function publishSketchToChannel(sketch: StudioSketch): PublishPackageResu
     return {
       ok: false,
       errors: [{ path: 'publish', message: e instanceof Error ? e.message : String(e) }],
+    };
+  }
+}
+
+export async function publishSketchToChannelAsync(
+  sketch: StudioSketch,
+): Promise<PublishPackageResult> {
+  if (sketch.backend !== 'threejs') return publishSketchToChannel(sketch);
+  const built = exportSketchToPackage(sketch);
+  if (!built.ok) return built;
+  if (!isThreePackageBundle(built.bundle)) {
+    return { ok: false, errors: [{ path: 'publish', message: 'expected a Three.js bundle' }] };
+  }
+  try {
+    await putThreePackageBundle(built.bundle);
+    const manifest = built.bundle.manifest;
+    const record = upsertAuthoredPackage({
+      slug: manifest.slug,
+      label: manifest.label,
+      character: manifest.character,
+      uiGroup: manifest.uiGroup,
+      target: 'threejs',
+      renderer: manifest.renderer,
+      requiresNativeWebGPU: manifest.requiresNativeWebGPU,
+      assets: manifest.assets,
+      updatedAt: new Date().toISOString(),
+    });
+    return { ok: true, slug: record.slug, label: record.label };
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [
+        {
+          path: 'publish',
+          message: `Three.js Publish to Console requires IndexedDB: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
     };
   }
 }

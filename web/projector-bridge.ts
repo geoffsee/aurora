@@ -18,6 +18,9 @@ import {
   staticModesApiBase,
   staticSitePathPrefix,
 } from '../shared/static-hosting.ts';
+import { getThreePackageBundle } from '../shared/three-package-store.ts';
+
+export { AdaptiveDprGovernor, AuroraThreeDeckHost } from './three-runtime.ts';
 
 export {
   compiledWireFromAuthoredPackage,
@@ -43,6 +46,32 @@ export function resolveAuthoredCompiledWire(
   const pkg = getAuthoredPackage(slug);
   if (!pkg) return null;
   return compiledWireFromAuthoredPackage(deck, pkg, epoch);
+}
+
+/** Async authored resolution adds IndexedDB-backed Three.js executable/assets. */
+export async function resolveAuthoredCompiledWireAsync(
+  deck: 'deck-a' | 'deck-b',
+  slug: string,
+  epoch = 0,
+): Promise<unknown | null> {
+  const metadata = getAuthoredPackage(slug);
+  if (!metadata) return null;
+  if (metadata.target !== 'threejs') return compiledWireFromAuthoredPackage(deck, metadata, epoch);
+  const bundle = await getThreePackageBundle(slug);
+  if (!bundle) return null;
+  const wire = compiledWireFromAuthoredPackage(deck, metadata, epoch);
+  const layer = wire.layers.find((candidate) => candidate.kind === 'threejs');
+  if (!layer) return null;
+  layer.moduleSource = bundle.javascript;
+  layer.sourceMap = bundle.sourceMap;
+  layer.assetUrls = Object.fromEntries(
+    bundle.manifest.assets.map((asset) => {
+      const bytes = bundle.assets[asset.path];
+      const copy = bytes ? new Uint8Array(bytes) : new Uint8Array();
+      return [asset.path, URL.createObjectURL(new Blob([copy], { type: asset.mediaType }))];
+    }),
+  );
+  return wire;
 }
 
 /**

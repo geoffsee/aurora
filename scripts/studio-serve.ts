@@ -8,10 +8,12 @@
  * (default http://127.0.0.1:3000/api/packages/import) — requires AURORA_DATA_DIR.
  */
 
+import { join, resolve } from 'node:path';
 import homepage from '../web/studio/index.html';
 
 const port = Number(Bun.env.STUDIO_PORT ?? 3010);
 const hostname = Bun.env.STUDIO_HOST ?? '127.0.0.1';
+const vendorRoot = resolve(import.meta.dirname, '../dist/vendor');
 
 const server = Bun.serve({
   port,
@@ -22,6 +24,13 @@ const server = Bun.serve({
   },
   routes: {
     '/': homepage,
+    '/vendor/*': (request) => {
+      const relative = new URL(request.url).pathname.slice('/vendor/'.length);
+      if (!relative || relative.includes('..') || relative.includes('\\')) {
+        return new Response('Bad path', { status: 400 });
+      }
+      return new Response(Bun.file(join(vendorRoot, ...relative.split('/'))));
+    },
   },
   fetch() {
     return new Response('Not found', { status: 404 });

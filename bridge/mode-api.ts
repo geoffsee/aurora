@@ -40,7 +40,7 @@ import {
 export const MODE_API_EPOCH_RETENTION = 4;
 
 /** Max bytes for a single served asset under /api/data/e/... (8 MiB). */
-export const MODE_API_MAX_ASSET_BYTES = 8 * 1024 * 1024;
+export const MODE_API_MAX_ASSET_BYTES = 32 * 1024 * 1024;
 
 /**
  * Extension → Content-Type for mode assets.
@@ -57,7 +57,23 @@ export const MODE_API_ASSET_MIME: Readonly<Record<string, string>> = {
   '.glb': 'model/gltf-binary',
   '.gltf': 'model/gltf+json',
   '.bin': 'application/octet-stream',
+  '.ktx2': 'image/ktx2',
+  '.basis': 'image/x-basis',
+  '.hdr': 'image/vnd.radiance',
+  '.exr': 'image/x-exr',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
   '.wgsl': 'text/plain; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.ts': 'text/plain; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
   '.glsl': 'text/plain; charset=utf-8',
   '.frag': 'text/plain; charset=utf-8',
   '.vert': 'text/plain; charset=utf-8',
@@ -191,9 +207,11 @@ export function compileFromEntry(
 ): CompileFromEntryResult {
   const pure = compileFromEntryPure(entry, epoch, deck);
   if (!pure.ok) return pure;
+  const withThree = enrichThreeLayersSync(entry, pure.wire);
+  if (!withThree.ok) return withThree;
   // Sync path: reject packs that still need GLSL→WGSL (naga is async).
   // HTTP uses compileFromEntryAsync which enriches fullscreen layers.
-  const needsNaga = pure.wire.layers.some(
+  const needsNaga = withThree.wire.layers.some(
     (l) => l.kind === 'fullscreen' && isPackShaderRef(l.ref) && !l.wgsl && isGlslLike(l.ref),
   );
   if (needsNaga) {
@@ -203,11 +221,62 @@ export function compileFromEntry(
     };
   }
   // WGSL-only fullscreen layers: sync attach without naga.
-  if (pure.wire.layers.some((l) => l.kind === 'fullscreen' && isPackShaderRef(l.ref) && !l.wgsl)) {
+  if (
+    withThree.wire.layers.some((l) => l.kind === 'fullscreen' && isPackShaderRef(l.ref) && !l.wgsl)
+  ) {
     // Block on a microtask-free sync read for .wgsl only.
-    return enrichFullscreenSync(entry, pure.wire);
+    return enrichFullscreenSync(entry, withThree.wire);
   }
-  return pure;
+  return withThree;
+}
+
+function enrichThreeLayersSync(
+  entry: CatalogEntry,
+  wire: CompiledModeWire,
+): CompileFromEntryResult {
+  const layers = [] as CompiledModeWire['layers'];
+  for (const layer of wire.layers) {
+    if (layer.kind !== 'threejs') {
+      layers.push(layer);
+      continue;
+    }
+    const real = resolveSandboxedRealPath(entry.path, layer.ref);
+    if (!real)
+      return {
+        ok: false,
+        errors: [`threejs layer ref ${layer.ref}: asset missing or escapes preset root`],
+      };
+    try {
+      const st = statSync(real);
+      if (!st.isFile() || st.size > 512 * 1024)
+        return {
+          ok: false,
+          errors: [`threejs layer ref ${layer.ref}: executable exceeds size cap or is not a file`],
+        };
+      const moduleSource = readFileSync(real, 'utf8');
+      if (!/\bexport\s+default\b/.test(moduleSource))
+        return {
+          ok: false,
+          errors: [`threejs layer ref ${layer.ref}: module must default-export a factory`],
+        };
+      const mapReal = resolveSandboxedRealPath(entry.path, `${layer.ref}.map`);
+      let sourceMap: string | undefined;
+      if (mapReal) {
+        const mapStat = statSync(mapReal);
+        if (mapStat.isFile() && mapStat.size <= 512 * 1024)
+          sourceMap = readFileSync(mapReal, 'utf8');
+      }
+      layers.push({ ...layer, moduleSource, sourceMap });
+    } catch (error) {
+      return {
+        ok: false,
+        errors: [
+          `threejs layer ref ${layer.ref}: ${error instanceof Error ? error.message : String(error)}`,
+        ],
+      };
+    }
+  }
+  return { ok: true, wire: { ...wire, layers } };
 }
 
 function isGlslLike(ref: string): boolean {
@@ -379,13 +448,15 @@ export async function compileFromEntryAsync(
 ): Promise<CompileFromEntryResult> {
   const pure = compileFromEntryPure(entry, epoch, deck);
   if (!pure.ok) return pure;
+  const withThree = enrichThreeLayersSync(entry, pure.wire);
+  if (!withThree.ok) return withThree;
 
-  const needsEnrich = pure.wire.layers.some(
+  const needsEnrich = withThree.wire.layers.some(
     (l) => l.kind === 'fullscreen' && isPackShaderRef(l.ref) && !l.wgsl,
   );
-  if (!needsEnrich) return pure;
+  if (!needsEnrich) return withThree;
 
-  const enriched = await enrichPackFullscreenLayers(pure.wire, async (ref) => {
+  const enriched = await enrichPackFullscreenLayers(withThree.wire, async (ref) => {
     const read = readPackShaderAsset(entry, ref);
     if (!read.ok) return read;
     return { ok: true, text: read.text, bytes: new TextEncoder().encode(read.text).byteLength };

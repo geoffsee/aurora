@@ -37,6 +37,23 @@ body {
   touch-action: none;
 }
 
+.three-deck {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: plus-lighter;
+}
+
+@supports not (mix-blend-mode: plus-lighter) {
+  .three-deck {
+    mix-blend-mode: normal;
+  }
+}
+
 #boot {
   position: fixed;
   left: 50%;

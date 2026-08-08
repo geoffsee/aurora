@@ -12,6 +12,31 @@ import {
 export const STUDIO_STORAGE_KEY = 'aurora-studio-sketches-v1';
 export const STUDIO_VERSION = 1 as const;
 
+export type StudioBackend = 'wgsl' | 'threejs';
+export const THREE_WEBGL2_TEMPLATE = `import * as THREE from 'three';
+
+export default async function create(ctx) {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(55, ctx.viewport.width / ctx.viewport.height, 0.1, 100);
+  camera.position.z = 4;
+  const geometry = ctx.resources.track(new THREE.TorusKnotGeometry(1, 0.3, 128, 24));
+  const material = ctx.resources.track(new THREE.MeshStandardMaterial({ color: 0x66ccff }));
+  const mesh = new THREE.Mesh(geometry, material);
+  scene.add(mesh, new THREE.HemisphereLight(0xffffff, 0x202040, 3));
+  return {
+    scene,
+    camera,
+    update(frame) {
+      mesh.rotation.x += frame.delta * (0.2 + frame.speed);
+      mesh.rotation.y += frame.delta * (0.4 + frame.energy);
+      material.emissive.setRGB(frame.palette.rgb[0], frame.palette.rgb[1], frame.palette.rgb[2]);
+      material.emissiveIntensity = frame.pulse * frame.intensity;
+    },
+    resize(width, height) { camera.aspect = width / height; camera.updateProjectionMatrix(); },
+  };
+}
+`;
+
 /** pack-v1 performance + palette knobs driven in the preview. */
 export type StudioKnobs = {
   intensity: number;
@@ -40,6 +65,11 @@ export type StudioSketch = {
   uiGroup: string;
   /** Authoring WGSL (preferred) or show-form; export/preview adapt. */
   wgsl: string;
+  backend: StudioBackend;
+  renderer?: 'webgl2' | 'webgpu';
+  requiresNativeWebGPU?: boolean;
+  /** Canonical editable TypeScript for Three.js sketches. */
+  source?: string;
   knobs: StudioKnobs;
   updatedAt: string;
 };
@@ -107,7 +137,19 @@ export type StudioSketchPatch = Partial<Omit<StudioSketch, 'id' | 'knobs'>> & {
 };
 
 export function createSketch(
-  partial?: Partial<Pick<StudioSketch, 'label' | 'character' | 'uiGroup' | 'wgsl'>> & {
+  partial?: Partial<
+    Pick<
+      StudioSketch,
+      | 'label'
+      | 'character'
+      | 'uiGroup'
+      | 'wgsl'
+      | 'backend'
+      | 'renderer'
+      | 'requiresNativeWebGPU'
+      | 'source'
+    >
+  > & {
     knobs?: Partial<StudioKnobs>;
   },
   existingSlugs: string[] = [],
@@ -121,6 +163,10 @@ export function createSketch(
     character: partial?.character ?? '',
     uiGroup: partial?.uiGroup ?? 'field-motion',
     wgsl: partial?.wgsl ?? PACK_V1_AUTHORING_TEMPLATE,
+    backend: partial?.backend ?? 'wgsl',
+    renderer: partial?.backend === 'threejs' ? (partial.renderer ?? 'webgl2') : undefined,
+    requiresNativeWebGPU: partial?.requiresNativeWebGPU ?? false,
+    source: partial?.backend === 'threejs' ? (partial.source ?? THREE_WEBGL2_TEMPLATE) : undefined,
     knobs: partial?.knobs ? { ...defaultKnobs(), ...partial.knobs } : defaultKnobs(),
     updatedAt: nowIso(),
   };
@@ -170,7 +216,12 @@ function parseSketch(raw: unknown): StudioSketch | null {
   if (!isRecord(raw)) return null;
   const id = typeof raw.id === 'string' && raw.id ? raw.id : null;
   const label = typeof raw.label === 'string' && raw.label.trim() ? raw.label.trim() : null;
-  const wgsl = typeof raw.wgsl === 'string' ? raw.wgsl : null;
+  const wgsl =
+    typeof raw.wgsl === 'string'
+      ? raw.wgsl
+      : raw.backend === 'threejs'
+        ? PACK_V1_AUTHORING_TEMPLATE
+        : null;
   if (!id || !label || wgsl === null) return null;
   const slug =
     typeof raw.slug === 'string' && raw.slug.trim()
@@ -187,6 +238,16 @@ function parseSketch(raw: unknown): StudioSketch | null {
     character: typeof raw.character === 'string' ? raw.character : '',
     uiGroup: typeof raw.uiGroup === 'string' && raw.uiGroup.trim() ? raw.uiGroup : 'field-motion',
     wgsl: cleanWgsl,
+    backend: raw.backend === 'threejs' ? 'threejs' : 'wgsl',
+    renderer:
+      raw.renderer === 'webgpu' ? 'webgpu' : raw.backend === 'threejs' ? 'webgl2' : undefined,
+    requiresNativeWebGPU: raw.backend === 'threejs' ? Boolean(raw.requiresNativeWebGPU) : false,
+    source:
+      raw.backend === 'threejs' && typeof raw.source === 'string'
+        ? raw.source
+        : raw.backend === 'threejs'
+          ? THREE_WEBGL2_TEMPLATE
+          : undefined,
     knobs: parseKnobs(raw.knobs),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : nowIso(),
   };

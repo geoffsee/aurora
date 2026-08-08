@@ -28,7 +28,9 @@ export type ModeDisposition =
   | 'engine-module'
   | 'retire/merge';
 
-export type CompiledModeLayerKind = 'mesh' | 'fullscreen' | 'field' | 'accent';
+export type CompiledModeLayerKind = 'mesh' | 'fullscreen' | 'field' | 'accent' | 'threejs';
+
+export type CompiledThreeAsset = { path: string; mediaType: string; bytes: number };
 
 /**
  * Optional layer descriptor compiled from authoring `layers`.
@@ -47,6 +49,15 @@ export type CompiledModeLayer = {
    * Pages/static never require this — builtins ship without pack GLSL.
    */
   wgsl?: string;
+  /** Executable, self-contained ES2022 module attached by the bridge. */
+  moduleSource?: string;
+  sourceMap?: string;
+  renderer?: 'webgl2' | 'webgpu';
+  requiresNativeWebGPU?: boolean;
+  sourceRef?: string;
+  assets?: CompiledThreeAsset[];
+  /** Runtime-only object URLs for same-origin IndexedDB-authored assets. */
+  assetUrls?: Record<string, string>;
 };
 
 export type CompiledFieldParams = Record<string, number>;

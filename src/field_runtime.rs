@@ -4535,4 +4535,28 @@ mod tests {
             Some("// deck-b-shader-bbb")
         );
     }
+
+    #[test]
+    fn threejs_layer_suppresses_only_its_assigned_deck() {
+        let mut rt = FieldRuntime::default();
+        let three_a = r#"{
+            "wireVersion": 1, "epoch": 7, "slug": "three-a",
+            "disposition": "fullscreen-primary",
+            "suppressLegacyField": true,
+            "layers": [{ "kind": "threejs", "ref": "visualization.js" }]
+        }"#;
+        let field_b = r#"{
+            "wireVersion": 1, "epoch": 7, "slug": "beams-b",
+            "disposition": "field-primitive",
+            "suppressLegacyField": false,
+            "field": { "primitiveId": 10, "primitiveName": "beams", "params": {} },
+            "layers": []
+        }"#;
+        rt.try_set_compiled(FieldDeck::A, three_a).unwrap();
+        rt.try_set_compiled(FieldDeck::B, field_b).unwrap();
+        assert!(rt.should_zero_legacy_field(FieldDeck::A));
+        assert!(!rt.should_zero_legacy_field(FieldDeck::B));
+        assert!(rt.fullscreen_wgsl(FieldDeck::A).is_none());
+        assert!(rt.is_dsl_backed(FieldDeck::B));
+    }
 }

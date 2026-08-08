@@ -12,7 +12,7 @@ export function SketchSidebar({
   sketches: StudioSketch[];
   activeId: string | null;
   onSelect: (id: string) => void;
-  onAdd: () => void;
+  onAdd: (backend: 'wgsl' | 'threejs', renderer?: 'webgl2' | 'webgpu') => void;
   onDuplicate: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
@@ -22,9 +22,27 @@ export function SketchSidebar({
         <Text fontSize="xs" fontWeight="700" letterSpacing="0.08em" color="whiteAlpha.700">
           SKETCHES
         </Text>
-        <Button size="xs" variant="outline" onClick={onAdd} borderColor="#3a4038">
-          New
-        </Button>
+        <HStack gap={1}>
+          <Button size="xs" variant="outline" onClick={() => onAdd('wgsl')} borderColor="#3a4038">
+            WGSL
+          </Button>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => onAdd('threejs', 'webgl2')}
+            borderColor="#3a4038"
+          >
+            Three GL
+          </Button>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => onAdd('threejs', 'webgpu')}
+            borderColor="#3a4038"
+          >
+            Three GPU
+          </Button>
+        </HStack>
       </HStack>
       <VStack align="stretch" gap={1} flex="1" overflowY="auto">
         {sketches.map((s) => {
@@ -48,7 +66,10 @@ export function SketchSidebar({
                 {s.label}
               </Text>
               <Text fontSize="xs" color="whiteAlpha.600" truncate>
-                {s.slug}
+                {s.slug} ·{' '}
+                {s.backend === 'threejs'
+                  ? `Three ${s.renderer === 'webgpu' ? 'WebGPU' : 'WebGL2'}`
+                  : 'WGSL'}
               </Text>
             </Box>
           );

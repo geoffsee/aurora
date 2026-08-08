@@ -72,6 +72,10 @@ export type ModePresetLayer = {
   /** Asset path relative to the preset folder / catalog id / shader ref. */
   ref: string;
   weight?: number;
+  renderer?: 'webgl2' | 'webgpu';
+  requiresNativeWebGPU?: boolean;
+  sourceRef?: string;
+  assets?: { path: string; mediaType: string; bytes: number }[];
 };
 
 export type ModePresetField = {
@@ -171,7 +175,13 @@ export const FIELD_PRIMITIVE_PARAM_SPECS: Readonly<
   bloom: { intensity: { default: 1, min: 0, max: 1 } },
 };
 
-const LAYER_KINDS = new Set<ModePresetLayerKind>(['mesh', 'fullscreen', 'field', 'accent']);
+const LAYER_KINDS = new Set<ModePresetLayerKind>([
+  'mesh',
+  'fullscreen',
+  'field',
+  'accent',
+  'threejs',
+]);
 
 /**
  * N=2 engine slots are one fullscreen material per deck. Each pack may own at
@@ -341,7 +351,7 @@ export function validateModePreset(raw: unknown): ValidateModePresetResult {
         }
         if (typeof layer.kind !== 'string' || !LAYER_KINDS.has(layer.kind as ModePresetLayerKind)) {
           errors.push(
-            `layers[${i}].kind must be one of mesh|fullscreen|field|accent (got ${String(layer.kind)})`,
+            `layers[${i}].kind must be one of mesh|fullscreen|field|accent|threejs (got ${String(layer.kind)})`,
           );
         }
         if (typeof layer.ref !== 'string' || layer.ref.length === 0) {
@@ -351,6 +361,15 @@ export function validateModePreset(raw: unknown): ValidateModePresetResult {
           if (typeof layer.weight !== 'number' || !Number.isFinite(layer.weight)) {
             errors.push(`layers[${i}].weight must be a finite number when present`);
           }
+        }
+        if (layer.kind === 'threejs') {
+          if (layer.renderer !== 'webgl2' && layer.renderer !== 'webgpu')
+            errors.push(`layers[${i}].renderer must be webgl2 or webgpu`);
+          if (typeof layer.requiresNativeWebGPU !== 'boolean')
+            errors.push(`layers[${i}].requiresNativeWebGPU must be a boolean`);
+          if (typeof layer.sourceRef !== 'string' || !layer.sourceRef)
+            errors.push(`layers[${i}].sourceRef must be a non-empty string`);
+          if (!Array.isArray(layer.assets)) errors.push(`layers[${i}].assets must be an array`);
         }
       });
     }
@@ -391,6 +410,11 @@ export function validateModePreset(raw: unknown): ValidateModePresetResult {
         ref: layer.ref as string,
       };
       if (typeof layer.weight === 'number') out.weight = layer.weight;
+      if (layer.renderer === 'webgl2' || layer.renderer === 'webgpu') out.renderer = layer.renderer;
+      if (typeof layer.requiresNativeWebGPU === 'boolean')
+        out.requiresNativeWebGPU = layer.requiresNativeWebGPU;
+      if (typeof layer.sourceRef === 'string') out.sourceRef = layer.sourceRef;
+      if (Array.isArray(layer.assets)) out.assets = layer.assets as ModePresetLayer['assets'];
       return out;
     });
   }
@@ -476,6 +500,12 @@ export function compileModePreset(
     const out: CompiledModeLayer = { kind: layer.kind, ref: layer.ref };
     if (typeof layer.weight === 'number' && Number.isFinite(layer.weight)) {
       out.weight = clampNumber(layer.weight, 0, 1);
+    }
+    if (layer.kind === 'threejs') {
+      out.renderer = layer.renderer;
+      out.requiresNativeWebGPU = layer.requiresNativeWebGPU;
+      out.sourceRef = layer.sourceRef;
+      out.assets = layer.assets ? layer.assets.map((asset) => ({ ...asset })) : [];
     }
     return out;
   });

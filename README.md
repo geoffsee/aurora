@@ -2,7 +2,6 @@
 
 Browser/WebAssembly Bevy app for live Video DJ performance. The first show build favors dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.
 
-![Projector output: a procedural grid of tiles around a central beam burst](screenshots/example.webp)
 
 ## Requirements
 

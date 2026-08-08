@@ -33,6 +33,12 @@ export function StudioToolbar({
           <Text fontSize="xs" color="whiteAlpha.600">
             Author packages · Publish to Console (BroadcastChannel) · export .aurora-package
           </Text>
+          {sketch.backend === 'threejs' ? (
+            <Text fontSize="xs" color="orange.300">
+              Trusted code: Three packages execute same-origin JavaScript and must be treated like
+              plugins.
+            </Text>
+          ) : null}
         </Box>
         <HStack gap={2}>
           <Button size="sm" colorPalette="green" onClick={onPublish} disabled={busy}>

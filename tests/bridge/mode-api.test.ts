@@ -265,6 +265,40 @@ fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
     expect(result.wire.suppressLegacyField).toBe(true);
   });
 
+  test('attaches a Three.js executable and retains renderer/asset metadata', () => {
+    const root = tempDir();
+    const folder = writeValidPreset(root, 'three-orbit', {
+      disposition: 'fullscreen-primary',
+      field: undefined,
+      layers: [
+        {
+          kind: 'threejs',
+          ref: 'visualization.js',
+          sourceRef: 'visualization.ts',
+          renderer: 'webgl2',
+          requiresNativeWebGPU: false,
+          assets: [{ path: 'assets/model.glb', mediaType: 'model/gltf-binary', bytes: 3 }],
+        },
+      ],
+      engineMinCapabilities: ['threejs-runtime-v1'],
+    });
+    writeFileSync(
+      join(folder, 'visualization.js'),
+      'export default async () => ({ render() {} });',
+    );
+    const result = compileFromEntry(makeEntry(folder, 'three-orbit'), 9, 'deck-b');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.wire.deck).toBe('deck-b');
+    expect(result.wire.layers[0]).toMatchObject({
+      kind: 'threejs',
+      renderer: 'webgl2',
+      requiresNativeWebGPU: false,
+      moduleSource: 'export default async () => ({ render() {} });',
+    });
+    expect(result.wire.assetBase).toBe(modeAssetBase(9, 'deck-b', 'three-orbit'));
+  });
+
   test('>1 fullscreen layer fails compile (soft-fail errors)', () => {
     const root = tempDir();
     const folder = writeValidPreset(root, 'stack', {
@@ -594,6 +628,6 @@ describe('ModeApi asset serve + sandbox', () => {
 describe('constants', () => {
   test('retention and size caps are documented values', () => {
     expect(MODE_API_EPOCH_RETENTION).toBe(4);
-    expect(MODE_API_MAX_ASSET_BYTES).toBe(8 * 1024 * 1024);
+    expect(MODE_API_MAX_ASSET_BYTES).toBe(32 * 1024 * 1024);
   });
 });

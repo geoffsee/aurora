@@ -15,6 +15,7 @@ import {
 import {
   buildAuroraPackageArchive,
   buildManifest,
+  buildThreeManifest,
   PACK_V1_AUTHORING_TEMPLATE,
   PACK_V1_SHOW_TEMPLATE,
 } from '../../shared/aurora-package.ts';
@@ -86,6 +87,44 @@ describe('resolvePackageImportDataDir', () => {
 });
 
 describe('installAuroraPackageArchive', () => {
+  test('installs Three.js source, executable, and binary assets on both decks', () => {
+    const dataDir = tempDir();
+    const bytes = new Uint8Array([9, 8, 7]);
+    const archive = buildAuroraPackageArchive({
+      manifest: buildThreeManifest({
+        slug: 'three-grid',
+        label: 'Three Grid',
+        renderer: 'webgpu',
+        assets: [
+          { path: 'assets/model.glb', mediaType: 'model/gltf-binary', bytes: bytes.byteLength },
+        ],
+      }),
+      source: 'export default async () => ({ render() {} });',
+      javascript: 'export default async () => ({ render() {} });',
+      assets: { 'assets/model.glb': bytes },
+    });
+    const result = installAuroraPackageArchive(archive, { dataDir });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result).toMatchObject({
+      target: 'threejs',
+      entryFile: 'visualization.js',
+      renderer: 'webgpu',
+      trustedCode: true,
+    });
+    for (const deck of result.decks) {
+      const folder = result.paths[deck];
+      expect(readFileSync(join(folder, 'assets/model.glb'))).toEqual(Buffer.from(bytes));
+      const preset = JSON.parse(readFileSync(join(folder, 'preset.json'), 'utf8'));
+      expect(preset.layers[0]).toMatchObject({
+        kind: 'threejs',
+        renderer: 'webgpu',
+        ref: 'visualization.js',
+      });
+      expect(preset.engineMinCapabilities).toContain('threejs-runtime-v1');
+    }
+  });
+
   test('writes dual-deck preset.json + wgsl under data dir', () => {
     const dataDir = tempDir();
     const archive = makeShowArchive('glass-drift', 'Glass Drift', {

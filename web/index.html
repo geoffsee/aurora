@@ -6,6 +6,16 @@
     <title>aurora VJ</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./dist/vendor/three-v1/three.module.js",
+          "three/webgpu": "./dist/vendor/three-v1/three.webgpu.js",
+          "three/tsl": "./dist/vendor/three-v1/three.tsl.js",
+          "three/addons/": "./dist/vendor/three-v1/addons/"
+        }
+      }
+    </script>
   </head>
   <body>
     <main id="stage">
@@ -15,13 +25,14 @@
 
     <script type="module">
       import {
+        AuroraThreeDeckHost,
         attachProjectorTransport,
         createProjectorTransport,
         isControlBridgeConnected,
         isOscBridgeConnected,
         mountGeoffseePagesNav,
         projectorCompiledModeUrl,
-        resolveAuthoredCompiledWire,
+        resolveAuthoredCompiledWireAsync,
         subscribeAuthoredPackages,
         webgpuSecureContextError,
       } from "./dist/projector-bridge.js";
@@ -172,6 +183,42 @@
         demoMode: false,
         replaying: false,
       };
+      const stage = document.querySelector("#stage");
+      const threeFrame = (deck) => {
+        const isA = deck === "deck-a";
+        const mix = isA ? 1 - controlState.crossfade : controlState.crossfade;
+        const energy = clamp01(oscState.energy);
+        const bass = clamp01(oscState.bass);
+        const pulse = controlState.beatSync
+          ? Math.max(0, 1 - Math.min(1, (performance.now() - oscState.lastBeatAt) / 400) ** 2)
+          : bass;
+        return {
+          mix,
+          intensity: isA ? controlState.deckAIntensity : controlState.deckBIntensity,
+          depth: isA ? controlState.deckADepth : controlState.deckBDepth,
+          feedback: isA ? controlState.deckAFeedback : controlState.deckBFeedback,
+          speed: isA ? controlState.deckASpeed : controlState.deckBSpeed,
+          palette: {
+            hue: controlState.palette,
+            saturation: controlState.paletteSaturation,
+            brightness: controlState.paletteBrightness * controlState.maxBrightness,
+            rgb: [controlState.paletteR, controlState.paletteG, controlState.paletteB],
+          },
+          blackout: controlState.blackout,
+          freeze: controlState.freeze,
+          flashVersion: controlState.flashVersion,
+          resetVersion: controlState.resetVersion,
+          cueVersion: controlState.cueVersion,
+          energy,
+          bass,
+          mid: clamp01(oscState.mid),
+          high: clamp01(oscState.high),
+          pulse,
+          tempo: controlState.bpm,
+          beat: oscState.beat,
+        };
+      };
+      let threeHosts = null;
 
       const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
       const clampInt = (value, min, max, fallback = min) => {
@@ -407,7 +454,7 @@
         compiledSlugApplied[key] = clean;
         try {
           // Studio Publish stores packages in localStorage + BroadcastChannel.
-          let wire = resolveAuthoredCompiledWire(key, clean, 0);
+          let wire = await resolveAuthoredCompiledWireAsync(key, clean, 0);
           if (!wire) {
             const url = projectorCompiledModeUrl(key, clean);
             const res = await fetch(url, { cache: "no-store" });
@@ -418,13 +465,22 @@
             }
             wire = await res.json();
           }
-          if (gen !== compiledFetchGen[key]) return;
+          if (gen !== compiledFetchGen[key]) {
+            for (const layer of Array.isArray(wire?.layers) ? wire.layers : []) {
+              for (const url of Object.values(layer?.assetUrls ?? {})) URL.revokeObjectURL(url);
+            }
+            return;
+          }
           const json = JSON.stringify(wire);
           const ok = auroraSetCompiledMode(deck, json);
           if (!ok) {
+            for (const layer of Array.isArray(wire?.layers) ? wire.layers : []) {
+              for (const url of Object.values(layer?.assetUrls ?? {})) URL.revokeObjectURL(url);
+            }
             console.warn(`[field-runtime] aurora_set_compiled_mode rejected deck=${deck}`);
             return;
           }
+          if (threeHosts) void threeHosts[key].applyWire(wire);
           const epoch =
             wire && typeof wire === "object" && Number.isFinite(Number(wire.epoch))
               ? Number(wire.epoch)
@@ -613,6 +669,11 @@
       }
 
       let bridgeTransport = null;
+
+      threeHosts = stage ? {
+        "deck-a": new AuroraThreeDeckHost("deck-a", stage, () => threeFrame("deck-a"), sendErrorToControls),
+        "deck-b": new AuroraThreeDeckHost("deck-b", stage, () => threeFrame("deck-b"), sendErrorToControls),
+      } : null;
 
       function sendErrorToControls(description) {
         bridgeTransport?.send({

@@ -313,10 +313,12 @@ export function WgslEditor({
   value,
   onChange,
   diagnostics,
+  backend = 'wgsl',
 }: {
   value: string;
   onChange: (next: string) => void;
   diagnostics?: readonly WgslDiagnostic[];
+  backend?: 'wgsl' | 'threejs';
 }) {
   const editorRef = useRef<MonacoEditor | null>(null);
   const monacoRef = useRef<MonacoType | null>(null);
@@ -332,22 +334,34 @@ export function WgslEditor({
     const monaco = monacoRef.current;
     const model = editor?.getModel();
     if (!monaco || !model) return;
-    monaco.editor.setModelMarkers(model, 'wgsl', toMonacoMarkers(monaco, diagnostics));
-  }, [diagnostics]);
+    monaco.editor.setModelMarkers(
+      model,
+      'wgsl',
+      backend === 'wgsl' ? toMonacoMarkers(monaco, diagnostics) : [],
+    );
+  }, [backend, diagnostics]);
 
   return (
     <Box h="100%" display="flex" flexDirection="column" gap={2}>
       <Text fontSize="xs" fontWeight="700" letterSpacing="0.08em" color="whiteAlpha.700">
-        WGSL · pack-v1
+        {backend === 'threejs'
+          ? 'TypeScript · three-v1 · trusted same-origin code'
+          : 'WGSL · pack-v1'}
       </Text>
       <Box className="studio-editor" h="100%">
         <Editor
-          language={WGSL_LANG}
+          language={backend === 'threejs' ? 'typescript' : WGSL_LANG}
           theme="aurora-dark"
           value={value}
           onChange={(_value: string | undefined) => handleChange(_value ?? '')}
           beforeMount={(monaco: MonacoType) => {
             configureWgslLanguage(monaco);
+            monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+              target: monaco.languages.typescript.ScriptTarget.ES2022,
+              module: monaco.languages.typescript.ModuleKind.ESNext,
+              strict: true,
+              noEmit: true,
+            });
           }}
           onMount={(editor: MonacoEditor, monaco: MonacoType) => {
             editorRef.current = editor;
