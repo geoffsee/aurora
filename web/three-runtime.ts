@@ -148,6 +148,37 @@ type Active = {
   assetUrls: string[];
 };
 
+const STATIC_MODULE_SPECIFIER = /(\b(?:import|export)\s+(?:[^'";]*?\s+from\s+)?)(['"])([^'"]+)\2/g;
+
+function resolveDocumentModule(specifier: string): string {
+  try {
+    return import.meta.resolve(specifier);
+  } catch {
+    // The document import map remains the compatibility fallback on browsers
+    // that support import maps but not import.meta.resolve().
+    return specifier;
+  }
+}
+
+/**
+ * Blob modules have produced inconsistent bare-specifier resolution across
+ * browsers even when the owning document has an import map. Resolve authored
+ * Three.js imports from this (document-backed) module before creating the Blob
+ * so its first dependency fetch always uses a concrete URL.
+ */
+export function resolveThreeModuleImports(
+  source: string,
+  resolve: (specifier: string) => string = resolveDocumentModule,
+): string {
+  return source.replace(
+    STATIC_MODULE_SPECIFIER,
+    (statement, prefix: string, quote: string, specifier: string) => {
+      if (specifier !== 'three' && !specifier.startsWith('three/')) return statement;
+      return `${prefix}${quote}${resolve(specifier)}${quote}`;
+    },
+  );
+}
+
 export class AuroraThreeDeckHost {
   private active: Active | null = null;
   private generation = 0;
@@ -182,14 +213,15 @@ export class AuroraThreeDeckHost {
     const sourceMapUrl = layer.sourceMap
       ? URL.createObjectURL(new Blob([layer.sourceMap], { type: 'application/json' }))
       : undefined;
+    const resolvedModuleSource = resolveThreeModuleImports(layer.moduleSource);
     const executable = sourceMapUrl
       ? /\/\/# sourceMappingURL=.*$/m.test(layer.moduleSource)
-        ? layer.moduleSource.replace(
+        ? resolvedModuleSource.replace(
             /\/\/# sourceMappingURL=.*$/m,
             `//# sourceMappingURL=${sourceMapUrl}`,
           )
-        : `${layer.moduleSource}\n//# sourceMappingURL=${sourceMapUrl}`
-      : layer.moduleSource;
+        : `${resolvedModuleSource}\n//# sourceMappingURL=${sourceMapUrl}`
+      : resolvedModuleSource;
     const moduleUrl = URL.createObjectURL(new Blob([executable], { type: 'text/javascript' }));
     try {
       if (layer.renderer === 'webgpu' && layer.requiresNativeWebGPU && !('gpu' in navigator)) {
