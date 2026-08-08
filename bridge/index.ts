@@ -131,6 +131,8 @@ type ControlState = {
   deckBDepth: number;
   deckBFeedback: number;
   deckBSpeed: number;
+  deckAPalette: number;
+  deckBPalette: number;
   palette: number;
   paletteR: number;
   paletteG: number;
@@ -415,6 +417,8 @@ const defaultControlState = (): ControlState => ({
   deckBDepth: 0,
   deckBFeedback: 0.22,
   deckBSpeed: 1,
+  deckAPalette: 0.38,
+  deckBPalette: 0.38,
   palette: 0.38,
   paletteR: DEFAULT_PALETTE_RGB.r,
   paletteG: DEFAULT_PALETTE_RGB.g,
@@ -608,6 +612,8 @@ const coerceControlState = (state: unknown): ControlState => {
     deckBDepth: clamp(source.deckBDepth, 0, 1, defaults.deckBDepth),
     deckBFeedback: clamp(source.deckBFeedback, 0, 1, defaults.deckBFeedback),
     deckBSpeed: clamp(source.deckBSpeed, 0.1, 3, defaults.deckBSpeed),
+    deckAPalette: clamp(source.deckAPalette, 0, 1, paletteColor.palette),
+    deckBPalette: clamp(source.deckBPalette, 0, 1, paletteColor.palette),
     palette: paletteColor.palette,
     paletteR: paletteColor.r,
     paletteG: paletteColor.g,
@@ -804,6 +810,8 @@ const mergePaletteHue = (value: number) => {
     paletteR: rgb.r,
     paletteG: rgb.g,
     paletteB: rgb.b,
+    deckAPalette: palette,
+    deckBPalette: palette,
   });
 };
 
@@ -1306,6 +1314,9 @@ const applyVstControlMessage = (msg: OscMsg) => {
 
     mergeControlState({
       ...cue,
+      ...(cue.palette === undefined
+        ? {}
+        : { deckAPalette: cue.palette, deckBPalette: cue.palette }),
       cueVersion: current.cueVersion + 1,
       cueIntensity: finiteNumber(cue.intensity, current.intensity),
       cuePalette: finiteNumber(cue.palette, current.palette),

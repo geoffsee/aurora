@@ -21,6 +21,8 @@ export type MappableParam =
   | 'deckBDepth'
   | 'deckBFeedback'
   | 'deckBSpeed'
+  | 'deckAPalette'
+  | 'deckBPalette'
   | 'palette'
   | 'paletteR'
   | 'paletteG'
@@ -154,6 +156,24 @@ export const PARAM_META: Record<MappableParam, ParamMeta> = {
     max: 3,
     step: 0.01,
     format: f2,
+  },
+  deckAPalette: {
+    key: 'deckAPalette',
+    label: 'Deck A Color',
+    knobLabel: 'Color',
+    min: 0,
+    max: 1,
+    step: 0.001,
+    format: hueDeg,
+  },
+  deckBPalette: {
+    key: 'deckBPalette',
+    label: 'Deck B Color',
+    knobLabel: 'Color',
+    min: 0,
+    max: 1,
+    step: 0.001,
+    format: hueDeg,
   },
   palette: {
     key: 'palette',
@@ -469,14 +489,14 @@ export const DECK_A_KNOB_PARAMS = [
   'deckAIntensity',
   'deckADepth',
   'deckASpeed',
-  'palette',
+  'deckAPalette',
 ] as const satisfies readonly MappableParam[];
 
 export const DECK_B_KNOB_PARAMS = [
   'deckBIntensity',
   'deckBDepth',
   'deckBSpeed',
-  'palette',
+  'deckBPalette',
 ] as const satisfies readonly MappableParam[];
 
 /** Build the state patch for setting a mappable param to a value. Palette hue
@@ -490,7 +510,14 @@ export function buildParamPatch(
   const v = meta.integer ? Math.round(value) : value;
   if (param === 'palette') {
     const rgb = hueToRgb(v);
-    return { palette: v, paletteR: rgb.r, paletteG: rgb.g, paletteB: rgb.b };
+    return {
+      palette: v,
+      paletteR: rgb.r,
+      paletteG: rgb.g,
+      paletteB: rgb.b,
+      deckAPalette: v,
+      deckBPalette: v,
+    };
   }
   if (param === 'paletteR' || param === 'paletteG' || param === 'paletteB') {
     const r = param === 'paletteR' ? v : (current?.paletteR ?? 0);

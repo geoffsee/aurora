@@ -534,7 +534,11 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     (name: string, cue: (typeof cuePresets)[string]) => {
       setState((prev) => {
         const next = { ...prev, ...cue };
-        if (cue.palette !== undefined) syncPaletteFromHue(next);
+        if (cue.palette !== undefined) {
+          syncPaletteFromHue(next);
+          next.deckAPalette = cue.palette;
+          next.deckBPalette = cue.palette;
+        }
         next.cueVersion += 1;
         next.cueIntensity = clamp01(cue.intensity ?? prev.intensity);
         next.cuePalette = clamp01(cue.palette ?? prev.palette);
@@ -1477,5 +1481,10 @@ export function updatePaletteFromHex(
   };
   const next = { ...state, ...patch };
   syncPaletteFromRgb(next);
-  return { ...patch, palette: next.palette };
+  return {
+    ...patch,
+    palette: next.palette,
+    deckAPalette: next.palette,
+    deckBPalette: next.palette,
+  };
 }

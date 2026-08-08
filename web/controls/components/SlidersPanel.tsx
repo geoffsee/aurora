@@ -3,7 +3,7 @@ import { type ReactNode, useCallback, useMemo } from 'react';
 import { useControls } from '../context/ControlsContext.tsx';
 import { deckGpuShaderPatch } from '../lib/deck-gpu-shader.ts';
 import { deckGpuShaderModePatch, deckVisibilityPatch } from '../lib/deck-mode.ts';
-import { rgbToHex } from '../lib/palette.ts';
+import { hueToRgb, rgbToHex } from '../lib/palette.ts';
 import {
   buildParamPatch,
   DECK_A_KNOB_PARAMS,
@@ -82,16 +82,22 @@ export function SlidersPanel() {
         <Flex gap={6} minW="min-content" align="flex-start" pr={1} flexWrap="nowrap">
           {keys.map((key) => {
             const meta = PARAM_META[key];
+            const value = numericStateValue(state as unknown as Record<string, unknown>, key);
+            const deckColor = hueToRgb(value);
             return (
               <ParamKnob
                 key={key}
                 label={meta.knobLabel ?? meta.label}
-                value={numericStateValue(state as unknown as Record<string, unknown>, key)}
+                value={value}
                 min={meta.min}
                 max={meta.max}
                 step={meta.step}
                 format={meta.format}
-                accent={key === 'palette' ? paletteHex : undefined}
+                accent={
+                  key === 'deckAPalette' || key === 'deckBPalette'
+                    ? rgbToHex(deckColor.r, deckColor.g, deckColor.b)
+                    : undefined
+                }
                 onChange={(v) => onKnobChange(key, v)}
               />
             );
@@ -99,7 +105,7 @@ export function SlidersPanel() {
         </Flex>
       </Box>
     ),
-    [state, paletteHex, onKnobChange],
+    [state, onKnobChange],
   );
 
   const deckAKnobs = useMemo(

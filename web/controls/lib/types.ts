@@ -36,6 +36,9 @@ export type ControlState = {
   deckBDepth: number;
   deckBFeedback: number;
   deckBSpeed: number;
+  /** Independent hue controls for the two deck render paths. */
+  deckAPalette: number;
+  deckBPalette: number;
   palette: number;
   paletteR: number;
   paletteG: number;

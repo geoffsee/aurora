@@ -167,5 +167,16 @@ export const migrateControlState = (state: unknown): unknown => {
       deckBSpeed: typeof s.deckBSpeed === 'number' ? s.deckBSpeed : speed,
     });
   }
+  // v16 → v17: independent deck colors. Seed both from the former global
+  // palette so existing sessions render exactly as they did before divergence.
+  if (s.schemaVersion === 16) {
+    const palette = typeof s.palette === 'number' ? s.palette : 0.38;
+    return migrateControlState({
+      ...s,
+      schemaVersion: 17,
+      deckAPalette: typeof s.deckAPalette === 'number' ? s.deckAPalette : palette,
+      deckBPalette: typeof s.deckBPalette === 'number' ? s.deckBPalette : palette,
+    });
+  }
   return state;
 };

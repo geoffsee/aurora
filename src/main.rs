@@ -94,6 +94,10 @@ unsafe extern "C" {
     fn browser_control_deck_b_feedback() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBSpeed)]
     fn browser_control_deck_b_speed() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckAPalette)]
+    fn browser_control_deck_a_palette() -> f32;
+    #[wasm_bindgen(js_namespace = window, js_name = __auroraControlDeckBPalette)]
+    fn browser_control_deck_b_palette() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPalette)]
     fn browser_control_palette() -> f32;
     #[wasm_bindgen(js_namespace = window, js_name = __auroraControlPaletteR)]
@@ -519,6 +523,8 @@ struct VjState {
     deck_b_depth: f32,
     deck_b_feedback: f32,
     deck_b_speed: f32,
+    deck_a_palette: f32,
+    deck_b_palette: f32,
     palette: f32,
     palette_r: f32,
     palette_g: f32,
@@ -591,6 +597,8 @@ impl Default for VjState {
             deck_b_depth: 0.0,
             deck_b_feedback: 0.35,
             deck_b_speed: 1.0,
+            deck_a_palette: 0.38,
+            deck_b_palette: 0.38,
             // Cool aurora-green base; crown shader adds magenta tips on Deck B.
             palette: 0.38,
             palette_r: 0.12,
@@ -1185,6 +1193,8 @@ fn read_osc_inputs(time: Res<Time>, mut state: ResMut<VjState>) {
         state.deck_b_depth = browser_control_deck_b_depth().clamp(0.0, 1.0);
         state.deck_b_feedback = browser_control_deck_b_feedback().clamp(0.0, 1.0);
         state.deck_b_speed = browser_control_deck_b_speed().clamp(0.1, 3.0);
+        state.deck_a_palette = browser_control_deck_a_palette().clamp(0.0, 1.0);
+        state.deck_b_palette = browser_control_deck_b_palette().clamp(0.0, 1.0);
         state.palette = browser_control_palette().clamp(0.0, 1.0);
         state.palette_r = browser_control_palette_r().clamp(0.0, 1.0);
         state.palette_g = browser_control_palette_g().clamp(0.0, 1.0);
@@ -1834,21 +1844,18 @@ fn update_palette_material(
         .map(|window| window.width() / window.height().max(1.0))
         .unwrap_or(STAGE_WIDTH / STAGE_HEIGHT);
 
-    // Color picker is the GPU duotone base; params.x carries a reactive hue offset
-    // (manual palette + mids/highs) for phase variation in shader variants.
+    // Each deck's Color knob is its duotone base; params.x also carries the
+    // shared audio-reactive hue offset for phase variation in shader variants.
     let audio_hue = if active {
         (mid * 0.62 + high * 0.38).clamp(0.0, 1.0)
     } else {
         0.0
     };
-    let display_hue = (state.palette * 0.35 + audio_hue * 0.65).rem_euclid(1.0);
+    let display_hue_a = (state.deck_a_palette * 0.35 + audio_hue * 0.65).rem_euclid(1.0);
+    let display_hue_b = (state.deck_b_palette * 0.35 + audio_hue * 0.65).rem_euclid(1.0);
 
-    let palette_rgb = Vec4::new(
-        state.palette_r,
-        state.palette_g,
-        state.palette_b,
-        0.0,
-    );
+    let deck_rgb_a = hue_to_rgb(state.deck_a_palette).extend(0.0);
+    let deck_rgb_b = hue_to_rgb(state.deck_b_palette).extend(0.0);
     let audio_uniforms = Vec4::new(energy, bass, mid, high);
     // GPU brightness is palette_brightness only — max_brightness is a CPU-geometry master.
     let palette_extra_base = Vec4::new(
@@ -1864,7 +1871,8 @@ fn update_palette_material(
     } else {
         state.max_brightness.clamp(0.0, 1.0)
     };
-    let params_base = Vec4::new(display_hue, state.show_time, 0.0, aspect);
+    let params_deck_a = Vec4::new(display_hue_a, state.show_time, 0.0, aspect);
+    let params_deck_b = Vec4::new(display_hue_b, state.show_time, 0.0, aspect);
 
     // Pack fullscreen slots (indices 20/21): independent WGSL per deck, crossfaded.
     if any_pack {
@@ -1907,19 +1915,19 @@ fn update_palette_material(
         if let Some(ha) = pack_a_handle.as_ref()
             && let Some(mat) = pack_a_materials.get_mut(&ha.0)
         {
-            mat.params = params_base;
+            mat.params = params_deck_a;
             mat.palette_extra = extra_a;
             mat.audio_uniforms = audio_uniforms;
-            mat.palette_rgb = palette_rgb;
+            mat.palette_rgb = deck_rgb_a;
             mat.pack_drive = pack_drive_a;
         }
         if let Some(hb) = pack_b_handle.as_ref()
             && let Some(mat) = pack_b_materials.get_mut(&hb.0)
         {
-            mat.params = params_base;
+            mat.params = params_deck_b;
             mat.palette_extra = extra_b;
             mat.audio_uniforms = audio_uniforms;
-            mat.palette_rgb = palette_rgb;
+            mat.palette_rgb = deck_rgb_b;
             mat.pack_drive = pack_drive_b;
         }
     }
@@ -1939,8 +1947,8 @@ fn update_palette_material(
             0.0
         };
 
-        let params_a = Vec4::new(display_hue, state.show_time, a_var, aspect);
-        let params_b = Vec4::new(display_hue, state.show_time, b_var, aspect);
+        let params_a = Vec4::new(display_hue_a, state.show_time, a_var, aspect);
+        let params_b = Vec4::new(display_hue_b, state.show_time, b_var, aspect);
 
         // Master alpha lives in palette_extra.w for the deck layers so each can
         // fade independently while sharing the same material type.
@@ -1953,7 +1961,7 @@ fn update_palette_material(
             mat.params = params_a;
             mat.palette_extra = extra_a;
             mat.audio_uniforms = audio_uniforms;
-            mat.palette_rgb = palette_rgb;
+            mat.palette_rgb = deck_rgb_a;
         }
         if let Some(hb) = deck_b_handle.as_ref()
             && let Some(mat) = palette_materials.get_mut(&hb.0)
@@ -1961,7 +1969,7 @@ fn update_palette_material(
             mat.params = params_b;
             mat.palette_extra = extra_b;
             mat.audio_uniforms = audio_uniforms;
-            mat.palette_rgb = palette_rgb;
+            mat.palette_rgb = deck_rgb_b;
         }
     }
 

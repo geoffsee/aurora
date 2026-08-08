@@ -114,6 +114,8 @@
         deckBDepth: 0,
         deckBFeedback: 0.35,
         deckBSpeed: 1,
+        deckAPalette: 0.38,
+        deckBPalette: 0.38,
         palette: 0.38,
         paletteR: 0.12,
         paletteG: 0.72,
@@ -186,6 +188,8 @@
       const stage = document.querySelector("#stage");
       const threeFrame = (deck) => {
         const isA = deck === "deck-a";
+        const deckPalette = isA ? controlState.deckAPalette : controlState.deckBPalette;
+        const deckRgb = hueToRgb(deckPalette);
         const mix = isA ? 1 - controlState.crossfade : controlState.crossfade;
         const energy = clamp01(oscState.energy);
         const bass = clamp01(oscState.bass);
@@ -199,10 +203,10 @@
           feedback: isA ? controlState.deckAFeedback : controlState.deckBFeedback,
           speed: isA ? controlState.deckASpeed : controlState.deckBSpeed,
           palette: {
-            hue: controlState.palette,
+            hue: deckPalette,
             saturation: controlState.paletteSaturation,
             brightness: controlState.paletteBrightness * controlState.maxBrightness,
-            rgb: [controlState.paletteR, controlState.paletteG, controlState.paletteB],
+            rgb: [deckRgb.r, deckRgb.g, deckRgb.b],
           },
           blackout: controlState.blackout,
           freeze: controlState.freeze,
@@ -221,6 +225,22 @@
       let threeHosts = null;
 
       const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+      const hueToRgb = (hue, saturation = 0.72, lightness = 0.52) => {
+        const h = ((hue % 1) + 1) % 1;
+        const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+        const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
+        const m = lightness - c / 2;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        if (h < 1 / 6) { r = c; g = x; }
+        else if (h < 2 / 6) { r = x; g = c; }
+        else if (h < 3 / 6) { g = c; b = x; }
+        else if (h < 4 / 6) { g = x; b = c; }
+        else if (h < 5 / 6) { r = x; b = c; }
+        else { r = c; b = x; }
+        return { r: r + m, g: g + m, b: b + m };
+      };
       const clampInt = (value, min, max, fallback = min) => {
         const number = Number(value);
         return Math.max(min, Math.min(max, Math.floor(Number.isFinite(number) ? number : fallback)));
@@ -520,7 +540,17 @@
         controlState.intensity = Math.max(0.05, Math.min(1.5, Number(next.intensity) || controlState.intensity));
         controlState.feedback = clamp01(next.feedback);
         controlState.depth = clamp01(next.depth);
+        controlState.deckAIntensity = Math.max(0.05, Math.min(1.5, Number(next.deckAIntensity ?? next.intensity) || controlState.deckAIntensity));
+        controlState.deckADepth = clamp01(next.deckADepth ?? next.depth);
+        controlState.deckAFeedback = clamp01(next.deckAFeedback ?? next.feedback);
+        controlState.deckASpeed = Math.max(0.1, Math.min(3, Number(next.deckASpeed ?? next.speed) || controlState.deckASpeed));
+        controlState.deckBIntensity = Math.max(0.05, Math.min(1.5, Number(next.deckBIntensity ?? next.intensity) || controlState.deckBIntensity));
+        controlState.deckBDepth = clamp01(next.deckBDepth ?? next.depth);
+        controlState.deckBFeedback = clamp01(next.deckBFeedback ?? next.feedback);
+        controlState.deckBSpeed = Math.max(0.1, Math.min(3, Number(next.deckBSpeed ?? next.speed) || controlState.deckBSpeed));
         controlState.palette = clamp01(next.palette);
+        controlState.deckAPalette = next.deckAPalette === undefined ? controlState.palette : clamp01(next.deckAPalette);
+        controlState.deckBPalette = next.deckBPalette === undefined ? controlState.palette : clamp01(next.deckBPalette);
         controlState.paletteR = next.paletteR === undefined ? controlState.paletteR : clamp01(next.paletteR);
         controlState.paletteG = next.paletteG === undefined ? controlState.paletteG : clamp01(next.paletteG);
         controlState.paletteB = next.paletteB === undefined ? controlState.paletteB : clamp01(next.paletteB);
@@ -776,6 +806,8 @@
       window.__auroraControlDeckBDepth = () => controlState.deckBDepth ?? controlState.depth;
       window.__auroraControlDeckBFeedback = () => controlState.deckBFeedback ?? controlState.feedback;
       window.__auroraControlDeckBSpeed = () => controlState.deckBSpeed ?? controlState.speed;
+      window.__auroraControlDeckAPalette = () => controlState.deckAPalette ?? controlState.palette;
+      window.__auroraControlDeckBPalette = () => controlState.deckBPalette ?? controlState.palette;
       window.__auroraControlPalette = () => controlState.palette;
       window.__auroraControlPaletteR = () => controlState.paletteR;
       window.__auroraControlPaletteG = () => controlState.paletteG;

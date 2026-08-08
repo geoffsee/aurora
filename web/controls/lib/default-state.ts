@@ -23,6 +23,8 @@ export function defaultState(): ControlState {
     deckBDepth: 0,
     deckBFeedback: 0.22,
     deckBSpeed: 1,
+    deckAPalette: 0.38,
+    deckBPalette: 0.38,
     palette: 0.38,
     paletteR: DEFAULT_PALETTE_RGB.r,
     paletteG: DEFAULT_PALETTE_RGB.g,

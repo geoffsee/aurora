@@ -17,6 +17,8 @@ describe('buildParamPatch palette', () => {
     expect(patch.paletteR).toBeDefined();
     expect(patch.paletteG).toBeDefined();
     expect(patch.paletteB).toBeDefined();
+    expect(patch.deckAPalette).toBe(0);
+    expect(patch.deckBPalette).toBe(0);
     // Hue 0 ≈ red-ish base (HSL path in hueToRgb).
     expect(Number(patch.paletteR)).toBeGreaterThan(Number(patch.paletteG));
   });
@@ -57,13 +59,25 @@ describe('buildParamPatch palette', () => {
     expect(buildParamPatch('deckBSpeed', 2)).toEqual({ deckBSpeed: 2 });
     expect(buildParamPatch('deckADepth', 0.3)).toEqual({ deckADepth: 0.3 });
     expect(buildParamPatch('deckBFeedback', 0.6)).toEqual({ deckBFeedback: 0.6 });
+    expect(buildParamPatch('deckAPalette', 0.2)).toEqual({ deckAPalette: 0.2 });
+    expect(buildParamPatch('deckBPalette', 0.8)).toEqual({ deckBPalette: 0.8 });
   });
 });
 
 describe('deck launchpad knobs', () => {
-  test('each deck has intensity, depth, speed, and color (palette)', () => {
-    expect(DECK_A_KNOB_PARAMS).toEqual(['deckAIntensity', 'deckADepth', 'deckASpeed', 'palette']);
-    expect(DECK_B_KNOB_PARAMS).toEqual(['deckBIntensity', 'deckBDepth', 'deckBSpeed', 'palette']);
+  test('each deck has its own intensity, depth, speed, and color', () => {
+    expect(DECK_A_KNOB_PARAMS).toEqual([
+      'deckAIntensity',
+      'deckADepth',
+      'deckASpeed',
+      'deckAPalette',
+    ]);
+    expect(DECK_B_KNOB_PARAMS).toEqual([
+      'deckBIntensity',
+      'deckBDepth',
+      'deckBSpeed',
+      'deckBPalette',
+    ]);
   });
 
   test('deck param ranges match the corresponding global masters', () => {
@@ -95,11 +109,11 @@ describe('knob strip coverage', () => {
       expect(MAPPABLE_PARAMS).toContain(key);
     }
     for (const key of DECK_A_KNOB_PARAMS) {
-      if (key !== 'palette') expect(KNOB_STRIP_PARAMS).not.toContain(key);
+      expect(KNOB_STRIP_PARAMS).not.toContain(key);
       expect(MAPPABLE_PARAMS).toContain(key);
     }
     for (const key of DECK_B_KNOB_PARAMS) {
-      if (key !== 'palette') expect(KNOB_STRIP_PARAMS).not.toContain(key);
+      expect(KNOB_STRIP_PARAMS).not.toContain(key);
       expect(MAPPABLE_PARAMS).toContain(key);
     }
     // Everything mappable is strip, figure-only, deck-launchpad, or per-deck feedback.

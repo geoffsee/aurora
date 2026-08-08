@@ -359,6 +359,29 @@ test('v15 state seeds per-deck axes from globals', () => {
   expect(migrated.deckASpeed).toBe(1.8);
   expect(migrated.deckBSpeed).toBe(1.8);
   expect(migrated.deckAReloadActiveVersion).toBe(2);
+  expect(migrated.deckAPalette).toBe(0.38);
+  expect(migrated.deckBPalette).toBe(0.38);
+});
+
+test('v16 state seeds independent deck colors from the global palette', () => {
+  const migrated = migrateControlState({
+    schemaVersion: 16,
+    palette: 0.73,
+  }) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(migrated.deckAPalette).toBe(0.73);
+  expect(migrated.deckBPalette).toBe(0.73);
+});
+
+test('v16 migration preserves already-diverged deck colors', () => {
+  const migrated = migrateControlState({
+    schemaVersion: 16,
+    palette: 0.5,
+    deckAPalette: 0.15,
+    deckBPalette: 0.85,
+  }) as Record<string, unknown>;
+  expect(migrated.deckAPalette).toBe(0.15);
+  expect(migrated.deckBPalette).toBe(0.85);
 });
 
 test('v15 migration preserves already-diverged deck axes when present', () => {
@@ -389,7 +412,7 @@ test('v15 migration preserves already-diverged deck axes when present', () => {
   expect(migrated.deckBSpeed).toBe(0.5);
 });
 
-test('older schema chains through v16 deck axes with defaults from globals', () => {
+test('older schema chains through v17 deck axes and colors with global defaults', () => {
   const migrated = migrateControlState({
     schemaVersion: 13,
     intensity: 0.9,
@@ -406,6 +429,8 @@ test('older schema chains through v16 deck axes with defaults from globals', () 
   expect(migrated.deckBFeedback).toBe(0.4);
   expect(migrated.deckASpeed).toBe(1.25);
   expect(migrated.deckBSpeed).toBe(1.25);
+  expect(migrated.deckAPalette).toBe(0.38);
+  expect(migrated.deckBPalette).toBe(0.38);
 });
 
 test('null passes through unchanged', () => {

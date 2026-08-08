@@ -167,7 +167,7 @@ export function App() {
     <Box
       h="100vh"
       maxH="100vh"
-      overflow="hidden"
+      overflow={{ base: 'auto', lg: 'hidden' }}
       display="flex"
       flexDirection="column"
       bgGradient="to-b"
@@ -175,12 +175,19 @@ export function App() {
       gradientTo="#0e0b0b"
       color="gray.50"
     >
-      <Box flex="1 1 auto" minH={0} overflow="hidden" px={{ base: 2, md: 3 }} pt={3} pb={2}>
+      <Box
+        flex="1 1 auto"
+        minH={0}
+        overflow={{ base: 'visible', lg: 'hidden' }}
+        px={{ base: 2, md: 3 }}
+        pt={3}
+        pb={2}
+      >
         <Grid
-          templateColumns={{ base: '1fr', lg: '200px 1fr 1fr' }}
+          templateColumns={{ base: '1fr', lg: '260px minmax(0, 1fr) minmax(0, 1fr)' }}
           templateRows={{ base: 'auto auto auto auto', lg: 'auto 1fr' }}
           gap={3}
-          h="100%"
+          h={{ base: 'auto', lg: '100%' }}
           w="100%"
         >
           <GridItem colSpan={{ base: 1, lg: 3 }} flexShrink={0}>
@@ -197,7 +204,7 @@ export function App() {
             />
           </GridItem>
 
-          <GridItem minH={{ base: '120px', lg: 0 }} overflow="hidden">
+          <GridItem minH={{ base: '240px', lg: 0 }} overflow="hidden">
             <Box
               h="100%"
               p={3}

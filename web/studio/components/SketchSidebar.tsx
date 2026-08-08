@@ -1,4 +1,4 @@
-import { Box, Button, HStack, Text, VStack } from '@chakra-ui/react';
+import { Box, Button, Grid, HStack, Text, VStack } from '@chakra-ui/react';
 import type { StudioSketch } from '../lib/sketch-store.ts';
 
 export function SketchSidebar({
@@ -17,17 +17,24 @@ export function SketchSidebar({
   onRemove: (id: string) => void;
 }) {
   return (
-    <VStack align="stretch" gap={2} h="100%">
-      <HStack justify="space-between">
+    <VStack align="stretch" gap={2} h="100%" minH={0}>
+      <VStack align="stretch" gap={2} flexShrink={0}>
         <Text fontSize="xs" fontWeight="700" letterSpacing="0.08em" color="whiteAlpha.700">
           SKETCHES
         </Text>
-        <HStack gap={1}>
-          <Button size="xs" variant="outline" onClick={() => onAdd('wgsl')} borderColor="#3a4038">
+        <Grid templateColumns="repeat(3, minmax(0, 1fr))" gap={1}>
+          <Button
+            size="xs"
+            minW={0}
+            variant="outline"
+            onClick={() => onAdd('wgsl')}
+            borderColor="#3a4038"
+          >
             WGSL
           </Button>
           <Button
             size="xs"
+            minW={0}
             variant="outline"
             onClick={() => onAdd('threejs', 'webgl2')}
             borderColor="#3a4038"
@@ -36,15 +43,16 @@ export function SketchSidebar({
           </Button>
           <Button
             size="xs"
+            minW={0}
             variant="outline"
             onClick={() => onAdd('threejs', 'webgpu')}
             borderColor="#3a4038"
           >
             Three GPU
           </Button>
-        </HStack>
-      </HStack>
-      <VStack align="stretch" gap={1} flex="1" overflowY="auto">
+        </Grid>
+      </VStack>
+      <VStack align="stretch" gap={1} flex="1" minH={0} overflowY="auto" pr={1}>
         {sketches.map((s) => {
           const active = s.id === activeId;
           return (
