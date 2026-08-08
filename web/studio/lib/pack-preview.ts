@@ -45,8 +45,9 @@ const FRAME_WINDOW_SIZE = 60;
 const JANK_FRAME_MS = 33.333; // > 33ms means <30fps
 
 function readMemoryMetrics(): { usedMb: number | null; limitMb: number | null } {
-  const memory = (performance as Performance & { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } })
-    .memory;
+  const memory = (
+    performance as Performance & { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }
+  ).memory;
   if (!memory) return { usedMb: null, limitMb: null };
   return {
     usedMb: Math.round(memory.usedJSHeapSize / 1024 / 1024),

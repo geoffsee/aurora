@@ -1,6 +1,6 @@
 import { Box, Text } from '@chakra-ui/react';
-import { useCallback, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { WgslDiagnostic } from '../lib/wgsl-diagnostics.ts';
 
 type MonacoType = any;
@@ -208,7 +208,10 @@ function configureWgslLanguage(monaco: MonacoType): void {
     tokenizer: {
       root: [
         [/@[a-zA-Z0-9_]+\b/, 'annotation'],
-        [/\b(alias|bitcast|break|case|const|const_assert|continue|continuing|discard|else|enable|fn|for|if|loop|let|override|requires|return|struct|switch|var|while|case|default)\b/, 'keyword'],
+        [
+          /\b(alias|bitcast|break|case|const|const_assert|continue|continuing|discard|else|enable|fn|for|if|loop|let|override|requires|return|struct|switch|var|while|case|default)\b/,
+          'keyword',
+        ],
         [
           /\b(vec2|vec3|vec4|mat2x2|mat2x3|mat2x4|mat3x2|mat3x3|mat3x4|mat4x2|mat4x3|mat4x4|i32|u32|f32|f16|bool|array|ptr|atomic|texture_2d|texture_2d_array|texture_3d|texture_storage_2d|texture_storage_2d_array|sampler|sampler_comparison)\b/,
           'type',
@@ -248,7 +251,7 @@ function configureWgslLanguage(monaco: MonacoType): void {
     ],
     indentationRules: {
       increaseIndentPattern: /^\s*(if|loop|for|while|switch|struct)\b.*\{\s*$/,
-      decreaseIndentPattern: /^\s*[\}\]]/,
+      decreaseIndentPattern: /^\s*[}\]]/,
     },
     folding: {
       markers: {
@@ -285,10 +288,7 @@ function configureWgslLanguage(monaco: MonacoType): void {
   });
 }
 
-function toMonacoMarkers(
-  monaco: MonacoType,
-  diagnostics: readonly WgslDiagnostic[] = [],
-) {
+function toMonacoMarkers(monaco: MonacoType, diagnostics: readonly WgslDiagnostic[] = []) {
   return diagnostics.map((diagnostic) => {
     const line = Math.max(1, diagnostic.lineNumber);
     const startColumn = Math.max(1, diagnostic.startColumn);

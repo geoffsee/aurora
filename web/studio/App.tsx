@@ -11,7 +11,6 @@ import {
   importPackageToBridge,
   publishSketchToChannel,
 } from './lib/export-package.ts';
-import type { WgslDiagnostic } from './lib/wgsl-diagnostics.ts';
 import {
   addSketch,
   createSketch,
@@ -24,6 +23,7 @@ import {
   saveStudioDocument,
   updateSketch,
 } from './lib/sketch-store.ts';
+import type { WgslDiagnostic } from './lib/wgsl-diagnostics.ts';
 
 const BRIDGE_KEY = 'aurora-studio-bridge-origin';
 
@@ -56,12 +56,18 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<readonly WgslDiagnostic[]>([]);
+  const clearDiagnostics = useCallback(() => setDiagnostics([]), []);
+  const onDiagnostics = useCallback((next: readonly WgslDiagnostic[]) => {
+    setDiagnostics(next);
+  }, []);
 
   const active = useMemo(() => getActiveSketch(doc), [doc]);
+  const activeId = active?.id;
 
   useEffect(() => {
-    setDiagnostics([]);
-  }, [active?.id]);
+    if (activeId === undefined) return;
+    clearDiagnostics();
+  }, [activeId, clearDiagnostics]);
 
   // Persist sketches.
   useEffect(() => {
@@ -174,8 +180,7 @@ export function App() {
           templateRows={{ base: 'auto auto auto auto', lg: 'auto 1fr' }}
           gap={3}
           h="100%"
-          maxW="1600px"
-          mx="auto"
+          w="100%"
         >
           <GridItem colSpan={{ base: 1, lg: 3 }} flexShrink={0}>
             <StudioToolbar
@@ -253,11 +258,7 @@ export function App() {
               borderColor="#252a31"
               bg="rgba(0,0,0,0.25)"
             >
-              <PreviewPanel
-                wgsl={active.wgsl}
-                knobs={active.knobs}
-                onDiagnostics={(next) => setDiagnostics(next)}
-              />
+              <PreviewPanel wgsl={active.wgsl} knobs={active.knobs} onDiagnostics={onDiagnostics} />
             </Box>
           </GridItem>
         </Grid>
@@ -274,7 +275,7 @@ export function App() {
         py={2}
         zIndex={20}
       >
-        <Box maxW="1600px" mx="auto">
+        <Box w="100%">
           <KnobPanel
             knobs={active.knobs}
             onChange={(patch) => patchActive({ knobs: { ...active.knobs, ...patch } })}

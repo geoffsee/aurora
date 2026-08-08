@@ -70,7 +70,7 @@ export function PreviewPanel({
       preview.destroy();
       previewRef.current = null;
     };
-  }, []);
+  }, [onDiagnostics, onMetrics]);
 
   useEffect(() => {
     previewRef.current?.setKnobs(knobs);
@@ -111,7 +111,8 @@ function PreviewMetrics({ metrics }: { metrics: PackPreviewMetrics | null }) {
   const stallText = `${metrics.jankFrameCount} stalls`;
   const compileText =
     metrics.lastCompileMs === null ? 'n/a' : `${metrics.lastCompileMs.toFixed(1)} ms last compile`;
-  const sourceText = `preprocess ${metrics.lastPrepareMs === null ? 'n/a' : `${metrics.lastPrepareMs.toFixed(1)}ms`}` +
+  const sourceText =
+    `preprocess ${metrics.lastPrepareMs === null ? 'n/a' : `${metrics.lastPrepareMs.toFixed(1)}ms`}` +
     ` | pipeline ${metrics.lastPipelineMs === null ? 'n/a' : `${metrics.lastPipelineMs.toFixed(1)}ms`}`;
   const memoryText =
     metrics.memoryUsedMb === null
@@ -141,18 +142,34 @@ function PreviewMetrics({ metrics }: { metrics: PackPreviewMetrics | null }) {
         {health.label} · {health.value}
       </Text>
       {alerts.length > 0 ? (
-        <Text fontSize="11px" color="whiteAlpha.600" className="studio-status-error" letterSpacing="0.03em">
+        <Text
+          fontSize="11px"
+          color="whiteAlpha.600"
+          className="studio-status-error"
+          letterSpacing="0.03em"
+        >
           Alerts: {alerts.join(' · ')}
         </Text>
       ) : null}
-      <Text fontSize="11px" color="whiteAlpha.600" className={health.className} letterSpacing="0.03em">
+      <Text
+        fontSize="11px"
+        color="whiteAlpha.600"
+        className={health.className}
+        letterSpacing="0.03em"
+      >
         Stalls: {stallText} · Frames: {metrics.totalFrames} · Compile: {compileText}
       </Text>
-      <Text fontSize="11px" color="whiteAlpha.600" className={health.className} letterSpacing="0.03em">
+      <Text
+        fontSize="11px"
+        color="whiteAlpha.600"
+        className={health.className}
+        letterSpacing="0.03em"
+      >
         Compile steps: {sourceText}
       </Text>
       <Text fontSize="11px" color="whiteAlpha.500" letterSpacing="0.03em">
-        Canvas: {sizeText} · {memoryText} · Compiles: {metrics.compileCount} · Last errors: {metrics.lastCompileErrorCount}
+        Canvas: {sizeText} · {memoryText} · Compiles: {metrics.compileCount} · Last errors:{' '}
+        {metrics.lastCompileErrorCount}
       </Text>
     </VStack>
   );
@@ -181,7 +198,8 @@ function getHealth(metrics: PackPreviewMetrics): Health {
     AVG_FRAME_MS_WARN,
     false, // lower is better
   );
-  const stallPercent = metrics.totalFrames > 0 ? (metrics.jankFrameCount / metrics.totalFrames) * 100 : 0;
+  const stallPercent =
+    metrics.totalFrames > 0 ? (metrics.jankFrameCount / metrics.totalFrames) * 100 : 0;
   const stallSev = severityFromThresholds(
     stallPercent,
     STALL_PERCENT_ERROR,
@@ -193,7 +211,12 @@ function getHealth(metrics: PackPreviewMetrics): Health {
   if (metrics.lastCompileMs === null) {
     compileSev = 'ok';
   } else {
-    compileSev = severityFromThresholds(metrics.lastCompileMs, COMPILE_MS_ERROR, COMPILE_MS_WARN, false);
+    compileSev = severityFromThresholds(
+      metrics.lastCompileMs,
+      COMPILE_MS_ERROR,
+      COMPILE_MS_WARN,
+      false,
+    );
   }
 
   let memSev: ReturnType<typeof severityFromThresholds> = 'ok';
@@ -217,7 +240,12 @@ function getHealth(metrics: PackPreviewMetrics): Health {
       (memSev === 'error' ? 5 : memSev === 'warn' ? 3 : 0),
   );
 
-  const className = max === 'error' ? 'studio-status-error' : max === 'warn' ? 'studio-status-warn' : 'studio-status-ok';
+  const className =
+    max === 'error'
+      ? 'studio-status-error'
+      : max === 'warn'
+        ? 'studio-status-warn'
+        : 'studio-status-ok';
   return {
     label: `health ${Math.max(score, 0).toFixed(0)}/100`,
     value: `${Math.round(stallPercent)}% stalled`,
@@ -240,7 +268,8 @@ function getAlerts(metrics: PackPreviewMetrics): string[] {
       alerts.push(`high frame cost: ${metrics.avgFrameMs.toFixed(1)}ms`);
     }
 
-    const stallPercent = metrics.totalFrames > 0 ? (metrics.jankFrameCount / metrics.totalFrames) * 100 : 0;
+    const stallPercent =
+      metrics.totalFrames > 0 ? (metrics.jankFrameCount / metrics.totalFrames) * 100 : 0;
     if (stallPercent > STALL_PERCENT_ERROR) {
       alerts.push(`stalls: ${stallPercent.toFixed(0)}% (critical)`);
     } else if (stallPercent > STALL_PERCENT_WARN) {
