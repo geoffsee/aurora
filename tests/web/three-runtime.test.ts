@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { AdaptiveDprGovernor, ThreeResourceTracker } from '../../web/three-runtime.ts';
+import {
+  AdaptiveDprGovernor,
+  resolveThreeModuleImports,
+  ThreeResourceTracker,
+} from '../../web/three-runtime.ts';
 
 describe('AdaptiveDprGovernor', () => {
   test('reduces after a bad 120-frame window and never below one-half', () => {
@@ -34,5 +38,23 @@ describe('ThreeResourceTracker', () => {
     tracker.dispose();
     expect(tracker.size).toBe(0);
     expect(disposed).toBe(20);
+  });
+});
+
+describe('resolveThreeModuleImports', () => {
+  test('turns Three.js imports in authored Blob modules into concrete URLs', () => {
+    const source = [
+      `import * as THREE from 'three';`,
+      `import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";`,
+      `export { pass } from 'other-module';`,
+    ].join('\n');
+
+    expect(resolveThreeModuleImports(source, (specifier) => `/vendor/${specifier}`)).toBe(
+      [
+        `import * as THREE from '/vendor/three';`,
+        `import { GLTFLoader } from "/vendor/three/addons/loaders/GLTFLoader.js";`,
+        `export { pass } from 'other-module';`,
+      ].join('\n'),
+    );
   });
 });
