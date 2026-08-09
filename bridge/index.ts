@@ -246,6 +246,7 @@ const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const webRoot = `${root}/web`;
 const controlsDistRoot = `${root}/dist/controls`;
 const studioDistRoot = `${root}/dist/studio`;
+const vendorDistRoot = `${root}/dist/vendor`;
 const liveHost = Bun.env.LIVE_HOST ?? '127.0.0.1';
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
 const liveRecvPort = Number(Bun.env.LIVE_RECV_PORT ?? 11001);
@@ -348,6 +349,7 @@ const resolveStaticFile = (relativePath: string) => {
 
 const resolveControlsFile = (relativePath: string) =>
   Bun.file(`${controlsDistRoot}/${relativePath}`);
+const resolveVendorFile = (relativePath: string) => Bun.file(`${vendorDistRoot}/${relativePath}`);
 const resolveStudioFile = (relativePath: string) => Bun.file(`${studioDistRoot}/${relativePath}`);
 
 const udp = new osc.UDPPort({
@@ -1622,6 +1624,28 @@ const visualServer = Bun.serve({
     if (pathname === '/ws') {
       if (server.upgrade(request)) return undefined;
       return new Response('WebSocket upgrade failed', { status: 400 });
+    }
+
+    // The studio import map resolves `three` to "../vendor/three-v1/*" — a
+    // relative specifier so the Pages bundle (where dist/ is the site root, at
+    // a repo subpath) resolves it too. Here dist/ is not the root, so mirror
+    // dist/vendor at /vendor/. Three.js blob modules import through this map,
+    // so a 404 here surfaces as "Failed to fetch dynamically imported module".
+    if (request.method === 'GET' && pathname.startsWith('/vendor/')) {
+      const relativePath = pathname.slice('/vendor/'.length);
+      if (!relativePath || relativePath.includes('..')) {
+        return new Response('Not found', { status: 404 });
+      }
+      const file = resolveVendorFile(relativePath);
+      if (!(await file.exists())) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response(file, {
+        headers: {
+          'content-type': contentType(relativePath),
+          'cache-control': 'public, max-age=30',
+        },
+      });
     }
 
     if (request.method === 'GET' && pathname === '/studio') {
