@@ -1,7 +1,8 @@
 # aurora
 
-Browser/WebAssembly Bevy app for live Video DJ performance. The first show build favors dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.
+> This is an experimental project I use for learning. It isn't perfect.
 
+Browser/WebAssembly Bevy app for live Video DJ performance. The first show build favors dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.
 
 ## Requirements
 
