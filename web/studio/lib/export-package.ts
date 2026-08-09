@@ -12,10 +12,19 @@ import {
   isThreePackageBundle,
   parseAuroraPackageArchive,
 } from '../../../shared/aurora-package.ts';
-import { upsertAuthoredPackage } from '../../../shared/package-channel.ts';
-import { putThreePackageBundle } from '../../../shared/three-package-store.ts';
+import {
+  installAuthoredPackageBundle,
+  installWgslAuthoredPackage,
+} from '../../../shared/package-install.ts';
 import { compileThreeSource } from './compile-three.ts';
 import { knobsToLookDefaults, type StudioSketch } from './sketch-store.ts';
+
+// Relocated to shared/ so the Console's package import can reuse it; re-exported
+// here because Studio callers and tests import it from this module.
+export {
+  type BridgeImportResult,
+  importPackageToBridge,
+} from '../../../shared/package-import-client.ts';
 
 export type ExportLookResult =
   | { ok: true; bytes: Uint8Array; fileName: string; bundle: AuroraPackageBundle }
@@ -153,16 +162,9 @@ export function publishSketchToChannel(sketch: StudioSketch): PublishPackageResu
     if (parsed.bundle.manifest.target !== 'pack-fullscreen' || !parsed.bundle.wgsl) {
       return { ok: false, errors: [{ path: 'publish', message: 'expected a WGSL package' }] };
     }
-    const m = parsed.bundle.manifest;
-    const record = upsertAuthoredPackage({
-      slug: m.slug,
-      label: m.label,
-      character: m.character,
-      uiGroup: m.uiGroup,
-      wgsl: parsed.bundle.wgsl,
-      defaults: parsed.bundle.defaults,
-      updatedAt: new Date().toISOString(),
-    });
+    // parseAuroraPackageArchive already remapped to show form, so the installer
+    // has nothing left to convert.
+    const record = installWgslAuthoredPackage(parsed.bundle);
     return { ok: true, slug: record.slug, label: record.label };
   } catch (e) {
     return {
@@ -182,19 +184,7 @@ export async function publishSketchToChannelAsync(
     return { ok: false, errors: [{ path: 'publish', message: 'expected a Three.js bundle' }] };
   }
   try {
-    await putThreePackageBundle(built.bundle);
-    const manifest = built.bundle.manifest;
-    const record = upsertAuthoredPackage({
-      slug: manifest.slug,
-      label: manifest.label,
-      character: manifest.character,
-      uiGroup: manifest.uiGroup,
-      target: 'threejs',
-      renderer: manifest.renderer,
-      requiresNativeWebGPU: manifest.requiresNativeWebGPU,
-      assets: manifest.assets,
-      updatedAt: new Date().toISOString(),
-    });
+    const record = await installAuthoredPackageBundle(built.bundle);
     return { ok: true, slug: record.slug, label: record.label };
   } catch (error) {
     return {
@@ -207,97 +197,4 @@ export async function publishSketchToChannelAsync(
       ],
     };
   }
-}
-
-export type BridgeImportResult =
-  | {
-      ok: true;
-      slug: string;
-      label?: string;
-      overwritten?: boolean;
-      catalog?: { epoch: number; contentHash: string };
-    }
-  | { ok: false; errors: { path: string; message: string }[]; status: number };
-
-/**
- * POST archive bytes to the Aurora bridge package-import endpoint.
- * Requires bridge running with AURORA_DATA_DIR set.
- */
-export async function importPackageToBridge(
-  bytes: Uint8Array,
-  opts?: { bridgeOrigin?: string; signal?: AbortSignal },
-): Promise<BridgeImportResult> {
-  const origin = (opts?.bridgeOrigin ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
-  const url = `${origin}/api/packages/import`;
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  const requestBody = new Blob([copy], { type: 'application/zip' });
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/zip' },
-      body: requestBody,
-      signal: opts?.signal,
-    });
-  } catch (e) {
-    return {
-      ok: false,
-      status: 0,
-      errors: [
-        {
-          path: 'bridge',
-          message: e instanceof Error ? e.message : 'failed to reach bridge',
-        },
-      ],
-    };
-  }
-
-  let payload: unknown;
-  try {
-    payload = await res.json();
-  } catch {
-    return {
-      ok: false,
-      status: res.status,
-      errors: [{ path: 'bridge', message: `non-JSON response (${res.status})` }],
-    };
-  }
-
-  if (!res.ok || !payload || typeof payload !== 'object') {
-    const errors =
-      payload &&
-      typeof payload === 'object' &&
-      Array.isArray((payload as { errors?: unknown }).errors)
-        ? (payload as { errors: { path: string; message: string }[] }).errors
-        : [
-            {
-              path: 'bridge',
-              message: `import failed (${res.status})`,
-            },
-          ];
-    return { ok: false, status: res.status, errors };
-  }
-
-  const o = payload as Record<string, unknown>;
-  if (o.ok !== true) {
-    const errors = Array.isArray(o.errors)
-      ? (o.errors as { path: string; message: string }[])
-      : [{ path: 'bridge', message: 'import rejected' }];
-    return { ok: false, status: res.status, errors };
-  }
-
-  return {
-    ok: true,
-    slug: typeof o.slug === 'string' ? o.slug : 'unknown',
-    label: typeof o.label === 'string' ? o.label : undefined,
-    overwritten: Boolean(o.overwritten),
-    catalog:
-      o.catalog && typeof o.catalog === 'object'
-        ? {
-            epoch: Number((o.catalog as { epoch?: number }).epoch) || 0,
-            contentHash: String((o.catalog as { contentHash?: string }).contentHash ?? ''),
-          }
-        : undefined,
-  };
 }

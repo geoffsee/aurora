@@ -9,7 +9,7 @@ import {
   Portal,
   Text,
 } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GPU_SHADER_IMPORTED_UI_INDEX } from '../../../shared/gpu-shader-routing.ts';
 import { normalizeRemoteModelAssetPath } from '../../../shared/model-asset-path.ts';
 import {
@@ -20,9 +20,13 @@ import {
 import { useControls } from '../context/ControlsContext.tsx';
 import { VISUAL_MODES } from '../lib/constants.ts';
 import { deckGpuShaderModePatch } from '../lib/deck-mode.ts';
+import {
+  AURORA_PACKAGE_FILE_EXTENSION,
+  importAuroraPackageArchive,
+} from '../lib/import-package.ts';
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, updateState } = useControls();
+  const { state, updateState, refreshModeCatalog } = useControls();
 
   // --- Shadertoy API key ---
   const [keyStatus, setKeyStatus] = useState('checking…');
@@ -32,6 +36,11 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   // --- Shadertoy import ---
   const [importStatus, setImportStatus] = useState('idle');
   const [importUrl, setImportUrl] = useState('');
+
+  // --- Studio package import ---
+  const packageInputRef = useRef<HTMLInputElement | null>(null);
+  const [packageStatus, setPackageStatus] = useState('idle');
+  const [packageBusy, setPackageBusy] = useState(false);
 
   // --- Figure / Models ---
   const [assetPath, setAssetPath] = useState(state.figureAssetPath);
@@ -132,6 +141,23 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
       });
     } catch (err) {
       setImportStatus(`net err: ${(err as Error)?.message || String(err)}`);
+    }
+  };
+
+  const importPackageFile = async (file: File) => {
+    setPackageBusy(true);
+    setPackageStatus(`reading ${file.name}…`);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const result = await importAuroraPackageArchive(bytes);
+      setPackageStatus(result.message);
+      // The bridge path lands on disk (new catalog epoch); the local path posts
+      // on a BroadcastChannel that does not echo to this tab. Refresh covers both.
+      if (result.ok) await refreshModeCatalog();
+    } catch (err) {
+      setPackageStatus(`read failed: ${(err as Error)?.message || String(err)}`);
+    } finally {
+      setPackageBusy(false);
     }
   };
 
@@ -243,6 +269,50 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
                     </Button>
                   </Field.Root>
                 </Grid>
+              </Box>
+
+              {/* ---- Studio packages ---- */}
+              <Box>
+                <Text fontSize="sm" fontWeight="semibold" letterSpacing="0.04em" mb={1}>
+                  Studio packages
+                </Text>
+                <Text fontSize="xs" color="whiteAlpha.600" mb={3}>
+                  Load a <code>{AURORA_PACKAGE_FILE_EXTENSION}</code> exported from Preset Studio.
+                  Use this when Studio runs on a different origin than the Console, where “Publish
+                  to Console” cannot reach it.
+                </Text>
+                <Field.Root>
+                  <Field.Label display="flex" justifyContent="space-between">
+                    <span>Import package</span>
+                    <Text fontSize="sm" color="whiteAlpha.700">
+                      {packageStatus}
+                    </Text>
+                  </Field.Label>
+                  <input
+                    ref={packageInputRef}
+                    type="file"
+                    accept={AURORA_PACKAGE_FILE_EXTENSION}
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      // Reset so re-picking the same file fires change again.
+                      e.target.value = '';
+                      if (file) void importPackageFile(file);
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    loading={packageBusy}
+                    onClick={() => packageInputRef.current?.click()}
+                  >
+                    Choose {AURORA_PACKAGE_FILE_EXTENSION}…
+                  </Button>
+                  <Text fontSize="xs" color="whiteAlpha.500" mt={1}>
+                    Three.js packages run trusted same-origin JavaScript — treat them like plugins.
+                    A bridged stack stores the package on the bridge (needs <code>--data-dir</code>
+                    ); static hosting keeps it in this browser.
+                  </Text>
+                </Field.Root>
               </Box>
 
               {/* ---- Figure / Models ---- */}

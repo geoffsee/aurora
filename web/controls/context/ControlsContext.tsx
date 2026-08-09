@@ -158,6 +158,8 @@ type ControlsContextValue = {
   selectDeckPreset: (side: DeckSide, slug: string) => void;
   /** Explicit Reload active — re-fetch compiled for current slug/epoch. */
   reloadActiveDeck: (side: DeckSide) => void;
+  /** Re-pull the mode catalog (e.g. after importing an `.aurora-package`). */
+  refreshModeCatalog: () => Promise<void>;
   publish: (options?: { record?: boolean }) => void;
   queueCue: (name: string) => void;
   recallPreset: (slot: number) => void;
@@ -1294,6 +1296,21 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
     };
   }, [addBanner, applyMenuSnapshot]);
 
+  /**
+   * Pull the catalog again after a package import. A failed refetch keeps the
+   * catalog we already have and just re-merges the authored store, so importing
+   * on a stack whose bridge is unreachable never empties the launchpad.
+   */
+  const refreshModeCatalog = useCallback(async () => {
+    const result = await fetchModesCatalog();
+    if (result.ok) {
+      applyMenuSnapshot(result.catalog);
+      return;
+    }
+    const base = baseCatalogRef.current;
+    if (base) applyMenuSnapshot(base);
+  }, [applyMenuSnapshot]);
+
   // Studio Publish → BroadcastChannel / localStorage: re-merge authored packages into menu.
   useEffect(() => {
     return subscribeAuthoredPackages(() => {
@@ -1397,6 +1414,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       updateState,
       selectDeckPreset,
       reloadActiveDeck,
+      refreshModeCatalog,
       publish,
       queueCue,
       recallPreset,
@@ -1443,6 +1461,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       updateState,
       selectDeckPreset,
       reloadActiveDeck,
+      refreshModeCatalog,
       publish,
       queueCue,
       recallPreset,

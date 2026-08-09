@@ -24,9 +24,7 @@ describe('Three.js vendor staging', () => {
     mkdirSync(join(root, 'nested'));
     writeFileSync(join(root, 'entry.js'), `export { value } from './nested/dependency.js';`);
 
-    expect(findMissingRelativeModuleImports(root)).toEqual([
-      'entry.js -> ./nested/dependency.js',
-    ]);
+    expect(findMissingRelativeModuleImports(root)).toEqual(['entry.js -> ./nested/dependency.js']);
 
     writeFileSync(join(root, 'nested', 'dependency.js'), `export const value = 1;`);
     expect(findMissingRelativeModuleImports(root)).toEqual([]);
