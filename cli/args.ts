@@ -100,7 +100,11 @@ export function usage(): string {
   aurora -d              docker: build and run detached (--daemon)
   aurora --native / -n   native: vendored Caddy + Bun bridge (no Docker)
   aurora -n -d           native detached (pids in .aurora/native.pids)
-  aurora --data-dir DIR  overlay preset catalog (also: AURORA_DATA_DIR)
+  aurora --data-dir DIR  bind a host overlay dir (also: AURORA_DATA_DIR)
   aurora down            stop docker container and/or native processes
+
+Docker runs without --data-dir get the named volume "aurora-data" mounted at
+/override, so package imports have somewhere to land. Override the name with
+AURORA_DATA_VOLUME; reset it with \`docker volume rm aurora-data\`.
 `;
 }

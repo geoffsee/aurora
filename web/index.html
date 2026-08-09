@@ -210,6 +210,9 @@
           },
           blackout: controlState.blackout,
           freeze: controlState.freeze,
+          // Three decks are picked from the CPU launchpad, so they follow that
+          // layer's on/off switch like every other mode in it.
+          enabled: isA ? controlState.cpuDeckAEnabled : controlState.cpuDeckBEnabled,
           flashVersion: controlState.flashVersion,
           resetVersion: controlState.resetVersion,
           cueVersion: controlState.cueVersion,

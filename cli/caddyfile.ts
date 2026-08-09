@@ -20,6 +20,30 @@ export function normalizeTlsHosts(hosts: readonly string[]): string[] {
   return out;
 }
 
+/**
+ * Visual-server paths that must also answer on the *controls* origin.
+ *
+ * The Console is served from :8444 but its mode catalog, compiled wires, and
+ * package import all live on the visual server (:13000). Reaching across to
+ * :8443 for them fails in the browser — the bridge sends no CORS headers, so a
+ * cross-origin GET is blocked and the catalog silently comes up empty
+ * ("Mode catalog unavailable: Failed to fetch"). Proxying here keeps every
+ * Console request same-origin.
+ *
+ * Safe to route wholesale: the controls server owns no `/api/modes/*` or
+ * `/api/packages/*` route of its own (its API surface is `/api/shadertoy/*`).
+ *
+ * Kept in sync with `deploy/entrypoint.sh`, which renders the Docker Caddyfile
+ * at container start — see tests/cli/caddyfile-routes.test.ts.
+ */
+export const CONTROLS_SITE_PROXIED_PATHS = ['/api/modes/*', '/api/packages/import'] as const;
+
+function controlsSiteApiRoutes(upstream: number): string {
+  return CONTROLS_SITE_PROXIED_PATHS.map(
+    (path) => `\thandle ${path} {\n\t\treverse_proxy 127.0.0.1:${upstream}\n\t}`,
+  ).join('\n');
+}
+
 /** Build a Caddyfile body for projector (:8443) + controls (:8444). */
 export function renderCaddyfile(
   hosts: readonly string[],
@@ -51,7 +75,10 @@ ${proj} {
 
 ${ctrl} {
 	tls internal
-	reverse_proxy 127.0.0.1:${upCtrl}
+${controlsSiteApiRoutes(upProj)}
+	handle {
+		reverse_proxy 127.0.0.1:${upCtrl}
+	}
 }
 `;
 }

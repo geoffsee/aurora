@@ -14,20 +14,29 @@ import {
 } from '../../../shared/package-channel.ts';
 import { isStaticHosting, staticModesApiBase } from '../../../shared/static-hosting.ts';
 import { type MenuCatalogSnapshot, parsePublicCatalog } from './mode-catalog-menu.ts';
-import { CONTROLS_PORT, PROJECTOR_PORT } from './projector-url.ts';
+import { CONTROLS_PORT } from './projector-url.ts';
 
 type ModesLoc = Pick<Location, 'protocol' | 'hostname' | 'port' | 'pathname' | 'search'>;
 
-/** HTTP origin of the projector/bridge that serves `/api/modes/*`. */
+/**
+ * HTTP origin that serves `/api/modes/*` for this page.
+ *
+ * On the Caddy controls port this is the page's *own* origin: Caddy proxies
+ * `/api/modes/*` to the visual server (CONTROLS_SITE_PROXIED_PATHS in
+ * cli/caddyfile.ts). Going cross-origin to :8443 instead would be blocked —
+ * the bridge sends no CORS headers, so the fetch fails and the catalog never
+ * arrives.
+ */
 export function bridgeHttpOrigin(
   loc: Pick<Location, 'protocol' | 'hostname' | 'port'> = location,
 ): string {
   const host = loc.hostname || 'localhost';
   const protocol = loc.protocol || 'http:';
   if (loc.port === String(CONTROLS_PORT)) {
-    return `${protocol}//${host}:${PROJECTOR_PORT}`;
+    return `${protocol}//${host}:${CONTROLS_PORT}`;
   }
-  // Native bridge: controls on :3001, visual server on :3000.
+  // Bare bridge (no proxy): controls on :3001, visual server on :3000. Still
+  // cross-origin, so the catalog needs a proxy in front to work here.
   if (loc.port === '3001') {
     return `${protocol}//${host}:3000`;
   }

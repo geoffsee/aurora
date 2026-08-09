@@ -1,0 +1,6 @@
+# Bun's HTML dev server (scripts/studio-serve.ts) has no --external flag, so the
+# Three.js dedupe that build:web / build:studio get from `--external three` is
+# applied here as a plugin instead. Two Three.js instances on one page render
+# black without erroring — see scripts/bun-three-external.ts.
+[serve.static]
+plugins = ["./scripts/bun-three-external.ts"]

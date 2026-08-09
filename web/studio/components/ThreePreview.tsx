@@ -47,6 +47,9 @@ export function ThreePreview({
           },
           blackout: false,
           freeze: false,
+          // The studio preview has no deck switch — the sketch under edit is
+          // always the thing you want to see.
+          enabled: true,
           flashVersion: 0,
           resetVersion: 0,
           cueVersion: 0,

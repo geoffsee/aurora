@@ -235,6 +235,13 @@ AURORA_DATA_DIR=./my-modes aurora
 aurora --data-dir ./my-modes
 ```
 
+With no `--data-dir`, the CLI mounts the named volume `aurora-data` at
+`/override` instead. Nothing lands in the working tree, the overlay survives
+`aurora down`, and the bridge has somewhere to write — package imports from the
+Console's **Settings → Studio packages** need a writable `AURORA_DATA_DIR` and
+answer 503 without one. Rename it with `AURORA_DATA_VOLUME`; wipe it with
+`docker volume rm aurora-data`.
+
 Manual sketch:
 
 ```bash
@@ -243,6 +250,9 @@ docker run --rm \
   -e AURORA_DATA_DIR=/override \
   ... ghcr.io/geoffsee/aurora:latest
 ```
+
+`:ro` is fine for a read-only catalog overlay, but it also blocks package
+import. Drop it (or use the named volume) if operators import from the Console.
 
 ---
 

@@ -56,6 +56,12 @@ $proj {
 
 $ctrl {
 	tls internal
+	# Visual-server APIs the Console needs same-origin (the bridge sends no CORS
+	# headers, so reaching across to :8443 is blocked by the browser).
+	# Keep in sync with CONTROLS_SITE_PROXIED_PATHS in cli/caddyfile.ts.
+	handle /api/modes/* {
+		reverse_proxy 127.0.0.1:13000
+	}
 	handle /api/packages/import {
 		reverse_proxy 127.0.0.1:13000
 	}

@@ -13,8 +13,8 @@
  */
 
 import { networkInterfaces } from 'node:os';
-import { resolve } from 'node:path';
 import { parseArgs, usage } from './args';
+import { describeDataMount, dockerMountArgs, resolveDockerDataMount } from './data-mount';
 import { type DockerArch, dockerArchFromHost, dockerPlatform } from './docker-platform';
 import { EMBEDDED_DOCKER_CONTEXT_PATH } from './embedded-context';
 import { resolveAppRoot, runNativeStack, stopNativeStack } from './native-stack';
@@ -120,9 +120,6 @@ async function buildImage(): Promise<number> {
   return buildImageFromWorktree();
 }
 
-/** In-container mount path for operator overlay (see data/README.md). */
-const CONTAINER_DATA_DIR = '/override';
-
 function startContainer(dataDir?: string): number {
   stopContainer();
   console.log(`[aurora] starting ${CONTAINER}…`);
@@ -149,19 +146,13 @@ function startContainer(dataDir?: string): number {
     }
   }
 
-  // Overlay catalog: CLI --data-dir wins over AURORA_DATA_DIR env.
-  const hostDataDir =
-    dataDir !== undefined && dataDir.trim() !== ''
-      ? resolve(dataDir.trim())
-      : process.env.AURORA_DATA_DIR?.trim()
-        ? resolve(process.env.AURORA_DATA_DIR.trim())
-        : null;
-  const volumeArgs: string[] = [];
-  if (hostDataDir) {
-    volumeArgs.push('-v', `${hostDataDir}:${CONTAINER_DATA_DIR}`);
-    envArgs.push('-e', `AURORA_DATA_DIR=${CONTAINER_DATA_DIR}`);
-    console.log(`[aurora] data overlay ${hostDataDir} → ${CONTAINER_DATA_DIR}`);
-  }
+  // Always mount something writable: with AURORA_DATA_DIR unset the bridge
+  // refuses package imports with a 503.
+  const mount = resolveDockerDataMount({ dataDir });
+  if (mount.warning) console.warn(`[aurora] ${mount.warning}`);
+  const volumeArgs = dockerMountArgs(mount);
+  envArgs.push('-e', `AURORA_DATA_DIR=${mount.containerPath}`);
+  console.log(`[aurora] ${describeDataMount(mount)}`);
 
   return run([
     'docker',

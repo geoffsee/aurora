@@ -1,3 +1,22 @@
+/**
+ * Three.js deck host: compiles an authored sketch to a Blob module and drives it
+ * from projector frames.
+ *
+ * These `three` imports MUST stay external in every bundle that includes this
+ * module (`--external three --external three/*` in build:web / build:studio).
+ * Sketches resolve `three` through the page's import map to
+ * `dist/vendor/three-v1/*`; if a bundler also inlines its own copy, the page ends
+ * up with two. They render side by side without erroring, but every
+ * constructor-identity check across the boundary fails silently — most visibly
+ * the WebGPU renderer's light registry, which is keyed by constructor:
+ *
+ *   getLightNodeClass( light.constructor ) → lightNodes.get( light )
+ *
+ * A sketch's HemisphereLight from the vendor copy misses the bundled copy's
+ * registry, so `setupNodeLights` warns "Light node not found" and the scene
+ * renders unlit — a black deck with no error. See tests/web/three-dedupe.test.ts.
+ */
+
 import {
   type Camera,
   LoadingManager,
@@ -30,6 +49,12 @@ export type AuroraThreeFrame = {
   palette: { hue: number; saturation: number; brightness: number; rgb: [number, number, number] };
   blackout: boolean;
   freeze: boolean;
+  /**
+   * Deck mode-layer visibility (`cpuDeck{A,B}Enabled`). The Three deck lives in
+   * that layer — it is selected from the same launchpad — so switching the deck
+   * off has to hide it here too. Only the WASM projector reads the flag directly.
+   */
+  enabled: boolean;
   flashVersion: number;
   resetVersion: number;
   cueVersion: number;
@@ -177,6 +202,17 @@ export function resolveThreeModuleImports(
       return `${prefix}${quote}${resolve(specifier)}${quote}`;
     },
   );
+}
+
+/**
+ * Canvas opacity for a deck frame. A deck switched off at the console is hidden
+ * outright; otherwise the crossfade position decides.
+ */
+export function threeDeckOpacity(
+  frame: Pick<AuroraThreeFrame, 'enabled' | 'blackout' | 'mix'>,
+): number {
+  if (!frame.enabled || frame.blackout) return 0;
+  return Math.max(0, Math.min(1, frame.mix));
 }
 
 export class AuroraThreeDeckHost {
@@ -350,8 +386,10 @@ export class AuroraThreeDeckHost {
     const active = this.active;
     if (!active) return;
     const base = this.frameProvider();
-    active.canvas.style.opacity = base.blackout ? '0' : String(Math.max(0, Math.min(1, base.mix)));
-    if (base.freeze) return;
+    active.canvas.style.opacity = String(threeDeckOpacity(base));
+    // A disabled deck stops rendering too, not just hiding — no point paying for
+    // frames nobody sees. Re-enabling picks up on the next tick.
+    if (!base.enabled || base.freeze) return;
     const width = Math.max(1, this.stage.clientWidth);
     const height = Math.max(1, this.stage.clientHeight);
     const delta = Math.min(100, now - active.lastAt);

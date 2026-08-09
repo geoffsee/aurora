@@ -53,6 +53,24 @@ describe('modes-api-client static vs bridge URLs', () => {
     );
   });
 
+  test('Caddy controls origin keeps /api/modes same-origin', () => {
+    // Caddy proxies /api/modes/* on :8444 to the visual server. Pointing at
+    // :8443 instead is a cross-origin fetch the bridge sends no CORS headers
+    // for, so it fails and the catalog never loads.
+    const caddyControls = {
+      protocol: 'https:',
+      hostname: 'localhost',
+      port: '8444',
+      pathname: '/controls/',
+      search: '',
+    } as const;
+    expect(bridgeHttpOrigin(caddyControls)).toBe('https://localhost:8444');
+    expect(modesCatalogUrl(caddyControls)).toBe('https://localhost:8444/api/modes/catalog');
+    expect(modesCompiledUrl({ deck: 'deck-a', slug: 'beams', epoch: 2 }, caddyControls)).toBe(
+      'https://localhost:8444/api/modes/compiled?deck=deck-a&slug=beams&epoch=2',
+    );
+  });
+
   test('local bridge keeps live query-string API on projector origin', () => {
     expect(bridgeHttpOrigin(localBridge)).toBe('http://127.0.0.1:3000');
     expect(modesCatalogUrl(localBridge)).toBe('http://127.0.0.1:3000/api/modes/catalog');

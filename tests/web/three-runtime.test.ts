@@ -3,7 +3,28 @@ import {
   AdaptiveDprGovernor,
   resolveThreeModuleImports,
   ThreeResourceTracker,
+  threeDeckOpacity,
 } from '../../web/three-runtime.ts';
+
+describe('threeDeckOpacity', () => {
+  test('a deck switched off at the console is hidden', () => {
+    // Regression: Three decks are chosen from the CPU launchpad but the host
+    // only honoured blackout/mix, so "Off" left the sketch rendering on stage.
+    expect(threeDeckOpacity({ enabled: false, blackout: false, mix: 1 })).toBe(0);
+    expect(threeDeckOpacity({ enabled: false, blackout: false, mix: 0.5 })).toBe(0);
+  });
+
+  test('an enabled deck follows the crossfade, clamped', () => {
+    expect(threeDeckOpacity({ enabled: true, blackout: false, mix: 1 })).toBe(1);
+    expect(threeDeckOpacity({ enabled: true, blackout: false, mix: 0.25 })).toBe(0.25);
+    expect(threeDeckOpacity({ enabled: true, blackout: false, mix: 1.8 })).toBe(1);
+    expect(threeDeckOpacity({ enabled: true, blackout: false, mix: -0.4 })).toBe(0);
+  });
+
+  test('blackout still wins over an enabled deck at full mix', () => {
+    expect(threeDeckOpacity({ enabled: true, blackout: true, mix: 1 })).toBe(0);
+  });
+});
 
 describe('AdaptiveDprGovernor', () => {
   test('reduces after a bad 120-frame window and never below one-half', () => {
