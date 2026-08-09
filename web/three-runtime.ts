@@ -215,6 +215,18 @@ export function threeDeckOpacity(
   return Math.max(0, Math.min(1, frame.mix));
 }
 
+/**
+ * Apply deck visibility before a canvas is attached to the stage. Waiting for
+ * the first animation frame leaves a newly compiled sketch visible at the
+ * browser's default opacity, even when its CPU deck starts switched off.
+ */
+export function applyThreeDeckCanvasVisibility(
+  canvas: Pick<HTMLCanvasElement, 'style'>,
+  frame: Pick<AuroraThreeFrame, 'enabled' | 'blackout' | 'mix'>,
+): void {
+  canvas.style.opacity = String(threeDeckOpacity(frame));
+}
+
 export class AuroraThreeDeckHost {
   private active: Active | null = null;
   private generation = 0;
@@ -329,6 +341,7 @@ export class AuroraThreeDeckHost {
         throw new Error('factory must return render(), or scene and camera');
       const now = performance.now();
       const frame = this.makeFrame(now, 0, width, height, dpr);
+      applyThreeDeckCanvasVisibility(canvas, frame);
       instance.update?.(frame);
       if (instance.render) await instance.render(frame);
       else renderer.render(instance.scene as Scene, instance.camera as Camera);
@@ -386,7 +399,7 @@ export class AuroraThreeDeckHost {
     const active = this.active;
     if (!active) return;
     const base = this.frameProvider();
-    active.canvas.style.opacity = String(threeDeckOpacity(base));
+    applyThreeDeckCanvasVisibility(active.canvas, base);
     // A disabled deck stops rendering too, not just hiding — no point paying for
     // frames nobody sees. Re-enabling picks up on the next tick.
     if (!base.enabled || base.freeze) return;

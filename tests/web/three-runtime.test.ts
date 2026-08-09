@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   AdaptiveDprGovernor,
+  applyThreeDeckCanvasVisibility,
   resolveThreeModuleImports,
   ThreeResourceTracker,
   threeDeckOpacity,
@@ -23,6 +24,19 @@ describe('threeDeckOpacity', () => {
 
   test('blackout still wins over an enabled deck at full mix', () => {
     expect(threeDeckOpacity({ enabled: true, blackout: true, mix: 1 })).toBe(0);
+  });
+
+  test('applies the initial off state before a new canvas is shown', () => {
+    const canvas = document.createElement('canvas');
+    expect(canvas.style.opacity).toBe('');
+
+    applyThreeDeckCanvasVisibility(canvas, {
+      enabled: false,
+      blackout: false,
+      mix: 1,
+    });
+
+    expect(canvas.style.opacity).toBe('0');
   });
 });
 
