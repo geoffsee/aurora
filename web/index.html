@@ -30,7 +30,9 @@
         createProjectorTransport,
         isControlBridgeConnected,
         isOscBridgeConnected,
+        isStaticHosting,
         mountGeoffseePagesNav,
+        mountRelayHost,
         projectorCompiledModeUrl,
         resolveAuthoredCompiledWireAsync,
         subscribeAuthoredPackages,
@@ -734,6 +736,13 @@
             applyOscFrame(frame);
           },
         });
+
+        // Static builds have no bridge, so a phone reaches this projector
+        // through the relay Worker instead. Attached alongside the transport
+        // above: same-device controls and a paired phone both stay live.
+        if (isStaticHosting()) {
+          mountRelayHost({ onMessage: applyOscFrame });
+        }
       }
 
       window.addEventListener("unhandledrejection", (event) => {

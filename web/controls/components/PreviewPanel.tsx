@@ -1,5 +1,7 @@
 import { Box, Button, Flex, Link, Text } from '@chakra-ui/react';
 import { useCallback, useMemo, useState } from 'react';
+import { withAccessToken } from '../../../shared/access-token.ts';
+import { instanceLocationFor, loadInstanceTarget } from '../../../shared/instance-target.ts';
 import { isGeoffseeGithubPages } from '../../../shared/static-hosting.ts';
 import { loadPreviewEnabled, savePreviewEnabled } from '../lib/preview-preference.ts';
 import { projectorPreviewUrl, projectorWindowUrl } from '../lib/projector-url.ts';
@@ -66,8 +68,18 @@ function ProjectorIcon() {
 }
 
 export function PreviewPanel() {
-  const src = useMemo(() => projectorPreviewUrl(), []);
-  const projectorUrl = useMemo(() => projectorWindowUrl(), []);
+  // The preview mirrors whichever instance this console drives, so it follows
+  // the instance target and carries the token the projector needs for /ws.
+  const target = useMemo(() => loadInstanceTarget(), []);
+  const targetLoc = useMemo(() => instanceLocationFor(target), [target]);
+  const src = useMemo(
+    () => withAccessToken(projectorPreviewUrl(targetLoc), target.token),
+    [target, targetLoc],
+  );
+  const projectorUrl = useMemo(
+    () => withAccessToken(projectorWindowUrl(targetLoc), target.token),
+    [target, targetLoc],
+  );
   const onGeoffsee = isGeoffseeGithubPages();
   const [previewEnabled, setPreviewEnabled] = useState(() => loadPreviewEnabled());
 

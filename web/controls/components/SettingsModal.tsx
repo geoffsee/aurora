@@ -11,6 +11,13 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import { GPU_SHADER_IMPORTED_UI_INDEX } from '../../../shared/gpu-shader-routing.ts';
+import {
+  describeInstanceTarget,
+  loadInstanceTarget,
+  parseInstanceOrigin,
+  parseInstanceToken,
+  saveInstanceTarget,
+} from '../../../shared/instance-target.ts';
 import { normalizeRemoteModelAssetPath } from '../../../shared/model-asset-path.ts';
 import {
   FIGURE_VISUAL_MODE,
@@ -41,6 +48,14 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   const packageInputRef = useRef<HTMLInputElement | null>(null);
   const [packageStatus, setPackageStatus] = useState('idle');
   const [packageBusy, setPackageBusy] = useState(false);
+
+  // --- Instance target ---
+  // Every transport and fetch resolves the target once at mount, so switching
+  // instances reloads rather than rewiring a live session mid-show.
+  const [instance] = useState(() => loadInstanceTarget());
+  const [instanceInput, setInstanceInput] = useState(() => instance.origin ?? '');
+  const [tokenInput, setTokenInput] = useState(() => instance.token ?? '');
+  const [instanceError, setInstanceError] = useState<string | null>(null);
 
   // --- Figure / Models ---
   const [assetPath, setAssetPath] = useState(state.figureAssetPath);
@@ -103,6 +118,23 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     } catch (err) {
       setKeyStatus(`net err: ${(err as Error)?.message || String(err)}`);
     }
+  };
+
+  const connectInstance = () => {
+    const parsed = parseInstanceOrigin(instanceInput);
+    if (!parsed.ok) {
+      setInstanceError(parsed.error);
+      return;
+    }
+    setInstanceError(null);
+    saveInstanceTarget({ origin: parsed.origin, token: parseInstanceToken(tokenInput) });
+    location.reload();
+  };
+
+  const useLocalInstance = () => {
+    setInstanceError(null);
+    saveInstanceTarget({ origin: null, token: null });
+    location.reload();
   };
 
   const importShader = async () => {
@@ -211,6 +243,60 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               </Dialog.CloseTrigger>
             </Dialog.Header>
             <Dialog.Body display="flex" flexDirection="column" gap={5} pb={6}>
+              {/* ---- Instance ---- */}
+              <Box>
+                <Text fontSize="sm" fontWeight="semibold" letterSpacing="0.04em" mb={1}>
+                  Instance
+                </Text>
+                <Text fontSize="xs" color="whiteAlpha.600" mb={3}>
+                  Drive an aurora bridge other than the one that served this page — a phone on the
+                  venue wifi pointed at the show machine. Currently driving{' '}
+                  <code>{describeInstanceTarget(instance)}</code>.
+                </Text>
+                <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)' }} gap={3}>
+                  <Field.Root invalid={instanceError !== null}>
+                    <Field.Label>Bridge address</Field.Label>
+                    <Input
+                      inputMode="url"
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="192.168.1.10:8444"
+                      value={instanceInput}
+                      onChange={(e) => setInstanceInput(e.target.value)}
+                    />
+                    <Text fontSize="xs" color="whiteAlpha.500" mt={1}>
+                      Blank uses this page's own origin. Bare hosts get <code>https://</code>; the
+                      phone must trust the bridge's certificate first — open the address in a tab
+                      once and accept the warning.
+                    </Text>
+                    {instanceError ? (
+                      <Text fontSize="xs" color="red.300" mt={1}>
+                        {instanceError}
+                      </Text>
+                    ) : null}
+                  </Field.Root>
+                  <Field.Root>
+                    <Field.Label>Access token</Field.Label>
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="Only if the instance sets AURORA_ACCESS_TOKEN"
+                      value={tokenInput}
+                      onChange={(e) => setTokenInput(e.target.value)}
+                    />
+                    <Box display="flex" gap={2} mt={2}>
+                      <Button size="sm" onClick={connectInstance}>
+                        Connect &amp; reload
+                      </Button>
+                      <Button size="sm" variant="surface" onClick={useLocalInstance}>
+                        Use this origin
+                      </Button>
+                    </Box>
+                  </Field.Root>
+                </Grid>
+              </Box>
+
               {/* ---- Shadertoy ---- */}
               <Box>
                 <Text fontSize="sm" fontWeight="semibold" letterSpacing="0.04em" mb={3}>

@@ -45,6 +45,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 	--mount=type=cache,target=/root/.bun/install/cache \
 	bun run build:web \
 	&& bun run build:controls \
+	&& bun run build:mobile \
 	&& bun run build:studio \
 	&& bun run scripts/stage-web-models.ts
 

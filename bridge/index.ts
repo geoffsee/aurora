@@ -1,6 +1,11 @@
 import { createReadStream, watch } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { ServerWebSocket } from 'bun';
+import {
+  ACCESS_TOKEN_HEADER,
+  isAuthorizedRequest,
+  normalizeAccessToken,
+} from '../shared/access-token.ts';
 import { migrateControlState } from '../shared/control-state-schema.ts';
 import {
   DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
@@ -97,6 +102,7 @@ import {
   type MorphCurve,
   morphPresetStates,
 } from './preset-morph.ts';
+import { SoundCloudClient, soundCloudConfigFromEnv } from './soundcloud-client.ts';
 import { makeStateLog } from './state-log.ts';
 
 type TrackMapping = {
@@ -242,9 +248,14 @@ const controlsPort = Number(Bun.env.CONTROLS_PORT ?? 3001);
 // machine, projector) can reach them. Override with HOST=127.0.0.1 to lock
 // back to loopback-only.
 const host = Bun.env.HOST ?? '0.0.0.0';
+// Unset → the instance is open to anything that can route to it (unchanged
+// behaviour). Set → `/ws` and package import require the token. See
+// shared/access-token.ts for why the gate stops there.
+const accessToken = normalizeAccessToken(Bun.env.AURORA_ACCESS_TOKEN);
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const webRoot = `${root}/web`;
 const controlsDistRoot = `${root}/dist/controls`;
+const mobileDistRoot = `${root}/dist/mobile`;
 const studioDistRoot = `${root}/dist/studio`;
 const vendorDistRoot = `${root}/dist/vendor`;
 const liveHost = Bun.env.LIVE_HOST ?? '127.0.0.1';
@@ -255,6 +266,13 @@ const vstControlRecvPort = Number(Bun.env.VST_CONTROL_RECV_PORT ?? 12000);
 const midiClockDevice = Bun.env.MIDI_CLOCK_DEVICE ?? '';
 const abletonLinkEnabled = Bun.env.ABLETON_LINK_ENABLED === '1';
 const hotReload = Bun.env.HOT_RELOAD === '1';
+const soundCloudConfig = soundCloudConfigFromEnv(Bun.env);
+const soundCloudSessionFile = Bun.env.AURORA_DATA_DIR?.trim()
+  ? `${Bun.env.AURORA_DATA_DIR.trim().replace(/\/$/, '')}/soundcloud-session.json`
+  : null;
+const soundCloud = new SoundCloudClient(soundCloudConfig, {
+  sessionFile: soundCloudSessionFile,
+});
 
 // Deck preset catalog (bundled data/ + optional AURORA_DATA_DIR overlay).
 // ModeApi retains last N epochs for compile cache + epoch-scoped asset URLs.
@@ -349,6 +367,7 @@ const resolveStaticFile = (relativePath: string) => {
 
 const resolveControlsFile = (relativePath: string) =>
   Bun.file(`${controlsDistRoot}/${relativePath}`);
+const resolveMobileFile = (relativePath: string) => Bun.file(`${mobileDistRoot}/${relativePath}`);
 const resolveVendorFile = (relativePath: string) => Bun.file(`${vendorDistRoot}/${relativePath}`);
 const resolveStudioFile = (relativePath: string) => Bun.file(`${studioDistRoot}/${relativePath}`);
 
@@ -1614,6 +1633,103 @@ if (
   throw new Error('VST_CONTROL_NAMES out of sync with applyVstControlMessage switch');
 }
 
+/**
+ * CORS for `/api/*` so a console served by one instance can drive another
+ * (shared/instance-target.ts). Echoes the caller's origin rather than `*`
+ * because the token may travel in a header. No cookies are involved, so
+ * `allow-credentials` stays off.
+ */
+function apiCorsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('origin');
+  if (!origin) return {};
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-headers': `content-type, authorization, ${ACCESS_TOKEN_HEADER}`,
+    'access-control-max-age': '600',
+    vary: 'Origin',
+  };
+}
+
+function withApiCors(request: Request, response: Response): Response {
+  const headers = apiCorsHeaders(request);
+  for (const [key, value] of Object.entries(headers)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
+function unauthorizedResponse(request: Request): Response {
+  return withApiCors(
+    request,
+    Response.json(
+      { ok: false, error: 'invalid or missing access token' },
+      { status: 401, headers: { 'www-authenticate': 'Bearer realm="aurora"' } },
+    ),
+  );
+}
+
+/** POST /api/packages/import — `.aurora-package` archive → packs under AURORA_DATA_DIR. */
+async function handlePackageImport(request: Request, url: URL): Promise<Response> {
+  const dataDir = resolvePackageImportDataDir();
+  if (!dataDir) {
+    return Response.json(
+      {
+        ok: false,
+        errors: [
+          {
+            path: 'AURORA_DATA_DIR',
+            message:
+              'not set; package import writes only to the override data dir (never bundled data/)',
+          },
+        ],
+      },
+      { status: 503 },
+    );
+  }
+
+  const body = await readPackageArchiveFromRequest(request, url);
+  if (!body.ok) {
+    return Response.json({ ok: false, errors: body.errors }, { status: body.status });
+  }
+
+  const result = installAuroraPackageArchive(body.bytes, {
+    dataDir,
+    remapAuthoring: body.remapAuthoring,
+  });
+  if (!result.ok) {
+    return Response.json(result, { status: 400 });
+  }
+
+  const catalog = rescanModeCatalog();
+  console.log(
+    `[packages] imported slug=${result.slug} overwritten=${result.overwritten} dataDir=${dataDir}`,
+  );
+  return Response.json({
+    ok: true,
+    slug: result.slug,
+    label: result.label,
+    uiGroup: result.uiGroup,
+    decks: result.decks,
+    paths: result.paths,
+    overwritten: result.overwritten,
+    target: result.target,
+    entryFile: result.entryFile,
+    renderer: result.renderer,
+    wgslFile: result.wgslFile,
+    wgslForm: result.wgslForm,
+    trustedCode: result.trustedCode,
+    warning: result.trustedCode
+      ? 'This package executes trusted same-origin JavaScript. Treat it like a plugin.'
+      : undefined,
+    catalog: {
+      epoch: catalog.epoch,
+      contentHash: catalog.contentHash,
+      scannedAt: catalog.scannedAt,
+    },
+  });
+}
+
 const visualServer = Bun.serve({
   port,
   hostname: host,
@@ -1621,7 +1737,17 @@ const visualServer = Bun.serve({
     const url = new URL(request.url);
     const pathname = decodeURIComponent(url.pathname);
 
+    // Preflight for cross-origin consoles (remote instance targeting).
+    if (request.method === 'OPTIONS' && pathname.startsWith('/api/')) {
+      return new Response(null, { status: 204, headers: apiCorsHeaders(request) });
+    }
+
     if (pathname === '/ws') {
+      // Browsers cannot set handshake headers, so the token rides the query
+      // string here. Reject before upgrading: an accepted socket is control.
+      if (!isAuthorizedRequest(accessToken, url, request.headers)) {
+        return new Response('Unauthorized', { status: 401 });
+      }
       if (server.upgrade(request)) return undefined;
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
@@ -1688,6 +1814,28 @@ const visualServer = Bun.serve({
       });
     }
 
+    // Mobile show-control client (dist/mobile). Served from both origins so the
+    // printed LAN link works whichever port a phone lands on.
+    if (request.method === 'GET' && pathname === '/mobile') {
+      return Response.redirect(new URL('/mobile/', url), 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/mobile/')) {
+      const relativePath = pathname.slice('/mobile/'.length) || 'index.html';
+      if (relativePath.includes('..')) {
+        return new Response('Not found', { status: 404 });
+      }
+      const file = resolveMobileFile(relativePath);
+      if (!(await file.exists())) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response(file, {
+        headers: {
+          'content-type': contentType(relativePath),
+          'cache-control': 'no-store',
+        },
+      });
+    }
+
     if (pathname === '/debug/state-log') {
       return new Response(JSON.stringify(controlStateLog.toArray()), {
         headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -1695,77 +1843,29 @@ const visualServer = Bun.serve({
     }
 
     // Mode catalog / compile cache / epoch-scoped assets (issue #237).
+    // Read-only and ungated — see shared/access-token.ts.
     if (request.method === 'GET' && pathname === '/api/modes/catalog') {
-      return modeApi.handleCatalogRequest();
+      return withApiCors(request, modeApi.handleCatalogRequest());
     }
     if (request.method === 'GET' && pathname === '/api/modes/compiled') {
-      return modeApi.handleCompiledRequest(url);
+      return withApiCors(request, await modeApi.handleCompiledRequest(url));
     }
     if (request.method === 'GET' && pathname.startsWith('/api/data/e/')) {
       const assetResponse = modeApi.handleAssetRequest(pathname);
-      if (assetResponse) return assetResponse;
-      return Response.json({ error: 'invalid mode asset path' }, { status: 400 });
+      if (assetResponse) return withApiCors(request, assetResponse);
+      return withApiCors(
+        request,
+        Response.json({ error: 'invalid mode asset path' }, { status: 400 }),
+      );
     }
 
     // Import `.aurora-package` archive → dual-deck packs under AURORA_DATA_DIR.
+    // Gated: this is the one route that writes to disk.
     if (request.method === 'POST' && pathname === '/api/packages/import') {
-      const dataDir = resolvePackageImportDataDir();
-      if (!dataDir) {
-        return Response.json(
-          {
-            ok: false,
-            errors: [
-              {
-                path: 'AURORA_DATA_DIR',
-                message:
-                  'not set; package import writes only to the override data dir (never bundled data/)',
-              },
-            ],
-          },
-          { status: 503 },
-        );
+      if (!isAuthorizedRequest(accessToken, url, request.headers)) {
+        return unauthorizedResponse(request);
       }
-
-      const body = await readPackageArchiveFromRequest(request, url);
-      if (!body.ok) {
-        return Response.json({ ok: false, errors: body.errors }, { status: body.status });
-      }
-
-      const result = installAuroraPackageArchive(body.bytes, {
-        dataDir,
-        remapAuthoring: body.remapAuthoring,
-      });
-      if (!result.ok) {
-        return Response.json(result, { status: 400 });
-      }
-
-      const catalog = rescanModeCatalog();
-      console.log(
-        `[packages] imported slug=${result.slug} overwritten=${result.overwritten} dataDir=${dataDir}`,
-      );
-      return Response.json({
-        ok: true,
-        slug: result.slug,
-        label: result.label,
-        uiGroup: result.uiGroup,
-        decks: result.decks,
-        paths: result.paths,
-        overwritten: result.overwritten,
-        target: result.target,
-        entryFile: result.entryFile,
-        renderer: result.renderer,
-        wgslFile: result.wgslFile,
-        wgslForm: result.wgslForm,
-        trustedCode: result.trustedCode,
-        warning: result.trustedCode
-          ? 'This package executes trusted same-origin JavaScript. Treat it like a plugin.'
-          : undefined,
-        catalog: {
-          epoch: catalog.epoch,
-          contentHash: catalog.contentHash,
-          scannedAt: catalog.scannedAt,
-        },
-      });
+      return withApiCors(request, await handlePackageImport(request, url));
     }
 
     const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);
@@ -1929,6 +2029,86 @@ const controlsServer = Bun.serve({
     }
     if (request.method === 'GET' && pathname.startsWith('/studio/')) {
       return Response.redirect(url, 308);
+    }
+
+    // Mobile client is served here too — :8444 is the port a phone opens.
+    if (request.method === 'GET' && pathname === '/mobile') {
+      return Response.redirect(new URL('/mobile/', request.url), 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/mobile/')) {
+      const relativePath = pathname.slice('/mobile/'.length) || 'index.html';
+      if (relativePath.includes('..')) {
+        return new Response('Not found', { status: 404 });
+      }
+      const file = resolveMobileFile(relativePath);
+      if (!(await file.exists())) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response(file, {
+        headers: {
+          'content-type': contentType(relativePath),
+          'cache-control': 'no-store',
+        },
+      });
+    }
+
+    // SoundCloud account integration. The callback is protected by the OAuth
+    // state nonce; every console-initiated endpoint also observes Aurora's
+    // control-plane token so a LAN visitor cannot browse the connected account.
+    if (request.method === 'GET' && pathname === '/api/soundcloud/callback') {
+      const publicRedirect = Bun.env.SOUNDCLOUD_REDIRECT_URI?.trim();
+      const destination = publicRedirect ? new URL('/', publicRedirect) : new URL('/', request.url);
+      const code = new URL(request.url).searchParams.get('code');
+      const state = new URL(request.url).searchParams.get('state');
+      const oauthError = new URL(request.url).searchParams.get('error');
+      try {
+        if (oauthError) throw new Error(`SoundCloud authorization was denied: ${oauthError}`);
+        if (!code || !state) throw new Error('SoundCloud callback is missing code or state');
+        await soundCloud.completeAuthorization(code, state);
+        destination.searchParams.set('soundcloud', 'connected');
+      } catch (error) {
+        destination.searchParams.set(
+          'soundcloud_error',
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+      return Response.redirect(destination, 302);
+    }
+
+    if (pathname.startsWith('/api/soundcloud/')) {
+      const authorizationUrl = new URL(request.url);
+      if (!isAuthorizedRequest(accessToken, authorizationUrl, request.headers)) {
+        return unauthorizedResponse(request);
+      }
+      try {
+        if (request.method === 'GET' && pathname === '/api/soundcloud/status') {
+          return Response.json(await soundCloud.status());
+        }
+        if (request.method === 'GET' && pathname === '/api/soundcloud/login') {
+          return Response.json({ ok: true, url: await soundCloud.createAuthorizationUrl() });
+        }
+        if (request.method === 'GET' && pathname === '/api/soundcloud/tracks') {
+          const source = new URL(request.url).searchParams.get('source') ?? 'likes';
+          if (!['likes', 'mine', 'following'].includes(source)) {
+            return Response.json({ ok: false, error: 'Invalid track source' }, { status: 400 });
+          }
+          return Response.json({
+            ok: true,
+            source,
+            tracks: await soundCloud.tracks(source as 'likes' | 'mine' | 'following'),
+          });
+        }
+        if (request.method === 'POST' && pathname === '/api/soundcloud/logout') {
+          await soundCloud.disconnect();
+          return Response.json({ ok: true });
+        }
+        return new Response('Method not allowed', { status: 405 });
+      } catch (error) {
+        return Response.json(
+          { ok: false, error: error instanceof Error ? error.message : String(error) },
+          { status: 502 },
+        );
+      }
     }
 
     if (pathname === '/api/shadertoy/key') {
@@ -2215,6 +2395,14 @@ if (host === '0.0.0.0' || host === '::') {
   console.log(
     `LAN: open http://<this-machine-ip>:${port}/ (projector) or http://<this-machine-ip>:${controlsPort}/ (controls)`,
   );
+  if (!accessToken) {
+    console.log(
+      'LAN: no AURORA_ACCESS_TOKEN set — anyone who can reach this port can drive the show.',
+    );
+  }
+}
+if (accessToken) {
+  console.log('access token required for /ws and package import (AURORA_ACCESS_TOKEN)');
 }
 
 if (midiClockDevice) {

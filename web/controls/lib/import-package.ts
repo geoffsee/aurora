@@ -17,6 +17,11 @@ import {
   AURORA_PACKAGE_MAX_ARCHIVE_BYTES,
   parseAuroraPackageArchive,
 } from '../../../shared/aurora-package.ts';
+import {
+  type InstanceTarget,
+  instanceLocationFor,
+  loadInstanceTarget,
+} from '../../../shared/instance-target.ts';
 import { importPackageToBridge } from '../../../shared/package-import-client.ts';
 import { installAuthoredPackageBundle } from '../../../shared/package-install.ts';
 import { isStaticHosting } from '../../../shared/static-hosting.ts';
@@ -74,9 +79,18 @@ async function importLocally(bytes: Uint8Array): Promise<ConsoleImportResult> {
  */
 export async function importAuroraPackageArchive(
   bytes: Uint8Array,
-  opts?: { loc?: ImportLoc; fetchImpl?: typeof fetch; signal?: AbortSignal },
+  opts?: {
+    loc?: ImportLoc;
+    fetchImpl?: typeof fetch;
+    signal?: AbortSignal;
+    /** Defaults to the stored instance target; injectable for tests. */
+    target?: InstanceTarget;
+  },
 ): Promise<ConsoleImportResult> {
-  const loc = opts?.loc ?? location;
+  const target = opts?.target ?? loadInstanceTarget();
+  // A remote instance owns the destination disk, so the archive goes there —
+  // not to whichever origin happens to have served this console.
+  const loc = (opts?.loc ?? instanceLocationFor(target)) as ImportLoc;
   if (bytes.byteLength === 0) {
     return { ok: false, via: 'local', message: 'file is empty' };
   }
@@ -92,10 +106,13 @@ export async function importAuroraPackageArchive(
 
   // Caddy routes /api/packages/import on the console origin straight to the
   // bridge, so same-origin is correct here and avoids a CORS preflight.
+  // (A remote instance target is cross-origin by definition — the bridge
+  // answers the preflight for /api/*.)
   const result = await importPackageToBridge(bytes, {
     bridgeOrigin: loc.origin,
     fetchImpl: opts?.fetchImpl,
     signal: opts?.signal,
+    token: target.token,
   });
   if (result.ok) {
     return {

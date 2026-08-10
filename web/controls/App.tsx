@@ -11,6 +11,7 @@ import { PreviewPanel } from './components/PreviewPanel.tsx';
 import { AudioControlPanel, RehearsalPanel } from './components/RehearsalPanel.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { SlidersPanel } from './components/SlidersPanel.tsx';
+import { SoundCloudPanel } from './components/SoundCloudPanel.tsx';
 import { StatusHeader } from './components/StatusHeader.tsx';
 import { ControlsProvider } from './context/ControlsContext.tsx';
 
@@ -21,6 +22,7 @@ const gridAreas = `
   "map  map  map  map  reh  reh  reh  reh  reh  reh  reh  reh"
   "cues cues cues cues cues cues cues cues cues cues cues cues"
   "audc audc audc audc audc audc audc audc audc audc audc audc"
+  "snd  snd  snd  snd  snd  snd  snd  snd  snd  snd  snd  snd"
   "midi midi midi midi midi midi midi midi midi midi midi midi"
   "trig trig trig trig trig trig trig trig trig trig trig trig"
   "curv curv curv curv curv curv curv curv curv curv curv curv"
@@ -57,6 +59,7 @@ export function App() {
           <MappingPanel />
           <RehearsalPanel />
           <AudioControlPanel />
+          <SoundCloudPanel />
           <MidiCcPanel />
           <TriggersPanel />
           <AudioCurvesPanel />

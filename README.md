@@ -58,6 +58,108 @@ Use the same HTTPS ports on this machine’s LAN IP (`https://<ip>:8443` / `:844
 
 AbletonOSC / VST UDP (`11001`, `12000`) is published from the container; the bridge reaches Ableton on the host via `host.docker.internal`. VST control is local OSC/UDP, not HTTP or TLS; the CLI publishes port `12000` on host loopback only.
 
+### Pages deployment: pairing over the relay
+
+The GitHub Pages build has no bridge and no LAN certificate to trust, so a phone
+reaches the projector through a Cloudflare Worker instead
+(`worker/`, deployed at `https://aurora-relay.seemueller.workers.dev`).
+
+1. Open the Pages **projector** on the machine that renders. It registers a
+   session and shows an 8-character pairing code.
+2. Open the Pages **mobile client** on a phone and type the code.
+
+Both ends load over a public CA, so there is no certificate warning anywhere —
+the reason this path exists at all. The code is redeemed **once** for a random
+token and is then useless; it expires after five minutes, and the projector's
+“New code” button issues a fresh one. Session identity is never derived from
+anything device-shaped: a fingerprint would be guessable by anyone with a
+similar device, and would break on a browser update.
+
+The relay brokers opaque frames — it authenticates sockets and forwards bytes
+without parsing control state, so the show schema can change without the Worker
+knowing or being redeployed. Expect ~65 ms of added latency versus ~1 ms on the
+LAN; parameter moves feel fine and cue quantization happens on the receiving
+side, but a local bridge is still the better path when you have one.
+
+```bash
+bun run worker:dev      # local wrangler dev
+bun run worker:deploy   # publish
+bun run typecheck:worker
+```
+
+Point either surface at a different relay with `?relay=https://…` (persisted).
+
+### Mobile show client
+
+`https://<ip>:8444/mobile/` is a touch-first control surface for running a show
+from a phone (the CLI prints this as the `phone` link). Three tabs — Mix
+(crossfade, deck packs, intensity), Cues (cue pads, preset recall), Params
+(masters) — with blackout / freeze / strobe / flash pinned above the tab bar so
+they are never behind a tab switch. Setup takes the mic as an audio source, so a
+phone can drive tempo and energy with no Ableton and no OSC.
+
+It is a *view* over the same `ControlsProvider` the console uses, not a second
+client: transport, reconnect, clamping, cue quantization, and preset
+interpolation are shared, so the two surfaces cannot drift. Preset save/rename
+and the deeper mapping panels stay on the console.
+
+### Driving a remote instance (phone as control surface)
+
+Both the console and the mobile client can drive a bridge other than the one
+that served them. Settings → **Instance** takes a bridge address
+(`192.168.1.10:8444`; bare hosts get `https://`) and an optional access token,
+then reloads. `?instance=…&token=…` on the URL does the same in one tap, so the
+LAN links the CLI prints can be shared or QR-encoded straight to a phone.
+
+Two things to know before load-in:
+
+- **Certificate trust is per device.** Caddy's `tls internal` is a private CA,
+  and you cannot click through a warning for a `wss://` subresource — open the
+  bridge address in a tab once and accept it *before* connecting the console.
+- **Same-origin is simpler.** A console served *by* the instance it drives needs
+  no CORS and one cert acceptance. Cross-origin works (the bridge answers
+  preflights on `/api/*`) but is the harder path.
+
+The bridge binds `0.0.0.0`, so by default anyone who can reach the port can drive
+the show. Set a token to gate it:
+
+```bash
+AURORA_ACCESS_TOKEN=$(openssl rand -hex 16) aurora
+```
+
+That gates the `/ws` control bus and package import; read-only mode-catalog GETs
+stay open. The CLI prints tokenized LAN links, and the projector picks the token
+up from its own URL. Without the env var, behaviour is unchanged and the CLI
+warns you the instance is open.
+
+### SoundCloud account in Console
+
+The Console can connect a SoundCloud account and browse **Likes**, **My tracks**,
+and recent tracks from **Following**, then play a selection in SoundCloud's
+official embedded player. OAuth tokens stay off the static frontend.
+
+For a local Console, register the exact public Console callback URL and start
+Aurora with the credentials:
+
+```bash
+SOUNDCLOUD_CLIENT_ID=... \
+SOUNDCLOUD_CLIENT_SECRET=... \
+SOUNDCLOUD_REDIRECT_URI=https://localhost:8444/api/soundcloud/callback \
+aurora
+```
+
+The client secret is passed into the container as an environment variable and
+is never sent to the browser. When `AURORA_DATA_DIR` is available, the bridge
+persists the refresh-token session in `soundcloud-session.json` with owner-only
+permissions so the account remains connected across restarts. Disconnecting in
+Console removes that session.
+
+GitHub Pages uses the `aurora-relay` Cloudflare Worker instead: its
+`SoundCloudAccount` Durable Object owns OAuth state, refresh-token rotation, and
+the private Console bearer session. See [docs/soundcloud-worker.md](docs/soundcloud-worker.md)
+for one-time Worker secrets, the SoundCloud redirect URI, and the Pages repository
+variable.
+
 ### Image
 
 Runtime image: **`ghcr.io/geoffsee/aurora:latest`**. One process tree: [muxox](https://github.com/geoffsee/muxox) supervises Caddy + the Bun bridge (`deploy/muxox.toml`). CI pushes `:latest` on `main` and `:vX.Y.Z` on release tags (see `.github/workflows/publish-image.yml`). Operators who only want the published image can `docker pull` / `docker run` it themselves; `aurora` is the repo-side build-and-run path.

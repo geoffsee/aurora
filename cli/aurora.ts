@@ -13,6 +13,7 @@
  */
 
 import { networkInterfaces } from 'node:os';
+import { normalizeAccessToken, withAccessToken } from '../shared/access-token.ts';
 import { parseArgs, usage } from './args';
 import { describeDataMount, dockerMountArgs, resolveDockerDataMount } from './data-mount';
 import { type DockerArch, dockerArchFromHost, dockerPlatform } from './docker-platform';
@@ -57,6 +58,9 @@ function run(cmd: string[], opts: { inherit?: boolean } = {}): number {
 function printDockerUrls() {
   const host = process.env.AURORA_HOST ?? 'localhost';
   const lan = hostLanIps();
+  // Printed LAN links carry the token so a phone onboards in one tap.
+  const token = normalizeAccessToken(process.env.AURORA_ACCESS_TOKEN);
+  const tokenized = (url: string) => withAccessToken(url, token);
   console.log('');
   console.log(`  projector  https://${host}:${PROJECTOR_PORT}`);
   console.log(`  controls   https://${host}:${CONTROLS_PORT}`);
@@ -64,11 +68,17 @@ function printDockerUrls() {
   console.log(`  runtime    docker (${DOCKER_PLATFORM})`);
   if (lan.length > 0) {
     console.log(
-      `  LAN        https://${lan[0]}:${PROJECTOR_PORT}  /  https://${lan[0]}:${CONTROLS_PORT}`,
+      `  LAN        ${tokenized(`https://${lan[0]}:${PROJECTOR_PORT}/`)}  /  ${tokenized(
+        `https://${lan[0]}:${CONTROLS_PORT}/`,
+      )}`,
     );
+    console.log(`  phone      ${tokenized(`https://${lan[0]}:${CONTROLS_PORT}/mobile/`)}`);
   }
   console.log('');
   console.log('  Accept the Caddy TLS warning once if prompted (tls internal).');
+  if (!token) {
+    console.log('  No AURORA_ACCESS_TOKEN set — anyone on this network can drive the show.');
+  }
   console.log('');
 }
 
@@ -139,6 +149,10 @@ function startContainer(dataDir?: string): number {
     'VST_CONTROL_RECV_PORT',
     'MIDI_CLOCK_DEVICE',
     'ABLETON_LINK_ENABLED',
+    'AURORA_ACCESS_TOKEN',
+    'SOUNDCLOUD_CLIENT_ID',
+    'SOUNDCLOUD_CLIENT_SECRET',
+    'SOUNDCLOUD_REDIRECT_URI',
   ] as const) {
     const v = process.env[key];
     if (v !== undefined && v !== '') {

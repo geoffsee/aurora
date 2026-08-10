@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- `dark` pins Chakra's dark tokens. A show surface is never viewed in a lit
+     room, and following the OS preference would hand an operator a white
+     control panel on a dark stage. -->
+<html lang="en" class="dark" style="color-scheme: dark">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover so the panic bar can sit in the home-indicator area;
+         maximum-scale=1 stops iOS zooming when a pad is double-tapped mid-show. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#090804" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>aurora Show</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #090804;
+        /* Rubber-band scrolling can pull a pad out from under a thumb. */
+        overscroll-behavior: none;
+      }
+      /* Show controls are held, dragged, and mashed — none of that should
+         select text, pop a callout, or fire the 300ms tap delay. */
+      button,
+      [role='button'],
+      input[type='range'] {
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

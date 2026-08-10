@@ -1,3 +1,4 @@
+import { withAccessToken } from '../shared/access-token.ts';
 import { isControlBridgeConnected, isOscBridgeConnected } from '../shared/bridge-connection.ts';
 import {
   type BridgeTransport,
@@ -5,11 +6,21 @@ import {
   createWebSocketTransport,
   type OscFrame,
 } from '../shared/bridge-transport.ts';
+import { loadInstanceTarget } from '../shared/instance-target.ts';
 import {
   compiledWireFromAuthoredPackage,
   getAuthoredPackage,
   subscribeAuthoredPackages,
 } from '../shared/package-channel.ts';
+import { formatPairingCode } from '../shared/pairing-code.ts';
+import {
+  type HostSession,
+  loadHostSession,
+  registerHostSession,
+  resolveRelayBaseUrl,
+  rotateHostCode,
+  socketUrlForSession,
+} from '../shared/relay-session.ts';
 import { webgpuSecureContextError } from '../shared/secure-context.ts';
 import {
   geoffseePagesControlsUrl,
@@ -124,7 +135,10 @@ export function createProjectorTransport(
     return createBroadcastChannelTransport({ role: 'subscribe-only' });
   }
   const scheme = loc.protocol === 'https:' ? 'wss' : 'ws';
-  return createWebSocketTransport(`${scheme}://${loc.host}/ws`, {
+  // The projector always renders on the machine that served it — only the
+  // token is adopted from the instance target, never a remote origin.
+  const { token } = loadInstanceTarget(loc as Pick<Location, 'search'>);
+  return createWebSocketTransport(withAccessToken(`${scheme}://${loc.host}/ws`, token), {
     reconnect: true,
   });
 }
@@ -151,6 +165,119 @@ const CONTROLS_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height
 const FULLSCREEN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>`;
 
 const EXIT_FULLSCREEN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>`;
+
+/**
+ * Relay host: register a session, show the pairing code, accept guest frames.
+ *
+ * Only meaningful on the static build — a bridged stack already has a
+ * WebSocket bus and does not need a broker. The relay socket is attached
+ * *alongside* the existing transport rather than merged into it, so an operator
+ * can drive from the same-device controls page and a paired phone at once.
+ *
+ * Returns a disposer.
+ */
+export async function mountRelayHost(
+  handlers: { onMessage: (frame: OscFrame) => void },
+  doc: Document = document,
+  loc: Pick<Location, 'search'> = location,
+): Promise<() => void> {
+  const existing = loadHostSession();
+  let session = existing;
+  if (!session) {
+    const result = await registerHostSession(resolveRelayBaseUrl(loc));
+    if (!result.ok) {
+      console.warn(`[relay] could not register a session: ${result.error}`);
+      return () => {};
+    }
+    session = result.value;
+  }
+
+  const panel = renderPairingPanel(doc, session, async () => {
+    const rotated = await rotateHostCode(session as HostSession);
+    if (rotated.ok) {
+      session = rotated.value;
+      panel.setCode(rotated.value.code);
+    } else {
+      panel.setError(rotated.error);
+    }
+  });
+
+  const transport = createWebSocketTransport(
+    () => socketUrlForSession(session as HostSession, 'host'),
+    { reconnect: true },
+  );
+  let paired = false;
+  transport.onMessage((frame) => {
+    // A guest frame means someone paired: retire the code rather than leave it
+    // burning into the projector all night. The socket stays up.
+    if (!paired) {
+      paired = true;
+      panel.remove();
+    }
+    handlers.onMessage(frame);
+  });
+  transport.connect();
+
+  return () => {
+    transport.close();
+    panel.remove();
+  };
+}
+
+type PairingPanel = {
+  setCode: (code: string) => void;
+  setError: (message: string) => void;
+  remove: () => void;
+};
+
+/** Pairing code overlay — large enough to read from across a room. */
+function renderPairingPanel(
+  doc: Document,
+  session: HostSession,
+  onRotate: () => void,
+): PairingPanel {
+  const wrap = doc.createElement('div');
+  wrap.className = 'aurora-pairing';
+  wrap.setAttribute('role', 'status');
+
+  const label = doc.createElement('div');
+  label.className = 'aurora-pairing__label';
+  label.textContent = 'Pair a phone';
+
+  const code = doc.createElement('div');
+  code.className = 'aurora-pairing__code';
+  code.textContent = formatPairingCode(session.code);
+
+  const hint = doc.createElement('div');
+  hint.className = 'aurora-pairing__hint';
+  hint.textContent = 'Enter this code in the mobile show client';
+
+  const rotate = doc.createElement('button');
+  rotate.type = 'button';
+  rotate.className = 'aurora-pairing__rotate';
+  rotate.textContent = 'New code';
+  rotate.addEventListener('click', onRotate);
+
+  wrap.append(label, code, hint, rotate);
+  doc.body.append(wrap);
+
+  // The code is only useful until someone pairs; hide it on the first inbound
+  // frame so it is not left burning into a projector all night.
+  return {
+    setCode(next: string) {
+      code.textContent = formatPairingCode(next);
+      hint.textContent = 'Enter this code in the mobile show client';
+      wrap.classList.remove('aurora-pairing--error');
+    },
+    setError(message: string) {
+      hint.textContent = message;
+      wrap.classList.add('aurora-pairing--error');
+    },
+    remove() {
+      wrap.remove();
+    },
+  };
+}
 
 /** Bottom-left glass nav for the published Geoff See GitHub Pages projector. */
 export function mountGeoffseePagesNav(

@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { AUTOMATION_LAYOUT_PRESERVED_FIELDS } from '../../../bridge/automation-player.ts';
+import { withAccessToken } from '../../../shared/access-token.ts';
 import {
   type BridgeTransport,
   createBridgedTransport,
@@ -16,6 +17,12 @@ import {
   createWebSocketTransport,
 } from '../../../shared/bridge-transport.ts';
 import { DEMO_AUDIO_INTERVAL_MS, generateDemoAudioFrame } from '../../../shared/demo-audio.ts';
+import {
+  instanceLocationFor,
+  isRemoteInstance,
+  loadInstanceTarget,
+} from '../../../shared/instance-target.ts';
+import { loadGuestSession, socketUrlForSession } from '../../../shared/relay-session.ts';
 import {
   type CatalogLikeEntry,
   type DeckCatalogs,
@@ -203,7 +210,17 @@ export function useControls() {
 }
 
 export function ControlsProvider({ children }: { children: ReactNode }) {
-  const staticPreview = useRef(isStaticHosting());
+  // Resolved once: switching instances reconnects everything, so SettingsModal
+  // saves and reloads rather than trying to rewire a live session.
+  const instanceTarget = useRef(loadInstanceTarget());
+  const instanceLoc = useRef(instanceLocationFor(instanceTarget.current));
+  // Paired relay session, if this surface is acting as a guest control head.
+  const relayGuest = useRef(loadGuestSession());
+  // A statically-hosted page is *not* static once it has somewhere real to
+  // send frames — a remote instance, or a paired relay session.
+  const staticPreview = useRef(
+    isStaticHosting() && !isRemoteInstance(instanceTarget.current) && relayGuest.current === null,
+  );
   const [state, setState] = useState<ControlState>(initialControlState);
   const [osc, setOsc] = useState<OscMeters>(() => defaultOscMeters());
   const [diagnostics, setDiagnostics] = useState<Diagnostics>(() => defaultDiagnostics());
@@ -465,7 +482,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       // Prefetch compiled so last-known-good is warm (projector also fetches on slug change).
       const deck = deckIdFromSide(side);
       const epoch = menuEpochRef.current > 0 ? menuEpochRef.current : undefined;
-      void fetchCompiledMode({ deck, slug: trimmed, epoch }).then((result) => {
+      void fetchCompiledMode({ deck, slug: trimmed, epoch }, instanceLoc.current).then((result) => {
         if (result.ok) {
           const held = holdCompiled(deck, trimmed, epoch ?? 0, result.wire);
           if (held) activeCompiledRef.current[deck] = held;
@@ -498,7 +515,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       const deck = deckIdFromSide(side);
       const epoch = menuEpochRef.current > 0 ? menuEpochRef.current : undefined;
       setReloadBusy((prev) => ({ ...prev, [side]: true }));
-      void fetchCompiledMode({ deck, slug, epoch })
+      void fetchCompiledMode({ deck, slug, epoch }, instanceLoc.current)
         .then((result) => {
           if (result.ok) {
             const held = holdCompiled(deck, slug, epoch ?? 0, result.wire);
@@ -1231,9 +1248,17 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const bridge = createWebSocketTransport(bridgeWebSocketUrl(), {
-      reconnect: true,
-    });
+    // A paired relay session replaces the bridge socket: on the static build
+    // there is no bridge to reach, and the Worker brokers frames to the
+    // projector instead. Everything downstream is identical — the relay carries
+    // the same OscFrames and never interprets them.
+    const guest = relayGuest.current;
+    const bridge = guest
+      ? createWebSocketTransport(() => socketUrlForSession(guest, 'guest'), { reconnect: true })
+      : createWebSocketTransport(
+          withAccessToken(bridgeWebSocketUrl(instanceLoc.current), instanceTarget.current.token),
+          { reconnect: true },
+        );
     const fanout =
       typeof BroadcastChannel !== 'undefined'
         ? [createBroadcastChannelTransport({ role: 'publish-only' })]
@@ -1272,7 +1297,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
   // Static Pages still fetch the shipped catalog.json (no bridge / no WS).
   useEffect(() => {
     let cancelled = false;
-    void fetchModesCatalog().then((result) => {
+    void fetchModesCatalog(instanceLoc.current).then((result) => {
       if (cancelled) return;
       if (result.ok) {
         applyMenuSnapshot(result.catalog);
@@ -1302,7 +1327,7 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
    * on a stack whose bridge is unreachable never empties the launchpad.
    */
   const refreshModeCatalog = useCallback(async () => {
-    const result = await fetchModesCatalog();
+    const result = await fetchModesCatalog(instanceLoc.current);
     if (result.ok) {
       applyMenuSnapshot(result.catalog);
       return;

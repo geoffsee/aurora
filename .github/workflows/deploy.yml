@@ -22,6 +22,7 @@ concurrency:
 
 env:
   WASM_BINDGEN_VERSION: "0.2.122"
+  SOUNDCLOUD_API_URL: ${{ vars.SOUNDCLOUD_API_URL }}
 
 jobs:
   build:
@@ -55,6 +56,9 @@ jobs:
       - name: Build controls app
         run: bun run build:controls
 
+      - name: Build mobile show client
+        run: bun run build:mobile
+
       - name: Build Preset Studio
         run: bun run build:studio
 
@@ -80,6 +84,13 @@ jobs:
           sed -i 's|./dist/vendor/|./vendor/|g' dist/index.html
           # `build:controls` writes the React controls bundle to dist/controls/.
           test -f dist/controls/index.html
+          if [ -n "${SOUNDCLOUD_API_URL}" ]; then
+            sed -i "s|__AURORA_SOUNDCLOUD_API_URL__|${SOUNDCLOUD_API_URL}|g" dist/controls/index.html
+          else
+            sed -i "s|__AURORA_SOUNDCLOUD_API_URL__||g" dist/controls/index.html
+          fi
+          # Mobile show client — same ControlsProvider, touch-first view.
+          test -f dist/mobile/index.html
           # Preset Studio static app (package authoring + BroadcastChannel publish).
           test -f dist/studio/index.html
           touch dist/.nojekyll

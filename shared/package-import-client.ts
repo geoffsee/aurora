@@ -11,6 +11,8 @@
  * answers 503.
  */
 
+import { accessTokenHeaders } from './access-token.ts';
+
 export type BridgeImportResult =
   | {
       ok: true;
@@ -27,7 +29,13 @@ export type BridgeImportResult =
  */
 export async function importPackageToBridge(
   bytes: Uint8Array,
-  opts?: { bridgeOrigin?: string; signal?: AbortSignal; fetchImpl?: typeof fetch },
+  opts?: {
+    bridgeOrigin?: string;
+    signal?: AbortSignal;
+    fetchImpl?: typeof fetch;
+    /** Bridge access token, when the instance runs with AURORA_ACCESS_TOKEN. */
+    token?: string | null;
+  },
 ): Promise<BridgeImportResult> {
   const origin = (opts?.bridgeOrigin ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
   const url = `${origin}/api/packages/import`;
@@ -39,7 +47,10 @@ export async function importPackageToBridge(
   try {
     res = await fetchImpl(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/zip' },
+      headers: {
+        'content-type': 'application/zip',
+        ...accessTokenHeaders(opts?.token ?? null),
+      },
       body: requestBody,
       signal: opts?.signal,
     });
