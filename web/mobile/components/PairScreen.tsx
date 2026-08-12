@@ -56,7 +56,8 @@ export function PairScreen() {
           Pair with a projector
         </Text>
         <Text fontSize="sm" color="whiteAlpha.600" mt={2}>
-          Open the projector on the show machine and type the code it displays.
+          On the show machine, open Console and press <strong>Pair phone</strong> in the top row,
+          then type the code it shows.
         </Text>
       </Box>
 
@@ -101,7 +102,7 @@ export function PairScreen() {
       </Button>
 
       <Text fontSize="xs" color="whiteAlpha.500" textAlign="center" maxW="20rem">
-        Codes expire after a few minutes. If yours is stale, press “New code” on the projector.
+        Codes expire after a few minutes. If yours is stale, press “New code” in Console.
       </Text>
     </Flex>
   );
