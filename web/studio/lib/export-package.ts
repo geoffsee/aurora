@@ -72,6 +72,7 @@ export function exportSketchToPackage(sketch: StudioSketch): ExportLookResult {
         sourceMap: compiled.sourceMap,
         assets: {},
         defaults: knobsToLookDefaults(sketch.knobs),
+        audioMappings: sketch.audioMappings,
       };
       const bytes = buildAuroraPackageArchive(bundle);
       return { ok: true, bytes, fileName: auroraPackageFileName(sketch.slug), bundle };
@@ -97,6 +98,7 @@ export function exportSketchToPackage(sketch: StudioSketch): ExportLookResult {
       }),
       wgsl: sketch.wgsl,
       defaults: knobsToLookDefaults(sketch.knobs),
+      audioMappings: sketch.audioMappings,
     };
     const bytes = buildAuroraPackageArchive(bundle);
     return {

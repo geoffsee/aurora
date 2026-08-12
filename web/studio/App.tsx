@@ -287,6 +287,7 @@ export function App() {
                 <PreviewPanel
                   wgsl={active.wgsl}
                   knobs={active.knobs}
+                  audioMappings={active.audioMappings}
                   onDiagnostics={onDiagnostics}
                 />
               )}

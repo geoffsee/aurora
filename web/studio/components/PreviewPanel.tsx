@@ -1,5 +1,6 @@
 import { Box, Text, VStack } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
+import type { AudioMappingSet } from '../../../shared/audio-mapping-v1.ts';
 import {
   PackPreview,
   type PackPreviewMetrics,
@@ -22,11 +23,13 @@ const HEAP_ERROR_RATIO = 90;
 export function PreviewPanel({
   wgsl,
   knobs,
+  audioMappings,
   onDiagnostics,
   onMetrics,
 }: {
   wgsl: string;
   knobs: StudioKnobs;
+  audioMappings: AudioMappingSet;
   onDiagnostics?: (diagnostics: readonly WgslDiagnostic[]) => void;
   onMetrics?: (metrics: PackPreviewMetrics) => void;
 }) {
@@ -34,12 +37,14 @@ export function PreviewPanel({
   const previewRef = useRef<PackPreview | null>(null);
   const knobsRef = useRef(knobs);
   const wgslRef = useRef(wgsl);
+  const mappingsRef = useRef(audioMappings);
   const [status, setStatus] = useState<PackPreviewStatus>({ state: 'idle' });
   const [metrics, setMetrics] = useState<PackPreviewMetrics | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   knobsRef.current = knobs;
   wgslRef.current = wgsl;
+  mappingsRef.current = audioMappings;
 
   // Mount-only: construct GPU preview once; knobs/wgsl flow through refs + later effects.
   useEffect(() => {
@@ -63,6 +68,7 @@ export function PreviewPanel({
     void preview.init().then((ok) => {
       if (cancelled || !ok) return;
       preview.setKnobs(knobsRef.current);
+      preview.setAudioMappings(mappingsRef.current);
       void preview.setSource(wgslRef.current);
     });
     return () => {
@@ -75,6 +81,10 @@ export function PreviewPanel({
   useEffect(() => {
     previewRef.current?.setKnobs(knobs);
   }, [knobs]);
+
+  useEffect(() => {
+    previewRef.current?.setAudioMappings(audioMappings);
+  }, [audioMappings]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
