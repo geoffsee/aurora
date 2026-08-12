@@ -103,6 +103,21 @@ client: transport, reconnect, clamping, cue quantization, and preset
 interpolation are shared, so the two surfaces cannot drift. Preset save/rename
 and the deeper mapping panels stay on the console.
 
+**Phones find it on their own.** A handset that opens the console URL — from a
+QR to the host, a bookmark, or by typing the LAN IP — is offered the phone client
+once and remembers the answer. Detection is capability-based (coarse pointer plus
+a phone-sized short edge), so tablets and touchscreen laptops stay on Console;
+the CLI `phone` link still works as the explicit share target. Overrides, on any
+console link:
+
+| Override | Effect |
+| --- | --- |
+| `?console=1` | Stay on Console; never offer the phone client |
+| `?mobile=1` | Force the phone client, even on a desktop (QA) |
+
+Either choice sticks per device. Setup → **Use full Console** on the phone client
+switches back and clears the redirect.
+
 ### Driving a remote instance (phone as control surface)
 
 Both the console and the mobile client can drive a bridge other than the one
