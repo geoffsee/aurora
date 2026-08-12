@@ -109,7 +109,12 @@ describe('buildCopilotRequest', () => {
         action: 'fix',
         brief: '',
         diagnostics: [
-          { lineNumber: 12, startColumn: 3, message: 'unknown identifier', severity: 'error' as const },
+          {
+            lineNumber: 12,
+            startColumn: 3,
+            message: 'unknown identifier',
+            severity: 'error' as const,
+          },
         ],
       }).messages[0]?.content ?? '';
     expect(content).toContain('line 12: unknown identifier');
