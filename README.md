@@ -103,6 +103,25 @@ client: transport, reconnect, clamping, cue quantization, and preset
 interpolation are shared, so the two surfaces cannot drift. Preset save/rename
 and the deeper mapping panels stay on the console.
 
+Built for one-handed use on a dark stage:
+
+- **Panic is separated from navigation.** The blackout / freeze / strobe / flash
+  row sits in its own tinted band above the tabs, because two adjacent rows of
+  same-sized buttons is the geometry where a thumb reaching for “Cues” hits
+  “Blackout”. Nothing there has a confirm step — a panic control that asks a
+  question is not a panic control.
+- **Pinned chrome shrinks on a short viewport.** Rotating a phone leaves ~380 px
+  of height; the panic and tab rows drop to compact sizing below 520 px so the
+  controls stop being the reason you cannot see the show. Keyed on height, not
+  orientation, so tablets in landscape keep the roomy sizes.
+- **Haptics on commits and snaps**, never during a drag — where the platform has
+  them, and never when `prefers-reduced-motion` is set.
+- **A disconnected phone says so across the full width**, with the address it is
+  trying, instead of only a small grey pill.
+- Deck A/B carry an accent rule that lights for whichever deck the crossfade
+  actually favours: which pack is *loaded* and which pack is *on screen* are
+  different questions.
+
 ### Driving a remote instance (phone as control surface)
 
 Both the console and the mobile client can drive a bridge other than the one
