@@ -23,6 +23,23 @@ import type { AudioFeatures } from './audio-ema.ts';
 export type AudioMappingSource = keyof AudioFeatures;
 export type AudioMappingMode = 'continuous' | 'threshold';
 
+/**
+ * How a mapping folds into a target another mapping already wrote this frame.
+ *
+ * Before this existed the answer was "whichever mapping is later in the array
+ * silently wins", which is a real behaviour nobody chose — it made
+ * `bass → depth` and `energy → depth` an accident rather than a technique.
+ *
+ * - `last`   — later mapping wins (the historical behaviour; still the default)
+ * - `max`    — loudest contribution wins; the natural choice for two bands
+ *              driving one visual, since neither cancels the other
+ * - `sum`    — added and clamped by `coerceControlState`
+ * - `min`    — quietest wins; useful for a duck
+ */
+export type AudioMappingCombine = 'last' | 'max' | 'sum' | 'min';
+
+export const AUDIO_MAPPING_COMBINES: readonly AudioMappingCombine[] = ['last', 'max', 'sum', 'min'];
+
 export type AudioMapping = {
   /** Which audio feature band drives this mapping. */
   source: AudioMappingSource;
@@ -40,6 +57,8 @@ export type AudioMapping = {
   offDelayMs: number;
   /** threshold: when true, increment the current target value by 1 (counter targets like flashVersion). */
   increment: boolean;
+  /** How this mapping folds with another writing the same target this frame. */
+  combine: AudioMappingCombine;
 };
 
 const SOURCES: ReadonlySet<string> = new Set(['energy', 'bass', 'mid', 'high', 'pulse']);
@@ -96,6 +115,9 @@ export function parseAudioMappings(raw: unknown): AudioMapping[] {
       level: clamp01(num(e.level, 0.5)),
       offDelayMs: Math.max(0, num(e.offDelayMs, 200)),
       increment: e.increment === true,
+      combine: (AUDIO_MAPPING_COMBINES as readonly string[]).includes(String(e.combine))
+        ? (e.combine as AudioMappingCombine)
+        : 'last',
     });
   }
   return out;
@@ -128,11 +150,26 @@ export function makeAudioControlRouter(
   let wasAbove: boolean[] = [];
   let lastFiredMs: number[] = [];
   let lastOutput: number[] = [];
+  /**
+   * Targets written by more than one continuous mapping.
+   *
+   * These skip the no-op suppression below: a `max` pair whose quiet half is
+   * steady would otherwise fold against nothing and the target would follow
+   * only the half that happened to move this frame.
+   */
+  let contested: Set<string> = new Set();
 
   const resetEdgeState = () => {
     wasAbove = mappings.map(() => false);
     lastFiredMs = mappings.map(() => -Infinity);
     lastOutput = mappings.map(() => Number.NaN);
+    const seen = new Set<string>();
+    contested = new Set();
+    for (const m of mappings) {
+      if (m.mode !== 'continuous') continue;
+      if (seen.has(m.target)) contested.add(m.target);
+      seen.add(m.target);
+    }
   };
 
   return {
@@ -152,6 +189,29 @@ export function makeAudioControlRouter(
       let diff: Record<string, unknown> | null = null;
       const state = getState();
 
+      /**
+       * Fold a mapping's output into the frame's diff.
+       *
+       * Without this, two mappings on one target meant "later index wins" —
+       * behaviour nobody chose and nobody could rely on. `combine` makes the
+       * resolution explicit and per-mapping; `coerceControlState` still clamps
+       * whatever comes out, so `sum` cannot push a field out of range.
+       */
+      const write = (target: string, value: number, combine: AudioMappingCombine) => {
+        diff ??= {};
+        const prior = diff[target];
+        if (typeof prior !== 'number' || combine === 'last') {
+          diff[target] = value;
+          return;
+        }
+        diff[target] =
+          combine === 'max'
+            ? Math.max(prior, value)
+            : combine === 'min'
+              ? Math.min(prior, value)
+              : prior + value;
+      };
+
       for (let i = 0; i < mappings.length; i++) {
         const m = mappings[i];
         if (!m) continue;
@@ -160,11 +220,11 @@ export function makeAudioControlRouter(
         if (m.mode === 'continuous') {
           const out = m.targetMin + (m.targetMax - m.targetMin) * clamp01(raw);
           const prev = lastOutput[i] ?? Number.NaN;
-          if (Number.isNaN(prev) || Math.abs(out - prev) > CONTINUOUS_EPSILON) {
-            lastOutput[i] = out;
-            diff ??= {};
-            diff[m.target] = out;
-          }
+          // A mapping that has not moved still has to participate in the fold,
+          // or a `max` pair would drop to whichever half happened to move.
+          const moved = Number.isNaN(prev) || Math.abs(out - prev) > CONTINUOUS_EPSILON;
+          lastOutput[i] = out;
+          if (moved || contested.has(m.target)) write(m.target, out, m.combine);
           continue;
         }
 
@@ -175,11 +235,13 @@ export function makeAudioControlRouter(
         if (!rising) continue;
         if (nowMs - (lastFiredMs[i] ?? -Infinity) < m.offDelayMs) continue;
         lastFiredMs[i] = nowMs;
-        diff ??= {};
+        // Increment targets are counters: folding two writes with `max` would
+        // silently drop one bump, so they always take the running value.
         if (m.increment) {
+          diff ??= {};
           diff[m.target] = num(state[m.target], 0) + 1;
         } else {
-          diff[m.target] = m.targetMax;
+          write(m.target, m.targetMax, m.combine);
         }
       }
 

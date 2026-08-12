@@ -64,11 +64,17 @@ import {
   type AudioFeatures,
   DEFAULT_AUDIO_EMA_ALPHA,
   DEFAULT_AUDIO_EMA_ALPHAS,
-  DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
   makeAudioEmaState,
   stepAudioEma,
 } from './audio-ema.ts';
 import audioMappingsRaw from './audio-mappings.json' with { type: 'json' };
+import {
+  type AudioShapingConfig,
+  coerceAudioShaping,
+  defaultAudioShaping,
+  releaseAlphasFrom,
+  shapeAudioFeatures,
+} from './audio-shaper.ts';
 import { DEFAULT_TRANSIENT_CONFIG } from './audio-transient-trigger.ts';
 import {
   type AudioTransientConfig,
@@ -191,6 +197,8 @@ type ControlState = {
   deckBGpuShader: number;
   bandCurves: BandCurves;
   emaAlphas: AudioEmaAlphas;
+  /** Per-band signal shaping ahead of the control router (#285). */
+  audioShaping: AudioShapingConfig;
   morph: number;
   audioControlMode: boolean;
   outputs: OutputRoute[];
@@ -496,6 +504,7 @@ const defaultControlState = (): ControlState => ({
     high: 'linear',
   },
   emaAlphas: { ...DEFAULT_AUDIO_EMA_ALPHAS },
+  audioShaping: defaultAudioShaping(),
   morph: 0,
   audioControlMode: false,
   outputs: [],
@@ -770,6 +779,7 @@ const coerceControlState = (state: unknown): ControlState => {
         pulse: clamp(ea.pulse, 0.01, 1, DEFAULT_AUDIO_EMA_ALPHAS.pulse),
       };
     })(),
+    audioShaping: coerceAudioShaping(source.audioShaping),
     audioControlMode: Boolean(source.audioControlMode),
     outputs: normalizeOutputRoutes(source.outputs),
     audioTransientAutomation: Boolean(source.audioTransientAutomation),
@@ -1008,9 +1018,29 @@ function processLiveTrackData(args: unknown[]): void {
     liveAudioEma,
     rawFeatures,
     latestControlState?.emaAlphas ?? audioEmaAlphas,
-    DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
+    releaseAlphasFrom(currentShaping()),
   );
-  maybeFeedAutomationAudio(smoothed, Date.now());
+  maybeFeedAutomationAudio(shapedForRouter(smoothed), Date.now());
+}
+
+/**
+ * The live shaping config, and the shaped view of a smoothed feature set.
+ *
+ * Every router-bound feed goes through here so the three sources (AbletonOSC
+ * meters, browser mic, demo audio) cannot drift into different response
+ * curves — the same reason they already share one EMA.
+ *
+ * Note the split: shaping feeds the *router*, while the projector still applies
+ * `bandCurves` to the raw OSC it receives for the renderer. Those are two
+ * stages of two different pipelines, and the curve is read from the same field
+ * in both, so an operator changing it sees one consistent effect.
+ */
+function currentShaping(): AudioShapingConfig {
+  return latestControlState?.audioShaping ?? defaultAudioShaping();
+}
+
+function shapedForRouter(smoothed: Readonly<AudioFeatures>): AudioFeatures {
+  return shapeAudioFeatures(smoothed, currentShaping(), latestControlState?.bandCurves);
 }
 
 // Apply a single transient-config OSC message. firstArg is the raw payload value.
@@ -1976,11 +2006,14 @@ const visualServer = Bun.serve({
               browserAudioEma,
               rawBrowserFeatures,
               latestControlState?.emaAlphas ?? audioEmaAlphas,
-              DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
+              releaseAlphasFrom(currentShaping()),
             );
-            audioControlRouter.onFeatures(smoothedBrowser, nowMs);
-            maybeFeedAutomationAudio(smoothedBrowser, nowMs);
-            broadcastBrowserAudioFeatures(smoothedBrowser, nowMs);
+            const shapedBrowser = shapedForRouter(smoothedBrowser);
+            audioControlRouter.onFeatures(shapedBrowser, nowMs);
+            maybeFeedAutomationAudio(shapedBrowser, nowMs);
+            // Meters show the shaped signal: an operator who gates a band needs
+            // the meter to agree with what the mappings are actually seeing.
+            broadcastBrowserAudioFeatures(shapedBrowser, nowMs);
           } else if (parsed.address.startsWith('/aurora/automation/transient/')) {
             applyTransientConfigMsg(
               parsed.address,
@@ -2363,14 +2396,15 @@ setInterval(() => {
     demoAudioEma,
     rawFeatures,
     latestControlState?.emaAlphas ?? audioEmaAlphas,
-    DEFAULT_AUDIO_EMA_RELEASE_ALPHAS,
+    releaseAlphasFrom(currentShaping()),
   );
-  maybeFeedAutomationAudio(smoothed, Date.now());
+  const shapedDemo = shapedForRouter(smoothed);
+  maybeFeedAutomationAudio(shapedDemo, Date.now());
   // Drive the router from the demo feed only when no browser source is active;
   // otherwise both streams would share the router's edge state and thrash.
   const routerNowMs = Date.now();
   if (routerNowMs - lastBrowserAudioFeaturesMs >= BROWSER_AUDIO_FEATURE_TTL_MS) {
-    audioControlRouter.onFeatures(smoothed, routerNowMs);
+    audioControlRouter.onFeatures(shapedDemo, routerNowMs);
   }
   const demo = {
     tempo: state.bpm,

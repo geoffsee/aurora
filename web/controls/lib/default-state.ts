@@ -1,3 +1,4 @@
+import { defaultAudioShaping } from '../../../bridge/audio-shaper.ts';
 import {
   DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
   DEFAULT_DECK_B_GPU_SHADER_UI_INDEX,
@@ -86,6 +87,7 @@ export function defaultState(): ControlState {
       mid: 'linear',
       high: 'linear',
     },
+    audioShaping: defaultAudioShaping(),
     emaAlphas: {
       energy: 0.12,
       bass: 0.08,

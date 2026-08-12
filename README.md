@@ -313,6 +313,7 @@ first-run copy of bundled → override. See [`data/README.md`](data/README.md).
 - `web/controls/` – controls app (port `8444` via Caddy).
 - `data/` – bundled deck preset catalog + authoring guide (`data/README.md`).
 - `docs/mode-protocol.md` / `docs/mode-primitives.md` – mode pack protocol and primitive ceiling.
+- `docs/audio-control.md` – audio → ControlState: band shaping, targets, combine rules.
 - `deploy/` – `Caddyfile` + `muxox.toml` for the container entrypoint.
 - `Dockerfile` – `ghcr.io/geoffsee/aurora` image (muxox + Caddy + Bun).
 - `plugins/aurora-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.
