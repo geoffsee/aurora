@@ -314,11 +314,19 @@ export function WgslEditor({
   onChange,
   diagnostics,
   backend = 'wgsl',
+  registerSelectionReader,
 }: {
   value: string;
   onChange: (next: string) => void;
   diagnostics?: readonly WgslDiagnostic[];
   backend?: 'wgsl' | 'threejs';
+  /**
+   * Hands the caller a pull-based reader for the current selection (#289).
+   * Pull rather than a change event: the copilot needs the selection once, at
+   * submit time, and an onSelectionChange would re-render the panel on every
+   * cursor move for a value nothing is displaying.
+   */
+  registerSelectionReader?: (read: () => string) => void;
 }) {
   const editorRef = useRef<MonacoEditor | null>(null);
   const monacoRef = useRef<MonacoType | null>(null);
@@ -365,6 +373,11 @@ export function WgslEditor({
           }}
           onMount={(editor: MonacoEditor, monaco: MonacoType) => {
             editorRef.current = editor;
+            registerSelectionReader?.(() => {
+              const selection = editor.getSelection();
+              if (!selection || selection.isEmpty()) return '';
+              return editor.getModel()?.getValueInRange(selection) ?? '';
+            });
             monacoRef.current = monaco;
             monaco.editor.setTheme('aurora-dark');
           }}
