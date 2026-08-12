@@ -2,12 +2,16 @@ import { Box, Button, Dialog, Field, Flex, Input, Portal, Text } from '@chakra-u
 import { useState } from 'react';
 import {
   describeInstanceTarget,
+  instanceLocationFor,
   loadInstanceTarget,
   parseInstanceOrigin,
   parseInstanceToken,
   saveInstanceTarget,
 } from '../../../shared/instance-target.ts';
+import { redeemOtp } from '../../../shared/otp-auth.ts';
+import { formatPairingCode, normalizePairingCode } from '../../../shared/pairing-code.ts';
 import { useControls } from '../../controls/context/ControlsContext.tsx';
+import { bridgeHttpOrigin } from '../../controls/lib/modes-api-client.ts';
 
 export function InstanceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, updateState, micActive, toggleMicCapture } = useControls();
@@ -17,6 +21,11 @@ export function InstanceSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [tokenInput, setTokenInput] = useState(() => instance.token ?? '');
   const [error, setError] = useState<string | null>(null);
 
+  // --- One-time pairing code (#281) ---
+  const [codeInput, setCodeInput] = useState('');
+  const [pairing, setPairing] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
+
   const connect = () => {
     const parsed = parseInstanceOrigin(instanceInput);
     if (!parsed.ok) {
@@ -25,6 +34,38 @@ export function InstanceSheet({ open, onClose }: { open: boolean; onClose: () =>
     }
     setError(null);
     saveInstanceTarget({ origin: parsed.origin, token: parseInstanceToken(tokenInput) });
+    location.reload();
+  };
+
+  /**
+   * Redeem the code against whichever bridge this phone is pointed at, then
+   * store the returned session token *as* the instance token.
+   *
+   * That reuse is the point: everything downstream — the WebSocket URL, the
+   * `/api/*` headers, reconnects — already knows how to carry an instance
+   * token, so a paired phone needs no second code path and stays paired across
+   * reloads until the token expires or the operator revokes it.
+   */
+  const pairWithCode = async () => {
+    const code = normalizePairingCode(codeInput);
+    if (pairing) return;
+    setPairing(true);
+    setPairError(null);
+
+    const parsed = parseInstanceOrigin(instanceInput);
+    if (!parsed.ok) {
+      setPairing(false);
+      setPairError(parsed.error);
+      return;
+    }
+    const origin = bridgeHttpOrigin(instanceLocationFor({ origin: parsed.origin, token: null }));
+    const result = await redeemOtp(origin, code);
+    setPairing(false);
+    if (!result.ok) {
+      setPairError(result.error);
+      return;
+    }
+    saveInstanceTarget({ origin: parsed.origin, token: result.value.token });
     location.reload();
   };
 
@@ -111,6 +152,50 @@ export function InstanceSheet({ open, onClose }: { open: boolean; onClose: () =>
                         {error}
                       </Text>
                     ) : null}
+                  </Field.Root>
+                  {/* Codes first: this is the path an operator should take at
+                      load-in, and burying it under a password field guarantees
+                      they read out the hex token instead. */}
+                  <Field.Root invalid={pairError !== null}>
+                    <Field.Label>Pairing code</Field.Label>
+                    <Input
+                      value={formatPairingCode(normalizePairingCode(codeInput)) || codeInput}
+                      onChange={(e) => setCodeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void pairWithCode();
+                      }}
+                      placeholder="ABCD-EFGH"
+                      // Codes are uppercase and unambiguous by construction; stop
+                      // the OS autocapitalizing, autocorrecting, or spellchecking.
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      spellCheck={false}
+                      textAlign="center"
+                      fontFamily="mono"
+                      fontSize="xl"
+                      letterSpacing="0.12em"
+                      h="3.5rem"
+                    />
+                    {pairError ? (
+                      <Text fontSize="xs" color="red.300" mt={1}>
+                        {pairError}
+                      </Text>
+                    ) : null}
+                    <Button
+                      mt={2}
+                      w="100%"
+                      h="3.25rem"
+                      colorPalette="cyan"
+                      loading={pairing}
+                      onClick={() => void pairWithCode()}
+                    >
+                      Pair with code
+                    </Button>
+                    <Text fontSize="xs" color="whiteAlpha.600" mt={2}>
+                      Console → Settings → <strong>Phone pairing</strong> issues one. Single-use,
+                      expires in five minutes; this phone keeps a session token afterwards.
+                    </Text>
                   </Field.Root>
                   <Field.Root>
                     <Field.Label>Access token</Field.Label>

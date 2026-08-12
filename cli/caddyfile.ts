@@ -36,7 +36,13 @@ export function normalizeTlsHosts(hosts: readonly string[]): string[] {
  * Kept in sync with `deploy/entrypoint.sh`, which renders the Docker Caddyfile
  * at container start — see tests/cli/caddyfile-routes.test.ts.
  */
-export const CONTROLS_SITE_PROXIED_PATHS = ['/api/modes/*', '/api/packages/import'] as const;
+export const CONTROLS_SITE_PROXIED_PATHS = [
+  '/api/modes/*',
+  '/api/packages/import',
+  // Phone pairing (#281). The mobile client is served from :8444, so its
+  // redeem POST has to land on the visual server without going cross-origin.
+  '/api/auth/*',
+] as const;
 
 function controlsSiteApiRoutes(upstream: number): string {
   return CONTROLS_SITE_PROXIED_PATHS.map(

@@ -38,6 +38,7 @@ import {
   validatePresetOscMsg,
   validateVstOscMsg,
 } from '../shared/osc-validation.ts';
+import { OTP_PATHS } from '../shared/otp-auth.ts';
 import {
   MAX_SHADER_INDEX,
   normalizeOutputRoutes,
@@ -84,6 +85,7 @@ import {
 } from './midi-clock.ts';
 import { ModeApi, modesCatalogWsMessage } from './mode-api.ts';
 import { type CatalogSnapshot, formatCatalogSummary, loadModeCatalog } from './mode-catalog.ts';
+import { createBridgeAuthorizer, createOtpStore, OTP_CODE_TTL_MS } from './otp-store.ts';
 import {
   installAuroraPackageArchive,
   readPackageArchiveFromRequest,
@@ -252,6 +254,16 @@ const host = Bun.env.HOST ?? '0.0.0.0';
 // behaviour). Set → `/ws` and package import require the token. See
 // shared/access-token.ts for why the gate stops there.
 const accessToken = normalizeAccessToken(Bun.env.AURORA_ACCESS_TOKEN);
+
+/**
+ * Short-lived pairing codes for phones (#281), so a handset never has to type
+ * the 32-character `AURORA_ACCESS_TOKEN`. In-memory: a restart revokes every
+ * paired phone, which is what you want from a show machine between gigs.
+ */
+const otpStore = createOtpStore();
+
+/** Configured token, or a live phone session. See bridge/otp-store.ts. */
+const isAuthorizedOrPairedRequest = createBridgeAuthorizer(accessToken, otpStore);
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const webRoot = `${root}/web`;
 const controlsDistRoot = `${root}/dist/controls`;
@@ -1745,7 +1757,7 @@ const visualServer = Bun.serve({
     if (pathname === '/ws') {
       // Browsers cannot set handshake headers, so the token rides the query
       // string here. Reject before upgrading: an accepted socket is control.
-      if (!isAuthorizedRequest(accessToken, url, request.headers)) {
+      if (!isAuthorizedOrPairedRequest(url, request.headers)) {
         return new Response('Unauthorized', { status: 401 });
       }
       if (server.upgrade(request)) return undefined;
@@ -1862,10 +1874,59 @@ const visualServer = Bun.serve({
     // Import `.aurora-package` archive → dual-deck packs under AURORA_DATA_DIR.
     // Gated: this is the one route that writes to disk.
     if (request.method === 'POST' && pathname === '/api/packages/import') {
-      if (!isAuthorizedRequest(accessToken, url, request.headers)) {
+      if (!isAuthorizedOrPairedRequest(url, request.headers)) {
         return unauthorizedResponse(request);
       }
       return withApiCors(request, await handlePackageImport(request, url));
+    }
+
+    // ---- LAN phone pairing (#281) ----
+    // Minting and revoking need the configured token; redeeming cannot, or the
+    // phone would have to present the credential it is trying to avoid typing.
+    if (request.method === 'POST' && pathname === OTP_PATHS.mint) {
+      if (!isAuthorizedRequest(accessToken, url, request.headers)) {
+        return unauthorizedResponse(request);
+      }
+      if (!accessToken) {
+        // An open instance has nothing to pair *into*: a code would imply a
+        // gate that is not there. Say so rather than issue a useless credential.
+        return withApiCors(
+          request,
+          Response.json(
+            { error: 'set AURORA_ACCESS_TOKEN to gate this instance before pairing phones' },
+            { status: 409 },
+          ),
+        );
+      }
+      const minted = otpStore.mint();
+      console.log(`phone pairing code issued (expires in ${Math.round(OTP_CODE_TTL_MS / 1000)}s)`);
+      return withApiCors(request, Response.json(minted));
+    }
+
+    if (request.method === 'POST' && pathname === OTP_PATHS.redeem) {
+      const body = (await request.json().catch(() => null)) as { code?: unknown } | null;
+      const code = typeof body?.code === 'string' ? body.code : '';
+      const result = otpStore.redeem(code);
+      if (!result.ok) {
+        return withApiCors(
+          request,
+          Response.json({ error: result.error }, { status: result.status }),
+        );
+      }
+      console.log('phone paired via one-time code');
+      return withApiCors(
+        request,
+        Response.json({ token: result.token, expiresAt: result.expiresAt }),
+      );
+    }
+
+    if (request.method === 'POST' && pathname === OTP_PATHS.revoke) {
+      if (!isAuthorizedRequest(accessToken, url, request.headers)) {
+        return unauthorizedResponse(request);
+      }
+      const revoked = otpStore.revokeAll();
+      console.log(`revoked ${revoked} phone session${revoked === 1 ? '' : 's'}`);
+      return withApiCors(request, Response.json({ revoked }));
     }
 
     const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);

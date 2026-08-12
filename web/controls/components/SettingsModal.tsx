@@ -31,6 +31,7 @@ import {
   AURORA_PACKAGE_FILE_EXTENSION,
   importAuroraPackageArchive,
 } from '../lib/import-package.ts';
+import { PhonePairingSection } from './PhonePairingSection.tsx';
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, updateState, refreshModeCatalog } = useControls();
@@ -296,6 +297,9 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
                   </Field.Root>
                 </Grid>
               </Box>
+
+              {/* ---- Phone pairing ---- */}
+              <PhonePairingSection />
 
               {/* ---- Shadertoy ---- */}
               <Box>
