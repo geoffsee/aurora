@@ -1,5 +1,6 @@
 import { Box, Grid, GridItem } from '@chakra-ui/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CopilotPanel } from './components/CopilotPanel.tsx';
 import { KnobPanel } from './components/KnobPanel.tsx';
 import { PreviewPanel } from './components/PreviewPanel.tsx';
 import { SketchSidebar } from './components/SketchSidebar.tsx';
@@ -58,6 +59,9 @@ export function App() {
   const [message, setMessage] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<readonly WgslDiagnostic[]>([]);
   const clearDiagnostics = useCallback(() => setDiagnostics([]), []);
+  // Pull-based: the copilot reads the selection once at submit, so this never
+  // re-renders on cursor movement.
+  const readSelection = useRef<(() => string) | null>(null);
   const onDiagnostics = useCallback((next: readonly WgslDiagnostic[]) => {
     setDiagnostics(next);
   }, []);
@@ -184,7 +188,9 @@ export function App() {
         pb={2}
       >
         <Grid
-          templateColumns={{ base: '1fr', lg: '260px minmax(0, 1fr) minmax(0, 1fr)' }}
+          // Wider than the old 260px: the sidebar now carries the copilot dock as
+          // well as the sketch list, and a 260px column makes a prompt box unusable.
+          templateColumns={{ base: '1fr', lg: '340px minmax(0, 1fr) minmax(0, 1fr)' }}
           templateRows={{ base: 'auto auto auto auto', lg: 'auto 1fr' }}
           gap={3}
           h={{ base: 'auto', lg: '100%' }}
@@ -212,6 +218,10 @@ export function App() {
               border="1px solid"
               borderColor="#252a31"
               bg="rgba(0,0,0,0.25)"
+              display="flex"
+              flexDirection="column"
+              gap={3}
+              overflowY="auto"
             >
               <SketchSidebar
                 sketches={doc.sketches}
@@ -244,6 +254,17 @@ export function App() {
                   setDoc((d) => removeSketch(d, id));
                 }}
               />
+              {active.backend === 'threejs' ? null : (
+                <Box borderTopWidth="1px" borderColor="#252a31" pt={3}>
+                  <CopilotPanel
+                    wgsl={active.wgsl}
+                    knobs={active.knobs}
+                    diagnostics={diagnostics}
+                    getSelection={() => readSelection.current?.() ?? ''}
+                    onApply={(next) => patchActive({ wgsl: next })}
+                  />
+                </Box>
+              )}
             </Box>
           </GridItem>
 
@@ -263,6 +284,9 @@ export function App() {
                 }
                 diagnostics={diagnostics}
                 backend={active.backend}
+                registerSelectionReader={(read) => {
+                  readSelection.current = read;
+                }}
               />
             </Box>
           </GridItem>
