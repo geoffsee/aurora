@@ -24,6 +24,8 @@ import {
 export const RELAY_HOST_SESSION_KEY = 'aurora.relay.host';
 export const RELAY_GUEST_SESSION_KEY = 'aurora.relay.guest';
 export const RELAY_BASE_URL_KEY = 'aurora.relay.base';
+/** Set by the projector on the first guest frame; read by Console's pairing UI. */
+export const RELAY_PAIRED_KEY = 'aurora.relay.paired';
 
 /**
  * Deployed relay. Overridable with `?relay=` (persisted) so a fork can point at
@@ -43,6 +45,12 @@ export type GuestSession = {
   relayBase: string;
   sessionId: string;
   guestToken: string;
+};
+
+/** Evidence that at least one guest has actually sent a frame on a session. */
+export type PairedMark = {
+  sessionId: string;
+  pairedAt: number;
 };
 
 export type RelayResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -150,6 +158,62 @@ export function clearGuestSession(storage: StorageLike | null = safeStorage()): 
   }
 }
 
+/**
+ * Forget the host session so the next `ensureHostSession` registers a new one.
+ *
+ * The recovery path when a stored session outlives its Durable Object: rotate
+ * starts answering 404 and no amount of retrying fixes it.
+ */
+export function clearHostSession(storage: StorageLike | null = safeStorage()): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(RELAY_HOST_SESSION_KEY);
+    storage.removeItem(RELAY_PAIRED_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Record that a guest has paired.
+ *
+ * The relay tells nobody who is connected — the Durable Object forwards bytes
+ * and keeps no roster — so "someone paired" is only observable as the first
+ * inbound guest frame, which lands on the projector. Console and projector are
+ * the same origin on Pages (`/aurora/` and `/aurora/controls/`), so a storage
+ * key is the whole mechanism: no new protocol, no Worker redeploy.
+ *
+ * Consequence worth knowing: this is a per-browser signal. A Console running on
+ * a different machine than the projector will not see it, and shows the code as
+ * unpaired until it is rotated or the session is reset.
+ */
+export function markGuestPaired(
+  sessionId: string,
+  pairedAt: number,
+  storage: StorageLike | null = safeStorage(),
+): void {
+  if (!sessionId) return;
+  writeJsonItem(storage, RELAY_PAIRED_KEY, { sessionId, pairedAt } satisfies PairedMark);
+}
+
+/** Read the paired mark, ignoring one left behind by an earlier session. */
+export function loadGuestPaired(
+  sessionId: string,
+  storage: StorageLike | null = safeStorage(),
+): PairedMark | null {
+  const record = readJsonItem<PairedMark>(storage, RELAY_PAIRED_KEY);
+  if (!record || typeof record.pairedAt !== 'number') return null;
+  if (!sessionId || record.sessionId !== sessionId) return null;
+  return record;
+}
+
+/** True when a code has passed its TTL and the relay will refuse it. */
+export function isCodeExpired(session: HostSession, now: number): boolean {
+  return typeof session.codeExpiresAt === 'number' && session.codeExpiresAt > 0
+    ? session.codeExpiresAt <= now
+    : false;
+}
+
 async function postJson(
   url: string,
   body: unknown,
@@ -186,6 +250,23 @@ export async function registerHostSession(
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/**
+ * The stored host session, registering one if this origin has none yet.
+ *
+ * Whichever surface opens first owns registration — projector or Console, it
+ * does not matter, because they share an origin (and therefore this key) on the
+ * Pages layout. That is what lets Console render the code without taking the
+ * render role away from the projector.
+ */
+export async function ensureHostSession(
+  relayBase: string = resolveRelayBaseUrl(),
+  fetchImpl: typeof fetch = fetch,
+): Promise<RelayResult<HostSession>> {
+  const existing = loadHostSession();
+  if (existing) return { ok: true, value: existing };
+  return registerHostSession(relayBase, fetchImpl);
 }
 
 /** Ask the relay for a fresh code (the old one expired or was shown too widely). */
