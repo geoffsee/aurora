@@ -7,3 +7,8 @@ export {
   extractMicFeatures,
   micSecureContextError,
 } from '../../../bridge/mic-features.ts';
+
+export {
+  AURORA_AUDIO_SPECTRUM_ADDRESS,
+  extractAudioSpectrum,
+} from '../../../shared/audio-spectrum.ts';

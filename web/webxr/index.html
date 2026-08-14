@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>Aurora Spatial</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../vendor/three-v1/three.module.js",
+          "three/": "../vendor/three-v1/",
+          "three/webgpu": "../vendor/three-v1/webgpu.js",
+          "three/tsl": "../vendor/three-v1/tsl.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="viewport" aria-hidden="true"></div>
+    <main id="entry-panel">
+      <p class="eyebrow">Aurora Spatial</p>
+      <h1>Step inside the visualizer.</h1>
+      <p id="status" role="status">Checking immersive rendering support…</p>
+      <p id="details"></p>
+      <button id="enter-vr" type="button" disabled>Enter VR</button>
+    </main>
+    <script type="module" src="./index.ts"></script>
+  </body>
+</html>

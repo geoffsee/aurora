@@ -55,6 +55,8 @@ import {
 import { defaultDiagnostics, defaultOscMeters, defaultState } from '../lib/default-state.ts';
 import { clamp01, clampInt } from '../lib/math.ts';
 import {
+  AURORA_AUDIO_SPECTRUM_ADDRESS,
+  extractAudioSpectrum,
   extractMicFeatures,
   MIC_FFT_SIZE,
   MIC_MAX_DB,
@@ -946,6 +948,12 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       minDecibels: MIC_MIN_DB,
       maxDecibels: MIC_MAX_DB,
     });
+    const spectrum = extractAudioSpectrum(mic.bins, {
+      sampleRate: ctx.sampleRate,
+      fftSize: MIC_FFT_SIZE,
+      minDecibels: MIC_MIN_DB,
+      maxDecibels: MIC_MAX_DB,
+    });
     // BroadcastChannel and the bridge do not echo mic frames back to the
     // sender — update local meters here so the controls UI stays live.
     setOsc((prev) => {
@@ -955,9 +963,11 @@ export function ControlsProvider({ children }: { children: ReactNode }) {
       return next;
     });
     transport.send({ address: '/aurora/audio/features', args: [features] });
+    transport.send({ address: AURORA_AUDIO_SPECTRUM_ADDRESS, args: [spectrum] });
   }, []);
 
   const stopMicCapture = useCallback(() => {
+    transportRef.current?.send({ address: AURORA_AUDIO_SPECTRUM_ADDRESS, args: [null] });
     if (micTimerRef.current) {
       clearInterval(micTimerRef.current);
       micTimerRef.current = null;
