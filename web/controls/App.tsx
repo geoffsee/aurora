@@ -1,5 +1,6 @@
 import { Box, Grid } from '@chakra-ui/react';
 import { useState } from 'react';
+import { AudioShapingPanel } from './components/AudioShapingPanel.tsx';
 import { CrossfadePanel } from './components/CrossfadePanel.tsx';
 import { CuesPanel } from './components/CuesPanel.tsx';
 import { ErrorBanners } from './components/ErrorBanners.tsx';
@@ -26,6 +27,7 @@ const gridAreas = `
   "snd  snd  snd  snd  snd  snd  snd  snd  snd  snd  snd  snd"
   "midi midi midi midi midi midi midi midi midi midi midi midi"
   "trig trig trig trig trig trig trig trig trig trig trig trig"
+  "shap shap shap shap shap shap shap shap shap shap shap shap"
   "curv curv curv curv curv curv curv curv curv curv curv curv"
   "mete mete mete mete mete mete mete mete mete mete mete mete"
 `;
@@ -63,6 +65,7 @@ export function App() {
           <SoundCloudPanel />
           <MidiCcPanel />
           <TriggersPanel />
+          <AudioShapingPanel />
           <AudioCurvesPanel />
           <MetersPanel />
         </Grid>

@@ -178,5 +178,12 @@ export const migrateControlState = (state: unknown): unknown => {
       deckBPalette: typeof s.deckBPalette === 'number' ? s.deckBPalette : palette,
     });
   }
+  // v17 → v18: per-band audio shaping (gain / gate / ceiling / release /
+  // mute / solo). Absent means identity, so an upgraded session behaves
+  // exactly as it did — the bridge's coerce fills the defaults, which are the
+  // constants it already used.
+  if (s.schemaVersion === 17) {
+    return migrateControlState({ ...s, schemaVersion: 18, audioShaping: s.audioShaping ?? {} });
+  }
   return state;
 };

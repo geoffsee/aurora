@@ -120,6 +120,7 @@ describe('router contract', () => {
         level: 0.5,
         offDelayMs: 200,
         increment: false,
+        combine: 'last',
       },
       {
         source: 'pulse',
@@ -130,6 +131,7 @@ describe('router contract', () => {
         level: 0.4,
         offDelayMs: 200,
         increment: true,
+        combine: 'last',
       },
     ]);
     router.setEnabled(true);

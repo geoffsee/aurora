@@ -39,6 +39,7 @@ const continuousMapping = (over: Partial<AudioMapping> = {}): AudioMapping => ({
   level: 0.5,
   offDelayMs: 200,
   increment: false,
+  combine: 'last',
   ...over,
 });
 
@@ -51,6 +52,7 @@ const thresholdMapping = (over: Partial<AudioMapping> = {}): AudioMapping => ({
   level: 0.75,
   offDelayMs: 200,
   increment: true,
+  combine: 'last',
   ...over,
 });
 
@@ -253,4 +255,122 @@ test('setMappings resets edge state', () => {
   router.setMappings([thresholdMapping()]);
   expect(router.onFeatures(features({ pulse: 0.9 }), 10)).toBe(true);
   expect(state.flashVersion).toBe(2);
+});
+
+describe('combine rules for two mappings on one target', () => {
+  const pair = (combine: AudioMapping['combine']) => [
+    continuousMapping({ source: 'bass', target: 'depth', targetMax: 1, combine }),
+    continuousMapping({ source: 'mid', target: 'depth', targetMax: 1, combine }),
+  ];
+
+  test('defaults to last-write-wins — the historical behaviour', () => {
+    // Not a chosen semantic before this existed: whichever mapping sat later
+    // in the array silently won, which made two-band targets an accident.
+    const h = makeHarness();
+    h.router.setMappings(pair('last'));
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0.8, mid: 0.2, high: 0, pulse: 0 }, 0);
+    expect(h.diffs.at(-1)?.depth).toBeCloseTo(0.2, 5);
+  });
+
+  test('max lets the loudest band drive without the other cancelling it', () => {
+    const h = makeHarness();
+    h.router.setMappings(pair('max'));
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0.8, mid: 0.2, high: 0, pulse: 0 }, 0);
+    expect(h.diffs.at(-1)?.depth).toBeCloseTo(0.8, 5);
+  });
+
+  test('min ducks to the quieter band', () => {
+    const h = makeHarness();
+    h.router.setMappings(pair('min'));
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0.8, mid: 0.2, high: 0, pulse: 0 }, 0);
+    expect(h.diffs.at(-1)?.depth).toBeCloseTo(0.2, 5);
+  });
+
+  test('sum adds both contributions', () => {
+    const h = makeHarness();
+    h.router.setMappings(pair('sum'));
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0.3, mid: 0.4, high: 0, pulse: 0 }, 0);
+    expect(h.diffs.at(-1)?.depth).toBeCloseTo(0.7, 5);
+  });
+
+  test('a steady band still participates when its target is contested', () => {
+    // The bug this guards: no-op suppression is a bandwidth optimisation for a
+    // single mapping. On a contested target it would make `max` follow only
+    // whichever half happened to move this frame, so the value would collapse
+    // to the quiet band the moment the loud one held still.
+    const h = makeHarness();
+    h.router.setMappings(pair('max'));
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0.8, mid: 0.2, high: 0, pulse: 0 }, 0);
+    h.router.onFeatures({ energy: 0, bass: 0.8, mid: 0.25, high: 0, pulse: 0 }, 16);
+    expect(h.diffs.at(-1)?.depth).toBeCloseTo(0.8, 5);
+  });
+
+  test('increment targets always take the running value, never a fold', () => {
+    // Folding two bumps with `max` would silently drop one; a counter has to
+    // count.
+    const h = makeHarness({ flashVersion: 5 });
+    h.router.setMappings([
+      thresholdMapping({
+        source: 'pulse',
+        target: 'flashVersion',
+        increment: true,
+        combine: 'max',
+      }),
+    ]);
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0, mid: 0, high: 0, pulse: 1 }, 0);
+    expect(h.diffs.at(-1)?.flashVersion).toBe(6);
+  });
+});
+
+describe('per-deck targets', () => {
+  test('a mapping may address a specific deck sink', () => {
+    const h = makeHarness();
+    h.router.setMappings([
+      continuousMapping({ source: 'bass', target: 'deckADepth', targetMax: 1 }),
+      continuousMapping({ source: 'bass', target: 'deckBDepth', targetMin: 1, targetMax: 0 }),
+    ]);
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0.25, mid: 0, high: 0, pulse: 0 }, 0);
+    const diff = h.diffs.at(-1);
+    expect(diff?.deckADepth).toBeCloseTo(0.25, 5);
+    expect(diff?.deckBDepth).toBeCloseTo(0.75, 5);
+  });
+
+  test('one source may drive a per-deck sink and a global one at once', () => {
+    const h = makeHarness();
+    h.router.setMappings([
+      continuousMapping({ source: 'bass', target: 'deckADepth', targetMax: 1 }),
+      continuousMapping({ source: 'bass', target: 'depth', targetMax: 0.5 }),
+    ]);
+    h.router.setEnabled(true);
+    h.router.onFeatures({ energy: 0, bass: 0.6, mid: 0, high: 0, pulse: 0 }, 0);
+    const diff = h.diffs.at(-1);
+    expect(diff?.deckADepth).toBeCloseTo(0.6, 5);
+    expect(diff?.depth).toBeCloseTo(0.3, 5);
+  });
+
+  test('forbidden targets stay forbidden even per-deck', () => {
+    expect(
+      parseAudioMappings([
+        { source: 'bass', target: 'crossfade' },
+        { source: 'bass', target: 'deckAMode' },
+        { source: 'bass', target: 'deckAPresetSlug' },
+      ]),
+    ).toEqual([]);
+  });
+
+  test('parseAudioMappings defaults combine to last and rejects junk', () => {
+    const [mapping] = parseAudioMappings([
+      { source: 'bass', target: 'depth', combine: 'sideways' },
+    ]);
+    expect(mapping?.combine).toBe('last');
+    const [explicit] = parseAudioMappings([{ source: 'bass', target: 'depth', combine: 'max' }]);
+    expect(explicit?.combine).toBe('max');
+  });
 });

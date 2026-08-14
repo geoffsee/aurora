@@ -1,4 +1,5 @@
 import type { AudioEmaAlphas } from '../../../bridge/audio-ema.ts';
+import type { AudioShapingConfig } from '../../../bridge/audio-shaper.ts';
 import type { AudioCurveShape } from '../../../shared/osc-validation.ts';
 import type { OutputRoute } from '../../../shared/output-routing.ts';
 
@@ -94,6 +95,7 @@ export type ControlState = {
   deckBGpuShader: number;
   bandCurves: BandCurves;
   emaAlphas: AudioEmaAlphas;
+  audioShaping: AudioShapingConfig;
   morph: number;
   audioControlMode: boolean;
   outputs: OutputRoute[];
