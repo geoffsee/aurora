@@ -2,6 +2,7 @@ import { Box, Button, Flex, Text } from '@chakra-ui/react';
 import { studioAppUrl } from '../../../shared/static-hosting.ts';
 import { useControls } from '../context/ControlsContext.tsx';
 import { CLOCK_LABELS } from '../lib/constants.ts';
+import { PairPhoneControl } from './PairPhoneControl.tsx';
 import { Panel, StatusPill } from './ui.tsx';
 
 export function StatusHeader({ onSettings }: { onSettings: () => void }) {
@@ -92,6 +93,7 @@ export function StatusHeader({ onSettings }: { onSettings: () => void }) {
           >
             P95 {latencyP95 === null ? '—ms' : `${latencyP95.toFixed(0)}ms`}
           </StatusPill>
+          <PairPhoneControl />
           <Button
             size="sm"
             colorPalette="green"
