@@ -8,6 +8,7 @@ import { GeoffseePagesNav } from './components/GeoffseePagesNav.tsx';
 import { AudioCurvesPanel, MappingPanel } from './components/MappingPanel.tsx';
 import { MetersPanel } from './components/MetersPanel.tsx';
 import { MidiCcPanel, TriggersPanel } from './components/MidiTriggersPanel.tsx';
+import { MobileSurfacePrompt } from './components/MobileSurfacePrompt.tsx';
 import { PreviewPanel } from './components/PreviewPanel.tsx';
 import { AudioControlPanel, RehearsalPanel } from './components/RehearsalPanel.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
@@ -69,6 +70,7 @@ export function App() {
           <MetersPanel />
         </Grid>
         <ErrorBanners />
+        <MobileSurfacePrompt />
         <GeoffseePagesNav />
         <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       </Box>

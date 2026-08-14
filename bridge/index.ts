@@ -2064,6 +2064,14 @@ const controlsServer = Bun.serve({
       return Response.redirect(url, 308);
     }
 
+    // Console lives at the root of this origin, but `/controls/` is how it is
+    // addressed on the projector origin and on static Pages. Accepting the
+    // sub-path here too means one "back to Console" URL works from `/mobile/`
+    // regardless of which port the phone landed on.
+    if (request.method === 'GET' && (pathname === '/controls' || pathname === '/controls/')) {
+      return Response.redirect(new URL(`/${url.search}`, url), 308);
+    }
+
     // Mobile client is served here too — :8444 is the port a phone opens.
     if (request.method === 'GET' && pathname === '/mobile') {
       return Response.redirect(new URL('/mobile/', request.url), 308);
