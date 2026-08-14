@@ -14,9 +14,9 @@ import {
 } from '../shared/package-channel.ts';
 import { formatPairingCode } from '../shared/pairing-code.ts';
 import {
+  ensureHostSession,
   type HostSession,
-  loadHostSession,
-  registerHostSession,
+  markGuestPaired,
   resolveRelayBaseUrl,
   rotateHostCode,
   socketUrlForSession,
@@ -167,12 +167,30 @@ const FULLSCREEN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" heig
 const EXIT_FULLSCREEN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>`;
 
 /**
- * Relay host: register a session, show the pairing code, accept guest frames.
+ * Escape hatch for the projector-only Pages setup: `?pairOverlay=1` puts the
+ * code back on the canvas for an operator who never opens Console.
+ */
+export function pairingOverlayEnabled(loc: Pick<Location, 'search'> = location): boolean {
+  try {
+    return new URLSearchParams(loc.search ?? '').get('pairOverlay') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Relay host: register a session, accept guest frames.
  *
  * Only meaningful on the static build — a bridged stack already has a
  * WebSocket bus and does not need a broker. The relay socket is attached
  * *alongside* the existing transport rather than merged into it, so an operator
  * can drive from the same-device controls page and a paired phone at once.
+ *
+ * The pairing code is Console's to display (#286): it is an ops action, and
+ * burning it into the projection put it in every capture and IMAG feed. The
+ * projector keeps ownership of the *socket* — it owns the render — and only
+ * publishes "a guest is live" through storage for Console to pick up. The
+ * overlay survives behind `?pairOverlay=1` for projector-only setups.
  *
  * Returns a disposer.
  */
@@ -181,38 +199,37 @@ export async function mountRelayHost(
   doc: Document = document,
   loc: Pick<Location, 'search'> = location,
 ): Promise<() => void> {
-  const existing = loadHostSession();
-  let session = existing;
-  if (!session) {
-    const result = await registerHostSession(resolveRelayBaseUrl(loc));
-    if (!result.ok) {
-      console.warn(`[relay] could not register a session: ${result.error}`);
-      return () => {};
-    }
-    session = result.value;
+  const result = await ensureHostSession(resolveRelayBaseUrl(loc));
+  if (!result.ok) {
+    console.warn(`[relay] could not register a session: ${result.error}`);
+    return () => {};
   }
+  let session = result.value;
 
-  const panel = renderPairingPanel(doc, session, async () => {
-    const rotated = await rotateHostCode(session as HostSession);
-    if (rotated.ok) {
-      session = rotated.value;
-      panel.setCode(rotated.value.code);
-    } else {
-      panel.setError(rotated.error);
-    }
+  const panel = pairingOverlayEnabled(loc)
+    ? renderPairingPanel(doc, session, async () => {
+        const rotated = await rotateHostCode(session);
+        if (rotated.ok) {
+          session = rotated.value;
+          panel?.setCode(rotated.value.code);
+        } else {
+          panel?.setError(rotated.error);
+        }
+      })
+    : null;
+
+  const transport = createWebSocketTransport(() => socketUrlForSession(session, 'host'), {
+    reconnect: true,
   });
-
-  const transport = createWebSocketTransport(
-    () => socketUrlForSession(session as HostSession, 'host'),
-    { reconnect: true },
-  );
   let paired = false;
   transport.onMessage((frame) => {
-    // A guest frame means someone paired: retire the code rather than leave it
-    // burning into the projector all night. The socket stays up.
+    // A guest frame is the only evidence the relay ever gives that someone
+    // paired — it keeps no roster. Record it so Console can retire the code
+    // instead of leaving it up for anyone in the room to read.
     if (!paired) {
       paired = true;
-      panel.remove();
+      markGuestPaired(session.sessionId, Date.now());
+      panel?.remove();
     }
     handlers.onMessage(frame);
   });
@@ -220,7 +237,7 @@ export async function mountRelayHost(
 
   return () => {
     transport.close();
-    panel.remove();
+    panel?.remove();
   };
 }
 
