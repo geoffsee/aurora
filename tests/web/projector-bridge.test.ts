@@ -1,9 +1,25 @@
 import { describe, expect, test } from 'vitest';
 import {
   mountGeoffseePagesNav,
+  pairingOverlayEnabled,
   shouldSubscribeBroadcastChannel,
   shouldUseBroadcastChannel,
 } from '../../web/projector-bridge.ts';
+
+describe('pairingOverlayEnabled', () => {
+  test('is off by default — Console owns the pairing code now', () => {
+    expect(pairingOverlayEnabled({ search: '' })).toBe(false);
+  });
+
+  test('opt-in escape hatch for projector-only Pages setups', () => {
+    expect(pairingOverlayEnabled({ search: '?pairOverlay=1' })).toBe(true);
+  });
+
+  test('any other value leaves the projection clean', () => {
+    expect(pairingOverlayEnabled({ search: '?pairOverlay=0' })).toBe(false);
+    expect(pairingOverlayEnabled({ search: '?pairOverlay' })).toBe(false);
+  });
+});
 
 describe('shouldUseBroadcastChannel', () => {
   test('requires embed=1 and a same-origin parent frame', () => {
