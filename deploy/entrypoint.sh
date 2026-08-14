@@ -65,6 +65,9 @@ $ctrl {
 	handle /api/packages/import {
 		reverse_proxy 127.0.0.1:13000
 	}
+	handle /api/auth/* {
+		reverse_proxy 127.0.0.1:13000
+	}
 	handle {
 		reverse_proxy 127.0.0.1:13001
 	}

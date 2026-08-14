@@ -25,7 +25,11 @@ describe('controls-origin API routing', () => {
     // Regression: the Console reads /api/modes/* from its own origin because the
     // bridge sends no CORS headers. Dropping these routes makes the mode catalog
     // 404 on :8444 and the launchpad comes up empty.
-    expect(CONTROLS_SITE_PROXIED_PATHS).toEqual(['/api/modes/*', '/api/packages/import']);
+    expect(CONTROLS_SITE_PROXIED_PATHS).toEqual([
+      '/api/modes/*',
+      '/api/packages/import',
+      '/api/auth/*',
+    ]);
   });
 
   test('native Caddyfile sends them to the visual server, not the controls server', () => {

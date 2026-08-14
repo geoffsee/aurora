@@ -146,6 +146,27 @@ stay open. The CLI prints tokenized LAN links, and the projector picks the token
 up from its own URL. Without the env var, behaviour is unchanged and the CLI
 warns you the instance is open.
 
+#### Pairing a phone with a one-time code
+
+Reading a 32-character hex token out to someone holding a phone does not work,
+so in practice it gets shared as a tokenised URL — which puts the *long-lived*
+credential through a chat app. Issue a short code instead:
+
+1. **Console → Settings → Phone pairing → Issue pairing code.** Eight characters,
+   same alphabet and five-minute life as the relay's pairing code.
+2. On the phone, **Setup → Pairing code**, type it, **Pair with code**.
+
+The code is redeemed **once** for a random session token, which the phone stores
+as its instance token — so it reconnects on its own afterwards without the code
+or the access token. Wrong guesses are limited (five well-formed attempts burn
+the code; the endpoint is flood-limited independently), compares are
+constant-time, and no device fingerprinting is involved.
+
+Sessions last 12 hours, end when the bridge restarts, and can be dropped
+immediately with **Revoke phone sessions**. The instance must actually be gated —
+`AURORA_ACCESS_TOKEN` is what authorises issuing a code, and an open bridge
+refuses rather than hand out a credential that gates nothing.
+
 ### SoundCloud account in Console
 
 The Console can connect a SoundCloud account and browse **Likes**, **My tracks**,
