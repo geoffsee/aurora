@@ -6,6 +6,10 @@ import {
   isAuthorizedRequest,
   normalizeAccessToken,
 } from '../shared/access-token.ts';
+import {
+  AURORA_AUDIO_SPECTRUM_ADDRESS,
+  coerceAudioSpectrumFrame,
+} from '../shared/audio-spectrum.ts';
 import { migrateControlState } from '../shared/control-state-schema.ts';
 import {
   DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
@@ -257,6 +261,7 @@ const webRoot = `${root}/web`;
 const controlsDistRoot = `${root}/dist/controls`;
 const mobileDistRoot = `${root}/dist/mobile`;
 const studioDistRoot = `${root}/dist/studio`;
+const webxrDistRoot = `${root}/dist/webxr`;
 const vendorDistRoot = `${root}/dist/vendor`;
 const liveHost = Bun.env.LIVE_HOST ?? '127.0.0.1';
 const liveSendPort = Number(Bun.env.LIVE_SEND_PORT ?? 11000);
@@ -370,6 +375,7 @@ const resolveControlsFile = (relativePath: string) =>
 const resolveMobileFile = (relativePath: string) => Bun.file(`${mobileDistRoot}/${relativePath}`);
 const resolveVendorFile = (relativePath: string) => Bun.file(`${vendorDistRoot}/${relativePath}`);
 const resolveStudioFile = (relativePath: string) => Bun.file(`${studioDistRoot}/${relativePath}`);
+const resolveWebxrFile = (relativePath: string) => Bun.file(`${webxrDistRoot}/${relativePath}`);
 
 const udp = new osc.UDPPort({
   localAddress: Bun.env.LIVE_RECV_HOST ?? '0.0.0.0',
@@ -1794,6 +1800,27 @@ const visualServer = Bun.serve({
       });
     }
 
+    if (request.method === 'GET' && pathname === '/webxr') {
+      url.pathname = '/webxr/';
+      return Response.redirect(url, 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/webxr/')) {
+      const relativePath = pathname.slice('/webxr/'.length) || 'index.html';
+      if (relativePath.includes('..')) {
+        return new Response('Not found', { status: 404 });
+      }
+      const file = resolveWebxrFile(relativePath);
+      if (!(await file.exists())) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response(file, {
+        headers: {
+          'content-type': contentType(relativePath),
+          'cache-control': 'no-store',
+        },
+      });
+    }
+
     if (request.method === 'GET' && pathname === '/controls') {
       return Response.redirect(new URL('/controls/', url), 308);
     }
@@ -1981,6 +2008,18 @@ const visualServer = Bun.serve({
             audioControlRouter.onFeatures(smoothedBrowser, nowMs);
             maybeFeedAutomationAudio(smoothedBrowser, nowMs);
             broadcastBrowserAudioFeatures(smoothedBrowser, nowMs);
+          } else if (parsed.address === AURORA_AUDIO_SPECTRUM_ADDRESS) {
+            const rawSpectrum = Array.isArray(parsed.args) ? parsed.args[0] : undefined;
+            const spectrum = rawSpectrum === null ? null : coerceAudioSpectrumFrame(rawSpectrum);
+            if (rawSpectrum === null || spectrum) {
+              const data = JSON.stringify({
+                address: AURORA_AUDIO_SPECTRUM_ADDRESS,
+                args: [spectrum],
+              });
+              sockets.forEach((socket) => {
+                socket.send(data);
+              });
+            }
           } else if (parsed.address.startsWith('/aurora/automation/transient/')) {
             applyTransientConfigMsg(
               parsed.address,
@@ -2037,6 +2076,14 @@ const controlsServer = Bun.serve({
     // regardless of which port the phone landed on.
     if (request.method === 'GET' && (pathname === '/controls' || pathname === '/controls/')) {
       return Response.redirect(new URL(`/${url.search}`, url), 308);
+    }
+
+    if (request.method === 'GET' && pathname === '/webxr') {
+      url.pathname = '/webxr/';
+      return Response.redirect(url, 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/webxr/')) {
+      return Response.redirect(url, 308);
     }
 
     // Mobile client is served here too — :8444 is the port a phone opens.

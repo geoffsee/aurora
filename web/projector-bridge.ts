@@ -1,12 +1,5 @@
-import { withAccessToken } from '../shared/access-token.ts';
 import { isControlBridgeConnected, isOscBridgeConnected } from '../shared/bridge-connection.ts';
-import {
-  type BridgeTransport,
-  createBroadcastChannelTransport,
-  createWebSocketTransport,
-  type OscFrame,
-} from '../shared/bridge-transport.ts';
-import { loadInstanceTarget } from '../shared/instance-target.ts';
+import { createWebSocketTransport, type OscFrame } from '../shared/bridge-transport.ts';
 import {
   compiledWireFromAuthoredPackage,
   getAuthoredPackage,
@@ -30,6 +23,12 @@ import {
   staticSitePathPrefix,
 } from '../shared/static-hosting.ts';
 import { getThreePackageBundle } from '../shared/three-package-store.ts';
+import {
+  attachDisplayTransport,
+  createDisplayTransport,
+  shouldSubscribeBroadcastChannel,
+  shouldUseBroadcastChannel,
+} from './display-transport.ts';
 
 export { AdaptiveDprGovernor, AuroraThreeDeckHost } from './three-runtime.ts';
 
@@ -39,6 +38,8 @@ export {
   isControlBridgeConnected,
   isOscBridgeConnected,
   isStaticHosting,
+  shouldSubscribeBroadcastChannel,
+  shouldUseBroadcastChannel,
   staticModesApiBase,
   staticSitePathPrefix,
   subscribeAuthoredPackages,
@@ -103,62 +104,9 @@ export function projectorCompiledModeUrl(
   return `/api/modes/compiled?${params.toString()}`;
 }
 
-/** True when an embedded preview can share the controls page origin. */
-export function shouldUseBroadcastChannel(
-  loc: Pick<Location, 'search' | 'origin'> = location,
-  win: Pick<Window, 'parent'> = window,
-): boolean {
-  if (new URLSearchParams(loc.search).get('embed') !== '1') return false;
-  if (typeof BroadcastChannel === 'undefined') return false;
-  try {
-    return win.parent !== win && win.parent.location.origin === loc.origin;
-  } catch {
-    return false;
-  }
-}
-
-/** True when the projector should listen on the shared BroadcastChannel. */
-export function shouldSubscribeBroadcastChannel(
-  loc: Pick<Location, 'search' | 'hostname' | 'protocol' | 'origin'> = location,
-  win: Pick<Window, 'parent'> = window,
-): boolean {
-  if (typeof BroadcastChannel === 'undefined') return false;
-  return isStaticHosting(loc) || shouldUseBroadcastChannel(loc, win);
-}
-
-export function createProjectorTransport(
-  loc: Pick<Location, 'protocol' | 'host' | 'search' | 'hostname' | 'origin' | 'href'> = location,
-  win: Pick<Window, 'parent'> = window,
-): BridgeTransport {
-  const useBroadcast = shouldSubscribeBroadcastChannel(loc, win);
-  if (useBroadcast) {
-    return createBroadcastChannelTransport({ role: 'subscribe-only' });
-  }
-  const scheme = loc.protocol === 'https:' ? 'wss' : 'ws';
-  // The projector always renders on the machine that served it — only the
-  // token is adopted from the instance target, never a remote origin.
-  const { token } = loadInstanceTarget(loc as Pick<Location, 'search'>);
-  return createWebSocketTransport(withAccessToken(`${scheme}://${loc.host}/ws`, token), {
-    reconnect: true,
-  });
-}
-
-export function attachProjectorTransport(
-  transport: BridgeTransport,
-  handlers: {
-    onOpen?: () => void;
-    onClose?: () => void;
-    onError?: () => void;
-    onMessage: (frame: OscFrame) => void;
-  },
-): () => void {
-  if (handlers.onOpen) transport.onOpen(handlers.onOpen);
-  if (handlers.onClose) transport.onClose(handlers.onClose);
-  if (handlers.onError) transport.onError(handlers.onError);
-  transport.onMessage(handlers.onMessage);
-  transport.connect();
-  return () => transport.close();
-}
+/** Backward-compatible projector names for the generic display transport. */
+export const createProjectorTransport = createDisplayTransport;
+export const attachProjectorTransport = attachDisplayTransport;
 
 const CONTROLS_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>`;
 
