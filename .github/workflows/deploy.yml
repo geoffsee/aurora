@@ -59,6 +59,9 @@ jobs:
       - name: Build mobile show client
         run: bun run build:mobile
 
+      - name: Build WebXR spatial visualizer
+        run: bun run build:webxr
+
       - name: Build Preset Studio
         run: bun run build:studio
 
@@ -91,6 +94,8 @@ jobs:
           fi
           # Mobile show client — same ControlsProvider, touch-first view.
           test -f dist/mobile/index.html
+          # Immersive spatial visualizer. The directory form is the canonical Pages URL.
+          test -f dist/webxr/index.html
           # Preset Studio static app (package authoring + BroadcastChannel publish).
           test -f dist/studio/index.html
           touch dist/.nojekyll

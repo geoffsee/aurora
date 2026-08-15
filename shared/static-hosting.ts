@@ -67,8 +67,10 @@ export function staticSitePathPrefix(loc: Pick<Location, 'pathname'> = location)
   if (path.endsWith('/index.html')) {
     path = path.slice(0, -'/index.html'.length);
   }
-  // Strip app sub-routes so projector / controls / studio share one site root.
-  for (const segment of ['/controls', '/studio'] as const) {
+  // Strip app sub-routes so projector / controls / studio / mobile share one
+  // site root. Without `/mobile` the phone client on Pages resolves its mode
+  // catalog under `/aurora/mobile/api/…` and 404s.
+  for (const segment of ['/controls', '/studio', '/mobile'] as const) {
     const idx = path.indexOf(segment);
     if (idx >= 0) {
       path = path.slice(0, idx);

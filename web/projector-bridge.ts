@@ -1,12 +1,5 @@
-import { withAccessToken } from '../shared/access-token.ts';
 import { isControlBridgeConnected, isOscBridgeConnected } from '../shared/bridge-connection.ts';
-import {
-  type BridgeTransport,
-  createBroadcastChannelTransport,
-  createWebSocketTransport,
-  type OscFrame,
-} from '../shared/bridge-transport.ts';
-import { loadInstanceTarget } from '../shared/instance-target.ts';
+import { createWebSocketTransport, type OscFrame } from '../shared/bridge-transport.ts';
 import {
   compiledWireFromAuthoredPackage,
   getAuthoredPackage,
@@ -14,9 +7,9 @@ import {
 } from '../shared/package-channel.ts';
 import { formatPairingCode } from '../shared/pairing-code.ts';
 import {
+  ensureHostSession,
   type HostSession,
-  loadHostSession,
-  registerHostSession,
+  markGuestPaired,
   resolveRelayBaseUrl,
   rotateHostCode,
   socketUrlForSession,
@@ -30,6 +23,12 @@ import {
   staticSitePathPrefix,
 } from '../shared/static-hosting.ts';
 import { getThreePackageBundle } from '../shared/three-package-store.ts';
+import {
+  attachDisplayTransport,
+  createDisplayTransport,
+  shouldSubscribeBroadcastChannel,
+  shouldUseBroadcastChannel,
+} from './display-transport.ts';
 
 export { AdaptiveDprGovernor, AuroraThreeDeckHost } from './three-runtime.ts';
 
@@ -39,6 +38,8 @@ export {
   isControlBridgeConnected,
   isOscBridgeConnected,
   isStaticHosting,
+  shouldSubscribeBroadcastChannel,
+  shouldUseBroadcastChannel,
   staticModesApiBase,
   staticSitePathPrefix,
   subscribeAuthoredPackages,
@@ -103,62 +104,9 @@ export function projectorCompiledModeUrl(
   return `/api/modes/compiled?${params.toString()}`;
 }
 
-/** True when an embedded preview can share the controls page origin. */
-export function shouldUseBroadcastChannel(
-  loc: Pick<Location, 'search' | 'origin'> = location,
-  win: Pick<Window, 'parent'> = window,
-): boolean {
-  if (new URLSearchParams(loc.search).get('embed') !== '1') return false;
-  if (typeof BroadcastChannel === 'undefined') return false;
-  try {
-    return win.parent !== win && win.parent.location.origin === loc.origin;
-  } catch {
-    return false;
-  }
-}
-
-/** True when the projector should listen on the shared BroadcastChannel. */
-export function shouldSubscribeBroadcastChannel(
-  loc: Pick<Location, 'search' | 'hostname' | 'protocol' | 'origin'> = location,
-  win: Pick<Window, 'parent'> = window,
-): boolean {
-  if (typeof BroadcastChannel === 'undefined') return false;
-  return isStaticHosting(loc) || shouldUseBroadcastChannel(loc, win);
-}
-
-export function createProjectorTransport(
-  loc: Pick<Location, 'protocol' | 'host' | 'search' | 'hostname' | 'origin' | 'href'> = location,
-  win: Pick<Window, 'parent'> = window,
-): BridgeTransport {
-  const useBroadcast = shouldSubscribeBroadcastChannel(loc, win);
-  if (useBroadcast) {
-    return createBroadcastChannelTransport({ role: 'subscribe-only' });
-  }
-  const scheme = loc.protocol === 'https:' ? 'wss' : 'ws';
-  // The projector always renders on the machine that served it — only the
-  // token is adopted from the instance target, never a remote origin.
-  const { token } = loadInstanceTarget(loc as Pick<Location, 'search'>);
-  return createWebSocketTransport(withAccessToken(`${scheme}://${loc.host}/ws`, token), {
-    reconnect: true,
-  });
-}
-
-export function attachProjectorTransport(
-  transport: BridgeTransport,
-  handlers: {
-    onOpen?: () => void;
-    onClose?: () => void;
-    onError?: () => void;
-    onMessage: (frame: OscFrame) => void;
-  },
-): () => void {
-  if (handlers.onOpen) transport.onOpen(handlers.onOpen);
-  if (handlers.onClose) transport.onClose(handlers.onClose);
-  if (handlers.onError) transport.onError(handlers.onError);
-  transport.onMessage(handlers.onMessage);
-  transport.connect();
-  return () => transport.close();
-}
+/** Backward-compatible projector names for the generic display transport. */
+export const createProjectorTransport = createDisplayTransport;
+export const attachProjectorTransport = attachDisplayTransport;
 
 const CONTROLS_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>`;
 
@@ -167,12 +115,30 @@ const FULLSCREEN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" heig
 const EXIT_FULLSCREEN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>`;
 
 /**
- * Relay host: register a session, show the pairing code, accept guest frames.
+ * Escape hatch for the projector-only Pages setup: `?pairOverlay=1` puts the
+ * code back on the canvas for an operator who never opens Console.
+ */
+export function pairingOverlayEnabled(loc: Pick<Location, 'search'> = location): boolean {
+  try {
+    return new URLSearchParams(loc.search ?? '').get('pairOverlay') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Relay host: register a session, accept guest frames.
  *
  * Only meaningful on the static build — a bridged stack already has a
  * WebSocket bus and does not need a broker. The relay socket is attached
  * *alongside* the existing transport rather than merged into it, so an operator
  * can drive from the same-device controls page and a paired phone at once.
+ *
+ * The pairing code is Console's to display (#286): it is an ops action, and
+ * burning it into the projection put it in every capture and IMAG feed. The
+ * projector keeps ownership of the *socket* — it owns the render — and only
+ * publishes "a guest is live" through storage for Console to pick up. The
+ * overlay survives behind `?pairOverlay=1` for projector-only setups.
  *
  * Returns a disposer.
  */
@@ -181,38 +147,37 @@ export async function mountRelayHost(
   doc: Document = document,
   loc: Pick<Location, 'search'> = location,
 ): Promise<() => void> {
-  const existing = loadHostSession();
-  let session = existing;
-  if (!session) {
-    const result = await registerHostSession(resolveRelayBaseUrl(loc));
-    if (!result.ok) {
-      console.warn(`[relay] could not register a session: ${result.error}`);
-      return () => {};
-    }
-    session = result.value;
+  const result = await ensureHostSession(resolveRelayBaseUrl(loc));
+  if (!result.ok) {
+    console.warn(`[relay] could not register a session: ${result.error}`);
+    return () => {};
   }
+  let session = result.value;
 
-  const panel = renderPairingPanel(doc, session, async () => {
-    const rotated = await rotateHostCode(session as HostSession);
-    if (rotated.ok) {
-      session = rotated.value;
-      panel.setCode(rotated.value.code);
-    } else {
-      panel.setError(rotated.error);
-    }
+  const panel = pairingOverlayEnabled(loc)
+    ? renderPairingPanel(doc, session, async () => {
+        const rotated = await rotateHostCode(session);
+        if (rotated.ok) {
+          session = rotated.value;
+          panel?.setCode(rotated.value.code);
+        } else {
+          panel?.setError(rotated.error);
+        }
+      })
+    : null;
+
+  const transport = createWebSocketTransport(() => socketUrlForSession(session, 'host'), {
+    reconnect: true,
   });
-
-  const transport = createWebSocketTransport(
-    () => socketUrlForSession(session as HostSession, 'host'),
-    { reconnect: true },
-  );
   let paired = false;
   transport.onMessage((frame) => {
-    // A guest frame means someone paired: retire the code rather than leave it
-    // burning into the projector all night. The socket stays up.
+    // A guest frame is the only evidence the relay ever gives that someone
+    // paired — it keeps no roster. Record it so Console can retire the code
+    // instead of leaving it up for anyone in the room to read.
     if (!paired) {
       paired = true;
-      panel.remove();
+      markGuestPaired(session.sessionId, Date.now());
+      panel?.remove();
     }
     handlers.onMessage(frame);
   });
@@ -220,7 +185,7 @@ export async function mountRelayHost(
 
   return () => {
     transport.close();
-    panel.remove();
+    panel?.remove();
   };
 }
 

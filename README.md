@@ -65,12 +65,26 @@ reaches the projector through a Cloudflare Worker instead
 (`worker/`, deployed at `https://aurora-relay.seemueller.workers.dev`).
 
 1. Open the Pages **projector** on the machine that renders. It registers a
-   session and shows an 8-character pairing code.
-2. Open the Pages **mobile client** on a phone and type the code.
+   session (silently — nothing is drawn over the show image).
+2. In **Console**, press **Pair phone** in the top row to reveal an 8-character
+   code.
+3. Open the Pages **mobile client** on a phone and type the code.
+
+Pairing lives in Console rather than on the projector because it is an ops
+action: a code painted on the canvas competes with the artwork and stays in
+every capture and IMAG feed. Console only reveals it when asked, so there is no
+code sitting on a screen for the room to read. Projector and Console share the
+session through same-origin storage, so whichever you open first registers it
+and the other adopts it — and Console shows **Phone paired** once a guest is
+actually live. That signal is per-browser: a Console driven from a *different*
+machine than the projector will keep showing the code as unpaired.
+
+For a projector-only setup with no Console open, `?pairOverlay=1` puts the old
+on-canvas panel back.
 
 Both ends load over a public CA, so there is no certificate warning anywhere —
 the reason this path exists at all. The code is redeemed **once** for a random
-token and is then useless; it expires after five minutes, and the projector's
+token and is then useless; it expires after five minutes, and Console's
 “New code” button issues a fresh one. Session identity is never derived from
 anything device-shaped: a fingerprint would be guessable by anyone with a
 similar device, and would break on a browser update.
@@ -102,6 +116,21 @@ It is a *view* over the same `ControlsProvider` the console uses, not a second
 client: transport, reconnect, clamping, cue quantization, and preset
 interpolation are shared, so the two surfaces cannot drift. Preset save/rename
 and the deeper mapping panels stay on the console.
+
+**Phones find it on their own.** A handset that opens the console URL — from a
+QR to the host, a bookmark, or by typing the LAN IP — is offered the phone client
+once and remembers the answer. Detection is capability-based (coarse pointer plus
+a phone-sized short edge), so tablets and touchscreen laptops stay on Console;
+the CLI `phone` link still works as the explicit share target. Overrides, on any
+console link:
+
+| Override | Effect |
+| --- | --- |
+| `?console=1` | Stay on Console; never offer the phone client |
+| `?mobile=1` | Force the phone client, even on a desktop (QA) |
+
+Either choice sticks per device. Setup → **Use full Console** on the phone client
+switches back and clears the redirect.
 
 Built for one-handed use on a dark stage:
 
@@ -332,6 +361,7 @@ first-run copy of bundled → override. See [`data/README.md`](data/README.md).
 - `web/controls/` – controls app (port `8444` via Caddy).
 - `data/` – bundled deck preset catalog + authoring guide (`data/README.md`).
 - `docs/mode-protocol.md` / `docs/mode-primitives.md` – mode pack protocol and primitive ceiling.
+- `docs/spikes/` – design investigations whose deliverable is a decision, not code.
 - `deploy/` – `Caddyfile` + `muxox.toml` for the container entrypoint.
 - `Dockerfile` – `ghcr.io/geoffsee/aurora` image (muxox + Caddy + Bun).
 - `plugins/aurora-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.

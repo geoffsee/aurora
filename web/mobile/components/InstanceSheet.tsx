@@ -7,6 +7,7 @@ import {
   parseInstanceToken,
   saveInstanceTarget,
 } from '../../../shared/instance-target.ts';
+import { consoleClientUrl, saveSurfacePreference } from '../../../shared/mobile-routing.ts';
 import { useControls } from '../../controls/context/ControlsContext.tsx';
 
 export function InstanceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -141,6 +142,29 @@ export function InstanceSheet({ open, onClose }: { open: boolean; onClose: () =>
                     </Button>
                   </Flex>
                 </Flex>
+              </Box>
+
+              {/* ---- Surface ---- */}
+              <Box>
+                <Text fontSize="sm" fontWeight="semibold" letterSpacing="0.04em" mb={1}>
+                  Surface
+                </Text>
+                <Text fontSize="xs" color="whiteAlpha.600" mb={3}>
+                  The full Console has preset authoring and deep mapping this client leaves out. It
+                  is dense on a phone, but it is here when you need it — this device will stop
+                  redirecting to the show client once you switch.
+                </Text>
+                <Button
+                  w="100%"
+                  h="3.25rem"
+                  variant="surface"
+                  onClick={() => {
+                    saveSurfacePreference('console');
+                    location.href = consoleClientUrl(location);
+                  }}
+                >
+                  Use full Console
+                </Button>
               </Box>
             </Dialog.Body>
           </Dialog.Content>

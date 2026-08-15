@@ -63,6 +63,7 @@ function printDockerUrls() {
   const tokenized = (url: string) => withAccessToken(url, token);
   console.log('');
   console.log(`  projector  https://${host}:${PROJECTOR_PORT}`);
+  console.log(`  WebXR     https://${host}:${PROJECTOR_PORT}/webxr/`);
   console.log(`  controls   https://${host}:${CONTROLS_PORT}`);
   console.log(`  muxox UI   http://${host}:${MUXOX_UI_PORT}`);
   console.log(`  runtime    docker (${DOCKER_PLATFORM})`);
@@ -73,6 +74,7 @@ function printDockerUrls() {
       )}`,
     );
     console.log(`  phone      ${tokenized(`https://${lan[0]}:${CONTROLS_PORT}/mobile/`)}`);
+    console.log(`  headset    ${tokenized(`https://${lan[0]}:${PROJECTOR_PORT}/webxr/`)}`);
   }
   console.log('');
   console.log('  Accept the Caddy TLS warning once if prompted (tls internal).');
