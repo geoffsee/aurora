@@ -5,6 +5,7 @@ import { loadGuestSession } from '../../shared/relay-session.ts';
 import { isStaticHosting } from '../../shared/static-hosting.ts';
 import { ErrorBanners } from '../controls/components/ErrorBanners.tsx';
 import { ControlsProvider } from '../controls/context/ControlsContext.tsx';
+import { ConnectionAlert } from './components/ConnectionAlert.tsx';
 import { CuesTab } from './components/CuesTab.tsx';
 import { InstanceSheet } from './components/InstanceSheet.tsx';
 import { MixTab } from './components/MixTab.tsx';
@@ -55,6 +56,7 @@ export function App() {
         color="gray.50"
       >
         <StatusBar onSettings={() => setSetupOpen(true)} />
+        <ConnectionAlert />
 
         <Box as="main" flex="1" overflowY="auto" px={3} py={4}>
           {tab === 'mix' ? <MixTab /> : null}

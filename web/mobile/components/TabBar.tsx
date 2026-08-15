@@ -1,4 +1,6 @@
 import { Button, Grid } from '@chakra-ui/react';
+import { HAPTIC_TICK_MS, haptic } from '../lib/haptics.ts';
+import { sizesFor, useCompactLayout } from '../lib/layout.ts';
 import { MOBILE_TABS, type MobileTabId } from '../lib/tabs.ts';
 
 export function TabBar({
@@ -8,6 +10,8 @@ export function TabBar({
   active: MobileTabId;
   onSelect: (tab: MobileTabId) => void;
 }) {
+  const sizes = sizesFor(useCompactLayout());
+
   return (
     <Grid
       as="nav"
@@ -20,7 +24,7 @@ export function TabBar({
       {MOBILE_TABS.map((tab) => (
         <Button
           key={tab.id}
-          h="3.25rem"
+          h={sizes.controlHeight}
           fontSize="md"
           fontWeight="bold"
           variant="surface"
@@ -30,7 +34,10 @@ export function TabBar({
           color={active === tab.id ? 'black' : 'whiteAlpha.800'}
           _hover={{ bg: active === tab.id ? 'cyan.200' : 'whiteAlpha.200' }}
           aria-current={active === tab.id ? 'page' : undefined}
-          onClick={() => onSelect(tab.id)}
+          onClick={() => {
+            if (tab.id !== active) haptic(HAPTIC_TICK_MS);
+            onSelect(tab.id);
+          }}
         >
           {tab.label}
         </Button>
