@@ -18,7 +18,7 @@ const pkg = JSON.parse(readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf8'))
 };
 
 /** Bundles that pull in web/three-runtime.ts and therefore must externalize three. */
-const THREE_BEARING_BUILDS = ['build:web', 'build:studio'] as const;
+const THREE_BEARING_BUILDS = ['build:web', 'build:webxr', 'build:studio'] as const;
 
 describe('three.js is never bundled twice', () => {
   test.each(THREE_BEARING_BUILDS)('%s externalizes three', (script) => {

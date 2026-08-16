@@ -5,14 +5,13 @@ import {
   DynamicDrawUsage,
   IcosahedronGeometry,
   InstancedMesh,
-  type Material,
+  MeshBasicMaterial,
   MathUtils,
   Object3D,
   PerspectiveCamera,
   Scene,
   TorusGeometry,
 } from 'three';
-import { MeshBasicNodeMaterial } from 'three/webgpu';
 import type { SpatialVisualizerFrame } from './data-bridge.ts';
 
 const PARTICLE_MAX = 2_048;
@@ -24,10 +23,8 @@ const COMFORT_RADIUS = 0.55;
 const FLASH_COOLDOWN_MS = 250;
 const FLASH_DECAY_SECONDS = 0.18;
 
-type BasicNodeMaterial = InstanceType<typeof MeshBasicNodeMaterial>;
-
-function material(color: number, opacity: number, wireframe = false): BasicNodeMaterial {
-  const value = new MeshBasicNodeMaterial({ color, transparent: true, opacity, wireframe });
+function material(color: number, opacity: number, wireframe = false): MeshBasicMaterial {
+  const value = new MeshBasicMaterial({ color, transparent: true, opacity, wireframe });
   value.blending = AdditiveBlending;
   value.depthTest = true;
   value.depthWrite = false;
@@ -181,7 +178,8 @@ export class SpatialSceneController {
   dispose(): void {
     for (const mesh of [this.particles, this.spectrum, this.rings, this.shells]) {
       mesh.geometry.dispose();
-      (mesh.material as Material).dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const value of materials) value.dispose();
       mesh.removeFromParent();
     }
   }

@@ -34,6 +34,20 @@ describe('remapAuthoringWgslToShow', () => {
     expect(show).toContain('let uv = frag.uv');
     expect(show).toContain('pack_drive');
   });
+
+  test('remaps a multiline authoring entry with a trailing parameter comma', () => {
+    const multiline = PACK_V1_AUTHORING_TEMPLATE.replace(
+      'fn fragment(@builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>)',
+      `fn fragment(
+  @builtin(position) pos: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+)`,
+    );
+    const show = remapAuthoringWgslToShow(multiline);
+    expect(show).toContain('fn fragment(frag: VertexOutput)');
+    expect(show).toContain('let uv = frag.uv');
+    expect(show).not.toContain('@builtin(position)');
+  });
 });
 
 describe('build + parse archive', () => {

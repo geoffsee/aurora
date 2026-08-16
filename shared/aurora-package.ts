@@ -476,7 +476,7 @@ export function remapAuthoringWgslToShow(source: string): string {
   // Authoring entry: @fragment fn fragment(@builtin(position) …, @location(0) uv: vec2) -> …
   // → Bevy Material2d entry + local uv from frag.uv
   const authoringEntry =
-    /@fragment\s+fn\s+fragment\s*\(\s*@builtin\(\s*position\s*\)\s+\w+\s*:\s*vec4\s*<\s*f32\s*>\s*,\s*@location\(\s*0\s*\)\s+(\w+)\s*:\s*vec2\s*<\s*f32\s*>\s*\)\s*->\s*@location\(\s*0\s*\)\s*vec4\s*<\s*f32\s*>\s*\{/;
+    /@fragment\s+fn\s+fragment\s*\(\s*@builtin\(\s*position\s*\)\s+\w+\s*:\s*vec4\s*<\s*f32\s*>\s*,\s*@location\(\s*0\s*\)\s+(\w+)\s*:\s*vec2\s*<\s*f32\s*>\s*,?\s*\)\s*->\s*@location\(\s*0\s*\)\s*vec4\s*<\s*f32\s*>\s*\{/;
 
   if (authoringEntry.test(s)) {
     s = s.replace(
