@@ -11,6 +11,17 @@ import {
   resolveOutputView,
 } from '../../shared/output-routing.ts';
 import { hueToRgb } from '../../shared/palette-color.ts';
+import {
+  MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+  webXrSpatialFormationByIndex,
+} from '../../shared/webxr-spatial-contract.ts';
+import {
+  resolveSpatialFormation,
+  type SpatialFormationId,
+  spatialModeSeed,
+} from './spatial-formations.ts';
+
+export { spatialModeSeed } from './spatial-formations.ts';
 
 const TRACK_DATA = '/live/song/get/track_data';
 const TEMPO = '/live/song/get/tempo';
@@ -46,7 +57,7 @@ type AudioBands = {
   deckB: number;
 };
 
-type DeckFrame = {
+export type SpatialDeckFrame = {
   weight: number;
   enabled: boolean;
   color: [number, number, number];
@@ -54,7 +65,10 @@ type DeckFrame = {
   depth: number;
   feedback: number;
   speed: number;
+  xrDensity: number;
+  xrStructure: number;
   modeSeed: number;
+  formation: SpatialFormationId;
 };
 
 export type SpatialVisualizerFrame = {
@@ -73,9 +87,10 @@ export type SpatialVisualizerFrame = {
   beatVersion: number;
   tempo: number;
   playing: boolean;
-  deckA: DeckFrame;
-  deckB: DeckFrame;
-  formSeed: number;
+  deckA: SpatialDeckFrame;
+  deckB: SpatialDeckFrame;
+  xrSpatialExtent: number;
+  xrAudioReactivity: number;
   rings: boolean;
   ringOpacity: number;
   blackout: boolean;
@@ -111,6 +126,15 @@ type ControlView = {
   deckBMode: number;
   deckAPresetSlug: string;
   deckBPresetSlug: string;
+  xrFollowDeckModes: boolean;
+  xrFormationA: number;
+  xrFormationB: number;
+  xrDensityA: number;
+  xrDensityB: number;
+  xrStructureA: number;
+  xrStructureB: number;
+  xrSpatialExtent: number;
+  xrAudioReactivity: number;
   deckAIntensity: number;
   deckADepth: number;
   deckAFeedback: number;
@@ -152,6 +176,15 @@ const DEFAULT_CONTROL: ControlView = {
   deckBMode: 1,
   deckAPresetSlug: 'beams',
   deckBPresetSlug: 'tunnel',
+  xrFollowDeckModes: true,
+  xrFormationA: 0,
+  xrFormationB: 1,
+  xrDensityA: 1,
+  xrDensityB: 1,
+  xrStructureA: 1,
+  xrStructureB: 1,
+  xrSpatialExtent: 1,
+  xrAudioReactivity: 1,
   deckAIntensity: 0.82,
   deckADepth: 0,
   deckAFeedback: 0.22,
@@ -198,17 +231,6 @@ function curve(value: number, shape: string): number {
   if (shape === 'exponential') return value * value;
   if (shape === 'logarithmic') return Math.sqrt(Math.max(0, value));
   return value;
-}
-
-/** FNV-1a seed kept stable across browser sessions and JS engines. */
-export function spatialModeSeed(mode: number, slug: string): number {
-  const source = mode >= 0 ? `mode:${Math.floor(mode)}` : `slug:${slug}`;
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index++) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0) / 0xffffffff;
 }
 
 function trackDataValueStart(args: unknown[]): number {
@@ -298,6 +320,22 @@ function applyControlPatch(previous: ControlView, raw: unknown): ControlView {
       typeof source.deckBPresetSlug === 'string'
         ? source.deckBPresetSlug
         : previous.deckBPresetSlug,
+    xrFollowDeckModes:
+      typeof source.xrFollowDeckModes === 'boolean'
+        ? source.xrFollowDeckModes
+        : previous.xrFollowDeckModes,
+    xrFormationA: Math.floor(
+      clamp(source.xrFormationA, 0, MAX_WEBXR_SPATIAL_FORMATION_INDEX, previous.xrFormationA),
+    ),
+    xrFormationB: Math.floor(
+      clamp(source.xrFormationB, 0, MAX_WEBXR_SPATIAL_FORMATION_INDEX, previous.xrFormationB),
+    ),
+    xrDensityA: clamp01(source.xrDensityA, previous.xrDensityA),
+    xrDensityB: clamp01(source.xrDensityB, previous.xrDensityB),
+    xrStructureA: clamp01(source.xrStructureA, previous.xrStructureA),
+    xrStructureB: clamp01(source.xrStructureB, previous.xrStructureB),
+    xrSpatialExtent: clamp(source.xrSpatialExtent, 0.65, 1.75, previous.xrSpatialExtent),
+    xrAudioReactivity: clamp01(source.xrAudioReactivity, previous.xrAudioReactivity),
     deckAIntensity: clamp(source.deckAIntensity, 0.05, 1.5, previous.deckAIntensity),
     deckADepth: clamp01(source.deckADepth, previous.deckADepth),
     deckAFeedback: clamp01(source.deckAFeedback, previous.deckAFeedback),
@@ -519,9 +557,8 @@ export class VisualizerDataBridge {
       playing: this.playing || demoFresh || featuresFresh,
       deckA,
       deckB,
-      formSeed:
-        (deckA.modeSeed * deckA.weight + deckB.modeSeed * deckB.weight + output.activeShader / 37) %
-        1,
+      xrSpatialExtent: this.control.xrSpatialExtent,
+      xrAudioReactivity: this.control.xrAudioReactivity,
       rings: this.control.rings,
       ringOpacity: this.control.ringOpacity,
       blackout: output.blackout || deckA.weight + deckB.weight <= 0,
@@ -533,7 +570,7 @@ export class VisualizerDataBridge {
     };
   }
 
-  private deckFrame(side: 'a' | 'b', weight: number, hueShift: number): DeckFrame {
+  private deckFrame(side: 'a' | 'b', weight: number, hueShift: number): SpatialDeckFrame {
     const isA = side === 'a';
     const hue = ((isA ? this.control.deckAPalette : this.control.deckBPalette) + hueShift + 1) % 1;
     const rgb = hueToRgb(hue, this.control.paletteSaturation, 0.52);
@@ -548,7 +585,12 @@ export class VisualizerDataBridge {
       depth: isA ? this.control.deckADepth : this.control.deckBDepth,
       feedback: isA ? this.control.deckAFeedback : this.control.deckBFeedback,
       speed: isA ? this.control.deckASpeed : this.control.deckBSpeed,
+      xrDensity: isA ? this.control.xrDensityA : this.control.xrDensityB,
+      xrStructure: isA ? this.control.xrStructureA : this.control.xrStructureB,
       modeSeed: spatialModeSeed(mode, slug),
+      formation: this.control.xrFollowDeckModes
+        ? resolveSpatialFormation(mode, slug)
+        : webXrSpatialFormationByIndex(isA ? this.control.xrFormationA : this.control.xrFormationB),
     };
   }
 

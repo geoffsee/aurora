@@ -1,5 +1,5 @@
-import { setupWebGLXRFallback } from 'three/addons/webxr/WebGLXRFallback.js';
 import { WebGLRenderer } from 'three';
+import { setupWebGLXRFallback } from 'three/addons/webxr/WebGLXRFallback.js';
 import { WebGPURenderer } from 'three/webgpu';
 import { isStaticHosting } from '../../shared/static-hosting.ts';
 import { attachDisplayTransport, createDisplayTransport } from '../display-transport.ts';

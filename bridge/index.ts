@@ -56,6 +56,7 @@ import {
   resolveBothDeckSelections,
 } from '../shared/resolve-deck-selection.ts';
 import { importShadertoyUrl } from '../shared/shadertoy-import.ts';
+import { MAX_WEBXR_SPATIAL_FORMATION_INDEX } from '../shared/webxr-spatial-contract.ts';
 import {
   deriveLinkFrame,
   isLinkActive,
@@ -163,6 +164,16 @@ type ControlState = {
   deckAReloadActiveVersion: number;
   /** Explicit Reload active counter for deck B. */
   deckBReloadActiveVersion: number;
+  /** Follow the selected deck/package identity, or use explicit XR formations. */
+  xrFollowDeckModes: boolean;
+  xrFormationA: number;
+  xrFormationB: number;
+  xrDensityA: number;
+  xrDensityB: number;
+  xrStructureA: number;
+  xrStructureB: number;
+  xrSpatialExtent: number;
+  xrAudioReactivity: number;
   rings: boolean;
   ringOpacity: number;
   strobe: boolean;
@@ -464,6 +475,15 @@ const defaultControlState = (): ControlState => ({
   deckBPresetSlug: 'tunnel',
   deckAReloadActiveVersion: 0,
   deckBReloadActiveVersion: 0,
+  xrFollowDeckModes: true,
+  xrFormationA: 0,
+  xrFormationB: 1,
+  xrDensityA: 1,
+  xrDensityB: 1,
+  xrStructureA: 1,
+  xrStructureB: 1,
+  xrSpatialExtent: 1,
+  xrAudioReactivity: 1,
   rings: false,
   ringOpacity: 0.35,
   strobe: false,
@@ -667,6 +687,28 @@ const coerceControlState = (state: unknown): ControlState => {
       Number.MAX_SAFE_INTEGER,
       previous.deckBReloadActiveVersion ?? defaults.deckBReloadActiveVersion,
     ),
+    xrFollowDeckModes:
+      typeof source.xrFollowDeckModes === 'boolean'
+        ? source.xrFollowDeckModes
+        : previous.xrFollowDeckModes,
+    xrFormationA: clampInt(
+      source.xrFormationA,
+      0,
+      MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+      previous.xrFormationA,
+    ),
+    xrFormationB: clampInt(
+      source.xrFormationB,
+      0,
+      MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+      previous.xrFormationB,
+    ),
+    xrDensityA: clamp(source.xrDensityA, 0, 1, previous.xrDensityA),
+    xrDensityB: clamp(source.xrDensityB, 0, 1, previous.xrDensityB),
+    xrStructureA: clamp(source.xrStructureA, 0, 1, previous.xrStructureA),
+    xrStructureB: clamp(source.xrStructureB, 0, 1, previous.xrStructureB),
+    xrSpatialExtent: clamp(source.xrSpatialExtent, 0.65, 1.75, previous.xrSpatialExtent),
+    xrAudioReactivity: clamp(source.xrAudioReactivity, 0, 1, previous.xrAudioReactivity),
     rings: source.rings !== false,
     ringOpacity: clamp(source.ringOpacity, 0, 1, defaults.ringOpacity),
     strobe: Boolean(source.strobe),
@@ -1204,6 +1246,33 @@ const applyVstControlMessage = (msg: OscMsg) => {
       case 'deck_b_mode':
         mergeControlState({ deckBMode: value });
         break;
+      case 'xr_follow_deck_modes':
+        mergeControlState({ xrFollowDeckModes: booleanArg(arg) });
+        break;
+      case 'xr_formation_a':
+        mergeControlState({ xrFormationA: value });
+        break;
+      case 'xr_formation_b':
+        mergeControlState({ xrFormationB: value });
+        break;
+      case 'xr_density_a':
+        mergeControlState({ xrDensityA: value });
+        break;
+      case 'xr_density_b':
+        mergeControlState({ xrDensityB: value });
+        break;
+      case 'xr_structure_a':
+        mergeControlState({ xrStructureA: value });
+        break;
+      case 'xr_structure_b':
+        mergeControlState({ xrStructureB: value });
+        break;
+      case 'xr_spatial_extent':
+        mergeControlState({ xrSpatialExtent: value });
+        break;
+      case 'xr_audio_reactivity':
+        mergeControlState({ xrAudioReactivity: value });
+        break;
       case 'rings':
         mergeControlState({ rings: booleanArg(arg) });
         break;
@@ -1606,6 +1675,15 @@ const _switchCaseNames: ReadonlySet<string> = new Set([
   'palette',
   'deck_a_mode',
   'deck_b_mode',
+  'xr_follow_deck_modes',
+  'xr_formation_a',
+  'xr_formation_b',
+  'xr_density_a',
+  'xr_density_b',
+  'xr_structure_a',
+  'xr_structure_b',
+  'xr_spatial_extent',
+  'xr_audio_reactivity',
   'rings',
   'ring_opacity',
   'strobe',

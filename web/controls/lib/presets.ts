@@ -23,6 +23,12 @@ export const INTERPOLATED_KEYS = [
   'paletteB',
   'ringOpacity',
   'maxBrightness',
+  'xrDensityA',
+  'xrDensityB',
+  'xrStructureA',
+  'xrStructureB',
+  'xrSpatialExtent',
+  'xrAudioReactivity',
 ] as const;
 
 export type InterpolatedKey = (typeof INTERPOLATED_KEYS)[number];
@@ -40,6 +46,12 @@ export const CURVE_PARAM_LABELS: Record<InterpolatedKey, string> = {
   paletteB: 'Color B',
   ringOpacity: 'Ring Opc',
   maxBrightness: 'Max Bright',
+  xrDensityA: 'XR Density A',
+  xrDensityB: 'XR Density B',
+  xrStructureA: 'XR Structure A',
+  xrStructureB: 'XR Structure B',
+  xrSpatialExtent: 'XR Extent',
+  xrAudioReactivity: 'XR Audio',
 };
 
 export function applyCurve(t: number, curve: CurveMode, durationMs: number): number {

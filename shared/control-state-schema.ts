@@ -178,5 +178,23 @@ export const migrateControlState = (state: unknown): unknown => {
       deckBPalette: typeof s.deckBPalette === 'number' ? s.deckBPalette : palette,
     });
   }
+  // v17 → v18: WebXR performance controls. Following deck modes by default
+  // preserves existing shows; explicit formation indices are dormant until the
+  // operator disables follow mode.
+  if (s.schemaVersion === 17) {
+    return migrateControlState({
+      ...s,
+      schemaVersion: 18,
+      xrFollowDeckModes: true,
+      xrFormationA: 0,
+      xrFormationB: 1,
+      xrDensityA: 1,
+      xrDensityB: 1,
+      xrStructureA: 1,
+      xrStructureB: 1,
+      xrSpatialExtent: 1,
+      xrAudioReactivity: 1,
+    });
+  }
   return state;
 };

@@ -1,4 +1,9 @@
 import { MAX_FIGURE_MODEL_INDEX, MODEL_CATALOG } from '../../../shared/model-catalog.ts';
+import {
+  MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+  WEBXR_SPATIAL_FORMATION_LABELS,
+  webXrSpatialFormationByIndex,
+} from '../../../shared/webxr-spatial-contract.ts';
 import { VISUAL_MODES } from './constants.ts';
 import { hueToRgb, rgbToHue } from './palette.ts';
 import type { ControlState } from './types.ts';
@@ -38,6 +43,14 @@ export type MappableParam =
   | 'morph'
   | 'deckAMode'
   | 'deckBMode'
+  | 'xrFormationA'
+  | 'xrFormationB'
+  | 'xrDensityA'
+  | 'xrDensityB'
+  | 'xrStructureA'
+  | 'xrStructureB'
+  | 'xrSpatialExtent'
+  | 'xrAudioReactivity'
   | 'layerWeight0'
   | 'layerWeight1'
   | 'layerWeight2'
@@ -312,6 +325,80 @@ export const PARAM_META: Record<MappableParam, ParamMeta> = {
     bumpCue: true,
     format: (v) => VISUAL_MODES[Math.round(v)] ?? String(Math.round(v)),
   },
+  xrFormationA: {
+    key: 'xrFormationA',
+    label: 'XR Formation A',
+    knobLabel: 'XR Form A',
+    min: 0,
+    max: MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+    step: 1,
+    integer: true,
+    format: (v) => WEBXR_SPATIAL_FORMATION_LABELS[webXrSpatialFormationByIndex(v)],
+  },
+  xrFormationB: {
+    key: 'xrFormationB',
+    label: 'XR Formation B',
+    knobLabel: 'XR Form B',
+    min: 0,
+    max: MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+    step: 1,
+    integer: true,
+    format: (v) => WEBXR_SPATIAL_FORMATION_LABELS[webXrSpatialFormationByIndex(v)],
+  },
+  xrDensityA: {
+    key: 'xrDensityA',
+    label: 'XR Density A',
+    knobLabel: 'XR Dens A',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: pct,
+  },
+  xrDensityB: {
+    key: 'xrDensityB',
+    label: 'XR Density B',
+    knobLabel: 'XR Dens B',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: pct,
+  },
+  xrStructureA: {
+    key: 'xrStructureA',
+    label: 'XR Structure A',
+    knobLabel: 'XR Struct A',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: pct,
+  },
+  xrStructureB: {
+    key: 'xrStructureB',
+    label: 'XR Structure B',
+    knobLabel: 'XR Struct B',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: pct,
+  },
+  xrSpatialExtent: {
+    key: 'xrSpatialExtent',
+    label: 'XR Spatial Extent',
+    knobLabel: 'XR Extent',
+    min: 0.65,
+    max: 1.75,
+    step: 0.01,
+    format: f2,
+  },
+  xrAudioReactivity: {
+    key: 'xrAudioReactivity',
+    label: 'XR Audio Reactivity',
+    knobLabel: 'XR Audio',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: pct,
+  },
   layerWeight0: {
     key: 'layerWeight0',
     label: 'Layer 1 Opacity',
@@ -465,6 +552,14 @@ export const KNOB_STRIP_PARAMS: readonly MappableParam[] = [
   'gridShapeMix',
   'deckAMode',
   'deckBMode',
+  'xrFormationA',
+  'xrFormationB',
+  'xrDensityA',
+  'xrDensityB',
+  'xrStructureA',
+  'xrStructureB',
+  'xrSpatialExtent',
+  'xrAudioReactivity',
   'layerWeight0',
   'layerWeight1',
   'layerWeight2',

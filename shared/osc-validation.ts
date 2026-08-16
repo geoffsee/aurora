@@ -46,7 +46,9 @@ export const VST_OSC_CONTRACT = contract;
 // v15: added deckAReloadActiveVersion / deckBReloadActiveVersion (explicit re-fetch compiled)
 // v16: per-deck intensity/depth/feedback/speed for launchpad instrument knobs
 // v17: independent per-deck palette hue for each launchpad Color knob
-export const CONTROL_STATE_SCHEMA_VERSION = 17;
+// v18: shared WebXR performance controls (formation override, density,
+//      structure, spatial extent, and audio reactivity)
+export const CONTROL_STATE_SCHEMA_VERSION = 18;
 
 export type AudioCurveShape = 'linear' | 'exponential' | 'logarithmic';
 export const AUDIO_CURVE_SHAPES: readonly AudioCurveShape[] = [
