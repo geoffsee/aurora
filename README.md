@@ -132,6 +132,25 @@ console link:
 Either choice sticks per device. Setup → **Use full Console** on the phone client
 switches back and clears the redirect.
 
+Built for one-handed use on a dark stage:
+
+- **Panic is separated from navigation.** The blackout / freeze / strobe / flash
+  row sits in its own tinted band above the tabs, because two adjacent rows of
+  same-sized buttons is the geometry where a thumb reaching for “Cues” hits
+  “Blackout”. Nothing there has a confirm step — a panic control that asks a
+  question is not a panic control.
+- **Pinned chrome shrinks on a short viewport.** Rotating a phone leaves ~380 px
+  of height; the panic and tab rows drop to compact sizing below 520 px so the
+  controls stop being the reason you cannot see the show. Keyed on height, not
+  orientation, so tablets in landscape keep the roomy sizes.
+- **Haptics on commits and snaps**, never during a drag — where the platform has
+  them, and never when `prefers-reduced-motion` is set.
+- **A disconnected phone says so across the full width**, with the address it is
+  trying, instead of only a small grey pill.
+- Deck A/B carry an accent rule that lights for whichever deck the crossfade
+  actually favours: which pack is *loaded* and which pack is *on screen* are
+  different questions.
+
 ### Driving a remote instance (phone as control surface)
 
 Both the console and the mobile client can drive a bridge other than the one
@@ -342,6 +361,7 @@ first-run copy of bundled → override. See [`data/README.md`](data/README.md).
 - `web/controls/` – controls app (port `8444` via Caddy).
 - `data/` – bundled deck preset catalog + authoring guide (`data/README.md`).
 - `docs/mode-protocol.md` / `docs/mode-primitives.md` – mode pack protocol and primitive ceiling.
+- `docs/spikes/` – design investigations whose deliverable is a decision, not code.
 - `deploy/` – `Caddyfile` + `muxox.toml` for the container entrypoint.
 - `Dockerfile` – `ghcr.io/geoffsee/aurora` image (muxox + Caddy + Bun).
 - `plugins/aurora-vst/` – VST3 plugin that forwards parameter changes to the bridge over OSC.

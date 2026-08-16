@@ -60,3 +60,52 @@ export function describeLatency(latencyP95: number | null): StatusPillModel {
 export function isFeedLive(lastFrameAt: number, now: number, windowMs = 3000): boolean {
   return now - lastFrameAt < windowMs;
 }
+
+export type ConnectionAlert = {
+  title: string;
+  detail: string;
+  /** `error` reads as red, `warn` as amber. */
+  tone: 'error' | 'warn';
+};
+
+export type ConnectionAlertInput = {
+  status: BridgeStatus;
+  /** The instance this phone is pointed at, for the "wrong box" case. */
+  target: string;
+  /** True when driving a bridge other than the origin that served the page. */
+  remote: boolean;
+};
+
+/**
+ * A full-width strip for when the phone is not actually driving anything.
+ *
+ * The status pills are correct but they are small, and on a bright stage a
+ * grey "No bridge" chip is indistinguishable from a live one at arm's length.
+ * The failure mode this prevents is an operator moving a fader for thirty
+ * seconds before noticing the show is not responding — so a disconnected phone
+ * says so across the full width, in words, with the address it is trying.
+ *
+ * Returns null while connected, which is almost always.
+ */
+export function describeConnectionAlert(input: ConnectionAlertInput): ConnectionAlert | null {
+  switch (input.status) {
+    case 'error':
+      return {
+        title: 'Not connected',
+        detail: input.remote
+          ? `Cannot reach ${input.target}. Check the address, and that this phone has accepted its certificate.`
+          : `Cannot reach ${input.target}. The show machine may be off the network.`,
+        tone: 'error',
+      };
+    case 'connecting':
+      return { title: 'Reconnecting…', detail: `Trying ${input.target}.`, tone: 'warn' };
+    case 'static':
+      return {
+        title: 'Preview only',
+        detail: 'No bridge behind this page — controls move nothing until you pair or connect.',
+        tone: 'warn',
+      };
+    default:
+      return null;
+  }
+}
