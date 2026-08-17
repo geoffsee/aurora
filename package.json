@@ -86,5 +86,5 @@
     "typegpu": "^0.12.0",
     "unplugin-typegpu": "^0.12.1"
   },
-  "version": "0.1.9"
+  "version": "0.1.10"
 }
