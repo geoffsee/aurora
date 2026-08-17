@@ -48,3 +48,4 @@ preview_bucket_name = "aurora-live-show-assets-preview"
 directory = "../dist/viewer"
 binding = "VIEWER_ASSETS"
 run_worker_first = true
+html_handling = "none"
