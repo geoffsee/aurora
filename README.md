@@ -1,5 +1,10 @@
 # aurora
 
+This software generates real-time music visualizations that may include flashing lights, rapid color changes, strobing effects, and high-contrast patterns.
+These effects can trigger seizures or other symptoms in people with photosensitive epilepsy or light sensitivity.
+Do not use this software if you are affected by flashing or strobing lights.
+Use at your own risk.
+
 > This is an experimental project I use for learning. It isn't perfect.
 
 Browser/WebAssembly Bevy app for live Video DJ performance. The first show build favors dependable procedural visuals, keyboard control, and a local Bun server over risky real-time browser video decoding.
