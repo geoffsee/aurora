@@ -37,6 +37,22 @@ describe('live-show Worker runtime', () => {
     expect(await response.json()).toMatchObject({ protocolVersion: 1, shows: [] });
   });
 
+  test('streams the content-addressed viewer runtime from reserved R2 storage', async () => {
+    const bindings = env as unknown as { LIVE_SHOW_ASSETS: R2Bucket };
+    const file = 'aurora-0123456789abcdef.wasm';
+    await bindings.LIVE_SHOW_ASSETS.put(
+      `viewer-runtime/${file}`,
+      new Uint8Array([0, 97, 115, 109]),
+    );
+
+    const response = await worker.fetch(
+      new Request(`https://worker.example/viewer/runtime/${file}`),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/wasm');
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([0, 97, 115, 109]));
+  });
+
   test('validates show creation before allocating a session', async () => {
     const response = await worker.fetch(
       new Request('https://worker.example/api/shows', {

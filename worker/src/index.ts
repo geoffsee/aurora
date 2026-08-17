@@ -58,6 +58,9 @@ export type Env = SoundCloudAccountEnv & {
 };
 
 const SOUNDCLOUD_API_PREFIX = '/api/soundcloud';
+const VIEWER_RUNTIME_PREFIX = '/viewer/runtime/';
+const VIEWER_RUNTIME_KEY_PREFIX = 'viewer-runtime/';
+const VIEWER_RUNTIME_FILE = /^aurora-[a-f0-9]{16}\.wasm$/;
 
 function liveLog(event: string, detail: Record<string, unknown>): void {
   console.log(JSON.stringify({ scope: 'live-show', event, ...detail }));
@@ -660,9 +663,35 @@ export default {
       }
     }
 
+    // The Bevy runtime is larger than Cloudflare Static Assets' per-file cap.
+    // Stream only content-addressed build artifacts from the reserved R2
+    // prefix; show package cleanup never touches this namespace.
+    if (
+      (request.method === 'GET' || request.method === 'HEAD') &&
+      url.pathname.startsWith(VIEWER_RUNTIME_PREFIX)
+    ) {
+      const file = url.pathname.slice(VIEWER_RUNTIME_PREFIX.length);
+      if (!VIEWER_RUNTIME_FILE.test(file))
+        return json({ error: 'runtime not found' }, { status: 404 });
+      const object = await env.LIVE_SHOW_ASSETS.get(`${VIEWER_RUNTIME_KEY_PREFIX}${file}`);
+      if (!object) return json({ error: 'runtime not found' }, { status: 404 });
+      return new Response(request.method === 'HEAD' ? null : object.body, {
+        headers: {
+          'content-type': 'application/wasm',
+          'cache-control': 'public, max-age=31536000, immutable',
+          etag: object.httpEtag,
+          ...CORS_HEADERS,
+        },
+      });
+    }
+
     // Isolated audience renderer. It has a distinct Worker origin so trusted
     // Three.js packages cannot read Console/projector storage or credentials.
-    if (request.method === 'GET' && url.pathname.startsWith('/viewer/') && env.VIEWER_ASSETS) {
+    if (
+      (request.method === 'GET' || request.method === 'HEAD') &&
+      url.pathname.startsWith('/viewer/') &&
+      env.VIEWER_ASSETS
+    ) {
       const assetUrl = new URL(request.url);
       assetUrl.pathname = `/${url.pathname.slice('/viewer/'.length)}`;
       if (assetUrl.pathname === '/') assetUrl.pathname = '/index.html';

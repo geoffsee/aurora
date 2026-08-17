@@ -6,15 +6,17 @@ control traffic.
 
 ## Worker setup and rollout
 
-Create both R2 buckets named by `worker/wrangler.toml`, then build the isolated viewer before
-deploying the Worker:
+Create both R2 buckets named by `worker/wrangler.toml`, then deploy the Worker:
 
 ```bash
 bunx wrangler r2 bucket create aurora-live-show-assets
 bunx wrangler r2 bucket create aurora-live-show-assets-preview
-bun run build:viewer
 bun run worker:deploy
 ```
+
+`worker:deploy` builds the isolated viewer, uploads its content-addressed Bevy WASM runtime to R2,
+and publishes the Worker/static assets. The WASM object is kept outside Cloudflare Static Assets
+because it exceeds that service's 25 MiB per-file limit.
 
 Wrangler applies the `ShowDirectory` Durable Object migration during deployment. Roll out in this
 order: R2 buckets and migration, backward-compatible Worker, Pages directory/viewer assets, then

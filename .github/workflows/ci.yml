@@ -68,7 +68,7 @@ jobs:
         run: bun run typecheck:worker
 
       - name: Build live-show surfaces
-        run: bun run build:controls && bun run build:shows && bun run build:viewer
+        run: bun run build:controls && bun run build:shows && bun run build:viewer-assets
 
       - name: Worker runtime tests
         run: bun run test:worker
