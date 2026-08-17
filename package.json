@@ -54,19 +54,19 @@
     "format:biome": "biome format --write ."
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.7",
+    "@biomejs/biome": "^2.5.8",
     "@cloudflare/vitest-pool-workers": "^0.21.3",
-    "@cloudflare/workers-types": "^5.20260810.1",
+    "@cloudflare/workers-types": "^5.20260814.1",
     "@types/bun": "latest",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/three": "0.185.4",
     "@types/ws": "^8.18.1",
-    "happy-dom": "^20.11.1",
+    "happy-dom": "^20.11.2",
     "typescript": "^7.0.2",
     "typescript-legacy": "npm:typescript@5.9.3",
     "vitest": "^4.1.10",
-    "wrangler": "^4.120.0",
+    "wrangler": "^4.123.0",
     "ws": "^8"
   },
   "peerDependencies": {
@@ -83,8 +83,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "three": "0.185.1",
-    "typegpu": "^0.11.9",
-    "unplugin-typegpu": "^0.11.6"
+    "typegpu": "^0.12.0",
+    "unplugin-typegpu": "^0.12.1"
   },
   "version": "0.1.9"
 }
