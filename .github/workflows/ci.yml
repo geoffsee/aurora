@@ -47,7 +47,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install wasm-bindgen-cli
-        uses: taiki-e/install-action@v2.85.10
+        uses: taiki-e/install-action@v2.85.13
         with:
           tool: wasm-bindgen-cli@${{ env.WASM_BINDGEN_VERSION }}
 
