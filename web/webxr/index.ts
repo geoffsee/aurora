@@ -1,12 +1,20 @@
+import { WebGLRenderer } from 'three';
 import { setupWebGLXRFallback } from 'three/addons/webxr/WebGLXRFallback.js';
 import { WebGPURenderer } from 'three/webgpu';
+import { isAudienceViewerSurface } from '../../shared/live-show-client.ts';
 import { isStaticHosting } from '../../shared/static-hosting.ts';
 import { attachDisplayTransport, createDisplayTransport } from '../display-transport.ts';
 import { mountRelayHost } from '../projector-bridge.ts';
 import { outputIdFromLocation, VisualizerDataBridge } from './data-bridge.ts';
 import { SpatialSceneController } from './spatial-scene.ts';
+import {
+  ensureXrSessionEnabledFeatures,
+  forceLegacyWebGlLayer,
+  withoutXrProjectionLayers,
+  xrSessionNeedsLegacyWebGlLayer,
+} from './xr-compat.ts';
 
-type AuroraRenderer = WebGPURenderer;
+type AuroraRenderer = WebGPURenderer | WebGLRenderer;
 type BackendFlags = { isWebGPUBackend?: boolean };
 
 function requiredElement<T extends Element>(selector: string): T {
@@ -27,6 +35,7 @@ let renderer: AuroraRenderer | null = null;
 let session: XRSession | null = null;
 let disposeRelay = () => {};
 let dataTimer = 0;
+let useLegacyWebGlLayer = false;
 
 function setStatus(message: string, detail = ''): void {
   status.textContent = message;
@@ -34,7 +43,9 @@ function setStatus(message: string, detail = ''): void {
 }
 
 function rendererName(value: AuroraRenderer): string {
-  return (value.backend as BackendFlags).isWebGPUBackend ? 'WebGPU' : 'WebGL2 fallback';
+  return value instanceof WebGLRenderer || !(value.backend as BackendFlags).isWebGPUBackend
+    ? 'WebGL2 fallback'
+    : 'WebGPU';
 }
 
 function sizeRenderer(value: AuroraRenderer): void {
@@ -69,13 +80,16 @@ async function initializeRenderer(): Promise<AuroraRenderer> {
 
   setupWebGLXRFallback(
     primary,
-    () =>
-      new WebGPURenderer({
+    () => {
+      const fallback = new WebGPURenderer({
         forceWebGL: true,
         alpha: false,
         antialias: true,
         powerPreference: 'high-performance',
-      }),
+      });
+      if (useLegacyWebGlLayer) forceLegacyWebGlLayer(fallback.xr);
+      return fallback;
+    },
     (fallback, previous) => {
       renderer = fallback;
       replaceRendererCanvas(fallback, previous);
@@ -86,6 +100,25 @@ async function initializeRenderer(): Promise<AuroraRenderer> {
   return primary;
 }
 
+async function switchToClassicWebGlRenderer(): Promise<WebGLRenderer> {
+  if (renderer instanceof WebGLRenderer) return renderer;
+
+  const previous = renderer;
+  if (previous) await previous.setAnimationLoop(null);
+  const fallback = new WebGLRenderer({
+    alpha: false,
+    antialias: true,
+    powerPreference: 'high-performance',
+  });
+  fallback.xr.enabled = true;
+  fallback.xr.setReferenceSpaceType('local');
+  fallback.setAnimationLoop(renderFrame);
+  renderer = fallback;
+  replaceRendererCanvas(fallback, previous ?? undefined);
+  previous?.dispose();
+  return fallback;
+}
+
 async function enterVr(): Promise<void> {
   if (!renderer || !navigator.xr) return;
   enterButton.disabled = true;
@@ -94,6 +127,8 @@ async function enterVr(): Promise<void> {
     session = await navigator.xr.requestSession('immersive-vr', {
       optionalFeatures: ['webgpu'],
     } as XRSessionInit);
+    useLegacyWebGlLayer = xrSessionNeedsLegacyWebGlLayer(session);
+    ensureXrSessionEnabledFeatures(session);
     session.addEventListener(
       'end',
       () => {
@@ -108,7 +143,12 @@ async function enterVr(): Promise<void> {
       },
       { once: true },
     );
-    await renderer.xr.setSession(session);
+    if (useLegacyWebGlLayer) {
+      const fallback = await switchToClassicWebGlRenderer();
+      await withoutXrProjectionLayers(() => fallback.xr.setSession(session));
+    } else {
+      await renderer.xr.setSession(session);
+    }
     document.body.classList.add('xr-active');
     enterButton.textContent = 'VR active';
     setStatus('VR session active', `${rendererName(renderer)} · local reference space`);
@@ -161,7 +201,7 @@ async function boot(): Promise<void> {
         `${rendererName(renderer as AuroraRenderer)} · waiting for visualizer data`,
       ),
   });
-  if (isStaticHosting(location)) {
+  if (isStaticHosting(location) && !isAudienceViewerSurface(location)) {
     disposeRelay = await mountRelayHost({ onMessage: (frame) => dataBridge.ingest(frame) });
   }
   dataTimer = window.setInterval(() => spatial.commit(dataBridge.snapshot()), 1_000 / 45);

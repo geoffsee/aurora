@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "aurora"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "bevy",
  "serde_json",
@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "aurora-vst"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "nih_plug",
  "rosc",

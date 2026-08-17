@@ -48,6 +48,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 	&& bun run build:mobile \
 	&& bun run build:webxr \
 	&& bun run build:studio \
+	&& bun run build:shows \
 	&& bun run scripts/stage-web-models.ts
 
 # ---------------------------------------------------------------------------
@@ -100,6 +101,6 @@ ENV HOST=127.0.0.1 \
 	LIVE_HOST=host.docker.internal \
 	VST_CONTROL_RECV_HOST=0.0.0.0
 
-EXPOSE 8443 8444 8450 11001/udp 12000/udp
+EXPOSE 8443 8444 8450 18080 11001/udp 12000/udp
 
 ENTRYPOINT ["/app/deploy/entrypoint.sh"]

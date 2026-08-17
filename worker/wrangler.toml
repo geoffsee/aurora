@@ -12,6 +12,10 @@ name = "SHOW_SESSION"
 class_name = "ShowSession"
 
 [[durable_objects.bindings]]
+name = "SHOW_DIRECTORY"
+class_name = "ShowDirectory"
+
+[[durable_objects.bindings]]
 name = "PAIRING_CODE"
 class_name = "PairingCode"
 
@@ -28,3 +32,19 @@ new_sqlite_classes = ["ShowSession", "PairingCode"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["SoundCloudAccount"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["ShowDirectory"]
+
+[[r2_buckets]]
+binding = "LIVE_SHOW_ASSETS"
+bucket_name = "aurora-live-show-assets"
+preview_bucket_name = "aurora-live-show-assets-preview"
+
+# Built by `bun run build:viewer`. The Worker serves these only below
+# `/viewer/`, isolating executable audience packages from Pages Console data.
+[assets]
+directory = "../dist/viewer"
+binding = "VIEWER_ASSETS"
+run_worker_first = true

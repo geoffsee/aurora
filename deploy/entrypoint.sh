@@ -69,6 +69,44 @@ $ctrl {
 		reverse_proxy 127.0.0.1:13001
 	}
 }
+
+# Read-only public-ingress origin. A Cloudflare connector uses
+# http://aurora-origin:18080; an external proxy reaches the published host port.
+:18080 {
+	@write not method GET HEAD
+	respond @write "Method not allowed" 405
+	handle /.well-known/aurora-live-show {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /api/modes/* {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /api/data/e/* {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /assets/* {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /dist/pkg/* {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /dist/projector-bridge.js {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /vendor/* {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /styles.css {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle /index.html {
+		reverse_proxy 127.0.0.1:13000
+	}
+	handle / {
+		reverse_proxy 127.0.0.1:13000
+	}
+	respond "Not found" 404
+}
 EOF
 
 echo "[entrypoint] Caddy TLS hosts:$HOSTS" >&2

@@ -6,8 +6,10 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { networkInterfaces } from 'node:os';
 import { join, resolve } from 'node:path';
 import { normalizeAccessToken, withAccessToken } from '../shared/access-token.ts';
+import { resolveShowIngress } from '../shared/live-show.ts';
 import { renderCaddyfile } from './caddyfile';
 import { ensureVendoredCaddy } from './vendor-caddy';
+import { ensureVendoredCloudflared } from './vendor-cloudflared';
 
 const PROJECTOR_PORT = 8443;
 const CONTROLS_PORT = 8444;
@@ -136,6 +138,11 @@ export async function runNativeStack(opts: NativeRunOptions = {}): Promise<numbe
   writeFileSync(caddyfilePath, renderCaddyfile(tlsHosts));
 
   const caddyBin = await ensureVendoredCaddy(vendorDir);
+  const tunnelToken = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim() ?? '';
+  const publicUrl = process.env.AURORA_SHOW_PUBLIC_URL?.trim() ?? '';
+  const ingress = resolveShowIngress(process.env.AURORA_SHOW_INGRESS, Boolean(tunnelToken));
+  const cloudflareConfigured = Boolean(ingress === 'cloudflare' && tunnelToken && publicUrl);
+  const cloudflaredBin = cloudflareConfigured ? await ensureVendoredCloudflared(vendorDir) : null;
   const bunBin = bunExecutable();
 
   const bridgeEnv: Record<string, string> = {
@@ -144,6 +151,7 @@ export async function runNativeStack(opts: NativeRunOptions = {}): Promise<numbe
     CONTROLS_PORT: '13001',
     HOST: '127.0.0.1',
     LIVE_HOST: process.env.LIVE_HOST ?? '127.0.0.1',
+    AURORA_RUNTIME: 'native',
   };
   for (const key of [
     'LIVE_SEND_PORT',
@@ -152,6 +160,10 @@ export async function runNativeStack(opts: NativeRunOptions = {}): Promise<numbe
     'MIDI_CLOCK_DEVICE',
     'ABLETON_LINK_ENABLED',
     'AURORA_DATA_DIR',
+    'CLOUDFLARE_TUNNEL_TOKEN',
+    'AURORA_SHOW_INGRESS',
+    'AURORA_SHOW_PUBLIC_URL',
+    'AURORA_LIVE_API_URL',
   ] as const) {
     const v = process.env[key];
     if (v !== undefined && v !== '') bridgeEnv[key] = v;
@@ -188,10 +200,40 @@ export async function runNativeStack(opts: NativeRunOptions = {}): Promise<numbe
       ? { cwd: appRoot, stdout: 'ignore', stderr: 'ignore', env: process.env }
       : { cwd: appRoot, stdout: 'inherit', stderr: 'inherit', env: process.env },
   );
+  const cloudflared = cloudflaredBin
+    ? Bun.spawn(
+        [
+          cloudflaredBin,
+          'tunnel',
+          '--no-autoupdate',
+          'run',
+          '--token',
+          process.env.CLOUDFLARE_TUNNEL_TOKEN as string,
+        ],
+        opts.daemon
+          ? { cwd: appRoot, stdout: 'ignore', stderr: 'ignore', env: process.env }
+          : { cwd: appRoot, stdout: 'inherit', stderr: 'inherit', env: process.env },
+      )
+    : null;
 
-  const pids = [bridge.pid, caddy.pid].filter((p): p is number => typeof p === 'number');
+  const pids = [bridge.pid, caddy.pid, cloudflared?.pid].filter(
+    (p): p is number => typeof p === 'number',
+  );
   writePidFile(appRoot, pids);
   printNativeUrls(lan);
+  if (cloudflared) {
+    console.log(
+      `  live show  ${process.env.AURORA_SHOW_PUBLIC_URL} → http://127.0.0.1:18080 (cloudflared)`,
+    );
+  } else if (publicUrl && ingress === 'external') {
+    console.log(
+      `  live show  ${process.env.AURORA_SHOW_PUBLIC_URL} → http://127.0.0.1:18080 (external ingress)`,
+    );
+  } else if (!publicUrl) {
+    console.log('  live show  disabled — set AURORA_SHOW_PUBLIC_URL');
+  } else {
+    console.log('  live show  disabled — Cloudflare ingress requires CLOUDFLARE_TUNNEL_TOKEN');
+  }
 
   if (opts.daemon) {
     console.log(`[aurora] detached — stop with: aurora down`);
@@ -213,6 +255,11 @@ export async function runNativeStack(opts: NativeRunOptions = {}): Promise<numbe
     } catch {
       /* */
     }
+    try {
+      cloudflared?.kill();
+    } catch {
+      /* */
+    }
     stopNativeStack(appRoot);
     process.exit(0);
   };
@@ -220,7 +267,7 @@ export async function runNativeStack(opts: NativeRunOptions = {}): Promise<numbe
   process.on('SIGTERM', shutdown);
 
   console.log(`[aurora] streaming logs (Ctrl+C to stop)…`);
-  await Promise.race([bridge.exited, caddy.exited]);
+  await Promise.race([bridge.exited, caddy.exited, ...(cloudflared ? [cloudflared.exited] : [])]);
   if (!shuttingDown) {
     console.log(`\n[aurora] a process exited — cleaning up…`);
     shutdown();

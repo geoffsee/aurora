@@ -16,6 +16,9 @@
     "build:mobile": "bun build web/mobile/index.html --outdir dist/mobile --minify",
     "build:webxr": "bun run build:three-vendor && bun build web/webxr/index.html --outdir dist/webxr --minify --external three --external three/*",
     "build:studio": "bun run build:three-vendor && bun build web/studio/index.html --outdir dist/studio --minify --external three --external three/*",
+    "build:shows": "bun build web/shows/index.html --outdir dist/shows --minify",
+    "build:viewer": "bun run build:web && bun run build:viewer-assets",
+    "build:viewer-assets": "bun run stage:static-catalog && bun build web/projector-bridge.ts --outdir dist/viewer --target browser --format esm --external three --external three/* && bun run scripts/stage-viewer.ts",
     "studio": "bun run build:three-vendor && bun run scripts/studio-serve.ts",
     "check:wasm": "CARGO_TARGET_DIR=target cargo check -p aurora --target wasm32-unknown-unknown",
     "check:vst": "cargo check -p aurora-vst",
@@ -37,12 +40,14 @@
     "test": "bun run test:rust && bun run test:web",
     "test:rust": "bash scripts/test-rust.sh",
     "test:web": "vitest run",
+    "test:worker": "vitest run --config worker/vitest.config.ts",
+    "load-gate:live-show": "bun run scripts/live-show-load-gate.ts",
     "setup": "bash scripts/setup.sh",
     "postinstall": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "typecheck": "tsc --noEmit",
     "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
     "worker:dev": "wrangler dev --config worker/wrangler.toml",
-    "worker:deploy": "wrangler deploy --config worker/wrangler.toml",
+    "worker:deploy": "bun run scripts/deploy-worker.ts",
     "format": "bash scripts/format-code.sh",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -50,6 +55,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.7",
+    "@cloudflare/vitest-pool-workers": "^0.21.3",
     "@cloudflare/workers-types": "^5.20260810.1",
     "@types/bun": "latest",
     "@types/react": "^19.2.18",
@@ -80,5 +86,5 @@
     "typegpu": "^0.11.9",
     "unplugin-typegpu": "^0.11.6"
   },
-  "version": "0.1.7"
+  "version": "0.1.9"
 }

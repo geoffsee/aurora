@@ -163,6 +163,7 @@ export function CrossfadePanel() {
           {(
             [
               ['rings', 'Rings', state.rings],
+              ['xrFollowDeckModes', 'XR Follows Decks', state.xrFollowDeckModes],
               ['strobe', 'Strobe', state.strobe],
               ['strobeLockout', 'Strobe Lock', state.strobeLockout],
               ['freeze', 'Freeze', state.freeze],

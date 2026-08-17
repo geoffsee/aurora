@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import contract from '../../shared/vst-osc-contract.json' with { type: 'json' };
+import {
+  MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+  WEBXR_SPATIAL_FORMATION_LABELS,
+  WEBXR_SPATIAL_FORMATIONS,
+} from '../../shared/webxr-spatial-contract.ts';
 
 const VST_LIB_PATH = join(__dirname, '..', '..', 'plugins', 'aurora-vst', 'src', 'lib.rs');
 const vstSource = readFileSync(VST_LIB_PATH, 'utf8');
@@ -43,6 +48,18 @@ describe('VST OSC contract', () => {
       ...extractCallArgs('send_bool'),
     ]);
     expect(emittedControls).toEqual(sortedUnique(contract.controls.vstEmitted));
+  });
+
+  test('VST WebXR formation range matches the shared append-only contract', () => {
+    const match = vstSource.match(/const MAX_WEBXR_SPATIAL_FORMATION_INDEX: i32 = (\d+);/);
+    expect(Number(match?.[1])).toBe(MAX_WEBXR_SPATIAL_FORMATION_INDEX);
+    const namesBlock = vstSource.match(
+      /const WEBXR_SPATIAL_FORMATION_NAMES: \[&str; \d+\] = \[([\s\S]*?)\];/,
+    );
+    const names = [...(namesBlock?.[1] ?? '').matchAll(/"([^"]+)"/g)].map((item) => item[1]);
+    expect(names).toEqual(
+      WEBXR_SPATIAL_FORMATIONS.map((formation) => WEBXR_SPATIAL_FORMATION_LABELS[formation]),
+    );
   });
 
   test('VST source send_trigger calls match triggers.vstEmitted exactly', () => {

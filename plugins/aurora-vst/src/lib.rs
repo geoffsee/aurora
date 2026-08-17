@@ -7,6 +7,43 @@ const DEFAULT_TARGET: &str = "127.0.0.1:12000";
 const MAX_GPU_SHADER_INDEX: i32 = 36;
 /// Matches `MAX_VISUAL_MODE_INDEX` in shared/visual-mode-catalog.ts and bridge clamp (0–48).
 const MAX_VISUAL_MODE_INDEX: i32 = 48;
+/// Stable append-only order in shared/webxr-spatial-contract.ts (0–32).
+const MAX_WEBXR_SPATIAL_FORMATION_INDEX: i32 = 32;
+const WEBXR_SPATIAL_FORMATION_NAMES: [&str; 33] = [
+    "Beams",
+    "Tunnel",
+    "Burst",
+    "Mirror",
+    "Atmosphere",
+    "Strobe",
+    "Swarm",
+    "Orbit",
+    "Pulse",
+    "Spiral",
+    "Ripple",
+    "Shards",
+    "Flux",
+    "Lattice",
+    "Rain",
+    "Echo",
+    "Vortex",
+    "Prism",
+    "Scanner",
+    "Comet",
+    "Bloom",
+    "Sculpture",
+    "Polytope",
+    "Manifold",
+    "Tiling",
+    "Fractal",
+    "Linked Rings",
+    "Graph",
+    "Flow Field",
+    "Hierarchy",
+    "Clock",
+    "Point Cloud",
+    "Flora",
+];
 struct AuroraVst {
     params: Arc<AuroraParams>,
     sender: OscSender,
@@ -34,6 +71,24 @@ struct AuroraParams {
     deck_a_mode: IntParam,
     #[id = "deck_b_mode"]
     deck_b_mode: IntParam,
+    #[id = "xr_follow_deck_modes"]
+    xr_follow_deck_modes: BoolParam,
+    #[id = "xr_formation_a"]
+    xr_formation_a: IntParam,
+    #[id = "xr_formation_b"]
+    xr_formation_b: IntParam,
+    #[id = "xr_density_a"]
+    xr_density_a: FloatParam,
+    #[id = "xr_density_b"]
+    xr_density_b: FloatParam,
+    #[id = "xr_structure_a"]
+    xr_structure_a: FloatParam,
+    #[id = "xr_structure_b"]
+    xr_structure_b: FloatParam,
+    #[id = "xr_spatial_extent"]
+    xr_spatial_extent: FloatParam,
+    #[id = "xr_audio_reactivity"]
+    xr_audio_reactivity: FloatParam,
     #[id = "rings"]
     rings: BoolParam,
     #[id = "ring_opacity"]
@@ -103,6 +158,15 @@ struct ParameterCache {
     hue: f32,
     deck_a_mode: i32,
     deck_b_mode: i32,
+    xr_follow_deck_modes: bool,
+    xr_formation_a: i32,
+    xr_formation_b: i32,
+    xr_density_a: f32,
+    xr_density_b: f32,
+    xr_structure_a: f32,
+    xr_structure_b: f32,
+    xr_spatial_extent: f32,
+    xr_audio_reactivity: f32,
     rings: bool,
     ring_opacity: f32,
     strobe: bool,
@@ -163,6 +227,15 @@ impl Default for AuroraParams {
             hue: float_param("Hue", 0.0, 0.0, 1.0),
             deck_a_mode: IntParam::new("Deck A Mode", 0, IntRange::Linear { min: 0, max: MAX_VISUAL_MODE_INDEX }),
             deck_b_mode: IntParam::new("Deck B Mode", 1, IntRange::Linear { min: 0, max: MAX_VISUAL_MODE_INDEX }),
+            xr_follow_deck_modes: BoolParam::new("XR Follow Deck Modes", true),
+            xr_formation_a: xr_formation_param("XR Formation A", 0),
+            xr_formation_b: xr_formation_param("XR Formation B", 1),
+            xr_density_a: float_param("XR Density A", 1.0, 0.0, 1.0),
+            xr_density_b: float_param("XR Density B", 1.0, 0.0, 1.0),
+            xr_structure_a: float_param("XR Structure A", 1.0, 0.0, 1.0),
+            xr_structure_b: float_param("XR Structure B", 1.0, 0.0, 1.0),
+            xr_spatial_extent: float_param("XR Spatial Extent", 1.0, 0.65, 1.75),
+            xr_audio_reactivity: float_param("XR Audio Reactivity", 1.0, 0.0, 1.0),
             rings: BoolParam::new("Rings", true),
             ring_opacity: float_param("Ring Opacity", 1.0, 0.0, 1.0),
             strobe: BoolParam::new("Strobe", false),
@@ -258,6 +331,20 @@ impl AuroraVst {
         self.sender.send_f32("hue", next.hue);
         self.sender.send_i32("deck_a_mode", next.deck_a_mode);
         self.sender.send_i32("deck_b_mode", next.deck_b_mode);
+        self.sender
+            .send_bool("xr_follow_deck_modes", next.xr_follow_deck_modes);
+        self.sender.send_i32("xr_formation_a", next.xr_formation_a);
+        self.sender.send_i32("xr_formation_b", next.xr_formation_b);
+        self.sender.send_f32("xr_density_a", next.xr_density_a);
+        self.sender.send_f32("xr_density_b", next.xr_density_b);
+        self.sender
+            .send_f32("xr_structure_a", next.xr_structure_a);
+        self.sender
+            .send_f32("xr_structure_b", next.xr_structure_b);
+        self.sender
+            .send_f32("xr_spatial_extent", next.xr_spatial_extent);
+        self.sender
+            .send_f32("xr_audio_reactivity", next.xr_audio_reactivity);
         self.sender.send_bool("rings", next.rings);
         self.sender.send_f32("ring_opacity", next.ring_opacity);
         self.sender.send_bool("strobe", next.strobe);
@@ -311,6 +398,38 @@ impl AuroraVst {
         }
         if previous.deck_b_mode != next.deck_b_mode {
             self.sender.send_i32("deck_b_mode", next.deck_b_mode);
+        }
+        if previous.xr_follow_deck_modes != next.xr_follow_deck_modes {
+            self.sender
+                .send_bool("xr_follow_deck_modes", next.xr_follow_deck_modes);
+        }
+        if previous.xr_formation_a != next.xr_formation_a {
+            self.sender.send_i32("xr_formation_a", next.xr_formation_a);
+        }
+        if previous.xr_formation_b != next.xr_formation_b {
+            self.sender.send_i32("xr_formation_b", next.xr_formation_b);
+        }
+        if changed(previous.xr_density_a, next.xr_density_a) {
+            self.sender.send_f32("xr_density_a", next.xr_density_a);
+        }
+        if changed(previous.xr_density_b, next.xr_density_b) {
+            self.sender.send_f32("xr_density_b", next.xr_density_b);
+        }
+        if changed(previous.xr_structure_a, next.xr_structure_a) {
+            self.sender
+                .send_f32("xr_structure_a", next.xr_structure_a);
+        }
+        if changed(previous.xr_structure_b, next.xr_structure_b) {
+            self.sender
+                .send_f32("xr_structure_b", next.xr_structure_b);
+        }
+        if changed(previous.xr_spatial_extent, next.xr_spatial_extent) {
+            self.sender
+                .send_f32("xr_spatial_extent", next.xr_spatial_extent);
+        }
+        if changed(previous.xr_audio_reactivity, next.xr_audio_reactivity) {
+            self.sender
+                .send_f32("xr_audio_reactivity", next.xr_audio_reactivity);
         }
         if previous.rings != next.rings {
             self.sender.send_bool("rings", next.rings);
@@ -418,6 +537,15 @@ impl ParameterCache {
             hue: params.hue.value(),
             deck_a_mode: params.deck_a_mode.value(),
             deck_b_mode: params.deck_b_mode.value(),
+            xr_follow_deck_modes: params.xr_follow_deck_modes.value(),
+            xr_formation_a: params.xr_formation_a.value(),
+            xr_formation_b: params.xr_formation_b.value(),
+            xr_density_a: params.xr_density_a.value(),
+            xr_density_b: params.xr_density_b.value(),
+            xr_structure_a: params.xr_structure_a.value(),
+            xr_structure_b: params.xr_structure_b.value(),
+            xr_spatial_extent: params.xr_spatial_extent.value(),
+            xr_audio_reactivity: params.xr_audio_reactivity.value(),
             rings: params.rings.value(),
             ring_opacity: params.ring_opacity.value(),
             strobe: params.strobe.value(),
@@ -505,6 +633,23 @@ impl OscSender {
 fn float_param(name: &str, default: f32, min: f32, max: f32) -> FloatParam {
     FloatParam::new(name, default, FloatRange::Linear { min, max })
         .with_smoother(SmoothingStyle::None)
+}
+
+fn xr_formation_param(name: &str, default: i32) -> IntParam {
+    IntParam::new(
+        name,
+        default,
+        IntRange::Linear {
+            min: 0,
+            max: MAX_WEBXR_SPATIAL_FORMATION_INDEX,
+        },
+    )
+    .with_value_to_string(Arc::new(|value| {
+        WEBXR_SPATIAL_FORMATION_NAMES
+            .get(value.max(0) as usize)
+            .unwrap_or(&"Unknown")
+            .to_string()
+    }))
 }
 
 fn trigger_param(name: &str) -> FloatParam {

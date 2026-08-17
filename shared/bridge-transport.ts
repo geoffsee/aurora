@@ -40,6 +40,10 @@ export type WebSocketTransportOptions = {
   reconnect?: boolean;
   initialReconnectDelayMs?: number;
   maxReconnectDelayMs?: number;
+  /** Audience sockets use this to unpack batched state envelopes. */
+  mapIncoming?: (raw: unknown) => OscFrame[];
+  /** Receive-only sockets must never expose send authority to renderer code. */
+  receiveOnly?: boolean;
 };
 
 export function createWebSocketTransport(
@@ -89,7 +93,9 @@ export function createWebSocketTransport(
     ws.onerror = () => error.emit();
     ws.onmessage = (event) => {
       try {
-        message.emit(JSON.parse(String(event.data)) as OscFrame);
+        const parsed: unknown = JSON.parse(String(event.data));
+        const frames = options.mapIncoming ? options.mapIncoming(parsed) : [parsed as OscFrame];
+        for (const frame of frames) message.emit(frame);
       } catch {
         // Ignore malformed bridge frames.
       }
@@ -112,6 +118,7 @@ export function createWebSocketTransport(
       ws = null;
     },
     send(frame) {
+      if (options.receiveOnly) return false;
       if (!this.ready) return false;
       ws?.send(JSON.stringify(frame));
       return true;

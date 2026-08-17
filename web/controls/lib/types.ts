@@ -62,6 +62,16 @@ export type ControlState = {
   deckAReloadActiveVersion: number;
   /** Same as deckAReloadActiveVersion for deck B. */
   deckBReloadActiveVersion: number;
+  /** Follow deck/package selection or use the explicit WebXR formation indices. */
+  xrFollowDeckModes: boolean;
+  xrFormationA: number;
+  xrFormationB: number;
+  xrDensityA: number;
+  xrDensityB: number;
+  xrStructureA: number;
+  xrStructureB: number;
+  xrSpatialExtent: number;
+  xrAudioReactivity: number;
   rings: boolean;
   ringOpacity: number;
   strobe: boolean;

@@ -27,11 +27,15 @@
       import {
         AuroraThreeDeckHost,
         attachProjectorTransport,
+        consumeViewerFragment,
         createProjectorTransport,
+        isAudienceViewer,
+        isAudienceViewerSurface,
         isControlBridgeConnected,
         isOscBridgeConnected,
         isStaticHosting,
         mountGeoffseePagesNav,
+        mountPagesLiveShowSource,
         mountRelayHost,
         projectorCompiledModeUrl,
         resolveAuthoredCompiledWireAsync,
@@ -39,7 +43,20 @@
         webgpuSecureContextError,
       } from "./dist/projector-bridge.js";
 
-      mountGeoffseePagesNav();
+      consumeViewerFragment();
+      const AUDIENCE_VIEWER = isAudienceViewerSurface() || isAudienceViewer();
+      if (!AUDIENCE_VIEWER) mountGeoffseePagesNav();
+      const pagesLiveSource = isStaticHosting() && !AUDIENCE_VIEWER
+        ? mountPagesLiveShowSource()
+        : null;
+      const audienceStatus = AUDIENCE_VIEWER ? (() => {
+        const node = document.createElement('div');
+        node.className = 'aurora-audience-status';
+        node.setAttribute('role', 'status');
+        node.textContent = 'Connecting to live show…';
+        document.body.append(node);
+        return node;
+      })() : null;
 
       const boot = document.querySelector("#boot");
       // Multi-output routing: a window opened with ?output=<id> renders the route
@@ -60,6 +77,7 @@
         DIAGNOSTICS: "/aurora/server/diagnostics",
         DEV_RELOAD: "/aurora/dev/reload",
         SHADER_IMPORTED: "/aurora/shader/imported",
+        SOURCE_STATUS: "/aurora/live/source",
       };
       const CONTROL = {
         STATE: "/aurora/control/state",
@@ -367,6 +385,7 @@
       }
 
       function applyOscFrame(frame) {
+        pagesLiveSource?.publish(frame);
         const address = frame?.address;
         const args = Array.isArray(frame?.args) ? frame.args : [];
 
@@ -408,6 +427,9 @@
           handleHotReload();
         } else if (address === OSC.SHADER_IMPORTED) {
           handleImportedShader(args[0]);
+        } else if (address === OSC.SOURCE_STATUS && audienceStatus) {
+          audienceStatus.textContent = args[0] ? 'Live' : 'Show source reconnecting…';
+          audienceStatus.classList.toggle('aurora-audience-status--hidden', Boolean(args[0]));
         }
       }
 
@@ -530,9 +552,11 @@
       };
 
       // When Studio publishes a package, re-bind if the active slug matches.
-      subscribeAuthoredPackages(() => {
-        window.__auroraReloadActiveCompiledModes();
-      });
+      if (!AUDIENCE_VIEWER) {
+        subscribeAuthoredPackages(() => {
+          window.__auroraReloadActiveCompiledModes();
+        });
+      }
 
       function applyControlState(next) {
         if (!next || typeof next !== "object") return;
@@ -723,14 +747,26 @@
         attachProjectorTransport(bridgeTransport, {
           onOpen: () => {
             oscState.bridgeReady = true;
+            if (audienceStatus) {
+              audienceStatus.textContent = 'Live';
+              audienceStatus.classList.add('aurora-audience-status--hidden');
+            }
           },
           onClose: () => {
             oscState.connected = false;
             oscState.bridgeReady = false;
+            if (audienceStatus) {
+              audienceStatus.textContent = 'Show source reconnecting…';
+              audienceStatus.classList.remove('aurora-audience-status--hidden');
+            }
           },
           onError: () => {
             oscState.connected = false;
             oscState.bridgeReady = false;
+            if (audienceStatus) {
+              audienceStatus.textContent = 'Unable to connect to this show';
+              audienceStatus.classList.remove('aurora-audience-status--hidden');
+            }
           },
           onMessage: (frame) => {
             applyOscFrame(frame);
@@ -740,7 +776,7 @@
         // Static builds have no bridge, so a phone reaches this projector
         // through the relay Worker instead. Attached alongside the transport
         // above: same-device controls and a paired phone both stay live.
-        if (isStaticHosting()) {
+        if (isStaticHosting() && !AUDIENCE_VIEWER) {
           mountRelayHost({ onMessage: applyOscFrame });
         }
       }
@@ -749,6 +785,18 @@
         const msg = event.reason instanceof Error ? event.reason.message : String(event.reason ?? "Unknown error");
         sendErrorToControls(`Unhandled rejection: ${msg}`);
       });
+      if (AUDIENCE_VIEWER) {
+        window.setInterval(() => {
+          try {
+            const raw = sessionStorage.getItem('aurora.live.viewer');
+            const viewer = raw ? JSON.parse(raw) : null;
+            if (viewer?.expiresAt && viewer.expiresAt <= Date.now() && audienceStatus) {
+              audienceStatus.textContent = 'This show has ended';
+              audienceStatus.classList.remove('aurora-audience-status--hidden');
+            }
+          } catch { /* storage unavailable */ }
+        }, 1000);
+      }
       window.addEventListener("error", (event) => {
         const msg = event.error instanceof Error ? event.error.message : (event.message || 'Unknown error');
         sendErrorToControls(`Runtime error: ${msg}`);

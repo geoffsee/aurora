@@ -1,5 +1,14 @@
+import {
+  getAudienceCompiledWire,
+  loadAudienceCompiledWire,
+} from '../shared/audience-package-store.ts';
 import { isControlBridgeConnected, isOscBridgeConnected } from '../shared/bridge-connection.ts';
 import { createWebSocketTransport, type OscFrame } from '../shared/bridge-transport.ts';
+import {
+  consumeViewerFragment,
+  isAudienceViewer,
+  isAudienceViewerSurface,
+} from '../shared/live-show-client.ts';
 import {
   compiledWireFromAuthoredPackage,
   getAuthoredPackage,
@@ -30,11 +39,15 @@ import {
   shouldUseBroadcastChannel,
 } from './display-transport.ts';
 
+export { mountPagesLiveShowSource } from './pages-live-source.ts';
 export { AdaptiveDprGovernor, AuroraThreeDeckHost } from './three-runtime.ts';
 
 export {
   compiledWireFromAuthoredPackage,
+  consumeViewerFragment,
   getAuthoredPackage,
+  isAudienceViewer,
+  isAudienceViewerSurface,
   isControlBridgeConnected,
   isOscBridgeConnected,
   isStaticHosting,
@@ -55,6 +68,9 @@ export function resolveAuthoredCompiledWire(
   slug: string,
   epoch = 0,
 ): unknown | null {
+  if (isAudienceViewerSurface() || isAudienceViewer()) {
+    return getAudienceCompiledWire(deck, slug, epoch);
+  }
   const pkg = getAuthoredPackage(slug);
   if (!pkg) return null;
   return compiledWireFromAuthoredPackage(deck, pkg, epoch);
@@ -66,6 +82,9 @@ export async function resolveAuthoredCompiledWireAsync(
   slug: string,
   epoch = 0,
 ): Promise<unknown | null> {
+  if (isAudienceViewerSurface() || isAudienceViewer()) {
+    return loadAudienceCompiledWire(deck, slug, epoch);
+  }
   const metadata = getAuthoredPackage(slug);
   if (!metadata) return null;
   if (metadata.target !== 'threejs') return compiledWireFromAuthoredPackage(deck, metadata, epoch);
@@ -97,6 +116,9 @@ export function projectorCompiledModeUrl(
   loc: Pick<Location, 'protocol' | 'hostname' | 'port' | 'pathname' | 'search'> = location,
 ): string {
   const clean = typeof slug === 'string' ? slug.trim() : '';
+  if (isAudienceViewerSurface(loc)) {
+    return `${loc.protocol}//${loc.hostname}${loc.port ? `:${loc.port}` : ''}/viewer/api/modes/compiled/${deck}/${encodeURIComponent(clean)}.json`;
+  }
   if (isStaticHosting(loc)) {
     return `${staticModesApiBase(loc)}/api/modes/compiled/${deck}/${encodeURIComponent(clean)}.json`;
   }
@@ -147,6 +169,7 @@ export async function mountRelayHost(
   doc: Document = document,
   loc: Pick<Location, 'search'> = location,
 ): Promise<() => void> {
+  if (isAudienceViewer() || isAudienceViewerSurface()) return () => {};
   const result = await ensureHostSession(resolveRelayBaseUrl(loc));
   if (!result.ok) {
     console.warn(`[relay] could not register a session: ${result.error}`);

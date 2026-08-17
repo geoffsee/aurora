@@ -321,7 +321,17 @@ AURORA_VST_TARGET=127.0.0.1:12001 VST_CONTROL_RECV_PORT=12001 aurora
 
 Set `AURORA_VST_TARGET` in the environment that launches Ableton so the plugin and bridge use the same non-default port.
 
-The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, trails, depth, palette, ring opacity, and max brightness; toggle parameters for rings, strobe, strobe lockout, blackout, freeze, beat sync, bar sync, and demo mode; deck mode parameters for Beams/Tunnel/Burst/Mirror/Wash; and momentary parameters for flash, reset, and the cue presets.
+The plugin exposes continuous parameters for crossfade, BPM, speed, intensity, trails, depth,
+palette, ring opacity, and max brightness; toggle parameters for rings, strobe, strobe lockout,
+blackout, freeze, beat sync, bar sync, and demo mode; deck mode parameters for the complete mode
+catalog; and momentary parameters for flash, reset, and the cue presets.
+
+WebXR performance parameters are also automatable from the VST: **XR Follow Deck Modes**, explicit
+**XR Formation A/B**, per-deck **XR Density** and **XR Structure**, global **XR Spatial Extent**, and
+**XR Audio Reactivity**. Formation indices use the append-only order in
+`shared/webxr-spatial-contract.ts`, so saved DAW automation remains stable as the platform grows.
+The same fields live in `ControlState`, making VST, MIDI, browser controls, presets, recording, and
+replay equal control surfaces for a live web performance.
 
 ## Mode packs (filesystem catalog)
 

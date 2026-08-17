@@ -431,6 +431,35 @@ test('older schema chains through v17 deck axes and colors with global defaults'
   expect(migrated.deckBSpeed).toBe(1.25);
   expect(migrated.deckAPalette).toBe(0.38);
   expect(migrated.deckBPalette).toBe(0.38);
+  expect(migrated.xrFollowDeckModes).toBe(true);
+  expect(migrated.xrFormationA).toBe(0);
+  expect(migrated.xrFormationB).toBe(1);
+  expect(migrated.xrDensityA).toBe(1);
+  expect(migrated.xrDensityB).toBe(1);
+  expect(migrated.xrStructureA).toBe(1);
+  expect(migrated.xrStructureB).toBe(1);
+  expect(migrated.xrSpatialExtent).toBe(1);
+  expect(migrated.xrAudioReactivity).toBe(1);
+});
+
+test('v17 migration adds backward-compatible WebXR performance controls', () => {
+  const migrated = migrateControlState({
+    schemaVersion: 17,
+    deckAPalette: 0.2,
+    deckBPalette: 0.8,
+  }) as Record<string, unknown>;
+  expect(migrated.schemaVersion).toBe(CONTROL_STATE_SCHEMA_VERSION);
+  expect(migrated).toMatchObject({
+    xrFollowDeckModes: true,
+    xrFormationA: 0,
+    xrFormationB: 1,
+    xrDensityA: 1,
+    xrDensityB: 1,
+    xrStructureA: 1,
+    xrStructureB: 1,
+    xrSpatialExtent: 1,
+    xrAudioReactivity: 1,
+  });
 });
 
 test('null passes through unchanged', () => {

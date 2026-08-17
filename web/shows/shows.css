@@ -1,0 +1,142 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #090804;
+  color: #f5f5f4;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 0%, #173832 0, #0e0b0b 32rem, #090804 70%);
+}
+main {
+  width: min(72rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 4rem 0;
+}
+header {
+  max-width: 46rem;
+  margin-bottom: 2rem;
+}
+.eyebrow {
+  color: #67e8c4;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+}
+h1 {
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  line-height: 0.95;
+  margin: 0.3rem 0 1rem;
+}
+.lede {
+  color: #b7b4ad;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+.shows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+article,
+.notice,
+.dialog {
+  border: 1px solid #ffffff24;
+  background: #10100ed9;
+  border-radius: 1rem;
+  box-shadow: 0 1.5rem 5rem #0008;
+}
+article {
+  padding: 1.3rem;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
+}
+article.selected {
+  border-color: #67e8c4;
+  transform: translateY(-2px);
+}
+article h2 {
+  margin: 0.8rem 0 0.4rem;
+  font-size: 1.45rem;
+}
+article p {
+  color: #b7b4ad;
+}
+.live-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 1rem #4ade80;
+}
+.viewers {
+  font-size: 0.85rem;
+}
+button {
+  border: 0;
+  border-radius: 0.65rem;
+  padding: 0.7rem 1rem;
+  background: #45d6b0;
+  color: #06130f;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+button.secondary {
+  background: #292925;
+  color: #eee;
+}
+.notice {
+  padding: 1rem;
+  margin: 1rem 0;
+  color: #c8c5bd;
+}
+.notice.error {
+  border-color: #f8717180;
+  color: #fca5a5;
+}
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: #000b;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+.dialog {
+  width: min(28rem, 100%);
+  padding: 1.5rem;
+}
+.dialog p {
+  color: #b7b4ad;
+  line-height: 1.5;
+}
+.dialog input {
+  width: 100%;
+  padding: 0.9rem;
+  border: 1px solid #ffffff38;
+  border-radius: 0.6rem;
+  background: #080806;
+  color: white;
+  font:
+    700 1.4rem ui-monospace,
+    monospace;
+  text-align: center;
+  letter-spacing: 0.12em;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}

@@ -14,14 +14,19 @@
 
 import { networkInterfaces } from 'node:os';
 import { normalizeAccessToken, withAccessToken } from '../shared/access-token.ts';
+import { resolveShowIngress } from '../shared/live-show.ts';
 import { parseArgs, usage } from './args';
 import { describeDataMount, dockerMountArgs, resolveDockerDataMount } from './data-mount';
 import { type DockerArch, dockerArchFromHost, dockerPlatform } from './docker-platform';
 import { EMBEDDED_DOCKER_CONTEXT_PATH } from './embedded-context';
 import { resolveAppRoot, runNativeStack, stopNativeStack } from './native-stack';
+import { CLOUDFLARED_VERSION } from './vendor-cloudflared';
 
 const IMAGE = process.env.AURORA_IMAGE ?? 'ghcr.io/geoffsee/aurora:latest';
 const CONTAINER = process.env.AURORA_CONTAINER ?? 'aurora';
+const TUNNEL_CONTAINER = `${CONTAINER}-cloudflared`;
+const LIVE_NETWORK = `${CONTAINER}-live`;
+export const CLOUDFLARED_IMAGE = `cloudflare/cloudflared:${CLOUDFLARED_VERSION}`;
 const DOCKER_ARCH: DockerArch = dockerArchFromHost();
 const DOCKER_PLATFORM = dockerPlatform(DOCKER_ARCH);
 
@@ -85,7 +90,32 @@ function printDockerUrls() {
 }
 
 function stopContainer() {
+  run(['docker', 'rm', '-f', TUNNEL_CONTAINER], { inherit: false });
   run(['docker', 'rm', '-f', CONTAINER], { inherit: false });
+  run(['docker', 'network', 'rm', LIVE_NETWORK], { inherit: false });
+}
+
+export function cloudflaredDockerArgs(token: string): string[] {
+  return [
+    'docker',
+    'run',
+    '-d',
+    '--name',
+    TUNNEL_CONTAINER,
+    '--network',
+    LIVE_NETWORK,
+    CLOUDFLARED_IMAGE,
+    'tunnel',
+    '--no-autoupdate',
+    'run',
+    '--token',
+    token,
+  ];
+}
+
+/** Publish the read-only gateway for a host-managed HTTPS reverse proxy. */
+export function externalGatewayDockerArgs(bind = '127.0.0.1:18080'): string[] {
+  return ['-p', `${bind}:18080`];
 }
 
 async function loadEmbeddedDockerContext(): Promise<Uint8Array | null> {
@@ -135,6 +165,15 @@ async function buildImage(): Promise<number> {
 function startContainer(dataDir?: string): number {
   stopContainer();
   console.log(`[aurora] starting ${CONTAINER}…`);
+  const tunnelToken = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim() ?? '';
+  const publicUrl = process.env.AURORA_SHOW_PUBLIC_URL?.trim() ?? '';
+  const ingress = resolveShowIngress(process.env.AURORA_SHOW_INGRESS, Boolean(tunnelToken));
+  const cloudflareConfigured = Boolean(ingress === 'cloudflare' && tunnelToken && publicUrl);
+  const externalIngressConfigured = Boolean(ingress === 'external' && publicUrl);
+  if (cloudflareConfigured) {
+    const networkCode = run(['docker', 'network', 'create', LIVE_NETWORK], { inherit: false });
+    if (networkCode !== 0) return networkCode;
+  }
   const tlsHosts = ['localhost', '127.0.0.1', ...hostLanIps()].join(',');
   const vstControlRecvPort = process.env.VST_CONTROL_RECV_PORT ?? '12000';
   const envArgs: string[] = [
@@ -144,6 +183,8 @@ function startContainer(dataDir?: string): number {
     `AURORA_TLS_HOSTS=${process.env.AURORA_TLS_HOSTS ?? tlsHosts}`,
     '-e',
     'VST_CONTROL_RECV_HOST=0.0.0.0',
+    '-e',
+    'AURORA_RUNTIME=docker',
   ];
   for (const key of [
     'LIVE_SEND_PORT',
@@ -155,6 +196,10 @@ function startContainer(dataDir?: string): number {
     'SOUNDCLOUD_CLIENT_ID',
     'SOUNDCLOUD_CLIENT_SECRET',
     'SOUNDCLOUD_REDIRECT_URI',
+    'CLOUDFLARE_TUNNEL_TOKEN',
+    'AURORA_SHOW_INGRESS',
+    'AURORA_SHOW_PUBLIC_URL',
+    'AURORA_LIVE_API_URL',
   ] as const) {
     const v = process.env[key];
     if (v !== undefined && v !== '') {
@@ -170,7 +215,7 @@ function startContainer(dataDir?: string): number {
   envArgs.push('-e', `AURORA_DATA_DIR=${mount.containerPath}`);
   console.log(`[aurora] ${describeDataMount(mount)}`);
 
-  return run([
+  const containerArgs = [
     'docker',
     'run',
     '-d',
@@ -180,6 +225,9 @@ function startContainer(dataDir?: string): number {
     DOCKER_PLATFORM,
     '--add-host',
     'host.docker.internal:host-gateway',
+    ...(cloudflareConfigured
+      ? ['--network', LIVE_NETWORK, '--network-alias', 'aurora-origin']
+      : []),
     ...envArgs,
     ...volumeArgs,
     '-p',
@@ -188,12 +236,34 @@ function startContainer(dataDir?: string): number {
     `${CONTROLS_PORT}:8444`,
     '-p',
     `${MUXOX_UI_PORT}:8450`,
+    ...(externalIngressConfigured
+      ? externalGatewayDockerArgs(process.env.AURORA_SHOW_GATEWAY_BIND?.trim() || '127.0.0.1:18080')
+      : []),
     '-p',
     '11001:11001/udp',
     '-p',
     `127.0.0.1:${vstControlRecvPort}:${vstControlRecvPort}/udp`,
     IMAGE,
-  ]);
+  ];
+  const code = run(containerArgs);
+  if (code !== 0) return code;
+  if (externalIngressConfigured) {
+    const bind = process.env.AURORA_SHOW_GATEWAY_BIND?.trim() || '127.0.0.1:18080';
+    console.log(
+      `[aurora] live-show external ingress ${publicUrl} (reverse proxy to http://${bind})`,
+    );
+    return code;
+  }
+  if (!cloudflareConfigured) return code;
+  const tunnelCode = run(cloudflaredDockerArgs(tunnelToken));
+  if (tunnelCode !== 0) {
+    stopContainer();
+    return tunnelCode;
+  }
+  console.log(
+    `[aurora] live-show tunnel ${publicUrl} (remote service must be http://aurora-origin:18080)`,
+  );
+  return 0;
 }
 
 async function attachLogsUntilExit(): Promise<number> {
@@ -259,6 +329,18 @@ async function runDocker(daemon: boolean, dataDir?: string): Promise<number> {
   if (startCode !== 0) return startCode;
 
   printDockerUrls();
+
+  if (!process.env.AURORA_SHOW_PUBLIC_URL?.trim()) {
+    console.log('  live show  disabled — set AURORA_SHOW_PUBLIC_URL');
+  } else if (
+    resolveShowIngress(
+      process.env.AURORA_SHOW_INGRESS,
+      Boolean(process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim()),
+    ) === 'cloudflare' &&
+    !process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim()
+  ) {
+    console.log('  live show  disabled — Cloudflare ingress requires CLOUDFLARE_TUNNEL_TOKEN');
+  }
 
   if (daemon) {
     console.log(`[aurora] detached — stop with: aurora down`);

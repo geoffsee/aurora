@@ -8,12 +8,14 @@ function readSource(relativePath: string): string {
   return readFileSync(resolve(REPO_ROOT, relativePath), 'utf8');
 }
 
-function studioImportMap(): Record<string, string> {
-  const html = readSource('web/studio/index.html');
+function pageImportMap(relativePath: string): Record<string, string> {
+  const html = readSource(relativePath);
   const match = html.match(/<script type="importmap">([\s\S]*?)<\/script>/);
-  if (!match?.[1]) throw new Error('web/studio/index.html has no import map');
+  if (!match?.[1]) throw new Error(`${relativePath} has no import map`);
   return JSON.parse(match[1]).imports as Record<string, string>;
 }
+
+const studioImportMap = () => pageImportMap('web/studio/index.html');
 
 /**
  * Three.js sketches are compiled to Blob modules whose `three` imports are
@@ -65,5 +67,13 @@ describe('studio Three.js import map', () => {
     expect(readSource('scripts/build-three-vendor.ts')).toContain(
       "join(root, 'dist', 'vendor', 'three-v1')",
     );
+  });
+});
+
+describe('WebXR Three.js import map', () => {
+  test('maps WebGPU entry points to files staged by build-three-vendor', () => {
+    const imports = pageImportMap('web/webxr/index.html');
+    expect(imports['three/webgpu']).toBe('../vendor/three-v1/three.webgpu.js');
+    expect(imports['three/tsl']).toBe('../vendor/three-v1/three.tsl.js');
   });
 });

@@ -1,33 +1,117 @@
 import {
   AdditiveBlending,
   BoxGeometry,
+  type BufferGeometry,
   Color,
+  ConeGeometry,
+  CylinderGeometry,
+  DodecahedronGeometry,
   DynamicDrawUsage,
   IcosahedronGeometry,
   InstancedMesh,
-  type Material,
   MathUtils,
+  MeshBasicMaterial,
   Object3D,
+  OctahedronGeometry,
   PerspectiveCamera,
   Scene,
+  SphereGeometry,
+  TetrahedronGeometry,
   TorusGeometry,
+  TorusKnotGeometry,
 } from 'three';
-import { MeshBasicNodeMaterial } from 'three/webgpu';
-import type { SpatialVisualizerFrame } from './data-bridge.ts';
+import type { SpatialDeckFrame, SpatialVisualizerFrame } from './data-bridge.ts';
+import {
+  SPATIAL_COMFORT_RADIUS,
+  SPATIAL_FORMATION_PROFILES,
+  SPATIAL_FORMATIONS,
+  type SpatialFormationContext,
+  type SpatialFormationId,
+  type SpatialParticleBudget,
+  type SpatialPose,
+  smoothSpatialWeight,
+  splitSpatialParticleBudget,
+  writeParticlePose,
+  writeRingPose,
+  writeShellPose,
+  writeSpectrumPose,
+} from './spatial-formations.ts';
 
 const PARTICLE_MAX = 2_048;
 const PARTICLE_TIERS = [1_536, 1_024, 768] as const;
 const SPECTRUM_COUNT = 64;
 const RING_COUNT = 24;
 const SHELL_COUNT = 12;
-const COMFORT_RADIUS = 0.55;
 const FLASH_COOLDOWN_MS = 250;
 const FLASH_DECAY_SECONDS = 0.18;
+const HIDDEN_WEIGHT = 0.001;
+const FORMATION_HUE_SHIFT = Object.fromEntries(
+  SPATIAL_FORMATIONS.map((formation, index) => [formation, ((index * 0.0618) % 0.42) - 0.12]),
+) as Record<SpatialFormationId, number>;
 
-type BasicNodeMaterial = InstanceType<typeof MeshBasicNodeMaterial>;
+type DeckSide = 'a' | 'b';
 
-function material(color: number, opacity: number, wireframe = false): BasicNodeMaterial {
-  const value = new MeshBasicNodeMaterial({ color, transparent: true, opacity, wireframe });
+type SpatialGeometries = {
+  particles: Record<SpatialFormationId, BufferGeometry>;
+  spectrum: BoxGeometry;
+  ring: TorusGeometry;
+  shells: Record<SpatialFormationId, BufferGeometry>;
+};
+
+function particleGeometry(formation: SpatialFormationId): BufferGeometry {
+  if (formation === 'beams' || formation === 'tunnel' || formation === 'comet') {
+    return new ConeGeometry(0.045, 0.18, 5);
+  }
+  if (formation === 'rain' || formation === 'flow-field') {
+    return new ConeGeometry(0.036, 0.22, 4);
+  }
+  if (formation === 'atmosphere' || formation === 'pulse' || formation === 'point-cloud') {
+    return new SphereGeometry(0.055, 7, 5);
+  }
+  if (formation === 'swarm' || formation === 'flora') {
+    return new IcosahedronGeometry(0.052, 0);
+  }
+  if (formation === 'mirror' || formation === 'polytope' || formation === 'hierarchy') {
+    return new OctahedronGeometry(0.052, 0);
+  }
+  if (formation === 'sculpture') return new DodecahedronGeometry(0.055, 0);
+  if (formation === 'manifold') return new TorusGeometry(0.048, 0.016, 4, 8);
+  if (formation === 'tiling') return new CylinderGeometry(0.06, 0.06, 0.022, 3);
+  if (
+    formation === 'strobe' ||
+    formation === 'flux' ||
+    formation === 'lattice' ||
+    formation === 'scanner' ||
+    formation === 'clock'
+  ) {
+    return new BoxGeometry(0.052, 0.12, 0.035);
+  }
+  return new TetrahedronGeometry(0.055, 0);
+}
+
+function shellGeometry(formation: SpatialFormationId): BufferGeometry {
+  if (formation === 'atmosphere') return new SphereGeometry(1, 10, 7);
+  if (formation === 'manifold' || formation === 'linked-rings') {
+    return new TorusKnotGeometry(0.74, 0.14, 40, 6);
+  }
+  if (formation === 'polytope') return new IcosahedronGeometry(1, 0);
+  if (formation === 'fractal') return new TetrahedronGeometry(1, 0);
+  if (formation === 'tiling') return new CylinderGeometry(1, 1, 0.15, 5);
+  if (formation === 'hierarchy') return new OctahedronGeometry(1, 0);
+  if (formation === 'flora') return new IcosahedronGeometry(1, 1);
+  return new DodecahedronGeometry(1, 0);
+}
+
+function geometryRecord(
+  factory: (formation: SpatialFormationId) => BufferGeometry,
+): Record<SpatialFormationId, BufferGeometry> {
+  return Object.fromEntries(
+    SPATIAL_FORMATIONS.map((formation) => [formation, factory(formation)]),
+  ) as Record<SpatialFormationId, BufferGeometry>;
+}
+
+function material(opacity: number, wireframe = false): MeshBasicMaterial {
+  const value = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity, wireframe });
   value.blending = AdditiveBlending;
   value.depthTest = true;
   value.depthWrite = false;
@@ -47,33 +131,398 @@ function seeded(seed: number): () => number {
 
 const mix = (a: number, b: number, t: number): number => a + (b - a) * t;
 
-export class SpatialSceneController {
-  readonly scene = new Scene();
-  readonly camera = new PerspectiveCamera(70, 1, 0.05, 50);
+function applyPose(
+  dummy: Object3D,
+  mesh: InstancedMesh,
+  index: number,
+  pose: SpatialPose,
+  spatialExtent: number,
+): void {
+  const distance = Math.hypot(pose.x, pose.y, pose.z);
+  const safeBoundary = SPATIAL_COMFORT_RADIUS + 0.22;
+  const extentDistance =
+    distance > safeBoundary ? safeBoundary + (distance - safeBoundary) * spatialExtent : distance;
+  const positionScale = distance > Number.EPSILON ? extentDistance / distance : 1;
+  dummy.position.set(pose.x * positionScale, pose.y * positionScale, pose.z * positionScale);
+  dummy.rotation.set(pose.rotationX, pose.rotationY, pose.rotationZ);
+  dummy.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
+  dummy.updateMatrix();
+  mesh.setMatrixAt(index, dummy.matrix);
+}
 
-  private readonly root = new Object3D();
+class SpatialDeckLayer {
+  readonly root = new Object3D();
+
   private readonly dummy = new Object3D();
   private readonly particles: InstancedMesh;
   private readonly spectrum: InstancedMesh;
   private readonly rings: InstancedMesh;
   private readonly shells: InstancedMesh;
-  private readonly particleMaterial = material(0xffffff, 0.65);
-  private readonly spectrumMaterial = material(0xffffff, 0.78);
-  private readonly ringMaterial = material(0xffffff, 0.45);
-  private readonly shellMaterial = material(0xffffff, 0.24, true);
-  private readonly particleX = new Float32Array(PARTICLE_MAX);
-  private readonly particleY = new Float32Array(PARTICLE_MAX);
-  private readonly particleZ = new Float32Array(PARTICLE_MAX);
-  private readonly particleSpeed = new Float32Array(PARTICLE_MAX);
-  private readonly particlePhase = new Float32Array(PARTICLE_MAX);
+  private readonly particleMaterial = material(0.65);
+  private readonly spectrumMaterial = material(0.78);
+  private readonly ringMaterial = material(0.45);
+  private readonly shellMaterial = material(0.24);
+  private readonly randomRadius = new Float32Array(PARTICLE_MAX);
+  private readonly randomAngle = new Float32Array(PARTICLE_MAX);
+  private readonly randomSpeed = new Float32Array(PARTICLE_MAX);
+  private readonly randomPhase = new Float32Array(PARTICLE_MAX);
+  private readonly baseColor = new Color();
+  private readonly accentColor = new Color();
+  private readonly workingColor = new Color();
+  private readonly pose: SpatialPose = {
+    x: 0,
+    y: 0,
+    z: 0,
+    rotationX: 0,
+    rotationY: 0,
+    rotationZ: 0,
+    scaleX: 1,
+    scaleY: 1,
+    scaleZ: 1,
+  };
+  private readonly context: SpatialFormationContext = {
+    index: 0,
+    count: 1,
+    elapsed: 0,
+    seed: 0.5,
+    randomRadius: 0,
+    randomAngle: 0,
+    randomSpeed: 1,
+    randomPhase: 0,
+    level: 0,
+    energy: 0,
+    bass: 0,
+    mid: 0,
+    high: 0,
+    pulse: 0,
+    flash: 0,
+    intensity: 1,
+    depth: 0,
+    feedback: 0,
+    speed: 1,
+  };
+
+  private frame: SpatialDeckFrame;
+  private formation: SpatialFormationId;
+  private targetWeight: number;
+  private weight: number;
+  private particleCount = 0;
+  private particlesDirty = true;
+  private spatialExtent = 1;
+  private audioReactivity = 1;
+
+  constructor(
+    private readonly side: DeckSide,
+    private readonly geometries: SpatialGeometries,
+    initialFrame: SpatialDeckFrame,
+  ) {
+    this.frame = initialFrame;
+    this.formation = initialFrame.formation;
+    this.targetWeight = initialFrame.enabled ? initialFrame.weight : 0;
+    this.weight = this.targetWeight;
+    this.root.name = `aurora-spatial-deck-${side}`;
+
+    this.particles = new InstancedMesh(
+      geometries.particles[this.formation],
+      this.particleMaterial,
+      PARTICLE_MAX,
+    );
+    this.spectrum = new InstancedMesh(geometries.spectrum, this.spectrumMaterial, SPECTRUM_COUNT);
+    this.rings = new InstancedMesh(geometries.ring, this.ringMaterial, RING_COUNT);
+    this.shells = new InstancedMesh(
+      geometries.shells[this.formation],
+      this.shellMaterial,
+      SHELL_COUNT,
+    );
+    this.particles.name = `${this.root.name}-particles`;
+    this.spectrum.name = `${this.root.name}-spectrum`;
+    this.rings.name = `${this.root.name}-rings`;
+    this.shells.name = `${this.root.name}-shells`;
+
+    for (const mesh of [this.particles, this.spectrum, this.rings, this.shells]) {
+      mesh.frustumCulled = false;
+      mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+      this.root.add(mesh);
+    }
+    this.particles.count = 0;
+    this.resetParticles(initialFrame.modeSeed);
+    this.applyFormationStyle();
+    this.applyInstanceColors();
+  }
+
+  currentWeight(): number {
+    return this.weight;
+  }
+
+  commit(next: SpatialDeckFrame, reset: boolean): void {
+    const layoutChanged =
+      next.formation !== this.formation || Math.abs(next.modeSeed - this.frame.modeSeed) > 1e-9;
+    const colorChanged =
+      next.color[0] !== this.frame.color[0] ||
+      next.color[1] !== this.frame.color[1] ||
+      next.color[2] !== this.frame.color[2];
+    this.frame = next;
+    this.targetWeight = next.enabled ? next.weight : 0;
+    if (layoutChanged) {
+      this.formation = next.formation;
+      this.particles.geometry = this.geometries.particles[this.formation];
+      this.shells.geometry = this.geometries.shells[this.formation];
+      this.applyFormationStyle();
+    }
+    if (layoutChanged || reset) this.resetParticles(next.modeSeed);
+    if (layoutChanged || colorChanged) this.applyInstanceColors();
+  }
+
+  advanceWeight(dt: number): void {
+    this.weight = smoothSpatialWeight(this.weight, this.targetWeight, dt);
+  }
+
+  setParticleCount(count: number): void {
+    const density = SPATIAL_FORMATION_PROFILES[this.formation].particles;
+    const next = Math.max(
+      0,
+      Math.min(PARTICLE_MAX, Math.floor(count * density * this.frame.xrDensity)),
+    );
+    if (next !== this.particleCount) this.particlesDirty = true;
+    this.particleCount = next;
+    this.particles.count = next;
+  }
+
+  step(
+    frame: SpatialVisualizerFrame,
+    elapsed: number,
+    flashEnvelope: number,
+    particleOpacityWeight: number,
+  ): void {
+    const visible = this.weight > HIDDEN_WEIGHT;
+    this.root.visible = visible;
+    if (!visible) return;
+
+    const profile = SPATIAL_FORMATION_PROFILES[this.formation];
+    const structure = this.frame.xrStructure;
+    const reactiveEnergy = frame.energy * frame.xrAudioReactivity;
+    const reactiveBass = frame.bass * frame.xrAudioReactivity;
+    const reactiveMid = frame.mid * frame.xrAudioReactivity;
+    const reactiveHigh = frame.high * frame.xrAudioReactivity;
+    const reactiveFlash = flashEnvelope * frame.xrAudioReactivity;
+    const flashGain = 1 + Math.min(0.35, reactiveFlash * 0.35);
+    this.particleMaterial.opacity = MathUtils.clamp(
+      Math.min(0.88, 0.5 + reactiveEnergy * 0.28) * flashGain * particleOpacityWeight,
+      0,
+      1,
+    );
+    this.spectrumMaterial.opacity = MathUtils.clamp(
+      Math.min(0.9, 0.55 + reactiveHigh * 0.28) *
+        flashGain *
+        this.weight *
+        profile.spectrum *
+        structure,
+      0,
+      1,
+    );
+    this.ringMaterial.opacity = frame.rings
+      ? MathUtils.clamp(
+          Math.min(0.78, frame.ringOpacity * (0.65 + reactiveBass * 0.65)) *
+            flashGain *
+            this.weight *
+            profile.rings *
+            structure,
+          0,
+          1,
+        )
+      : 0;
+    this.shellMaterial.opacity = MathUtils.clamp(
+      Math.min(0.5, 0.16 + reactiveMid * 0.2) *
+        flashGain *
+        this.weight *
+        profile.shells *
+        structure,
+      0,
+      1,
+    );
+
+    this.rings.count =
+      frame.rings && profile.rings * structure > HIDDEN_WEIGHT
+        ? Math.max(1, Math.ceil(RING_COUNT * profile.rings * structure))
+        : 0;
+    this.shells.count =
+      profile.shells * structure > HIDDEN_WEIGHT
+        ? Math.max(1, Math.ceil(SHELL_COUNT * profile.shells * structure))
+        : 0;
+    this.particles.visible = this.particleCount > 0;
+    this.spectrum.visible = profile.spectrum * structure > HIDDEN_WEIGHT;
+    this.rings.visible = this.rings.count > 0;
+    this.shells.visible = this.shells.count > 0;
+
+    this.prepareContext(frame, elapsed, flashEnvelope);
+    if (this.particles.visible && (!frame.freeze || this.particlesDirty)) this.updateParticles();
+    if (this.spectrum.visible) this.updateSpectrum();
+    if (this.rings.visible) this.updateRings();
+    if (this.shells.visible) this.updateShells();
+    this.particlesDirty = false;
+  }
+
+  dispose(): void {
+    for (const mesh of [this.particles, this.spectrum, this.rings, this.shells]) {
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const value of materials) value.dispose();
+      mesh.removeFromParent();
+    }
+    this.root.removeFromParent();
+  }
+
+  private prepareContext(
+    frame: SpatialVisualizerFrame,
+    elapsed: number,
+    flashEnvelope: number,
+  ): void {
+    this.context.elapsed = elapsed;
+    this.context.seed = this.frame.modeSeed;
+    this.audioReactivity = frame.xrAudioReactivity;
+    this.spatialExtent = frame.xrSpatialExtent;
+    this.context.energy = frame.energy * this.audioReactivity;
+    this.context.bass = frame.bass * this.audioReactivity;
+    this.context.mid = frame.mid * this.audioReactivity;
+    this.context.high = frame.high * this.audioReactivity;
+    this.context.pulse = frame.pulse * this.audioReactivity;
+    this.context.flash = flashEnvelope * this.audioReactivity;
+    this.context.intensity = this.frame.intensity;
+    this.context.depth = this.frame.depth;
+    this.context.feedback = this.frame.feedback;
+    this.context.speed = this.frame.speed;
+  }
+
+  private resetParticles(seed: number): void {
+    const sideOffset = this.side === 'a' ? 0.117 : 0.731;
+    const random = seeded((seed + sideOffset) % 1);
+    for (let index = 0; index < PARTICLE_MAX; index++) {
+      this.randomRadius[index] = random();
+      this.randomAngle[index] = random() * Math.PI * 2;
+      this.randomSpeed[index] = 0.55 + random() * 1.7;
+      this.randomPhase[index] = random();
+    }
+    this.particlesDirty = true;
+  }
+
+  private applyFormationStyle(): void {
+    const wireframe = SPATIAL_FORMATION_PROFILES[this.formation].shellWireframe;
+    if (this.shellMaterial.wireframe === wireframe) return;
+    this.shellMaterial.wireframe = wireframe;
+    this.shellMaterial.needsUpdate = true;
+  }
+
+  private applyInstanceColors(): void {
+    this.baseColor.setRGB(...this.frame.color);
+    const hueShift = FORMATION_HUE_SHIFT[this.formation];
+    this.accentColor
+      .copy(this.baseColor)
+      .offsetHSL(hueShift + this.frame.modeSeed * 0.035, 0, 0.08);
+
+    for (let index = 0; index < PARTICLE_MAX; index++) {
+      const amount = ((index * 0.61803398875 + this.frame.modeSeed) % 1) * 0.62;
+      this.workingColor.copy(this.baseColor).lerp(this.accentColor, amount);
+      this.particles.setColorAt(index, this.workingColor);
+    }
+    for (let index = 0; index < SPECTRUM_COUNT; index++) {
+      this.workingColor
+        .copy(this.baseColor)
+        .lerp(this.accentColor, index / Math.max(1, SPECTRUM_COUNT - 1));
+      this.spectrum.setColorAt(index, this.workingColor);
+    }
+    for (let index = 0; index < RING_COUNT; index++) {
+      this.rings.setColorAt(index, index % 2 === 0 ? this.baseColor : this.accentColor);
+    }
+    for (let index = 0; index < SHELL_COUNT; index++) {
+      this.workingColor
+        .copy(this.baseColor)
+        .lerp(this.accentColor, index / Math.max(1, SHELL_COUNT - 1));
+      this.shells.setColorAt(index, this.workingColor);
+    }
+    for (const mesh of [this.particles, this.spectrum, this.rings, this.shells]) {
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+  }
+
+  private updateParticles(): void {
+    this.context.count = Math.max(1, this.particleCount);
+    for (let index = 0; index < this.particleCount; index++) {
+      this.context.index = index;
+      this.context.randomRadius = this.randomRadius[index] ?? 0;
+      this.context.randomAngle = this.randomAngle[index] ?? 0;
+      this.context.randomSpeed = this.randomSpeed[index] ?? 1;
+      this.context.randomPhase = this.randomPhase[index] ?? 0;
+      this.context.level = this.levelAt(index % SPECTRUM_COUNT);
+      writeParticlePose(this.formation, this.context, this.pose);
+      applyPose(this.dummy, this.particles, index, this.pose, this.spatialExtent);
+    }
+    this.particles.instanceMatrix.needsUpdate = true;
+  }
+
+  private updateSpectrum(): void {
+    this.context.count = SPECTRUM_COUNT;
+    for (let index = 0; index < SPECTRUM_COUNT; index++) {
+      this.context.index = index;
+      this.context.level = this.levelAt(index);
+      writeSpectrumPose(this.formation, this.context, this.pose);
+      applyPose(this.dummy, this.spectrum, index, this.pose, this.spatialExtent);
+    }
+    this.spectrum.instanceMatrix.needsUpdate = true;
+  }
+
+  private updateRings(): void {
+    this.context.count = this.rings.count;
+    this.context.level = 0;
+    for (let index = 0; index < this.rings.count; index++) {
+      this.context.index = index;
+      writeRingPose(this.formation, this.context, this.pose);
+      applyPose(this.dummy, this.rings, index, this.pose, this.spatialExtent);
+    }
+    this.rings.instanceMatrix.needsUpdate = true;
+  }
+
+  private updateShells(): void {
+    this.context.count = this.shells.count;
+    this.context.level = 0;
+    for (let index = 0; index < this.shells.count; index++) {
+      this.context.index = index;
+      writeShellPose(this.formation, this.context, this.pose);
+      applyPose(this.dummy, this.shells, index, this.pose, this.spatialExtent);
+    }
+    this.shells.instanceMatrix.needsUpdate = true;
+  }
+
+  private levelAt(index: number): number {
+    return (this.levels?.[index] ?? 0) * this.audioReactivity;
+  }
+
+  private levels: Float32Array<ArrayBuffer> | null = null;
+
+  setLevels(levels: Float32Array<ArrayBuffer>): void {
+    this.levels = levels;
+  }
+}
+
+export class SpatialSceneController {
+  readonly scene = new Scene();
+  readonly camera = new PerspectiveCamera(70, 1, 0.05, 50);
+
+  private readonly root = new Object3D();
+  private readonly geometries: SpatialGeometries = {
+    particles: geometryRecord(particleGeometry),
+    spectrum: new BoxGeometry(0.045, 1, 0.045),
+    ring: new TorusGeometry(1, 0.012, 6, 64),
+    shells: geometryRecord(shellGeometry),
+  };
+  private readonly deckA: SpatialDeckLayer;
+  private readonly deckB: SpatialDeckLayer;
   private readonly levels = new Float32Array(SPECTRUM_COUNT);
+  private readonly particleBudget: SpatialParticleBudget = { deckA: 0, deckB: 0 };
   private frame: SpatialVisualizerFrame;
   private elapsed = 0;
   private previousTimeMs = 0;
-  private currentSeed = 0.5;
-  private lastBeatVersion = 0;
-  private lastFlashVersion = 0;
-  private lastResetVersion = 0;
+  private lastBeatVersion: number;
+  private lastFlashVersion: number;
+  private lastResetVersion: number;
   private lastFlashAt = Number.NEGATIVE_INFINITY;
   private flashEnvelope = 0;
   private tierIndex = 0;
@@ -82,33 +531,16 @@ export class SpatialSceneController {
 
   constructor(initialFrame: SpatialVisualizerFrame) {
     this.frame = initialFrame;
+    this.lastBeatVersion = initialFrame.beatVersion;
+    this.lastFlashVersion = initialFrame.flashVersion;
+    this.lastResetVersion = initialFrame.resetVersion;
     this.scene.background = new Color(0x000000);
     this.camera.position.set(0, 0, 0);
     this.scene.add(this.root);
 
-    this.particles = new InstancedMesh(
-      new IcosahedronGeometry(0.035, 0),
-      this.particleMaterial,
-      PARTICLE_MAX,
-    );
-    this.spectrum = new InstancedMesh(
-      new BoxGeometry(0.06, 1, 0.06),
-      this.spectrumMaterial,
-      SPECTRUM_COUNT,
-    );
-    this.rings = new InstancedMesh(
-      new TorusGeometry(1, 0.018, 4, 48),
-      this.ringMaterial,
-      RING_COUNT,
-    );
-    this.shells = new InstancedMesh(new IcosahedronGeometry(1, 1), this.shellMaterial, SHELL_COUNT);
-    for (const mesh of [this.particles, this.spectrum, this.rings, this.shells]) {
-      mesh.frustumCulled = false;
-      mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-      this.root.add(mesh);
-    }
-    this.particles.count = PARTICLE_TIERS[0];
-    this.resetParticles(initialFrame.formSeed);
+    this.deckA = new SpatialDeckLayer('a', this.geometries, initialFrame.deckA);
+    this.deckB = new SpatialDeckLayer('b', this.geometries, initialFrame.deckB);
+    this.root.add(this.deckA.root, this.deckB.root);
     this.commit(initialFrame);
   }
 
@@ -119,12 +551,14 @@ export class SpatialSceneController {
       const alpha = target >= this.levels[index]! ? 0.65 : 0.15;
       this.levels[index] = mix(this.levels[index]!, target, alpha);
     }
-    this.applyInstanceColors();
+    this.deckA.setLevels(this.levels);
+    this.deckB.setLevels(this.levels);
 
-    if (next.resetVersion !== this.lastResetVersion) {
-      this.lastResetVersion = next.resetVersion;
-      this.resetParticles(next.formSeed);
-    }
+    const resetTriggered = next.resetVersion !== this.lastResetVersion;
+    this.lastResetVersion = next.resetVersion;
+    this.deckA.commit(next.deckA, resetTriggered);
+    this.deckB.commit(next.deckB, resetTriggered);
+
     const beatTriggered = next.beatVersion !== this.lastBeatVersion;
     this.lastBeatVersion = next.beatVersion;
     const flashTriggered = next.flashVersion !== this.lastFlashVersion;
@@ -135,7 +569,6 @@ export class SpatialSceneController {
     ) {
       this.lastFlashAt = next.nowMs;
       this.flashEnvelope = 1;
-      this.kickParticles();
     }
   }
 
@@ -145,32 +578,26 @@ export class SpatialSceneController {
     this.previousTimeMs = timeMs;
     this.observeFrameTime(dt);
     if (!this.frame.freeze) this.elapsed += dt;
-    this.currentSeed = MathUtils.damp(this.currentSeed, this.frame.formSeed, 7.7, dt);
     this.flashEnvelope *= Math.exp(-dt / FLASH_DECAY_SECONDS);
-    const flashGain = 1 + Math.min(0.35, this.flashEnvelope * 0.35);
-    this.particleMaterial.opacity = Math.min(
-      1,
-      Math.min(0.88, 0.5 + this.frame.energy * 0.28) * flashGain,
+
+    this.deckA.advanceWeight(dt);
+    this.deckB.advanceWeight(dt);
+    const weightA = this.deckA.currentWeight();
+    const weightB = this.deckB.currentWeight();
+    const totalWeight = Math.min(1, weightA + weightB);
+    splitSpatialParticleBudget(
+      PARTICLE_TIERS[this.tierIndex]!,
+      weightA,
+      weightB,
+      this.particleBudget,
     );
-    this.spectrumMaterial.opacity = Math.min(
-      1,
-      Math.min(0.9, 0.55 + this.frame.high * 0.28) * flashGain,
-    );
-    this.ringMaterial.opacity = this.frame.rings
-      ? Math.min(
-          1,
-          Math.min(0.78, this.frame.ringOpacity * (0.65 + this.frame.bass * 0.65)) * flashGain,
-        )
-      : 0;
-    this.shellMaterial.opacity = Math.min(
-      1,
-      Math.min(0.5, 0.16 + this.frame.mid * 0.2) * flashGain,
-    );
+    this.deckA.setParticleCount(this.particleBudget.deckA);
+    this.deckB.setParticleCount(this.particleBudget.deckB);
+
     this.root.visible = !this.frame.blackout;
-    if (!this.frame.freeze) this.updateParticles(dt);
-    this.updateSpectrum();
-    this.updateRings();
-    this.updateShells();
+    if (!this.root.visible) return;
+    this.deckA.step(this.frame, this.elapsed, this.flashEnvelope, totalWeight);
+    this.deckB.step(this.frame, this.elapsed, this.flashEnvelope, totalWeight);
   }
 
   resize(width: number, height: number): void {
@@ -179,184 +606,31 @@ export class SpatialSceneController {
   }
 
   dispose(): void {
-    for (const mesh of [this.particles, this.spectrum, this.rings, this.shells]) {
-      mesh.geometry.dispose();
-      (mesh.material as Material).dispose();
-      mesh.removeFromParent();
-    }
-  }
-
-  private resetParticles(seed: number): void {
-    const random = seeded(seed);
-    for (let index = 0; index < PARTICLE_MAX; index++) {
-      const angle = random() * Math.PI * 2;
-      const radius = COMFORT_RADIUS + 0.15 + random() * 4.8;
-      this.particleX[index] = Math.cos(angle) * radius;
-      this.particleY[index] = Math.sin(angle) * radius * 0.72;
-      this.particleZ[index] = -12 + random() * 16;
-      this.particleSpeed[index] = 0.55 + random() * 1.7;
-      this.particlePhase[index] = random() * Math.PI * 2;
-    }
-  }
-
-  private kickParticles(): void {
-    const count = Math.min(this.particles.count, 160);
-    for (let index = 0; index < count; index++) {
-      this.particleSpeed[index] = Math.min(4, this.particleSpeed[index]! * 1.65);
-    }
-  }
-
-  private applyInstanceColors(): void {
-    const a = new Color(...this.frame.deckA.color);
-    const b = new Color(...this.frame.deckB.color);
-    const total = Math.max(0.0001, this.frame.deckA.weight + this.frame.deckB.weight);
-    const cross = this.frame.deckB.weight / total;
-    const shared = a.clone().lerp(b, cross);
-    for (let index = 0; index < this.particles.count; index++) {
-      const local = ((index * 0.61803398875 + this.frame.formSeed) % 1) * 0.45;
-      this.particles.setColorAt(index, shared.clone().lerp(index % 2 === 0 ? a : b, local));
-    }
-    for (let index = 0; index < SPECTRUM_COUNT; index++) {
-      this.spectrum.setColorAt(index, a.clone().lerp(b, index / (SPECTRUM_COUNT - 1)));
-    }
-    for (let index = 0; index < RING_COUNT; index++) {
-      this.rings.setColorAt(index, index % 2 === 0 ? a : b);
-    }
-    for (let index = 0; index < SHELL_COUNT; index++) {
-      this.shells.setColorAt(index, shared);
-    }
-    for (const mesh of [this.particles, this.spectrum, this.rings, this.shells]) {
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    }
-  }
-
-  private updateParticles(dt: number): void {
-    const weight = this.frame.deckA.weight + this.frame.deckB.weight;
-    const speed =
-      (this.frame.deckA.speed * this.frame.deckA.weight +
-        this.frame.deckB.speed * this.frame.deckB.weight) /
-      Math.max(0.001, weight);
-    const intensity = this.deckValue('intensity');
-    const feedback = this.deckValue('feedback');
-    const drive = (0.7 + this.frame.energy * 7.5) * speed * (0.65 + intensity * 0.45);
-    const swirl = (this.currentSeed - 0.5) * 1.6 + this.frame.mid * 0.45 + (feedback - 0.5) * 0.35;
-    for (let index = 0; index < this.particles.count; index++) {
-      let x = this.particleX[index]!;
-      let y = this.particleY[index]!;
-      let z = this.particleZ[index]! + dt * drive * this.particleSpeed[index]!;
-      const angle = swirl * dt * (0.45 + (index % 17) / 24);
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      const nextX = x * cos - y * sin;
-      y = x * sin + y * cos;
-      x = nextX;
-      if (z > 4) {
-        z = -12 - ((index * 0.37 + this.elapsed) % 3);
-        this.particleSpeed[index] = Math.max(0.5, this.particleSpeed[index]! * 0.72);
-      }
-      this.particleX[index] = x;
-      this.particleY[index] = y;
-      this.particleZ[index] = z;
-      const level = this.levels[index % SPECTRUM_COUNT] ?? 0;
-      const scale = 0.55 + level * 2.2 + this.flashEnvelope * 0.8;
-      this.dummy.position.set(x, y, z);
-      this.dummy.rotation.set(
-        this.particlePhase[index]! + this.elapsed * 0.35,
-        this.elapsed * (0.2 + this.currentSeed),
-        0,
-      );
-      this.dummy.scale.setScalar(scale);
-      this.dummy.updateMatrix();
-      this.particles.setMatrixAt(index, this.dummy.matrix);
-    }
-    this.particles.instanceMatrix.needsUpdate = true;
-  }
-
-  private updateSpectrum(): void {
-    const spin = this.elapsed * (0.08 + this.frame.mid * 0.18);
-    const depth = this.deckValue('depth');
-    const intensity = this.deckValue('intensity');
-    for (let index = 0; index < SPECTRUM_COUNT; index++) {
-      const normalized = index / (SPECTRUM_COUNT - 1);
-      const helix = index % 2 === 0 ? 0 : Math.PI;
-      const angle = normalized * Math.PI * 4 + helix + spin;
-      const level = this.levels[index] ?? 0;
-      const radius = 2.05 + depth * 0.8 + level * (0.6 + depth * 0.4);
-      const y = (normalized - 0.5) * (3.6 + depth * 1.4);
-      this.dummy.position.set(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
-      this.dummy.rotation.set(0, -angle, Math.sin(angle * 0.5) * 0.2);
-      this.dummy.scale.set(1, 0.12 + level * 1.25 * intensity + this.frame.pulse * 0.16, 1);
-      this.dummy.updateMatrix();
-      this.spectrum.setMatrixAt(index, this.dummy.matrix);
-    }
-    this.spectrum.instanceMatrix.needsUpdate = true;
-  }
-
-  private updateRings(): void {
-    const feedback = this.deckValue('feedback');
-    for (let index = 0; index < RING_COUNT; index++) {
-      const phase =
-        (index / RING_COUNT + this.elapsed * (0.025 + feedback * 0.035 + this.frame.bass * 0.1)) %
-        1;
-      const radius = 1.25 + phase * 3.8 + this.frame.pulse * (1 - phase) * 0.7;
-      this.dummy.position.set(0, 0, -8 + phase * 10);
-      this.dummy.rotation.set(
-        (this.currentSeed - 0.5) * 0.9 + index * 0.025,
-        this.elapsed * 0.04 + index * 0.07,
-        index * 0.11,
-      );
-      this.dummy.scale.setScalar(radius);
-      this.dummy.updateMatrix();
-      this.rings.setMatrixAt(index, this.dummy.matrix);
-    }
-    this.rings.instanceMatrix.needsUpdate = true;
-  }
-
-  private updateShells(): void {
-    const depth = this.deckValue('depth');
-    const feedback = this.deckValue('feedback');
-    for (let index = 0; index < SHELL_COUNT; index++) {
-      const radius = 1.65 + index * (0.34 + depth * 0.16) + this.frame.mid * 0.18;
-      const direction = index % 2 === 0 ? 1 : -1;
-      this.dummy.position.set(0, 0, 0);
-      this.dummy.rotation.set(
-        this.elapsed * (0.025 + this.frame.high * 0.15) * direction + index,
-        this.elapsed * (0.025 + feedback * 0.04 + this.currentSeed * 0.08) - index * 0.4,
-        index * 0.23,
-      );
-      this.dummy.scale.setScalar(radius * (1 + this.frame.pulse * 0.025));
-      this.dummy.updateMatrix();
-      this.shells.setMatrixAt(index, this.dummy.matrix);
-    }
-    this.shells.instanceMatrix.needsUpdate = true;
-  }
-
-  private deckValue(key: 'intensity' | 'depth' | 'feedback'): number {
-    const weight = this.frame.deckA.weight + this.frame.deckB.weight;
-    return (
-      (this.frame.deckA[key] * this.frame.deckA.weight +
-        this.frame.deckB[key] * this.frame.deckB.weight) /
-      Math.max(0.001, weight)
-    );
+    this.deckA.dispose();
+    this.deckB.dispose();
+    for (const geometry of Object.values(this.geometries.particles)) geometry.dispose();
+    this.geometries.spectrum.dispose();
+    this.geometries.ring.dispose();
+    for (const geometry of Object.values(this.geometries.shells)) geometry.dispose();
+    this.root.removeFromParent();
   }
 
   private observeFrameTime(dt: number): void {
     if (!(dt > 0) || dt > 0.25) return;
     this.frameSamples.push(dt);
     if (this.frameSamples.length < 120) return;
-    const sorted = [...this.frameSamples].sort((a, b) => a - b);
-    const baseline = sorted[Math.max(0, Math.floor(sorted.length * 0.1))] ?? dt;
-    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? dt;
-    this.frameSamples = [];
+    this.frameSamples.sort((a, b) => a - b);
+    const baseline =
+      this.frameSamples[Math.max(0, Math.floor(this.frameSamples.length * 0.1))] ?? dt;
+    const p95 = this.frameSamples[Math.floor(this.frameSamples.length * 0.95)] ?? dt;
+    this.frameSamples.length = 0;
     if (p95 > baseline * 1.35 && this.tierIndex < PARTICLE_TIERS.length - 1) {
       this.tierIndex++;
-      this.particles.count = PARTICLE_TIERS[this.tierIndex]!;
       this.stableSeconds = 0;
     } else if (p95 < baseline * 1.15) {
       this.stableSeconds += p95 * 120;
       if (this.stableSeconds >= 10 && this.tierIndex > 0) {
         this.tierIndex--;
-        this.particles.count = PARTICLE_TIERS[this.tierIndex]!;
         this.stableSeconds = 0;
       }
     } else {
