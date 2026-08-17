@@ -6,7 +6,7 @@ A package is either a WGSL fullscreen pack (schema v1) or a trusted Three.js mod
 > [!WARNING]
 > Three.js packages execute same-origin JavaScript. Treat them like plugins and import only code you trust.
 
-Related: [preset-studio.md](./preset-studio.md) · [mode-protocol.md](./mode-protocol.md)
+Related: [preset-studio.md](./preset-studio.md) · [mode-protocol.md](./mode-protocol.md) · [audio-mapping.md](./audio-mapping.md)
 
 ## File
 
@@ -17,6 +17,7 @@ Related: [preset-studio.md](./preset-studio.md) · [mode-protocol.md](./mode-pro
 manifest.json     # required
 package.wgsl       # required
 defaults.json     # optional knob defaults
+mappings.json     # optional declared audio→knob mappings
 ```
 
 Schema v2 uses `visualization.ts` as canonical source, `visualization.js` plus an optional source map as the executable, and optional declared binary files under `assets/`.
@@ -48,6 +49,18 @@ Schema v2 uses `visualization.ts` as canonical source, `visualization.js` plus a
 | 2 | `audio_uniforms` | x=energy (**−1 idle**), y=bass, z=mid, w=high |
 | 3 | `palette_rgb` | xyz duotone base |
 | 4 | `pack_drive` | x=intensity, y=depth, z=feedback, w=speed |
+
+## `mappings.json` (optional)
+
+Declared audio→knob reactivity, shared by both targets. Sources are the live
+feature ids (`energy` `bass` `mid` `high` `pulse`); targets are the pack's own
+knobs (`intensity` `depth` `feedback` `speed` `hue` `sat` `bright`) — never
+`ControlState`. Omitting the file is fully supported and leaves a pack behaving
+exactly as it did before the schema existed.
+
+Validation is strict: a typo'd target is a build error, not a dropped row, so a
+pack cannot ship reactivity that quietly does nothing. Full schema, evaluation
+order, idle-audio rules, and the conflict model: **[audio-mapping.md](./audio-mapping.md)**.
 
 ### `wgslForm`
 

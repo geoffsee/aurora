@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { AUDIO_MAPPING_REFERENCE } from '../../shared/audio-mapping-v1.ts';
 import {
   AURORA_PACKAGE_SCHEMA_VERSION,
   auroraPackageFileName,
@@ -209,5 +210,101 @@ describe('auroraPackageToModePreset', () => {
     expect(preset.layers[0]).toEqual({ kind: 'fullscreen', ref: 'glass_drift.wgsl' });
     expect(preset.engineMinCapabilities).toContain('dual-fullscreen');
     expect(auroraPackageWgslFileName('glass-drift')).toBe('glass_drift.wgsl');
+  });
+});
+
+describe('mappings.json (#284)', () => {
+  const bundle = () => ({
+    manifest: buildManifest({
+      slug: 'mapped-pack',
+      label: 'Mapped Pack',
+      wgslForm: 'show' as const,
+    }),
+    wgsl: PACK_V1_SHOW_TEMPLATE,
+  });
+
+  test('round-trips a declared mapping set through the archive', () => {
+    const bytes = buildAuroraPackageArchive({
+      ...bundle(),
+      audioMappings: AUDIO_MAPPING_REFERENCE,
+    });
+    const parsed = parseAuroraPackageArchive(bytes);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.bundle.audioMappings).toEqual(AUDIO_MAPPING_REFERENCE);
+  });
+
+  test('a pack without mappings stays byte-identical to a pre-#284 archive', () => {
+    // The migration promise: declaring nothing costs nothing, so existing packs
+    // and existing golden archives are untouched.
+    const withNone = buildAuroraPackageArchive(bundle());
+    const withEmpty = buildAuroraPackageArchive({
+      ...bundle(),
+      audioMappings: { version: 1, mappings: [] },
+    });
+    expect(Array.from(withEmpty)).toEqual(Array.from(withNone));
+    expect(Object.keys(unzipTextEntries(withNone))).not.toContain('mappings.json');
+  });
+
+  test('parses to undefined when the archive declares none', () => {
+    const parsed = parseAuroraPackageArchive(buildAuroraPackageArchive(bundle()));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.bundle.audioMappings).toBeUndefined();
+  });
+
+  test('build refuses an invalid set rather than dropping it', () => {
+    expect(() =>
+      buildAuroraPackageArchive({
+        ...bundle(),
+        audioMappings: {
+          version: 1,
+          mappings: [{ ...AUDIO_MAPPING_REFERENCE.mappings[0], target: 'crossfade' }],
+        } as never,
+      }),
+    ).toThrow(/mappings\.json/);
+  });
+
+  test('import rejects an archive whose mappings.json is invalid', () => {
+    const bytes = zipStore([
+      {
+        name: 'manifest.json',
+        data: new TextEncoder().encode(
+          JSON.stringify(
+            buildManifest({ slug: 'mapped-pack', label: 'Mapped Pack', wgslForm: 'show' }),
+          ),
+        ),
+      },
+      { name: 'package.wgsl', data: new TextEncoder().encode(PACK_V1_SHOW_TEMPLATE) },
+      {
+        name: 'mappings.json',
+        data: new TextEncoder().encode(
+          JSON.stringify({ version: 1, mappings: [{ source: 'subsonic', target: 'depth' }] }),
+        ),
+      },
+    ]);
+    const parsed = parseAuroraPackageArchive(bytes);
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.errors[0]?.path).toContain('mappings.json#');
+  });
+
+  test('import rejects malformed JSON with a file-scoped error', () => {
+    const bytes = zipStore([
+      {
+        name: 'manifest.json',
+        data: new TextEncoder().encode(
+          JSON.stringify(
+            buildManifest({ slug: 'mapped-pack', label: 'Mapped Pack', wgslForm: 'show' }),
+          ),
+        ),
+      },
+      { name: 'package.wgsl', data: new TextEncoder().encode(PACK_V1_SHOW_TEMPLATE) },
+      { name: 'mappings.json', data: new TextEncoder().encode('{ not json') },
+    ]);
+    const parsed = parseAuroraPackageArchive(bytes);
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.errors[0]).toEqual({ path: 'mappings.json', message: 'invalid JSON' });
   });
 });

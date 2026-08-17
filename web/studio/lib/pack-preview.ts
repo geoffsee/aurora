@@ -3,6 +3,12 @@
  * Honest about limits: browser WebGPU ≠ Bevy Material2d; export remaps groups for the show.
  */
 
+import {
+  type AudioMappingEvaluator,
+  type AudioMappingSet,
+  createAudioMappingEvaluator,
+  emptyAudioMappingSet,
+} from '../../../shared/audio-mapping-v1.ts';
 import { hueToRgb } from '../../../shared/palette-color.ts';
 import { preparePreviewWgsl } from './prepare-preview-wgsl.ts';
 import type { StudioKnobs } from './sketch-store.ts';
@@ -90,6 +96,16 @@ export class PackPreview {
   private raf = 0;
   private startMs = performance.now();
   private knobs: StudioKnobs | null = null;
+  /**
+   * Declared audio→knob mappings for the open sketch (#284).
+   *
+   * The preview runs the *same* evaluator the show path does, from
+   * `shared/audio-mapping-v1.ts`, rather than a preview-only approximation —
+   * an author tuning against a preview that lies is worse than no preview.
+   */
+  private mappingEvaluator: AudioMappingEvaluator = createAudioMappingEvaluator(
+    emptyAudioMappingSet(),
+  );
   private listener: PackPreviewListener | null = null;
   private metricsListener: PackPreviewMetricsListener | null = null;
   private destroyed = false;
@@ -307,6 +323,11 @@ export class PackPreview {
     this.knobs = knobs;
   }
 
+  /** Swap the mapping set; resets envelopes so the old set leaves no tail. */
+  setAudioMappings(set: AudioMappingSet): void {
+    this.mappingEvaluator = createAudioMappingEvaluator(set);
+  }
+
   async setSource(wgsl: string): Promise<void> {
     if (!this.device || !this.pipelineLayout || !this.layout) return;
     if (wgsl === this.lastSource && this.pipeline) return;
@@ -405,16 +426,25 @@ export class PackPreview {
       pulse = 0.15 + 0.45 * Math.max(0, Math.sin(t * 2.2));
     }
 
-    const speedScale = 0.25 + k.speed * 1.75;
+    // Declared mappings decorate the operator knobs before they reach the bus.
+    // Packs that read audio_uniforms directly are unaffected — an empty set
+    // returns the knobs untouched.
+    const driven = this.mappingEvaluator.evaluate(
+      { energy, bass, mid, high, pulse },
+      k,
+      timeSec * 1000,
+    );
+
+    const speedScale = 0.25 + driven.speed * 1.75;
     const animTime = timeSec * speedScale;
-    const rgb = hueToRgb(k.hue, 0.72, 0.52);
+    const rgb = hueToRgb(driven.hue, 0.72, 0.52);
 
     const packs: [number, number, number, number][] = [
-      [k.hue, animTime, 0, aspect], // params
-      [k.sat, k.bright, pulse, k.alpha], // palette_extra
+      [driven.hue, animTime, 0, aspect], // params
+      [driven.sat, driven.bright, pulse, k.alpha], // palette_extra
       [energy, bass, mid, high], // audio_uniforms
       [rgb.r, rgb.g, rgb.b, 1], // palette_rgb
-      [k.intensity, k.depth, k.feedback, k.speed], // pack_drive
+      [driven.intensity, driven.depth, driven.feedback, driven.speed], // pack_drive
     ];
 
     for (let i = 0; i < BINDING_COUNT; i++) {

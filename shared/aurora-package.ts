@@ -4,6 +4,11 @@
  * See docs/aurora-package.md.
  */
 
+import {
+  AUDIO_MAPPING_FILE,
+  type AudioMappingSet,
+  validateAudioMappings,
+} from './audio-mapping-v1.ts';
 import { MODE_PRESET_SLUG_RE } from './mode-preset-schema.ts';
 import {
   unzipStore,
@@ -100,6 +105,8 @@ export type AuroraWgslPackageBundle = {
   /** WGSL source as stored in the archive (may be authoring or show form). */
   wgsl: string;
   defaults?: AuroraPackageDefaults;
+  /** Declared audio→knob mappings (#284). Absent = pack does its own math. */
+  audioMappings?: AudioMappingSet;
   source?: undefined;
   javascript?: undefined;
   sourceMap?: undefined;
@@ -113,6 +120,8 @@ export type AuroraThreePackageBundle = {
   sourceMap?: string;
   assets: Record<string, Uint8Array>;
   defaults?: AuroraPackageDefaults;
+  /** Declared audio→knob mappings (#284). Same schema as the WGSL target. */
+  audioMappings?: AudioMappingSet;
   wgsl?: undefined;
 };
 
@@ -758,6 +767,20 @@ export function validateBundle(bundle: AuroraPackageBundle): AuroraPackageValida
     const d = validateDefaults(bundle.defaults);
     if (Array.isArray(d)) errors.push(...d);
   }
+  if (bundle.audioMappings) {
+    // Re-validated even on the programmatic build path: a pack whose declared
+    // reactivity is silently dropped is worse than one that fails to build.
+    const checked = validateAudioMappings(bundle.audioMappings);
+    if (!checked.ok) {
+      errors.push(
+        ...checked.errors.map((error) => ({
+          path:
+            error.path === AUDIO_MAPPING_FILE ? error.path : `${AUDIO_MAPPING_FILE}#${error.path}`,
+          message: error.message,
+        })),
+      );
+    }
+  }
   if (errors.length) return { ok: false, errors };
   return { ok: true, bundle };
 }
@@ -796,6 +819,13 @@ export function buildAuroraPackageArchive(bundle: AuroraPackageBundle): Uint8Arr
     entries.push({
       name: 'defaults.json',
       data: encode(`${JSON.stringify(checked.bundle.defaults, null, 2)}\n`),
+    });
+  // Omitted entirely when a pack declares nothing, so an archive built before
+  // #284 and one built after are byte-identical for the same inputs.
+  if (bundle.audioMappings && bundle.audioMappings.mappings.length > 0)
+    entries.push({
+      name: AUDIO_MAPPING_FILE,
+      data: encode(`${JSON.stringify(bundle.audioMappings, null, 2)}\n`),
     });
   const archive = zipStore(entries);
   if (archive.byteLength > AURORA_PACKAGE_MAX_ARCHIVE_BYTES) {
@@ -850,7 +880,7 @@ export function parseAuroraPackageArchive(
   const man = validateManifest(manifestRaw);
   if (!man.ok) return man;
 
-  const allowed = new Set(['manifest.json', 'defaults.json']);
+  const allowed = new Set(['manifest.json', 'defaults.json', AUDIO_MAPPING_FILE]);
   if (man.bundle.manifest.target === 'pack-fullscreen') allowed.add('package.wgsl');
   else {
     allowed.add('visualization.ts');
@@ -876,6 +906,30 @@ export function parseAuroraPackageArchive(
     }
   }
 
+  let audioMappings: AudioMappingSet | undefined;
+  if (byName.has(AUDIO_MAPPING_FILE)) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text(AUDIO_MAPPING_FILE) as string);
+    } catch {
+      return { ok: false, errors: [{ path: AUDIO_MAPPING_FILE, message: 'invalid JSON' }] };
+    }
+    const checked = validateAudioMappings(raw);
+    if (!checked.ok) {
+      // Prefix so an author sees which file the path belongs to, the same way
+      // defaults/manifest errors read.
+      return {
+        ok: false,
+        errors: checked.errors.map((error) => ({
+          path:
+            error.path === AUDIO_MAPPING_FILE ? error.path : `${AUDIO_MAPPING_FILE}#${error.path}`,
+          message: error.message,
+        })),
+      };
+    }
+    audioMappings = checked.value;
+  }
+
   if (man.bundle.manifest.target === 'threejs') {
     for (const name of ['visualization.ts', 'visualization.js'])
       if (!byName.has(name))
@@ -893,6 +947,7 @@ export function parseAuroraPackageArchive(
           ]),
         ),
         defaults,
+        audioMappings,
       };
       return validateBundle(bundle);
     } catch (error) {
@@ -917,6 +972,7 @@ export function parseAuroraPackageArchive(
     manifest: { ...man.bundle.manifest, wgslForm: form },
     wgsl,
     defaults,
+    audioMappings,
   };
   return validateBundle(bundle);
 }

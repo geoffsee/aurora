@@ -4,6 +4,12 @@
  */
 
 import {
+  AUDIO_MAPPING_REFERENCE,
+  type AudioMappingSet,
+  emptyAudioMappingSet,
+  validateAudioMappings,
+} from '../../../shared/audio-mapping-v1.ts';
+import {
   type AuroraPackageDefaults,
   PACK_V1_AUTHORING_TEMPLATE,
   slugifyPackageLabel,
@@ -71,6 +77,8 @@ export type StudioSketch = {
   /** Canonical editable TypeScript for Three.js sketches. */
   source?: string;
   knobs: StudioKnobs;
+  /** Declared audio→knob mappings (#284); exported as the package mappings.json. */
+  audioMappings: AudioMappingSet;
   updatedAt: string;
 };
 
@@ -111,6 +119,22 @@ export function knobsToLookDefaults(knobs: StudioKnobs): AuroraPackageDefaults {
   };
 }
 
+/** Structural copy so two sketches never share a mapping array. */
+function cloneMappings(set: AudioMappingSet): AudioMappingSet {
+  return { version: set.version, mappings: set.mappings.map((entry) => ({ ...entry })) };
+}
+
+/**
+ * Stored sketches predate mappings, and a localStorage document is not build
+ * output — an unreadable set degrades to "no mappings" rather than losing the
+ * sketch.
+ */
+function parseAudioMappings(raw: unknown): AudioMappingSet {
+  if (raw === undefined || raw === null) return emptyAudioMappingSet();
+  const checked = validateAudioMappings(raw);
+  return checked.ok ? checked.value : emptyAudioMappingSet();
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -148,6 +172,7 @@ export function createSketch(
       | 'renderer'
       | 'requiresNativeWebGPU'
       | 'source'
+      | 'audioMappings'
     >
   > & {
     knobs?: Partial<StudioKnobs>;
@@ -168,6 +193,9 @@ export function createSketch(
     requiresNativeWebGPU: partial?.requiresNativeWebGPU ?? false,
     source: partial?.backend === 'threejs' ? (partial.source ?? THREE_WEBGL2_TEMPLATE) : undefined,
     knobs: partial?.knobs ? { ...defaultKnobs(), ...partial.knobs } : defaultKnobs(),
+    // New sketches start reactive. The reference set drives the stock template
+    // through pack_drive with no shader edit, which is the point being made.
+    audioMappings: partial?.audioMappings ?? cloneMappings(AUDIO_MAPPING_REFERENCE),
     updatedAt: nowIso(),
   };
 }
@@ -249,6 +277,7 @@ function parseSketch(raw: unknown): StudioSketch | null {
           ? THREE_WEBGL2_TEMPLATE
           : undefined,
     knobs: parseKnobs(raw.knobs),
+    audioMappings: parseAudioMappings(raw.audioMappings),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : nowIso(),
   };
 }
