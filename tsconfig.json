@@ -29,5 +29,11 @@
   },
   // `worker` has its own tsconfig: @cloudflare/workers-types conflicts with the
   // DOM lib the web apps compile against.
-  "exclude": ["dist", "node_modules", "worker"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "worker",
+    "tests/worker-runtime",
+    "tests/worker/show-directory.test.ts"
+  ]
 }

@@ -64,5 +64,14 @@ jobs:
       - name: Build WASM (web target)
         run: bun run build:web
 
+      - name: Typecheck Cloudflare Worker
+        run: bun run typecheck:worker
+
+      - name: Build live-show surfaces
+        run: bun run build:controls && bun run build:shows && bun run build:viewer
+
+      - name: Worker runtime tests
+        run: bun run test:worker
+
       - name: Vitest (browser)
         run: bun run test

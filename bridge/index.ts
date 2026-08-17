@@ -15,6 +15,7 @@ import {
   DEFAULT_DECK_A_GPU_SHADER_UI_INDEX,
   DEFAULT_DECK_B_GPU_SHADER_UI_INDEX,
 } from '../shared/gpu-shader-routing.ts';
+import { resolveShowIngress } from '../shared/live-show.ts';
 import { normalizeRemoteModelAssetPath } from '../shared/model-asset-path.ts';
 import { MAX_FIGURE_MODEL_INDEX } from '../shared/model-catalog.ts';
 import {
@@ -48,6 +49,7 @@ import {
   type OutputRoute,
 } from '../shared/output-routing.ts';
 import { DEFAULT_PALETTE_RGB, hueToRgb, resolvePaletteColor } from '../shared/palette-color.ts';
+import { DEFAULT_RELAY_BASE_URL } from '../shared/relay-session.ts';
 import {
   DECK_MODE_MAX,
   DECK_MODE_MIN,
@@ -81,6 +83,7 @@ import {
   parseTriggerBindings,
 } from './automation-bridge.ts';
 import { selectTempoSource } from './clock-arbiter.ts';
+import { LiveShowManager } from './live-show.ts';
 import {
   deriveBpmFromTimestamps,
   MIDI_CLOCK_TICK,
@@ -272,6 +275,7 @@ const webRoot = `${root}/web`;
 const controlsDistRoot = `${root}/dist/controls`;
 const mobileDistRoot = `${root}/dist/mobile`;
 const studioDistRoot = `${root}/dist/studio`;
+const showsDistRoot = `${root}/dist/shows`;
 const webxrDistRoot = `${root}/dist/webxr`;
 const vendorDistRoot = `${root}/dist/vendor`;
 const liveHost = Bun.env.LIVE_HOST ?? '127.0.0.1';
@@ -288,6 +292,20 @@ const soundCloudSessionFile = Bun.env.AURORA_DATA_DIR?.trim()
   : null;
 const soundCloud = new SoundCloudClient(soundCloudConfig, {
   sessionFile: soundCloudSessionFile,
+});
+const liveShowDataDir = Bun.env.AURORA_DATA_DIR?.trim()
+  ? Bun.env.AURORA_DATA_DIR.trim().replace(/\/$/, '')
+  : `${root}/.aurora`;
+const liveShow = new LiveShowManager({
+  apiUrl: Bun.env.AURORA_LIVE_API_URL?.trim() || DEFAULT_RELAY_BASE_URL,
+  publicUrl: Bun.env.AURORA_SHOW_PUBLIC_URL,
+  tunnelToken: Bun.env.CLOUDFLARE_TUNNEL_TOKEN,
+  ingress: resolveShowIngress(
+    Bun.env.AURORA_SHOW_INGRESS,
+    Boolean(Bun.env.CLOUDFLARE_TUNNEL_TOKEN?.trim()),
+  ),
+  runtime: Bun.env.AURORA_RUNTIME === 'docker' ? 'docker' : 'native',
+  persistenceFile: `${liveShowDataDir}/live-show-session.json`,
 });
 
 // Deck preset catalog (bundled data/ + optional AURORA_DATA_DIR overlay).
@@ -386,6 +404,7 @@ const resolveControlsFile = (relativePath: string) =>
 const resolveMobileFile = (relativePath: string) => Bun.file(`${mobileDistRoot}/${relativePath}`);
 const resolveVendorFile = (relativePath: string) => Bun.file(`${vendorDistRoot}/${relativePath}`);
 const resolveStudioFile = (relativePath: string) => Bun.file(`${studioDistRoot}/${relativePath}`);
+const resolveShowsFile = (relativePath: string) => Bun.file(`${showsDistRoot}/${relativePath}`);
 const resolveWebxrFile = (relativePath: string) => Bun.file(`${webxrDistRoot}/${relativePath}`);
 
 const udp = new osc.UDPPort({
@@ -1013,13 +1032,15 @@ function broadcastBrowserAudioFeatures(features: AudioFeatures, nowMs: number): 
   // Live AbletonOSC remains authoritative. Browser mic frames fill the same
   // renderer-facing audio lane only while OSC has gone quiet.
   if (nowMs - latestOscFrameAt < OSC_ACTIVE_TTL_MS) return;
-  const data = JSON.stringify({
+  const frame = {
     address: '/aurora/audio/features',
     args: [features],
-  });
+  };
+  const data = JSON.stringify(frame);
   sockets.forEach((ws) => {
     ws.send(data);
   });
+  liveShow.publish(frame);
 }
 
 // Derive AudioFeatures from a raw AbletonOSC track_data response and feed the
@@ -1122,14 +1143,16 @@ const broadcast = (msg: OscMsg) => {
     processLiveTrackData((msg.args ?? []).map(oscArgValue));
   }
 
-  const data = JSON.stringify({
+  const frame = {
     address: msg.address,
     args: (msg.args ?? []).map(oscArgValue),
-  });
+  };
+  const data = JSON.stringify(frame);
 
   sockets.forEach((ws) => {
     ws.send(data);
   });
+  liveShow.publish(frame);
 };
 
 const broadcastControl = (state: unknown) => {
@@ -1168,13 +1191,15 @@ const broadcastControl = (state: unknown) => {
   // The guarded recomposite already fanned the corrected frame out; skip the
   // outer send so clients receive exactly one frame per weight edit.
   if (recomposited) return;
-  const data = JSON.stringify({
+  const frame = {
     address: '/aurora/control/state',
     args: [latestControlState],
-  });
+  };
+  const data = JSON.stringify(frame);
   sockets.forEach((ws) => {
     ws.send(data);
   });
+  liveShow.publish(frame);
 };
 const broadcastError = (description: string) => {
   const data = JSON.stringify({
@@ -1193,13 +1218,15 @@ const broadcastPresetCommand = (address: string) => {
   });
 };
 const broadcastImportedShader = (wgsl: string, meta: unknown) => {
-  const data = JSON.stringify({
+  const frame = {
     address: '/aurora/shader/imported',
     args: [{ wgsl, meta }],
-  });
+  };
+  const data = JSON.stringify(frame);
   sockets.forEach((ws) => {
     ws.send(data);
   });
+  liveShow.publish(frame);
 };
 const booleanArg = (arg: OscArg | undefined) => {
   const value = oscArgValue(arg);
@@ -1608,6 +1635,7 @@ function broadcastLinkTempo(tempo: number): void {
   sockets.forEach((ws) => {
     ws.send(tempoData);
   });
+  liveShow.publish({ address: OSC_ADDRESSES.TEMPO, args: [rounded] });
 }
 
 function broadcastLinkBeat(beat: number): void {
@@ -1618,6 +1646,7 @@ function broadcastLinkBeat(beat: number): void {
   sockets.forEach((ws) => {
     ws.send(beatData);
   });
+  liveShow.publish({ address: OSC_ADDRESSES.BEAT, args: [beat] });
 }
 
 // Join an Ableton Link session and stream its shared tempo/beat-phase onto the
@@ -1728,7 +1757,7 @@ function apiCorsHeaders(request: Request): Record<string, string> {
   if (!origin) return {};
   return {
     'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'access-control-allow-headers': `content-type, authorization, ${ACCESS_TOKEN_HEADER}`,
     'access-control-max-age': '600',
     vary: 'Origin',
@@ -1751,6 +1780,39 @@ function unauthorizedResponse(request: Request): Response {
       { status: 401, headers: { 'www-authenticate': 'Bearer realm="aurora"' } },
     ),
   );
+}
+
+async function handleLiveShowManagement(request: Request, pathname: string): Promise<Response> {
+  const requestUrl = new URL(request.url);
+  if (!isAuthorizedRequest(accessToken, requestUrl, request.headers)) {
+    return unauthorizedResponse(request);
+  }
+  if (request.method === 'GET' && pathname === '/api/live-show') {
+    return withApiCors(request, await liveShow.status());
+  }
+  if (request.method === 'POST' && pathname === '/api/live-show') {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      /* validated below */
+    }
+    return withApiCors(
+      request,
+      await liveShow.start({ name: body.name, access: body.access, durationMs: body.durationMs }),
+    );
+  }
+  if (request.method === 'DELETE' && pathname === '/api/live-show') {
+    return withApiCors(request, await liveShow.stop());
+  }
+  if (request.method === 'POST' && pathname === '/api/live-show/code/rotate') {
+    return withApiCors(request, await liveShow.rotateCode());
+  }
+  const packageMatch = /^\/api\/live-show\/packages\/([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(pathname);
+  if (request.method === 'PUT' && packageMatch?.[1]) {
+    return withApiCors(request, await liveShow.uploadPackage(packageMatch[1], request));
+  }
+  return withApiCors(request, Response.json({ ok: false, error: 'not found' }, { status: 404 }));
 }
 
 /** POST /api/packages/import — `.aurora-package` archive → packs under AURORA_DATA_DIR. */
@@ -1826,6 +1888,19 @@ const visualServer = Bun.serve({
       return new Response(null, { status: 204, headers: apiCorsHeaders(request) });
     }
 
+    if (request.method === 'GET' && pathname === '/.well-known/aurora-live-show') {
+      const proof = liveShow.proof();
+      return proof
+        ? new Response(proof, {
+            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+          })
+        : new Response('Live show registration is not active', { status: 404 });
+    }
+
+    if (pathname === '/api/live-show' || pathname.startsWith('/api/live-show/')) {
+      return handleLiveShowManagement(request, pathname);
+    }
+
     if (pathname === '/ws') {
       // Browsers cannot set handshake headers, so the token rides the query
       // string here. Reject before upgrading: an accepted socket is control.
@@ -1860,6 +1935,19 @@ const visualServer = Bun.serve({
 
     if (request.method === 'GET' && pathname === '/studio') {
       return Response.redirect(new URL('/studio/', url), 308);
+    }
+
+    if (request.method === 'GET' && pathname === '/shows') {
+      return Response.redirect(new URL('/shows/', url), 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/shows/')) {
+      const relativePath = pathname.slice('/shows/'.length) || 'index.html';
+      if (relativePath.includes('..')) return new Response('Not found', { status: 404 });
+      const file = resolveShowsFile(relativePath);
+      if (!(await file.exists())) return new Response('Not found', { status: 404 });
+      return new Response(file, {
+        headers: { 'content-type': contentType(relativePath), 'cache-control': 'no-store' },
+      });
     }
     if (request.method === 'GET' && pathname.startsWith('/studio/')) {
       const relativePath = pathname.slice('/studio/'.length) || 'index.html';
@@ -2090,13 +2178,15 @@ const visualServer = Bun.serve({
             const rawSpectrum = Array.isArray(parsed.args) ? parsed.args[0] : undefined;
             const spectrum = rawSpectrum === null ? null : coerceAudioSpectrumFrame(rawSpectrum);
             if (rawSpectrum === null || spectrum) {
-              const data = JSON.stringify({
+              const frame = {
                 address: AURORA_AUDIO_SPECTRUM_ADDRESS,
                 args: [spectrum],
-              });
+              };
+              const data = JSON.stringify(frame);
               sockets.forEach((socket) => {
                 socket.send(data);
               });
+              liveShow.publish(frame);
             }
           } else if (parsed.address.startsWith('/aurora/automation/transient/')) {
             applyTransientConfigMsg(
@@ -2141,8 +2231,27 @@ const controlsServer = Bun.serve({
 
     const pathname = decodeURIComponent(url.pathname);
 
+    if (request.method === 'OPTIONS' && pathname.startsWith('/api/live-show')) {
+      return new Response(null, { status: 204, headers: apiCorsHeaders(request) });
+    }
+    if (pathname === '/api/live-show' || pathname.startsWith('/api/live-show/')) {
+      return handleLiveShowManagement(request, pathname);
+    }
+
     if (request.method === 'GET' && pathname === '/studio') {
       return Response.redirect(new URL('/studio/', url), 308);
+    }
+    if (request.method === 'GET' && pathname === '/shows') {
+      return Response.redirect(new URL('/shows/', request.url), 308);
+    }
+    if (request.method === 'GET' && pathname.startsWith('/shows/')) {
+      const relativePath = pathname.slice('/shows/'.length) || 'index.html';
+      if (relativePath.includes('..')) return new Response('Not found', { status: 404 });
+      const file = resolveShowsFile(relativePath);
+      if (!(await file.exists())) return new Response('Not found', { status: 404 });
+      return new Response(file, {
+        headers: { 'content-type': contentType(relativePath), 'cache-control': 'no-store' },
+      });
     }
     if (request.method === 'GET' && pathname.startsWith('/studio/')) {
       return Response.redirect(url, 308);
@@ -2371,6 +2480,7 @@ udp.on('ready', () => {
   sockets.forEach((ws) => {
     ws.send(data);
   });
+  liveShow.publish({ address: '/aurora/osc/connected', args: [1] });
 });
 
 udp.on('message', (msg: OscMsg) => {
@@ -2516,10 +2626,12 @@ setInterval(() => {
     high: smoothed.high,
     pulse: smoothed.pulse,
   };
-  const data = JSON.stringify({ address: '/aurora/demo/audio', args: [demo] });
+  const frame = { address: '/aurora/demo/audio', args: [demo] };
+  const data = JSON.stringify(frame);
   sockets.forEach((ws) => {
     ws.send(data);
   });
+  liveShow.publish(frame);
 }, 50);
 
 console.log(`aurora VJ output listening on ${visualServer.url}`);

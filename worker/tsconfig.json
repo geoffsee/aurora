@@ -15,5 +15,10 @@
     "noUncheckedIndexedAccess": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts", "../shared/pairing-code.ts", "../shared/relay-protocol.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../shared/live-show.ts",
+    "../shared/pairing-code.ts",
+    "../shared/relay-protocol.ts"
+  ]
 }

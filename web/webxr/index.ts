@@ -1,6 +1,7 @@
 import { WebGLRenderer } from 'three';
 import { setupWebGLXRFallback } from 'three/addons/webxr/WebGLXRFallback.js';
 import { WebGPURenderer } from 'three/webgpu';
+import { isAudienceViewerSurface } from '../../shared/live-show-client.ts';
 import { isStaticHosting } from '../../shared/static-hosting.ts';
 import { attachDisplayTransport, createDisplayTransport } from '../display-transport.ts';
 import { mountRelayHost } from '../projector-bridge.ts';
@@ -200,7 +201,7 @@ async function boot(): Promise<void> {
         `${rendererName(renderer as AuroraRenderer)} · waiting for visualizer data`,
       ),
   });
-  if (isStaticHosting(location)) {
+  if (isStaticHosting(location) && !isAudienceViewerSurface(location)) {
     disposeRelay = await mountRelayHost({ onMessage: (frame) => dataBridge.ingest(frame) });
   }
   dataTimer = window.setInterval(() => spatial.commit(dataBridge.snapshot()), 1_000 / 45);

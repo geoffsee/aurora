@@ -23,6 +23,7 @@ concurrency:
 env:
   WASM_BINDGEN_VERSION: "0.2.122"
   SOUNDCLOUD_API_URL: ${{ vars.SOUNDCLOUD_API_URL }}
+  AURORA_LIVE_API_URL: ${{ vars.AURORA_LIVE_API_URL }}
 
 jobs:
   build:
@@ -65,6 +66,9 @@ jobs:
       - name: Build Preset Studio
         run: bun run build:studio
 
+      - name: Build live-show directory
+        run: bun run build:shows
+
       - name: Stage static site
         run: |
           set -euo pipefail
@@ -92,12 +96,20 @@ jobs:
           else
             sed -i "s|__AURORA_SOUNDCLOUD_API_URL__||g" dist/controls/index.html
           fi
+          if [ -n "${AURORA_LIVE_API_URL}" ]; then
+            sed -i "s|__AURORA_LIVE_API_URL__|${AURORA_LIVE_API_URL}|g" dist/controls/index.html
+            sed -i "s|__AURORA_LIVE_API_URL__|${AURORA_LIVE_API_URL}|g" dist/shows/index.html
+          else
+            sed -i "s|__AURORA_LIVE_API_URL__||g" dist/controls/index.html
+            sed -i "s|__AURORA_LIVE_API_URL__||g" dist/shows/index.html
+          fi
           # Mobile show client — same ControlsProvider, touch-first view.
           test -f dist/mobile/index.html
           # Immersive spatial visualizer. The directory form is the canonical Pages URL.
           test -f dist/webxr/index.html
           # Preset Studio static app (package authoring + BroadcastChannel publish).
           test -f dist/studio/index.html
+          test -f dist/shows/index.html
           touch dist/.nojekyll
 
       - uses: actions/configure-pages@v6

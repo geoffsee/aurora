@@ -7,6 +7,7 @@ export const BRIDGE_PROJECTOR_PORT = 13000;
 export const BRIDGE_CONTROLS_PORT = 13001;
 export const PUBLIC_PROJECTOR_PORT = 8443;
 export const PUBLIC_CONTROLS_PORT = 8444;
+export const LIVE_VIEWER_GATEWAY_PORT = 18080;
 
 export function normalizeTlsHosts(hosts: readonly string[]): string[] {
   const out: string[] = [];
@@ -52,6 +53,7 @@ export function renderCaddyfile(
     controlsUpstream?: number;
     publicProjector?: number;
     publicControls?: number;
+    viewerGateway?: number;
   },
 ): string {
   const tlsHosts = normalizeTlsHosts(hosts);
@@ -59,6 +61,7 @@ export function renderCaddyfile(
   const pubCtrl = opts?.publicControls ?? PUBLIC_CONTROLS_PORT;
   const upProj = opts?.projectorUpstream ?? BRIDGE_PROJECTOR_PORT;
   const upCtrl = opts?.controlsUpstream ?? BRIDGE_CONTROLS_PORT;
+  const gateway = opts?.viewerGateway ?? LIVE_VIEWER_GATEWAY_PORT;
 
   const proj = tlsHosts.map((h) => `https://${h}:${pubProj}`).join(', ');
   const ctrl = tlsHosts.map((h) => `https://${h}:${pubCtrl}`).join(', ');
@@ -79,6 +82,45 @@ ${controlsSiteApiRoutes(upProj)}
 	handle {
 		reverse_proxy 127.0.0.1:${upCtrl}
 	}
+}
+
+# Read-only origin for Cloudflare Tunnel or a self-hosted HTTPS ingress. Never
+# expose Console, controls, Studio, WebXR controls, /ws, debug, or write APIs.
+:${gateway} {
+	@write not method GET HEAD
+	respond @write "Method not allowed" 405
+
+	handle /.well-known/aurora-live-show {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /api/modes/* {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /api/data/e/* {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /assets/* {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /dist/pkg/* {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /dist/projector-bridge.js {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /vendor/* {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /styles.css {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle /index.html {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	handle / {
+		reverse_proxy 127.0.0.1:${upProj}
+	}
+	respond "Not found" 404
 }
 `;
 }

@@ -6,6 +6,17 @@ import {
   type OscFrame,
 } from '../shared/bridge-transport.ts';
 import { loadInstanceTarget } from '../shared/instance-target.ts';
+import {
+  createAudienceFrameAssembler,
+  LIVE_SHOW_SOURCE_STATUS_ADDRESS,
+  type LiveStateFrame,
+  showSocketUrl,
+} from '../shared/live-show.ts';
+import {
+  consumeViewerFragment,
+  isAudienceViewer,
+  isAudienceViewerSurface,
+} from '../shared/live-show-client.ts';
 import { isStaticHosting } from '../shared/static-hosting.ts';
 
 /** True when an embedded display can share its parent controls-page origin. */
@@ -35,6 +46,53 @@ export function createDisplayTransport(
   loc: Pick<Location, 'protocol' | 'host' | 'search' | 'hostname' | 'origin' | 'href'> = location,
   win: Pick<Window, 'parent'> = window,
 ): BridgeTransport {
+  // Audience credentials arrive once in the fragment, then live only for this
+  // tab. This branch comes before BroadcastChannel/local `/ws` selection so an
+  // isolated viewer never mounts host or control-plane transports.
+  const viewer = consumeViewerFragment();
+  if (viewer) {
+    const assemble = createAudienceFrameAssembler();
+    return createWebSocketTransport(
+      showSocketUrl(viewer.liveApiUrl, viewer.showId, viewer.viewerToken, 'viewer'),
+      {
+        reconnect: true,
+        receiveOnly: true,
+        mapIncoming(raw) {
+          if (!raw || typeof raw !== 'object') return [];
+          const envelope = raw as { type?: unknown; frames?: unknown };
+          if ((raw as { address?: unknown }).address === LIVE_SHOW_SOURCE_STATUS_ADDRESS) {
+            return assemble(raw as LiveStateFrame);
+          }
+          if (
+            (envelope.type === 'live-state' || envelope.type === 'live-snapshot') &&
+            Array.isArray(envelope.frames)
+          ) {
+            return envelope.frames
+              .filter((frame): frame is LiveStateFrame =>
+                Boolean(frame && typeof frame === 'object'),
+              )
+              .flatMap(assemble);
+          }
+          return [];
+        },
+      },
+    );
+  }
+  if (isAudienceViewerSurface(loc) || isAudienceViewer()) {
+    // Missing/expired grant: stay disconnected instead of falling through to a
+    // same-origin `/ws`, which would accidentally mount a control transport.
+    const noop = () => () => {};
+    return {
+      ready: false,
+      connect() {},
+      close() {},
+      send: () => false,
+      onOpen: noop,
+      onClose: noop,
+      onError: noop,
+      onMessage: noop,
+    };
+  }
   if (shouldSubscribeBroadcastChannel(loc, win)) {
     return createBroadcastChannelTransport({ role: 'subscribe-only' });
   }
